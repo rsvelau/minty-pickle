@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { GridState, COLS, ROWS, MIN_SIZE, MAX_SIZE, colLabel, cellLabel, defaultCell } from './state.js';
+import { GridState, COLS, ROWS, MIN_SIZE, MAX_SIZE, colLabel, cellLabel, defaultCell, areaLabel } from './state.js';
+import { createWaterSurface } from './water.js';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -17,14 +18,25 @@ const m = (meters) => meters / METERS_PER_CELL; // metres -> world units (cells)
 
 const TILE = 1;               // world units per cell
 const INSET = 0.94;           // tile size inside its cell (gap = grid lines)
-const FLOOR_H = 0.06;         // walkable tile thickness
+const FLOOR_H = 0.06;         // top of a land tile (ground level ~ 0)
 const BLOCK_H = m(3);         // blocked cells rise one storey (~3 m)
+const BASE = m(3);            // tiles are columns reaching down this far
+const WATER_Y = -m(1);        // water surface sits ~1.2 m below the land
+const BED_H = -m(2.4);        // river/lake bed
+const DECK_TOP = FLOOR_H + 0.03; // bridge decks sit just above street level
+const DECK_T = m(0.5);        // deck thickness
+const RAIL_H = m(1.1);        // railing height
 
 // Night-time PNW palette. "Lit" outdoor reads as old mercury-vapor streetlight
 // (sickly green-white); lit indoor reads as warm incandescent.
 const PALETTE = {
   outdoor: { unlit: '#4a6158', lit: '#9fbf8f' },
   indoor: { unlit: '#7a5338', lit: '#f0a85a' },
+  bed: '#1b231f',
+  deck: { unlit: '#7d6a57', lit: '#d4a574' },
+  rail: '#2c2a27',
+  areaWater: '#24506a',
+  areaDeck: '#b39a72',
   blockedShade: 0.8,
   glowOutdoor: '#c6e0c0',
   glowIndoor: '#ffbe73',
@@ -37,16 +49,30 @@ const PALETTE = {
   walkNo: '#a2392f',
 };
 
+// A brush is a patch, or a function of the current cell returning a patch
+// (or null to leave the cell alone).
+// - Painting water makes land unwalkable; painting land over water makes it
+//   walkable again and removes any bridge.
+// - Bridges only go on water and are walkable.
+const toLand = (area) => (c) => ({ area, sub: null, bridge: false, ...(c.area === 'water' ? { walkable: true } : {}) });
+const toWater = (sub) => (c) => ({ area: 'water', sub, ...(c.area === 'water' ? {} : { walkable: false, bridge: false }) });
 const BRUSHES = {
-  outdoor: { indoor: false },
-  indoor: { indoor: true },
+  outdoor: toLand('outdoor'),
+  indoor: toLand('indoor'),
+  lake: toWater('lake'),
+  river: toWater('river'),
+  bridge: (c) => (c.area === 'water' ? { bridge: true, walkable: true } : null),
+  unbridge: (c) => (c.bridge ? { bridge: false, walkable: false } : null),
   unlit: { lit: false },
   lit: { lit: true },
   walkable: { walkable: true },
   blocked: { walkable: false },
   reset: defaultCell(),
 };
-const BRUSH_KEYS = { 1: 'outdoor', 2: 'indoor', 3: 'unlit', 4: 'lit', 5: 'walkable', 6: 'blocked', 0: 'reset' };
+const BRUSH_KEYS = {
+  1: 'outdoor', 2: 'indoor', 3: 'unlit', 4: 'lit', 5: 'walkable', 6: 'blocked',
+  7: 'lake', 8: 'river', 9: 'bridge', 0: 'reset',
+};
 
 // ---------------------------------------------------------------------------
 // State
@@ -185,7 +211,10 @@ const poolGeo = new THREE.PlaneGeometry(2.6 * TILE, 2.6 * TILE).rotateX(-Math.PI
 // ---------------------------------------------------------------------------
 
 let N = 0;
-let tiles, pools, glowAttr, slab, ground;
+let tiles, pools, glowAttr, slab, ground, decks, deckGlow, rails;
+let deckVisible = new Uint8Array(0);
+const water = createWaterSurface();
+scene.add(water.mesh);
 let heights = new Float32Array(0);
 let targetHeights = new Float32Array(0);
 let jitter = new Float32Array(0); // stable per-cell colour variation
@@ -218,17 +247,43 @@ function buildBoard() {
   disposeChildren(boardGroup);
   disposeChildren(labelGroup);
 
-  // Dark slab under the tiles; the gaps between tiles read as grid lines.
+  // Dark slab under the tile columns; the gaps between tiles read as grid lines.
   slab = new THREE.Mesh(new THREE.BoxGeometry(board.w + 0.4, 0.3, board.d + 0.4), slabMat);
-  slab.position.y = -0.15;
+  slab.position.y = -BASE - 0.15;
   slab.receiveShadow = true;
   boardGroup.add(slab);
 
-  // Forest floor stretching into the fog.
-  ground = new THREE.Mesh(new THREE.CircleGeometry(board.radius + 260, 64).rotateX(-Math.PI / 2), groundMat);
-  ground.position.y = -0.3;
+  // Forest floor level with the town, with a hole where the board sits so
+  // sunken water cells show through.
+  const shape = new THREE.Shape().absarc(0, 0, board.radius + 260, 0, Math.PI * 2, false);
+  const hw = board.w / 2 + 0.2, hd = board.d / 2 + 0.2;
+  shape.holes.push(new THREE.Path().moveTo(-hw, -hd).lineTo(hw, -hd).lineTo(hw, hd).lineTo(-hw, hd).lineTo(-hw, -hd));
+  ground = new THREE.Mesh(new THREE.ShapeGeometry(shape, 64).rotateX(-Math.PI / 2), groundMat);
   ground.receiveShadow = true;
   boardGroup.add(ground);
+
+  // Water surface + its per-cell textures.
+  water.resize(cols, rows);
+  water.mesh.position.y = WATER_Y;
+
+  // Bridge decks: one per cell (hidden unless that cell is a bridge).
+  const deckGeo = new THREE.BoxGeometry(TILE, DECK_T, TILE).translate(0, -DECK_T / 2, 0);
+  deckGlow = new THREE.InstancedBufferAttribute(new Float32Array(N), 1);
+  deckGeo.setAttribute('aGlow', deckGlow);
+  decks = new THREE.InstancedMesh(deckGeo, tileMat, N);
+  decks.castShadow = true;
+  decks.receiveShadow = true;
+  deckVisible = new Uint8Array(N);
+  boardGroup.add(decks);
+
+  // Railings along bridge edges that face open water (up to 4 per cell).
+  const railGeo = new THREE.BoxGeometry(TILE, RAIL_H, 0.05).translate(0, RAIL_H / 2, 0);
+  rails = new THREE.InstancedMesh(railGeo, new THREE.MeshLambertMaterial({ color: PALETTE.rail }), N * 4);
+  rails.userData.ownMaterial = true;
+  rails.castShadow = true;
+  rails.raycast = () => {};
+  rails.count = 0;
+  boardGroup.add(rails);
 
   // Tiles: one instanced mesh, per-instance colour + per-instance "glow" (lit).
   const tileGeo = tileGeoBase.clone();
@@ -255,14 +310,14 @@ function buildBoard() {
   for (let x = 0; x < cols; x++) {
     for (const zEdge of [-1, rows]) {
       const l = makeLabel(colLabel(x));
-      l.position.copy(cellToWorld(x, zEdge)).setY(0.01);
+      l.position.copy(cellToWorld(x, zEdge)).setY(0.02);
       labelGroup.add(l);
     }
   }
   for (let y = 0; y < rows; y++) {
     for (const xEdge of [-1, cols]) {
       const l = makeLabel(String(y + 1));
-      l.position.copy(cellToWorld(xEdge, y)).setY(0.01);
+      l.position.copy(cellToWorld(xEdge, y)).setY(0.02);
       labelGroup.add(l);
     }
   }
@@ -279,6 +334,69 @@ function buildBoard() {
   tiles.computeBoundingBox();
 }
 
+// Water mask, river flow, bridge decks and railings depend on neighbours, so
+// they are refreshed for the whole board after any change (cheap: <= 3600 cells).
+function refreshWaterAndBridges() {
+  water.update(grid, grid.riverFlow());
+  water.mesh.visible = ui.view === 'all' || ui.view === 'area';
+  water.setFlat(ui.view === 'area');
+
+  const showDecks = ui.view !== 'light';
+  let r = 0;
+  const railAt = (pos, rotY) => {
+    tmpMatrix.compose(pos, tmpQuat.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rotY), tmpScale.set(1, 1, 1));
+    rails.setMatrixAt(r++, tmpMatrix);
+  };
+  const openWater = (x, y) => grid.isWater(x, y) && !grid.cells[grid.index(x, y)].bridge;
+  for (let i = 0; i < N; i++) {
+    const c = grid.cells[i];
+    const { x, y } = grid.coords(i);
+    const on = showDecks && c.bridge;
+    deckVisible[i] = on ? 1 : 0;
+    if (on) {
+      tmpPos.copy(cellToWorld(x, y)).setY(DECK_TOP);
+      tmpMatrix.compose(tmpPos, tmpQuat.identity(), tmpScale.set(1, 1, 1));
+      decks.setMatrixAt(i, tmpMatrix);
+      const look = deckLook(c);
+      decks.setColorAt(i, tmpColor.set(look.color));
+      deckGlow.array[i] = look.glow;
+      if (ui.view === 'all') {
+        const p = cellToWorld(x, y).setY(DECK_TOP);
+        const e = 0.5 * TILE - 0.03;
+        if (openWater(x, y - 1)) railAt(p.clone().add(tmpScale.set(0, 0, -e)), 0);
+        if (openWater(x, y + 1)) railAt(p.clone().add(tmpScale.set(0, 0, e)), 0);
+        if (openWater(x - 1, y)) railAt(p.clone().add(tmpScale.set(-e, 0, 0)), Math.PI / 2);
+        if (openWater(x + 1, y)) railAt(p.clone().add(tmpScale.set(e, 0, 0)), Math.PI / 2);
+      }
+    } else {
+      // Parked far below and tiny rather than zero-scaled, so raycasts stay sane.
+      tmpMatrix.compose(tmpPos.set(0, -1000, 0), tmpQuat.identity(), tmpScale.set(1e-4, 1e-4, 1e-4));
+      decks.setMatrixAt(i, tmpMatrix);
+      decks.setColorAt(i, tmpColor.set(0x000000));
+    }
+  }
+  rails.count = r;
+  rails.instanceMatrix.needsUpdate = true;
+  decks.instanceMatrix.needsUpdate = true;
+  decks.instanceColor.needsUpdate = true;
+  deckGlow.needsUpdate = true;
+  decks.computeBoundingSphere();
+}
+
+function deckLook(c) {
+  if (ui.view === 'area') return { color: PALETTE.areaDeck, glow: 0.15 };
+  if (ui.view === 'walk') return { color: c.walkable ? PALETTE.walkOk : PALETTE.walkNo, glow: 0.2 };
+  return { color: c.lit ? PALETTE.deck.lit : PALETTE.deck.unlit, glow: c.lit ? 0.18 : 0 };
+}
+
+// Top of what you see in a cell: deck, water surface, or tile.
+function visibleTop(i) {
+  const c = grid.cells[i];
+  if (deckVisible[i]) return DECK_TOP;
+  if (c.area === 'water' && water.mesh.visible) return WATER_Y;
+  return heights[i];
+}
+
 // ---------------------------------------------------------------------------
 // Tile appearance
 // ---------------------------------------------------------------------------
@@ -291,22 +409,36 @@ const tmpScale = new THREE.Vector3();
 const ZERO = new THREE.Vector3(0, 0, 0);
 
 function cellLook(cell) {
-  // Returns { color: hex, glow: number, height: number, pool: hexOrNull }
+  // Returns { color: hex, glow: number, height: number (tile top), pool: hexOrNull, poolY }
   const blocked = !cell.walkable;
+  const isWater = cell.area === 'water';
+  // Water cells are always sunken; blocked land rises one storey.
+  const landH = blocked ? BLOCK_H : FLOOR_H;
+  const height = isWater ? BED_H : landH;
   switch (ui.view) {
     case 'area':
-      return { color: cell.indoor ? PALETTE.areaIndoor : PALETTE.areaOutdoor, glow: 0.15, height: FLOOR_H, pool: null };
+      return {
+        color: isWater ? PALETTE.areaWater : cell.area === 'indoor' ? PALETTE.areaIndoor : PALETTE.areaOutdoor,
+        glow: 0.15, height: isWater ? BED_H : FLOOR_H, pool: null,
+      };
     case 'light':
-      return { color: cell.lit ? PALETTE.lightOn : PALETTE.lightOff, glow: cell.lit ? 0.45 : 0, height: FLOOR_H, pool: null };
+      return { color: cell.lit ? PALETTE.lightOn : PALETTE.lightOff, glow: cell.lit ? 0.45 : 0, height: isWater ? BED_H : FLOOR_H, pool: null };
     case 'walk':
-      return { color: blocked ? PALETTE.walkNo : PALETTE.walkOk, glow: 0.2, height: blocked ? BLOCK_H : FLOOR_H, pool: null };
+      return { color: blocked ? PALETTE.walkNo : PALETTE.walkOk, glow: 0.2, height, pool: null };
     default: {
-      const set = cell.indoor ? PALETTE.indoor : PALETTE.outdoor;
+      if (isWater) {
+        return {
+          color: PALETTE.bed, glow: 0, height,
+          pool: cell.lit ? PALETTE.glowOutdoor : null,
+          poolY: (cell.bridge ? DECK_TOP : WATER_Y) + 0.012,
+        };
+      }
+      const set = PALETTE[cell.area];
       return {
         color: cell.lit ? set.lit : set.unlit,
         glow: cell.lit ? 0.18 : 0,
-        height: blocked ? BLOCK_H : FLOOR_H,
-        pool: cell.lit ? (cell.indoor ? PALETTE.glowIndoor : PALETTE.glowOutdoor) : null,
+        height,
+        pool: cell.lit ? (cell.area === 'indoor' ? PALETTE.glowIndoor : PALETTE.glowOutdoor) : null,
         shade: blocked ? PALETTE.blockedShade : 1,
       };
     }
@@ -324,7 +456,7 @@ function refreshCell(i) {
 
   const { x, y } = grid.coords(i);
   if (look.pool) {
-    tmpPos.copy(cellToWorld(x, y)).setY(FLOOR_H + 0.012);
+    tmpPos.copy(cellToWorld(x, y)).setY(look.poolY ?? FLOOR_H + 0.012);
     tmpMatrix.compose(tmpPos, tmpQuat.identity(), tmpScale.set(1, 1, 1));
     pools.setColorAt(i, tmpColor.set(look.pool));
   } else {
@@ -336,8 +468,8 @@ function refreshCell(i) {
 
 function writeTileMatrix(i) {
   const { x, y } = grid.coords(i);
-  tmpPos.copy(cellToWorld(x, y));
-  tmpMatrix.compose(tmpPos, tmpQuat.identity(), tmpScale.set(1, Math.max(heights[i], 0.001), 1));
+  tmpPos.copy(cellToWorld(x, y)).setY(-BASE);
+  tmpMatrix.compose(tmpPos, tmpQuat.identity(), tmpScale.set(1, Math.max(BASE + heights[i], 0.001), 1));
   tiles.setMatrixAt(i, tmpMatrix);
 }
 
@@ -345,6 +477,7 @@ function refreshAll(instant = false) {
   for (let i = 0; i < N; i++) refreshCell(i);
   if (instant) heights.set(targetHeights);
   for (let i = 0; i < N; i++) writeTileMatrix(i);
+  refreshWaterAndBridges();
   flagDirty();
 }
 
@@ -528,7 +661,7 @@ function buildSurroundings() {
     const h = m(16 + 14 * maturity + rnd() * 14);   // 16-44 m
     const r = h * (0.15 + rnd() * 0.06);            // crown radius
     tmpMatrix.compose(
-      tmpPos.set(x, -0.3, z),
+      tmpPos.set(x, 0, z),
       tmpQuat.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rnd() * Math.PI * 2),
       tmpScale.set(r, h, r),
     );
@@ -616,6 +749,7 @@ grid.onChange((indices, resized) => {
     syncSizeInputs();
   } else {
     for (const i of indices) refreshCell(i);
+    refreshWaterAndBridges();
     flagDirty();
   }
   updateCounts();
@@ -630,6 +764,7 @@ grid.onChange((indices, resized) => {
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 const boardPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const waterPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -WATER_Y);
 let hoverIndex = -1;
 let painting = null; // { pointerId, start:{x,y}, last:{x,y}, rect:boolean }
 const activeTouches = new Set();
@@ -638,7 +773,17 @@ function pickCell(ev, { clamp = false } = {}) {
   const r = renderer.domElement.getBoundingClientRect();
   pointer.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
   raycaster.setFromCamera(pointer, camera);
-  const hit = raycaster.intersectObject(tiles, false)[0];
+  const hit = raycaster.intersectObjects([tiles, decks], false)[0];
+  // Water surfaces aren't meshes we can hit, so test their plane too: the
+  // cell under the surface is what the eye sees, not the bed below it.
+  if (water.mesh.visible) {
+    const wp = raycaster.ray.intersectPlane(waterPlane, new THREE.Vector3());
+    if (wp && (!hit || raycaster.ray.origin.distanceTo(wp) < hit.distance)) {
+      const wx = Math.floor(wp.x / TILE + grid.cols / 2);
+      const wy = Math.floor(wp.z / TILE + grid.rows / 2);
+      if (grid.isWater(wx, wy)) return { x: wx, y: wy };
+    }
+  }
   if (hit && hit.instanceId !== undefined) return grid.coords(hit.instanceId);
   // Fallback: intersect the board plane (lets drags continue off the tile tops).
   const p = raycaster.ray.intersectPlane(boardPlane, new THREE.Vector3());
@@ -961,7 +1106,8 @@ function updateHoverInfo() {
   const c = grid.cells[hoverIndex];
   el.innerHTML =
     `<span class="id">${cellLabel(x, y)}</span>` +
-    `<span class="tag">${c.indoor ? 'Indoor' : 'Outdoor'}</span>` +
+    `<span class="tag">${c.area === 'water' ? `Water · ${areaLabel(c)}` : areaLabel(c)}</span>` +
+    (c.bridge ? `<span class="tag">Bridge (spans ${grid.bridgeAxis(x, y) === 'x' ? 'E–W' : 'N–S'})</span>` : '') +
     `<span class="tag">${c.lit ? 'Lit' : 'Unlit'}</span>` +
     `<span class="tag">${c.walkable ? 'Walkable' : 'Blocked'}</span>`;
 }
@@ -969,7 +1115,8 @@ function updateHoverInfo() {
 function updateCounts() {
   const n = grid.counts();
   $('#counts').innerHTML =
-    `Indoor <b>${n.indoor}</b> · Outdoor <b>${n.outdoor}</b><br>` +
+    `Outdoor <b>${n.outdoor}</b> · Indoor <b>${n.indoor}</b><br>` +
+    `Lake <b>${n.lake}</b> · River <b>${n.river}</b> · Bridge <b>${n.bridge}</b><br>` +
     `Lit <b>${n.lit}</b> · Unlit <b>${n.unlit}</b><br>` +
     `Walkable <b>${n.walkable}</b> · Blocked <b>${n.blocked}</b> · ${grid.cols}×${grid.rows}`;
 }
@@ -1059,13 +1206,20 @@ renderer.setAnimationLoop(() => {
 
   if (hoverIndex >= 0) {
     const { x, y } = grid.coords(hoverIndex);
+    const top = visibleTop(hoverIndex);
     hoverBox.position.copy(cellToWorld(x, y));
-    hoverBox.scale.set(1, heights[hoverIndex] + 0.02, 1);
+    if (top < 0) {
+      hoverBox.position.y = top - 0.01;
+      hoverBox.scale.set(1, 0.03, 1);
+    } else {
+      hoverBox.scale.set(1, top + 0.02, 1);
+    }
     // Ghost home covers the hovered cell and the cells right/below it.
     ghostHouse.position.copy(cellToWorld(x, y)).add(tmpPos.set(0.5 * TILE, FLOOR_H, 0.5 * TILE));
   }
   ghostHouse.visible = ui.ghost && hoverIndex >= 0;
 
+  water.tick(clock.elapsedTime);
   updateTreeFade();
   if (atmos.visible) updateRain(dt);
   renderer.render(scene, camera);
