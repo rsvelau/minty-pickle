@@ -1,13 +1,27 @@
 # Board Grid Planner
 
 A 3D planning board for a night-time, 90s Pacific Northwest board game.
-It's a 20 × 26 grid (columns **A–T**, rows **1–26**) where every cell has three attributes:
+The board is a whole town: a 20 × 26 grid by default (columns **A–T**, rows **1–26**), resizable from 4 to 60
+cells per side. Every cell has three attributes:
 
 | Attribute | Values | How it shows |
 |-----------|--------|--------------|
 | Area | Outdoor / Indoor | Mossy blue-grey vs. warm wood brown |
 | Light | Unlit / Lit | Lit cells glow and spill a soft light pool onto neighbours (mercury-vapour green outside, incandescent amber inside) |
 | Movement | Walkable / Blocked | Blocked cells rise as solid blocks (buildings, dense brush) |
+
+## Scale
+
+One cell is about **4 m (13 ft)**, so a small home covers **2 × 2 cells** (about 8 m / 26 ft square) and the
+default board is roughly 80 × 104 m. Everything outside the board is built to that scale
+(`METERS_PER_CELL` in `src/main.js`):
+
+- Douglas firs 16–44 m tall (4–11 cells), younger ones at the forest edge
+- A small reference house (2 × 2 cells, 3 m walls) in the clearing beside the board
+- Blocked cells rise one storey (3 m)
+- **Show small-home footprint at cursor** draws a ghost 2 × 2 house where you hover
+
+Trees between the camera and the board dissolve so they never hide cells.
 
 ## Run it
 
@@ -30,12 +44,16 @@ npm run build      # static site in dist/ (works from any sub-path, e.g. GitHub 
 | Undo / redo | `Ctrl/Cmd+Z` / `Ctrl/Cmd+Shift+Z` (or `Ctrl+Y`) |
 | Touch | One finger paints, two fingers orbit/zoom |
 
+**Board size** sets columns and rows. Cells are kept from the top-left (A1) corner; shrinking removes cells past
+the new edge, and undo restores them.
+
 The **View** buttons isolate one layer at a time (Area, Light, Move) when the combined view gets busy.
 
 ## Saving
 
 The board autosaves to your browser's local storage. **Export JSON** / **Import JSON** move layouts between
-machines; **Save PNG** grabs the current view. The JSON is deliberately plain so future tools can read it:
+machines (the file carries the board size); **Save PNG** grabs the current view. The JSON is deliberately plain so
+future tools can read it:
 
 ```json
 {

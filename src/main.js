@@ -1,16 +1,24 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { GridState, COLS, ROWS, colLabel, cellLabel, defaultCell } from './state.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { GridState, COLS, ROWS, MIN_SIZE, MAX_SIZE, colLabel, cellLabel, defaultCell } from './state.js';
 
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
 
 const STORAGE_KEY = 'minty-pickle.grid.v1';
+
+// Real-world scale. The board is a whole town; a small home covers 2 x 2 cells
+// (about 8 m x 8 m / 26 ft square), so one cell is about 4 m (13 ft).
+// Everything around the board (trees, the reference house, rain) uses this.
+const METERS_PER_CELL = 4;
+const m = (meters) => meters / METERS_PER_CELL; // metres -> world units (cells)
+
 const TILE = 1;               // world units per cell
 const INSET = 0.94;           // tile size inside its cell (gap = grid lines)
 const FLOOR_H = 0.06;         // walkable tile thickness
-const BLOCK_H = 0.75;         // unwalkable cells are raised blocks
+const BLOCK_H = m(3);         // blocked cells rise one storey (~3 m)
 
 // Night-time PNW palette. "Lit" outdoor reads as old mercury-vapor streetlight
 // (sickly green-white); lit indoor reads as warm incandescent.
@@ -53,12 +61,15 @@ const ui = {
   spaceHeld: false,
   labels: true,
   atmosphere: true,
+  ghost: false,        // small-home footprint follows the cursor
 };
 
 try {
   const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) grid.parse(JSON.parse(saved)).forEach((c, i) => Object.assign(grid.cells[i], c));
+  if (saved) grid.load(grid.parse(JSON.parse(saved)));
 } catch { /* storage unavailable or corrupt: start fresh */ }
+
+const rand32 = (seed) => () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
 
 // ---------------------------------------------------------------------------
 // Renderer / scene / camera
@@ -80,35 +91,39 @@ scene.background = SKY;
 const FOG = new THREE.Fog(SKY, 38, 95);
 scene.fog = FOG;
 
-const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 400);
+const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 1500);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.maxPolarAngle = Math.PI * 0.47;
-controls.minDistance = 6;
-controls.maxDistance = 90;
+controls.minDistance = 4;
 controls.screenSpacePanning = false;
 applyControlBindings();
 
-const CAMERAS = {
-  angled: { pos: new THREE.Vector3(0, 27, 29), target: new THREE.Vector3(0, 0, 1) },
-  top: { pos: new THREE.Vector3(0, 42, 0.001), target: new THREE.Vector3(0, 0, 0) },
-};
+// Board extents in world units, refreshed by buildBoard().
+const board = { w: 0, d: 0, radius: 0 };
+
 let camTween = null;
-// Pull a preset camera back far enough that the whole board fits the
-// viewport (portrait phones need much more distance), and push fog back too.
+// Camera presets are fitted to the current board size and the viewport
+// (portrait phones need much more distance). Fog is pushed back to match.
 function fitPreset(name) {
-  const c = CAMERAS[name];
-  const halfFov = THREE.MathUtils.degToRad(camera.fov / 2);
-  const needW = (COLS * TILE / 2 + 1.5) / (Math.tan(halfFov) * camera.aspect);
-  const base = c.pos.distanceTo(c.target);
-  const dist = Math.max(base, needW * (name === 'top' ? 1 : 1.15));
-  const pos = c.pos.clone().sub(c.target).setLength(dist).add(c.target);
-  FOG.near = Math.max(38, dist + 6);
-  FOG.far = FOG.near + 57;
-  controls.maxDistance = Math.max(90, dist * 1.5);
-  return { pos, target: c.target };
+  const halfV = THREE.MathUtils.degToRad(camera.fov / 2);
+  const tanV = Math.tan(halfV);
+  const tanH = tanV * camera.aspect;
+  const target = new THREE.Vector3(0, 0, name === 'top' ? 0 : board.d * 0.04);
+  let dir, dist;
+  if (name === 'top') {
+    dir = new THREE.Vector3(0, 1, 0.00001);
+    dist = Math.max((board.d / 2 + 1.5) / tanV, (board.w / 2 + 1.5) / tanH);
+  } else {
+    dir = new THREE.Vector3(0, 27, 29).normalize();
+    dist = (board.radius + 1.5) / Math.min(tanV, tanH) * 0.85;
+  }
+  FOG.near = dist + board.radius * 0.6;
+  FOG.far = FOG.near + 45 + board.radius;
+  controls.maxDistance = dist * 2.5;
+  return { pos: dir.multiplyScalar(dist).add(target), target };
 }
 function setCamera(name, instant = false) {
   const c = fitPreset(name);
@@ -126,55 +141,28 @@ function setCamera(name, instant = false) {
     toTarget: c.target.clone(),
   };
 }
-setCamera(window.innerWidth < window.innerHeight ? 'top' : 'angled', true);
 
 // Lighting: dim cool moonlight + sky/ground fill.
 scene.add(new THREE.HemisphereLight('#56627a', '#181a18', 2.4));
 const moon = new THREE.DirectionalLight('#a9bcff', 1.8);
-moon.position.set(-18, 30, -14);
 moon.castShadow = true;
 moon.shadow.mapSize.set(2048, 2048);
-Object.assign(moon.shadow.camera, { left: -20, right: 20, top: 20, bottom: -20, near: 1, far: 90 });
 moon.shadow.bias = -0.0008;
 scene.add(moon);
+scene.add(moon.target);
 
 // ---------------------------------------------------------------------------
-// Board base + surroundings
+// Shared materials / geometry
 // ---------------------------------------------------------------------------
 
 const cellToWorld = (x, y) => new THREE.Vector3(
-  (x - COLS / 2 + 0.5) * TILE, 0, (y - ROWS / 2 + 0.5) * TILE,
+  (x - grid.cols / 2 + 0.5) * TILE, 0, (y - grid.rows / 2 + 0.5) * TILE,
 );
 
-// Dark slab under the tiles; the gaps between tiles read as grid lines.
-const slab = new THREE.Mesh(
-  new THREE.BoxGeometry(COLS * TILE + 0.4, 0.3, ROWS * TILE + 0.4),
-  new THREE.MeshLambertMaterial({ color: '#07090b' }),
-);
-slab.position.y = -0.15;
-slab.receiveShadow = true;
-scene.add(slab);
+const slabMat = new THREE.MeshLambertMaterial({ color: '#07090b' });
+const groundMat = new THREE.MeshLambertMaterial({ color: '#0b100e' });
 
-// Forest floor stretching into the fog.
-const ground = new THREE.Mesh(
-  new THREE.CircleGeometry(160, 48),
-  new THREE.MeshLambertMaterial({ color: '#0b100e' }),
-);
-ground.rotation.x = -Math.PI / 2;
-ground.position.y = -0.3;
-ground.receiveShadow = true;
-scene.add(ground);
-
-// ---------------------------------------------------------------------------
-// Tiles: one instanced mesh, per-instance color + per-instance "glow" (lit)
-// ---------------------------------------------------------------------------
-
-const N = COLS * ROWS;
-const tileGeo = new THREE.BoxGeometry(INSET * TILE, 1, INSET * TILE);
-tileGeo.translate(0, 0.5, 0); // origin at the bottom so Y-scale = height
-const glowAttr = new THREE.InstancedBufferAttribute(new Float32Array(N), 1);
-tileGeo.setAttribute('aGlow', glowAttr);
-
+const tileGeoBase = new THREE.BoxGeometry(INSET * TILE, 1, INSET * TILE).translate(0, 0.5, 0); // origin at bottom
 const tileMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
 tileMat.onBeforeCompile = (shader) => {
   shader.vertexShader = shader.vertexShader
@@ -186,32 +174,114 @@ tileMat.onBeforeCompile = (shader) => {
     .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * vGlow;');
 };
 
-const tiles = new THREE.InstancedMesh(tileGeo, tileMat, N);
-tiles.castShadow = true;
-tiles.receiveShadow = true;
-tiles.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-scene.add(tiles);
-
 // Soft light pools that spill past lit cells onto their neighbours.
-const glowTex = makeRadialTexture();
 const poolMat = new THREE.MeshBasicMaterial({
-  map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.2,
+  map: makeRadialTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.2,
 });
 const poolGeo = new THREE.PlaneGeometry(2.6 * TILE, 2.6 * TILE).rotateX(-Math.PI / 2);
-const pools = new THREE.InstancedMesh(poolGeo, poolMat, N);
-pools.raycast = () => {};
-pools.renderOrder = 2;
-scene.add(pools);
 
-// Per-cell animated height so changes feel tactile.
-const heights = new Float32Array(N);
-const targetHeights = new Float32Array(N);
-const jitter = new Float32Array(N); // stable per-cell colour variation
-{
-  let seed = 1337;
-  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  for (let i = 0; i < N; i++) jitter[i] = (rand() - 0.5) * 0.12;
+// ---------------------------------------------------------------------------
+// Board (rebuilt whenever the dimensions change)
+// ---------------------------------------------------------------------------
+
+let N = 0;
+let tiles, pools, glowAttr, slab, ground;
+let heights = new Float32Array(0);
+let targetHeights = new Float32Array(0);
+let jitter = new Float32Array(0); // stable per-cell colour variation
+const boardGroup = new THREE.Group();
+scene.add(boardGroup);
+const labelGroup = new THREE.Group();
+scene.add(labelGroup);
+
+function disposeChildren(group) {
+  for (const child of [...group.children]) {
+    group.remove(child);
+    child.traverse((o) => {
+      if (o.isInstancedMesh) o.dispose();
+      if (o.geometry && ![tileGeoBase, poolGeo, firGeo].includes(o.geometry)) o.geometry.dispose();
+      if (o.material && o.userData.ownMaterial) {
+        o.material.map?.dispose();
+        o.material.dispose();
+      }
+    });
+  }
 }
+
+function buildBoard() {
+  const { cols, rows } = grid;
+  N = cols * rows;
+  board.w = cols * TILE;
+  board.d = rows * TILE;
+  board.radius = 0.5 * Math.hypot(board.w, board.d);
+
+  disposeChildren(boardGroup);
+  disposeChildren(labelGroup);
+
+  // Dark slab under the tiles; the gaps between tiles read as grid lines.
+  slab = new THREE.Mesh(new THREE.BoxGeometry(board.w + 0.4, 0.3, board.d + 0.4), slabMat);
+  slab.position.y = -0.15;
+  slab.receiveShadow = true;
+  boardGroup.add(slab);
+
+  // Forest floor stretching into the fog.
+  ground = new THREE.Mesh(new THREE.CircleGeometry(board.radius + 260, 64).rotateX(-Math.PI / 2), groundMat);
+  ground.position.y = -0.3;
+  ground.receiveShadow = true;
+  boardGroup.add(ground);
+
+  // Tiles: one instanced mesh, per-instance colour + per-instance "glow" (lit).
+  const tileGeo = tileGeoBase.clone();
+  glowAttr = new THREE.InstancedBufferAttribute(new Float32Array(N), 1);
+  tileGeo.setAttribute('aGlow', glowAttr);
+  tiles = new THREE.InstancedMesh(tileGeo, tileMat, N);
+  tiles.castShadow = true;
+  tiles.receiveShadow = true;
+  tiles.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  boardGroup.add(tiles);
+
+  pools = new THREE.InstancedMesh(poolGeo, poolMat, N);
+  pools.raycast = () => {};
+  pools.renderOrder = 2;
+  boardGroup.add(pools);
+
+  heights = new Float32Array(N);
+  targetHeights = new Float32Array(N);
+  jitter = new Float32Array(N);
+  const rnd = rand32(1337);
+  for (let i = 0; i < N; i++) jitter[i] = (rnd() - 0.5) * 0.12;
+
+  // Coordinate labels (A.. across, 1.. down) on all four sides.
+  for (let x = 0; x < cols; x++) {
+    for (const zEdge of [-1, rows]) {
+      const l = makeLabel(colLabel(x));
+      l.position.copy(cellToWorld(x, zEdge)).setY(0.01);
+      labelGroup.add(l);
+    }
+  }
+  for (let y = 0; y < rows; y++) {
+    for (const xEdge of [-1, cols]) {
+      const l = makeLabel(String(y + 1));
+      l.position.copy(cellToWorld(xEdge, y)).setY(0.01);
+      labelGroup.add(l);
+    }
+  }
+
+  // Moon shadows cover the board plus the nearest ring of trees.
+  const s = board.radius + 14;
+  Object.assign(moon.shadow.camera, { left: -s, right: s, top: s, bottom: -s, near: 1, far: s * 4 });
+  moon.shadow.camera.updateProjectionMatrix();
+  moon.position.set(-0.6 * s, 1.2 * s, -0.5 * s);
+
+  buildSurroundings();
+  buildRain();
+  refreshAll(true);
+  tiles.computeBoundingBox();
+}
+
+// ---------------------------------------------------------------------------
+// Tile appearance
+// ---------------------------------------------------------------------------
 
 const tmpColor = new THREE.Color();
 const tmpMatrix = new THREE.Matrix4();
@@ -287,17 +357,6 @@ function flagDirty() {
   tiles.computeBoundingSphere();
 }
 
-refreshAll(true);
-tiles.computeBoundingBox();
-
-grid.onChange((indices) => {
-  for (const i of indices) refreshCell(i);
-  flagDirty();
-  updateCounts();
-  updateHoverInfo();
-  scheduleSave();
-});
-
 // Hover outline
 const hoverBox = new THREE.LineSegments(
   new THREE.EdgesGeometry(new THREE.BoxGeometry(TILE, 1, TILE).translate(0, 0.5, 0)),
@@ -307,17 +366,11 @@ hoverBox.renderOrder = 10;
 hoverBox.visible = false;
 scene.add(hoverBox);
 
-// ---------------------------------------------------------------------------
-// Coordinate labels (A..T across, 1..26 down)
-// ---------------------------------------------------------------------------
-
-const labelGroup = new THREE.Group();
-scene.add(labelGroup);
 function makeLabel(text) {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
   const g = c.getContext('2d');
-  g.font = '600 64px ui-monospace, Menlo, Consolas, monospace';
+  g.font = `600 ${text.length > 2 ? 48 : 64}px ui-monospace, Menlo, Consolas, monospace`;
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.fillStyle = '#8f9f9a';
@@ -325,108 +378,250 @@ function makeLabel(text) {
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
-  const m = new THREE.Mesh(
+  const mesh = new THREE.Mesh(
     new THREE.PlaneGeometry(0.75, 0.75).rotateX(-Math.PI / 2),
     new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }),
   );
-  return m;
-}
-for (let x = 0; x < COLS; x++) {
-  for (const zEdge of [-1, ROWS]) {
-    const m = makeLabel(colLabel(x));
-    m.position.copy(cellToWorld(x, zEdge)).setY(0.01);
-    labelGroup.add(m);
-  }
-}
-for (let y = 0; y < ROWS; y++) {
-  for (const xEdge of [-1, COLS]) {
-    const m = makeLabel(String(y + 1));
-    m.position.copy(cellToWorld(xEdge, y)).setY(0.01);
-    labelGroup.add(m);
-  }
+  mesh.userData.ownMaterial = true;
+  return mesh;
 }
 
 // ---------------------------------------------------------------------------
-// Atmosphere: fir silhouettes in the fog, drizzle, faint drifting mist
+// Surroundings, built to real-world scale (1 cell = METERS_PER_CELL metres)
 // ---------------------------------------------------------------------------
 
 const atmos = new THREE.Group();
 scene.add(atmos);
-{
-  let seed = 90210;
-  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  const firMat = new THREE.MeshLambertMaterial({ color: '#0c1814' });
-  const trunkMat = new THREE.MeshLambertMaterial({ color: '#150f0b' });
-  const tiers = [
-    new THREE.ConeGeometry(1.6, 3.2, 7).translate(0, 3.0, 0),
-    new THREE.ConeGeometry(1.25, 2.8, 7).translate(0, 4.6, 0),
-    new THREE.ConeGeometry(0.85, 2.4, 7).translate(0, 6.1, 0),
-  ];
-  const trunk = new THREE.CylinderGeometry(0.18, 0.25, 1.8, 6).translate(0, 0.9, 0);
-  const halfW = (COLS * TILE) / 2 + 3;
-  const halfD = (ROWS * TILE) / 2 + 3;
+const surroundGroup = new THREE.Group();
+atmos.add(surroundGroup);
+
+// A Douglas fir in unit space: base at y=0, top at y=1, crown radius 1 at the
+// bottom tier. Instances scale it to (crownRadius, height, crownRadius).
+function makeFirGeometry() {
+  const parts = [];
+  const paint = (geo, hex) => {
+    const c = new THREE.Color(hex);
+    const n = geo.attributes.position.count;
+    const arr = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) arr.set([c.r, c.g, c.b], i * 3);
+    geo.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+    geo.deleteAttribute('uv');
+    return geo;
+  };
+  parts.push(paint(new THREE.CylinderGeometry(0.05, 0.08, 0.3, 6).translate(0, 0.15, 0), '#3a2a1e'));
+  const tiers = [[1.0, 0.42, 0.33], [0.8, 0.38, 0.52], [0.58, 0.32, 0.7], [0.36, 0.28, 0.86]];
+  for (const [r, h, y] of tiers) {
+    parts.push(paint(new THREE.ConeGeometry(r, h, 8).translate(0, y, 0), '#2c4a3e'));
+  }
+  return mergeGeometries(parts.map((g) => g.toNonIndexed()));
+}
+const firGeo = makeFirGeometry();
+
+// Trees between the camera and the board dissolve so they never hide cells.
+const fadeUniforms = { uCamXZ: { value: new THREE.Vector2() }, uFadeD: { value: 0 } };
+const firMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+firMat.onBeforeCompile = (shader) => {
+  Object.assign(shader.uniforms, fadeUniforms);
+  shader.vertexShader = shader.vertexShader
+    .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
+    .replace('#include <project_vertex>', `#include <project_vertex>
+      vec4 wp = vec4(transformed, 1.0);
+      #ifdef USE_INSTANCING
+        wp = instanceMatrix * wp;
+      #endif
+      vWPos = (modelMatrix * wp).xyz;`);
+  shader.fragmentShader = shader.fragmentShader
+    .replace('#include <common>', `#include <common>
+      varying vec3 vWPos;
+      uniform vec2 uCamXZ;
+      uniform float uFadeD;`)
+    .replace('void main() {', `void main() {
+      float dCam = distance(vWPos.xz, uCamXZ);
+      float fade = 1.0 - smoothstep(uFadeD - 2.5, uFadeD - 0.3, dCam);
+      float noise = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+      if (fade > noise * 0.999) discard;`);
+};
+
+// Small-home reference: 2 x 2 cells, ~3 m walls, hipped roof to ~6.5 m.
+function makeHouse({ ghost = false } = {}) {
+  const g = new THREE.Group();
+  const w = 2 * TILE - 0.2;
+  const wallMat = ghost
+    ? new THREE.MeshBasicMaterial({ color: '#f1d9a8', transparent: true, opacity: 0.18, depthWrite: false })
+    : new THREE.MeshLambertMaterial({ color: '#3b3a36' });
+  const roofMat = ghost
+    ? wallMat
+    : new THREE.MeshLambertMaterial({ color: '#1c1f22' });
+  const walls = new THREE.Mesh(new THREE.BoxGeometry(w, m(3), w).translate(0, m(3) / 2, 0), wallMat);
+  const roof = new THREE.Mesh(
+    new THREE.ConeGeometry(w * 0.78, m(3.5), 4).rotateY(Math.PI / 4).translate(0, m(3) + m(3.5) / 2, 0),
+    roofMat,
+  );
+  for (const part of [walls, roof]) {
+    part.castShadow = !ghost;
+    part.receiveShadow = !ghost;
+    part.userData.ownMaterial = true;
+    g.add(part);
+  }
+  if (ghost) {
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(walls.geometry),
+      new THREE.LineBasicMaterial({ color: '#f1d9a8', transparent: true, opacity: 0.7 }),
+    );
+    edges.userData.ownMaterial = true;
+    g.add(edges);
+  } else {
+    // One dim lit window and a porch light: someone is still up.
+    const win = new THREE.Mesh(
+      new THREE.PlaneGeometry(m(1.1), m(1.0)),
+      new THREE.MeshBasicMaterial({ color: '#e9a85c' }),
+    );
+    win.userData.ownMaterial = true;
+    win.position.set(-w / 4, m(1.6), w / 2 + 0.005);
+    g.add(win);
+  }
+  return g;
+}
+
+const ghostHouse = makeHouse({ ghost: true });
+ghostHouse.visible = false;
+scene.add(ghostHouse);
+
+function buildSurroundings() {
+  disposeChildren(surroundGroup);
+  const rnd = rand32(90210);
+  const halfW = board.w / 2;
+  const halfD = board.d / 2;
+
+  // Reference house in the clearing off the right edge, near the front.
+  const house = makeHouse();
+  house.position.set(halfW + 4.2, 0, halfD - 2);
+  surroundGroup.add(house);
+  const porch = new THREE.PointLight('#ffb866', 2.2, 7, 1.6);
+  porch.position.set(halfW + 4.2 - 0.4, m(2.6), halfD - 2 + 1.2);
+  surroundGroup.add(porch);
+
+  // Fir forest: a ring starting ~10 m (2.5 cells) past the labels.
+  // Mature Douglas firs: 20-40 m tall, crown about a third as wide as tall.
+  const clear = 3.5;
+  const depth = 32;
+  const ringArea = (board.w + 2 * (clear + depth)) * (board.d + 2 * (clear + depth)) - (board.w + 2 * clear) * (board.d + 2 * clear);
+  const count = Math.min(3500, Math.round(ringArea / 4.2));
+  const firs = new THREE.InstancedMesh(firGeo, firMat, count);
+  firs.castShadow = true;
+  firs.receiveShadow = true;
+  const cellHash = new Map();
+  const key = (x, z) => `${Math.floor(x / 1.5)},${Math.floor(z / 1.5)}`;
+  const shade = new THREE.Color();
   let placed = 0;
-  while (placed < 140) {
-    const px = (rand() - 0.5) * 140;
-    const pz = (rand() - 0.5) * 140;
-    if (Math.abs(px) < halfW && Math.abs(pz) < halfD) continue;
-    const tree = new THREE.Group();
-    tree.add(new THREE.Mesh(trunk, trunkMat));
-    for (const t of tiers) {
-      const m = new THREE.Mesh(t, firMat);
-      m.castShadow = true;
-      tree.add(m);
-    }
-    const s = 0.8 + rand() * 1.4;
-    tree.scale.set(s, s * (0.9 + rand() * 0.6), s);
-    tree.rotation.y = rand() * Math.PI;
-    tree.position.set(px, -0.3, pz);
-    atmos.add(tree);
+  for (let tries = 0; placed < count && tries < count * 12; tries++) {
+    const x = (rnd() - 0.5) * (board.w + 2 * (clear + depth));
+    const z = (rnd() - 0.5) * (board.d + 2 * (clear + depth));
+    const edge = Math.max(Math.abs(x) - halfW, Math.abs(z) - halfD); // distance past the board edge
+    if (edge < clear) continue;
+    if (Math.hypot(x - house.position.x, z - house.position.z) < 3.2) continue;
+    const k = key(x, z);
+    if (cellHash.has(k)) continue;
+    cellHash.set(k, true);
+    // Younger, shorter trees at the forest edge; old growth further back.
+    const maturity = Math.min(1, (edge - clear) / 10);
+    const h = m(16 + 14 * maturity + rnd() * 14);   // 16-44 m
+    const r = h * (0.15 + rnd() * 0.06);            // crown radius
+    tmpMatrix.compose(
+      tmpPos.set(x, -0.3, z),
+      tmpQuat.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rnd() * Math.PI * 2),
+      tmpScale.set(r, h, r),
+    );
+    firs.setMatrixAt(placed, tmpMatrix);
+    shade.setScalar(0.75 + rnd() * 0.5);
+    firs.setColorAt(placed, shade);
     placed++;
   }
+  firs.count = placed;
+  firs.computeBoundingSphere();
+  surroundGroup.add(firs);
 }
 
-const RAIN_COUNT = 1800;
-const RAIN_BOX = { x: 70, y: 40, z: 70 };
-const rainPos = new Float32Array(RAIN_COUNT * 6);
-const rainSpeed = new Float32Array(RAIN_COUNT);
-for (let i = 0; i < RAIN_COUNT; i++) {
-  const x = (Math.random() - 0.5) * RAIN_BOX.x;
-  const y = Math.random() * RAIN_BOX.y;
-  const z = (Math.random() - 0.5) * RAIN_BOX.z;
-  rainPos.set([x, y, z, x + 0.05, y - 0.45, z + 0.02], i * 6);
-  rainSpeed[i] = 14 + Math.random() * 8;
-}
-const rainGeo = new THREE.BufferGeometry();
-rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3).setUsage(THREE.DynamicDrawUsage));
-const rain = new THREE.LineSegments(
-  rainGeo,
-  new THREE.LineBasicMaterial({ color: '#8aa0b8', transparent: true, opacity: 0.22, depthWrite: false }),
-);
-rain.frustumCulled = false;
-atmos.add(rain);
+// Drizzle: streaks ~1.5 m long, spread over the board and the near forest.
+let rain = null;
+let rainPos = new Float32Array(0);
+let rainSpeed = new Float32Array(0);
+const RAIN_TOP = m(80);
+const STREAK = m(1.5);
+const rainBox = { x: 0, z: 0 };
+const rainMat = new THREE.LineBasicMaterial({ color: '#8aa0b8', transparent: true, opacity: 0.22, depthWrite: false });
 
+function buildRain() {
+  if (rain) { atmos.remove(rain); rain.geometry.dispose(); }
+  rainBox.x = board.w + 50;
+  rainBox.z = board.d + 50;
+  const count = Math.min(6000, Math.round(rainBox.x * rainBox.z * 0.3));
+  rainPos = new Float32Array(count * 6);
+  rainSpeed = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
+    spawnDrop(i, Math.random() * RAIN_TOP);
+    rainSpeed[i] = m(7) + Math.random() * m(3); // ~7-10 m/s
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3).setUsage(THREE.DynamicDrawUsage));
+  rain = new THREE.LineSegments(geo, rainMat);
+  rain.frustumCulled = false;
+  atmos.add(rain);
+}
+function spawnDrop(i, y) {
+  const x = (Math.random() - 0.5) * rainBox.x;
+  const z = (Math.random() - 0.5) * rainBox.z;
+  rainPos.set([x, y, z, x + 0.03, y - STREAK, z + 0.01], i * 6);
+}
 function updateRain(dt) {
-  for (let i = 0; i < RAIN_COUNT; i++) {
+  const n = rainSpeed.length;
+  for (let i = 0; i < n; i++) {
     const o = i * 6;
     const dy = rainSpeed[i] * dt;
     rainPos[o + 1] -= dy;
     rainPos[o + 4] -= dy;
-    rainPos[o] += dt * 0.6;
-    rainPos[o + 3] += dt * 0.6;
-    if (rainPos[o + 4] < -0.3) {
-      const x = (Math.random() - 0.5) * RAIN_BOX.x;
-      const z = (Math.random() - 0.5) * RAIN_BOX.z;
-      rainPos.set([x, RAIN_BOX.y, z, x + 0.05, RAIN_BOX.y - 0.45, z + 0.02], o);
-    }
+    rainPos[o] += dt * 0.3;
+    rainPos[o + 3] += dt * 0.3;
+    if (rainPos[o + 4] < -0.3) spawnDrop(i, RAIN_TOP);
   }
-  rainGeo.attributes.position.needsUpdate = true;
+  rain.geometry.attributes.position.needsUpdate = true;
 }
 
 function applyAtmosphere() {
   atmos.visible = ui.atmosphere;
   scene.fog = ui.atmosphere ? FOG : null;
 }
+
+// Horizontal distance from the camera to the nearest edge of the board (incl.
+// labels). Trees closer to the camera than this are dissolved.
+function updateTreeFade() {
+  const hx = board.w / 2 + 1.2;
+  const hz = board.d / 2 + 1.2;
+  const cx = camera.position.x;
+  const cz = camera.position.z;
+  const nx = THREE.MathUtils.clamp(cx, -hx, hx);
+  const nz = THREE.MathUtils.clamp(cz, -hz, hz);
+  fadeUniforms.uCamXZ.value.set(cx, cz);
+  fadeUniforms.uFadeD.value = Math.hypot(cx - nx, cz - nz);
+}
+
+buildBoard();
+setCamera(window.innerWidth < window.innerHeight ? 'top' : 'angled', true);
+
+grid.onChange((indices, resized) => {
+  if (resized) {
+    buildBoard();
+    setHover(null);
+    setCamera(window.innerWidth < window.innerHeight ? 'top' : 'angled');
+    syncSizeInputs();
+  } else {
+    for (const i of indices) refreshCell(i);
+    flagDirty();
+  }
+  updateCounts();
+  updateHoverInfo();
+  scheduleSave();
+});
 
 // ---------------------------------------------------------------------------
 // Interaction: painting
@@ -448,11 +643,11 @@ function pickCell(ev, { clamp = false } = {}) {
   // Fallback: intersect the board plane (lets drags continue off the tile tops).
   const p = raycaster.ray.intersectPlane(boardPlane, new THREE.Vector3());
   if (!p) return null;
-  let x = Math.floor(p.x / TILE + COLS / 2);
-  let y = Math.floor(p.z / TILE + ROWS / 2);
+  let x = Math.floor(p.x / TILE + grid.cols / 2);
+  let y = Math.floor(p.z / TILE + grid.rows / 2);
   if (clamp) {
-    x = THREE.MathUtils.clamp(x, 0, COLS - 1);
-    y = THREE.MathUtils.clamp(y, 0, ROWS - 1);
+    x = THREE.MathUtils.clamp(x, 0, grid.cols - 1);
+    y = THREE.MathUtils.clamp(y, 0, grid.rows - 1);
   }
   return grid.inBounds(x, y) ? { x, y } : null;
 }
@@ -594,11 +789,37 @@ $('#camMode').addEventListener('click', () => setOrbitMode(!ui.orbitMode));
 
 $('#optLabels').addEventListener('change', (e) => { ui.labels = e.target.checked; labelGroup.visible = ui.labels; });
 $('#optAtmos').addEventListener('change', (e) => { ui.atmosphere = e.target.checked; applyAtmosphere(); });
+$('#optGhost').addEventListener('change', (e) => { ui.ghost = e.target.checked; });
+
+// Board size
+function syncSizeInputs() {
+  $('#sizeCols').value = grid.cols;
+  $('#sizeRows').value = grid.rows;
+  $('#sizeReadout').textContent =
+    `${grid.cols} × ${grid.rows} cells ≈ ${grid.cols * METERS_PER_CELL} × ${grid.rows * METERS_PER_CELL} m ` +
+    `(${Math.round(grid.cols * METERS_PER_CELL * 3.281)} × ${Math.round(grid.rows * METERS_PER_CELL * 3.281)} ft)`;
+}
+for (const id of ['#sizeCols', '#sizeRows']) {
+  Object.assign($(id), { min: MIN_SIZE, max: MAX_SIZE });
+  $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') applySize(); });
+}
+function applySize() {
+  const cols = Number($('#sizeCols').value);
+  const rows = Number($('#sizeRows').value);
+  const shrinking = cols < grid.cols || rows < grid.rows;
+  if (grid.resize(cols, rows)) {
+    updateUndoButtons();
+    toast(shrinking ? 'Board resized. Cells past the new edge were removed; undo restores them.' : 'Board resized.');
+  }
+  syncSizeInputs(); // shows clamped values
+}
+$('#sizeApply').addEventListener('click', applySize);
+syncSizeInputs();
 
 $('#undo').addEventListener('click', () => { grid.undo(); updateUndoButtons(); });
 $('#redo').addEventListener('click', () => { grid.redo(); updateUndoButtons(); });
 $('#clear').addEventListener('click', () => {
-  grid.replaceAll(Array.from({ length: N }, defaultCell));
+  grid.replaceAll(grid.cols, grid.rows, Array.from({ length: N }, defaultCell));
   updateUndoButtons();
   toast('Board cleared. Undo (Ctrl/Cmd+Z) brings it back.');
 });
@@ -633,7 +854,8 @@ dlg.root.addEventListener('click', (e) => { if (e.target === dlg.root) closeDial
 
 function importText(text) {
   try {
-    grid.replaceAll(grid.parse(JSON.parse(text)));
+    const data = grid.parse(JSON.parse(text));
+    grid.replaceAll(data.cols, data.rows, data.cells);
     updateUndoButtons();
     closeDialog();
     toast('Layout imported. Undo restores the previous board.');
@@ -749,7 +971,7 @@ function updateCounts() {
   $('#counts').innerHTML =
     `Indoor <b>${n.indoor}</b> · Outdoor <b>${n.outdoor}</b><br>` +
     `Lit <b>${n.lit}</b> · Unlit <b>${n.unlit}</b><br>` +
-    `Walkable <b>${n.walkable}</b> · Blocked <b>${n.blocked}</b> · ${COLS}×${ROWS}`;
+    `Walkable <b>${n.walkable}</b> · Blocked <b>${n.blocked}</b> · ${grid.cols}×${grid.rows}`;
 }
 
 let saveTimer = 0;
@@ -839,8 +1061,12 @@ renderer.setAnimationLoop(() => {
     const { x, y } = grid.coords(hoverIndex);
     hoverBox.position.copy(cellToWorld(x, y));
     hoverBox.scale.set(1, heights[hoverIndex] + 0.02, 1);
+    // Ghost home covers the hovered cell and the cells right/below it.
+    ghostHouse.position.copy(cellToWorld(x, y)).add(tmpPos.set(0.5 * TILE, FLOOR_H, 0.5 * TILE));
   }
+  ghostHouse.visible = ui.ghost && hoverIndex >= 0;
 
+  updateTreeFade();
   if (atmos.visible) updateRain(dt);
   renderer.render(scene, camera);
 });

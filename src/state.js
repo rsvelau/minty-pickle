@@ -3,6 +3,12 @@
 export const COLS = 20;
 export const ROWS = 26;
 export const FORMAT_VERSION = 1;
+export const MIN_SIZE = 4;
+export const MAX_SIZE = 60;
+const clampSize = (n, fallback) => {
+  const v = Math.round(Number(n));
+  return Number.isFinite(v) ? Math.min(MAX_SIZE, Math.max(MIN_SIZE, v)) : fallback;
+};
 
 export const defaultCell = () => ({ indoor: false, lit: false, walkable: true });
 
@@ -35,7 +41,8 @@ export class GridState {
   inBounds(x, y) { return x >= 0 && y >= 0 && x < this.cols && y < this.rows; }
 
   onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
-  emit(indices) { for (const fn of this.listeners) fn(indices); }
+  // `resized` tells listeners the board dimensions changed (rebuild needed).
+  emit(indices, resized = false) { for (const fn of this.listeners) fn(indices, resized); }
 
   // --- strokes -------------------------------------------------------------
 
@@ -90,18 +97,51 @@ export class GridState {
   #replay(from, to, which) {
     const entries = from.pop();
     if (!entries) return false;
-    for (const e of entries) Object.assign(this.cells[e.i], e[which]);
     to.push(entries);
+    if (entries.snapshot) {
+      this.#restore(entries.snapshot[which]);
+      return true;
+    }
+    for (const e of entries) Object.assign(this.cells[e.i], e[which]);
     this.emit(entries.map((e) => e.i));
     return true;
   }
 
-  // Replace the whole board as a single undoable step.
-  replaceAll(cells) {
-    this.beginStroke();
-    cells.forEach((c, i) => this.apply(i, c, { silent: true }));
-    this.endStroke();
-    this.emit(this.cells.map((_, i) => i));
+  #snapshot() {
+    return { cols: this.cols, rows: this.rows, cells: this.cells.map((c) => ({ ...c })) };
+  }
+
+  #restore(snap) {
+    const resized = snap.cols !== this.cols || snap.rows !== this.rows;
+    this.cols = snap.cols;
+    this.rows = snap.rows;
+    this.cells = snap.cells.map((c) => ({ ...c }));
+    this.emit(this.cells.map((_, i) => i), resized);
+  }
+
+  // Replace the whole board (optionally with new dimensions) as one undoable step.
+  replaceAll(cols, rows, cells) {
+    const before = this.#snapshot();
+    const after = { cols, rows, cells: cells.map((c) => ({ ...c })) };
+    this.undoStack.push({ snapshot: { before, after } });
+    if (this.undoStack.length > 200) this.undoStack.shift();
+    this.redoStack.length = 0;
+    this.#restore(after);
+  }
+
+  // Change board dimensions, keeping every cell that still fits (anchored at A1).
+  resize(cols, rows) {
+    cols = clampSize(cols, this.cols);
+    rows = clampSize(rows, this.rows);
+    if (cols === this.cols && rows === this.rows) return false;
+    const cells = [];
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        cells.push(x < this.cols && y < this.rows ? { ...this.cells[this.index(x, y)] } : defaultCell());
+      }
+    }
+    this.replaceAll(cols, rows, cells);
+    return true;
   }
 
   counts() {
@@ -130,16 +170,24 @@ export class GridState {
     };
   }
 
-  // Parse saved data into a full cell array (does not mutate state).
+  // Parse saved data into { cols, rows, cells } (does not mutate state).
+  // Files without dimensions are read as the default 20 x 26 board.
   parse(data) {
     if (!data || !Array.isArray(data.cells)) throw new Error('Not a grid file: missing "cells".');
-    const out = Array.from({ length: this.cols * this.rows }, defaultCell);
+    const cols = clampSize(data.cols ?? COLS, COLS);
+    const rows = clampSize(data.rows ?? ROWS, ROWS);
+    const cells = Array.from({ length: cols * rows }, defaultCell);
     data.cells.forEach((c, n) => {
-      const x = Number.isInteger(c.x) ? c.x : n % (data.cols || this.cols);
-      const y = Number.isInteger(c.y) ? c.y : Math.floor(n / (data.cols || this.cols));
-      if (!this.inBounds(x, y)) return;
-      out[this.index(x, y)] = { indoor: !!c.indoor, lit: !!c.lit, walkable: c.walkable !== false };
+      const x = Number.isInteger(c.x) ? c.x : n % cols;
+      const y = Number.isInteger(c.y) ? c.y : Math.floor(n / cols);
+      if (x < 0 || y < 0 || x >= cols || y >= rows) return;
+      cells[y * cols + x] = { indoor: !!c.indoor, lit: !!c.lit, walkable: c.walkable !== false };
     });
-    return out;
+    return { cols, rows, cells };
+  }
+
+  // Load parsed data without touching undo history (used at startup).
+  load({ cols, rows, cells }) {
+    this.#restore({ cols, rows, cells });
   }
 }
