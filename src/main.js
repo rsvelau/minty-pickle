@@ -598,40 +598,111 @@ $('#optAtmos').addEventListener('change', (e) => { ui.atmosphere = e.target.chec
 $('#undo').addEventListener('click', () => { grid.undo(); updateUndoButtons(); });
 $('#redo').addEventListener('click', () => { grid.redo(); updateUndoButtons(); });
 $('#clear').addEventListener('click', () => {
-  if (!confirm('Reset every cell to outdoor / unlit / walkable? (You can undo this.)')) return;
   grid.replaceAll(Array.from({ length: N }, defaultCell));
   updateUndoButtons();
+  toast('Board cleared. Undo (Ctrl/Cmd+Z) brings it back.');
 });
 
+// In-page dialog for export / import / PNG. Works even where native
+// alert()/confirm() and file downloads are blocked (e.g. sandboxed embeds).
+const dlg = {
+  root: $('#dialog'), title: $('#dlgTitle'), text: $('#dlgText'),
+  area: $('#dlgArea'), img: $('#dlgImg'), actions: $('#dlgActions'),
+};
+function openDialog({ title, text = '', area = null, readonly = true, img = null, actions = [] }) {
+  dlg.title.textContent = title;
+  dlg.text.textContent = text;
+  dlg.text.classList.remove('error');
+  dlg.area.hidden = area === null;
+  if (area !== null) { dlg.area.value = area; dlg.area.readOnly = readonly; }
+  dlg.img.hidden = !img;
+  if (img) dlg.img.src = img;
+  dlg.actions.replaceChildren(...actions.map(([label, fn, primary]) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    if (primary) b.classList.add('on');
+    b.addEventListener('click', fn);
+    return b;
+  }), Object.assign(document.createElement('button'), { textContent: 'Close', onclick: closeDialog }));
+  dlg.root.hidden = false;
+  (area !== null && !readonly ? dlg.area : dlg.actions.firstElementChild)?.focus();
+}
+function closeDialog() { dlg.root.hidden = true; dlg.img.removeAttribute('src'); }
+function dialogError(msg) { dlg.text.textContent = msg; dlg.text.classList.add('error'); }
+dlg.root.addEventListener('click', (e) => { if (e.target === dlg.root) closeDialog(); });
+
+function importText(text) {
+  try {
+    grid.replaceAll(grid.parse(JSON.parse(text)));
+    updateUndoButtons();
+    closeDialog();
+    toast('Layout imported. Undo restores the previous board.');
+  } catch (err) {
+    dialogError(`That isn't a grid layout this app can read (${err.message}). Paste the JSON from Export, or choose a .json file.`);
+  }
+}
+
 $('#export').addEventListener('click', () => {
-  const blob = new Blob([JSON.stringify(grid.toJSON(), null, 2)], { type: 'application/json' });
-  download(blob, `board-grid-${stamp()}.json`);
+  const json = JSON.stringify(grid.toJSON(), null, 2);
+  openDialog({
+    title: 'Export layout',
+    text: 'Copy this JSON somewhere safe, or download it as a file. Import accepts either.',
+    area: json,
+    actions: [
+      ['Copy JSON', async () => {
+        try { await navigator.clipboard.writeText(json); toast('JSON copied.'); } catch { dlg.area.select(); dialogError('Copy was blocked here. The text is selected; press Ctrl/Cmd+C.'); }
+      }, true],
+      ['Download .json', () => download(new Blob([json], { type: 'application/json' }), `board-grid-${stamp()}.json`)],
+    ],
+  });
 });
-$('#import').addEventListener('click', () => $('#importFile').click());
+$('#import').addEventListener('click', () => {
+  openDialog({
+    title: 'Import layout',
+    text: 'Paste exported JSON below, or choose a .json file. This replaces the board (undo restores it).',
+    area: '',
+    readonly: false,
+    actions: [
+      ['Load pasted JSON', () => importText(dlg.area.value), true],
+      ['Choose file…', () => $('#importFile').click()],
+    ],
+  });
+  dlg.area.placeholder = '{ "format": "minty-pickle-grid", ... }';
+});
 $('#importFile').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   e.target.value = '';
-  if (!file) return;
-  try {
-    grid.replaceAll(grid.parse(JSON.parse(await file.text())));
-    updateUndoButtons();
-  } catch (err) {
-    alert(`Couldn't import that file: ${err.message}`);
-  }
+  if (file) importText(await file.text());
 });
 $('#png').addEventListener('click', () => {
   hoverBox.visible = false;
   renderer.render(scene, camera);
-  renderer.domElement.toBlob((blob) => blob && download(blob, `board-grid-${stamp()}.png`));
+  const url = renderer.domElement.toDataURL('image/png');
   hoverBox.visible = hoverIndex >= 0;
+  openDialog({
+    title: 'Snapshot',
+    text: 'Right-click (or long-press) the image to save or copy it.',
+    img: url,
+    actions: [['Download .png', () => renderer.domElement.toBlob((b) => b && download(b, `board-grid-${stamp()}.png`)), true]],
+  });
 });
+
+let toastTimer = 0;
+function toast(msg) {
+  const el = $('#toast');
+  el.textContent = msg;
+  el.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.hidden = true; }, 3200);
+}
 
 $('#collapse').addEventListener('click', () => { $('#panel').hidden = true; $('#expand').hidden = false; });
 $('#expand').addEventListener('click', () => { $('#panel').hidden = false; $('#expand').hidden = true; });
 if (window.innerWidth < 700) { $('#panel').hidden = true; $('#expand').hidden = false; }
 
 window.addEventListener('keydown', (e) => {
-  if (e.target instanceof HTMLInputElement) return;
+  if (!dlg.root.hidden) { if (e.key === 'Escape') closeDialog(); return; }
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
   const mod = e.ctrlKey || e.metaKey;
   if (mod && e.key.toLowerCase() === 'z') {
     e.preventDefault();

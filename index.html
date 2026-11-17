@@ -78,6 +78,17 @@
       </div>
     </aside>
 
+    <div id="dialog" class="dialog" hidden role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+      <div class="dialog-card">
+        <h3 id="dlgTitle"></h3>
+        <p id="dlgText"></p>
+        <textarea id="dlgArea" spellcheck="false" hidden></textarea>
+        <img id="dlgImg" alt="Snapshot of the board" hidden />
+        <div id="dlgActions" class="dialog-actions"></div>
+      </div>
+    </div>
+    <div id="toast" class="toast" role="status" hidden></div>
+
     <button id="expand" class="panel-tab" hidden>Grid Planner ☰</button>
 
     <div id="info" class="info">
