@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Board Grid Planner</title>
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <aside id="panel" class="panel">
+      <header class="panel-head">
+        <h1>Grid Planner</h1>
+        <button id="collapse" class="icon-btn" title="Hide panel" aria-label="Hide panel">–</button>
+      </header>
+
+      <div class="panel-body">
+        <section>
+          <h2>Paint</h2>
+          <div class="brush-row">
+            <span class="row-label">Area</span>
+            <button class="brush" data-brush="outdoor"><i class="sw sw-outdoor"></i>Outdoor<kbd>1</kbd></button>
+            <button class="brush" data-brush="indoor"><i class="sw sw-indoor"></i>Indoor<kbd>2</kbd></button>
+          </div>
+          <div class="brush-row">
+            <span class="row-label">Light</span>
+            <button class="brush" data-brush="unlit"><i class="sw sw-unlit"></i>Unlit<kbd>3</kbd></button>
+            <button class="brush" data-brush="lit"><i class="sw sw-lit"></i>Lit<kbd>4</kbd></button>
+          </div>
+          <div class="brush-row">
+            <span class="row-label">Move</span>
+            <button class="brush" data-brush="walkable"><i class="sw sw-walk"></i>Walkable<kbd>5</kbd></button>
+            <button class="brush" data-brush="blocked"><i class="sw sw-blocked"></i>Blocked<kbd>6</kbd></button>
+          </div>
+          <div class="brush-row">
+            <span class="row-label"></span>
+            <button class="brush wide" data-brush="reset">Reset cell to default<kbd>0</kbd></button>
+          </div>
+          <div class="seg" role="group" aria-label="Paint shape">
+            <button data-shape="brush" class="on">Freehand</button>
+            <button data-shape="rect">Rectangle <kbd>R</kbd></button>
+          </div>
+        </section>
+
+        <section>
+          <h2>View</h2>
+          <div class="seg" role="group" aria-label="Layer view">
+            <button data-view="all" class="on">All</button>
+            <button data-view="area">Area</button>
+            <button data-view="light">Light</button>
+            <button data-view="walk">Move</button>
+          </div>
+          <div class="seg" role="group" aria-label="Camera">
+            <button data-cam="angled">Angled</button>
+            <button data-cam="top">Top-down <kbd>T</kbd></button>
+            <button id="camMode" title="Left-drag orbits instead of paints (or hold Space)">Orbit mode</button>
+          </div>
+          <label class="check"><input type="checkbox" id="optLabels" checked /> Coordinate labels</label>
+          <label class="check"><input type="checkbox" id="optAtmos" checked /> Atmosphere (rain, trees, fog)</label>
+        </section>
+
+        <section>
+          <h2>File</h2>
+          <div class="file-row">
+            <button id="undo" title="Ctrl/Cmd+Z">Undo</button>
+            <button id="redo" title="Ctrl/Cmd+Shift+Z">Redo</button>
+            <button id="clear">Clear</button>
+          </div>
+          <div class="file-row">
+            <button id="export">Export JSON</button>
+            <button id="import">Import JSON</button>
+            <button id="png">Save PNG</button>
+          </div>
+          <input type="file" id="importFile" accept="application/json,.json" hidden />
+          <p class="note" id="saveNote">Autosaves in this browser.</p>
+        </section>
+      </div>
+    </aside>
+
+    <button id="expand" class="panel-tab" hidden>Grid Planner ☰</button>
+
+    <div id="info" class="info">
+      <div id="hover" class="hover">Hover a cell</div>
+      <div id="counts" class="counts"></div>
+    </div>
+
+    <div class="help">
+      <b>Left-drag</b> paint · <b>Shift-drag</b> rectangle · <b>Right-drag</b> / <b>Space</b>+drag orbit ·
+      <b>Middle-drag</b> pan · <b>Wheel</b> zoom · touch: 1 finger paints, 2 fingers move camera
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
