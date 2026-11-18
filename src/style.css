@@ -274,3 +274,4 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px
 .sw-wall { background: #b8b0a0; }
 .sw-door { background: linear-gradient(90deg, #b8b0a0 0 30%, #c0803c 30% 70%, #b8b0a0 70%); }
 .sw-erase { background: transparent; border: 1px dashed #e88a7f; }
+.sw-lamp { background: radial-gradient(circle, #fff0c4 0 25%, #f0b060 45%, #3a2a18 75%); }

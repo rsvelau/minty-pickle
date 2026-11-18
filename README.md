@@ -46,10 +46,21 @@ cells become Street when loaded. The street surface lives in `src/street.js`.
 
 - **Stop signs**: a faded red octagon on a post, on the corner to the right of each approach that has to stop,
   facing oncoming traffic. Crossings are all-way stops (four signs); at a T only the side street stops.
-- **A streetlight**: a cobra-head lamp on a weathered wooden utility pole with its arm over the junction. At a
-  T it stands on the sidewalk opposite the side street; at a crossing, on a corner. The lamp follows the
-  cell's **Lit** setting: paint the intersection Lit and it glows sodium-orange; leave it unlit and it's a
-  dead lamp.
+- **An antique street lamp**: the town is a late-1800s logging town kept historic, so lamps are cast-iron posts
+  in old dark-green paint (flared base, fluted shaft, ladder bar) with an acorn glass globe, cap and finial,
+  about 4.4 m tall. At a T it stands on the sidewalk opposite the side street; at a crossing, on a corner.
+
+### Lit lamps
+
+**Lit lamp** (`L`) switches on the street lamp in a cell. It only works on cells that have a lamp (street
+T-junctions and crossings) and does nothing elsewhere; **Unlit** switches it off. A lit lamp:
+
+- lights its own cell fully (the globe glows warm and a bright pool spreads from it), and
+- spills dimmer light onto the 8 cells around it: **55 %** on the four sides, **35 %** on the diagonals.
+
+The spill is real data, not just a picture: hovering a cell shows "Lamp light 55 %", the **Light** view shows
+the gradient, and exported JSON gives every cell a `light` level from 0 to 1 (plus `"lamp": true` on cells with
+a lit lamp). The spill amounts are `LAMP_SPILL` in `src/state.js`.
 
 ### Walkable and blocked versions
 
@@ -136,7 +147,7 @@ npm run build      # static site in dist/ (works from any sub-path, e.g. GitHub 
 |--------|-------|
 | Paint with the current brush | Left-drag |
 | Paint a rectangle | Shift + left-drag, or the **Rectangle** toggle (`R`) |
-| Choose a brush | `1` Ground · `2` Hardwood · `7` Lake · `8` River · `9` Bridge · `3` Unlit · `4` Lit · `5` Walkable · `6` Blocked · `0` Reset (other subcategories: click) |
+| Choose a brush | `1` Ground · `2` Hardwood · `7` Lake · `8` River · `9` Bridge · `3` Unlit · `4` Lit · `L` Lit lamp · `5` Walkable · `6` Blocked · `0` Reset (other subcategories: click) |
 | Walls & doors | `W` wall · `D` door · `X` erase |
 | Orbit camera | Right-drag, or hold `Space` and left-drag, or **Orbit mode** |
 | Zoom | Mouse wheel or pinch; zooms toward the pointer, so you can zoom into any corner of the board |

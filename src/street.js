@@ -18,10 +18,13 @@
 //   stop signs   on the corner to the right of each approach that must stop
 //                (all four at a crossing; only the side street at a T),
 //                facing oncoming traffic
-//   streetlight  a cobra-head lamp on a wooden utility pole, arm over the
-//                junction; the lamp glows when the cell is Lit, else it's dead
+//   street lamp  an antique cast-iron post with an acorn globe (the town is a
+//                late-1800s logging town kept historic); the globe glows when
+//                the cell's lamp is switched on ("Lit lamp"), else it's dark
 import * as THREE from 'three';
 import { METERS_PER_CELL, m, SIDEWALK_W } from './scale.js';
+import { streetMask } from './state.js';
+export { streetMask };
 
 const N = 1, E = 2, S = 4, W = 8;
 const TILE_PX = 256;
@@ -36,8 +39,19 @@ const WHITE = 'rgba(206, 204, 194, 0.7)';
 
 export function createStreets(group) {
   const atlas = buildAtlas();
-  const unlitMat = new THREE.MeshLambertMaterial({ map: atlas });
-  const litMat = new THREE.MeshLambertMaterial({ map: atlas, emissiveMap: atlas, emissive: new THREE.Color('#a39d8c') });
+  // One material per light level: unlit, lamp spill (diagonal, side), Lit,
+  // and the lamp cell itself (warm and bright).
+  const LEVELS = [
+    { e: null },
+    { e: '#3a3326' },
+    { e: '#5e523a' },
+    { e: '#a39d8c' },
+    { e: '#d8b77c' },
+  ];
+  const mats = LEVELS.map(({ e }) => (e
+    ? new THREE.MeshLambertMaterial({ map: atlas, emissiveMap: atlas, emissive: new THREE.Color(e) })
+    : new THREE.MeshLambertMaterial({ map: atlas })));
+  const levelIndex = (level, lamp, lit) => (lamp ? 4 : lit ? 3 : level >= 0.5 ? 2 : level > 0 ? 1 : 0);
   const geos = new Map();
   const meshes = new Map();
   const tmpM = new THREE.Matrix4();
@@ -49,11 +63,11 @@ export function createStreets(group) {
     return geos.get(k);
   }
 
-  function meshFor(key, mask, wear, lit, needed) {
+  function meshFor(key, mask, wear, lvl, needed) {
     let mesh = meshes.get(key);
     if (mesh && mesh.instanceMatrix.count >= needed) return mesh;
     if (mesh) { group.remove(mesh); mesh.dispose(); }
-    mesh = new THREE.InstancedMesh(geometryFor(mask, wear), lit ? litMat : unlitMat, Math.max(16, Math.ceil(needed * 1.5)));
+    mesh = new THREE.InstancedMesh(geometryFor(mask, wear), mats[lvl], Math.max(16, Math.ceil(needed * 1.5)));
     mesh.receiveShadow = true;
     mesh.castShadow = true;
     mesh.raycast = () => {};
@@ -65,7 +79,7 @@ export function createStreets(group) {
   const furniture = createFurniture(group);
 
   // ctx: { visible, cellToWorld(x, y), surfaceY }
-  function update(grid, { visible, cellToWorld, surfaceY }) {
+  function update(grid, { visible, cellToWorld, surfaceY, lightLevels, lampsOn }) {
     const buckets = new Map(); // key -> { mask, wear, lit, positions[] }
     const items = [];          // street furniture: [kind, x, y, z, rotY]
     if (visible) {
@@ -73,18 +87,20 @@ export function createStreets(group) {
         if (c.sub !== 'street') return;
         const { x, y } = grid.coords(i);
         const mask = streetMask(grid, x, y);
-        placeFurniture(items, mask, cellToWorld(x, y), surfaceY + CURB, c.lit, x * 31 + y * 17);
+        const lamp = !!lampsOn?.[i];
+        placeFurniture(items, mask, cellToWorld(x, y), surfaceY + CURB, lamp, x * 31 + y * 17);
         const wear = ((x * 73856093) ^ (y * 19349663)) >>> 0 & 1;
-        const key = `${mask}:${wear}:${c.lit ? 1 : 0}`;
-        if (!buckets.has(key)) buckets.set(key, { mask, wear, lit: c.lit, positions: [] });
+        const lvl = levelIndex(lightLevels?.[i] ?? 0, lamp, c.lit);
+        const key = `${mask}:${wear}:${lvl}`;
+        if (!buckets.has(key)) buckets.set(key, { positions: [] });
         buckets.get(key).positions.push(cellToWorld(x, y));
       });
     }
     for (const key of new Set([...meshes.keys(), ...buckets.keys()])) {
       const b = buckets.get(key);
-      const [mask, wear, lit] = key.split(':').map(Number);
+      const [mask, wear, lvl] = key.split(':').map(Number);
       const list = b?.positions ?? [];
-      const mesh = meshFor(key, mask, wear, !!lit, list.length);
+      const mesh = meshFor(key, mask, wear, lvl, list.length);
       list.forEach((p, n) => {
         tmpM.makeTranslation(tmpP.set(p.x, surfaceY, p.z));
         mesh.setMatrixAt(n, tmpM);
@@ -103,26 +119,6 @@ export function createStreets(group) {
   }
 
   return { update, clear };
-}
-
-// Which sides continue the road: street or bridge neighbours. Off the board,
-// a side counts as open when the road runs straight through from the
-// opposite side (so roads continue off the edge instead of dead-ending).
-export function streetMask(grid, x, y) {
-  const conn = (nx, ny) => {
-    if (!grid.inBounds(nx, ny)) return null; // decided below
-    const c = grid.cells[grid.index(nx, ny)];
-    return c.sub === 'street' || c.bridge;
-  };
-  const sides = [[N, 0, -1, S], [E, 1, 0, W], [S, 0, 1, N], [W, -1, 0, E]];
-  const open = {};
-  for (const [bit, dx, dy] of sides) open[bit] = conn(x + dx, y + dy);
-  let mask = 0;
-  for (const [bit, , , opp] of sides) {
-    if (open[bit] === true) mask |= bit;
-    else if (open[bit] === null && open[opp] === true) mask |= bit;
-  }
-  return mask;
 }
 
 // --- geometry ------------------------------------------------------------------
@@ -430,19 +426,19 @@ function placeFurniture(items, mask, centre, y, lit, hash) {
     const pz = centre.z + cz * CORNER + dz * 0.02;
     items.push(['stopSign', px, y, pz, FACE[d]]);
   }
-  // Streetlight: at a T, mid-sidewalk opposite the stem; at a crossing, on a
-  // corner (varies per junction). The arm reaches toward the middle.
+  // Street lamp: at a T, mid-sidewalk opposite the stem; at a crossing, on a
+  // corner square (varies per junction), at the curb side of the sidewalk.
   let lx, lz;
   if (open.length === 3) {
     const closed = [N, E, S, W].find((b) => !(mask & b));
-    [lx, lz] = DIR[closed].map((v) => v * CORNER);
+    [lx, lz] = DIR[closed].map((v) => v * (CORNER - SW * 0.15));
   } else {
     const corners = [[1, 1], [-1, 1], [-1, -1], [1, -1]];
-    [lx, lz] = corners[hash % 4].map((v) => v * CORNER);
+    [lx, lz] = corners[hash % 4].map((v) => v * (CORNER - SW * 0.1));
   }
-  const rot = Math.atan2(lz, -lx); // turns the +x arm toward the cell centre
-  items.push(['streetlight', centre.x + lx, y, centre.z + lz, rot]);
-  items.push([lit ? 'lampOn' : 'lampOff', centre.x + lx, y, centre.z + lz, rot]);
+  const rot = (hash % 8) * (Math.PI / 4); // ladder bar direction varies
+  items.push(['lampPost', centre.x + lx, y, centre.z + lz, rot]);
+  items.push([lit ? 'globeOn' : 'globeOff', centre.x + lx, y, centre.z + lz, rot]);
   if (lit) items.push(['lampHalo', centre.x + lx, y, centre.z + lz, rot]);
 }
 
@@ -451,12 +447,12 @@ function createFurniture(group) {
   const vcMat = new THREE.MeshLambertMaterial({ vertexColors: true });
   const mats = {
     stopSign: vcMat,
-    streetlight: vcMat,
-    lampOn: new THREE.MeshBasicMaterial({ color: '#ffc46b' }),         // sodium glow
-    lampOff: new THREE.MeshLambertMaterial({ color: '#3a3c3a' }),      // dead lamp
+    lampPost: vcMat,
+    globeOn: new THREE.MeshBasicMaterial({ color: '#ffe2a6' }),        // warm incandescent glass
+    globeOff: new THREE.MeshLambertMaterial({ color: '#3d4441', transparent: true, opacity: 0.85 }), // dark glass
     // Soft glow round a lit lamp so it reads from above too.
     lampHalo: new THREE.MeshBasicMaterial({
-      color: '#ffb457', transparent: true, opacity: 0.16, depthWrite: false, blending: THREE.AdditiveBlending,
+      color: '#ffc370', transparent: true, opacity: 0.15, depthWrite: false, blending: THREE.AdditiveBlending,
     }),
   };
   const meshes = {};
@@ -471,7 +467,7 @@ function createFurniture(group) {
     if (mesh && mesh.instanceMatrix.count >= needed) return mesh;
     if (mesh) { group.remove(mesh); mesh.dispose(); }
     mesh = new THREE.InstancedMesh(kinds[kind], mats[kind], Math.max(16, Math.ceil(needed * 1.5)));
-    mesh.castShadow = kind !== 'lampOn' && kind !== 'lampHalo';
+    mesh.castShadow = kind !== 'globeOn' && kind !== 'lampHalo';
     mesh.receiveShadow = true;
     mesh.raycast = () => {};
     meshes[kind] = mesh;
@@ -526,7 +522,14 @@ function furnitureKinds() {
   const octagon = (r, t, y, z, hex) => paint(
     new THREE.CylinderGeometry(r, r, t, 8).rotateX(Math.PI / 2).rotateZ(Math.PI / 8).translate(0, y, z), hex);
 
-  const POLE_H = m(8.5), ARM = m(2.6);
+  // Antique cast-iron street lamp (late-1800s style, kept by the historic
+  // town): octagonal plinth, flared base, fluted shaft with collars, a ladder
+  // bar, and an acorn globe under a cap with a finial. ~4.4 m tall.
+  const IRON = '#1f2c25';        // old dark-green paint over cast iron
+  const IRON_HI = '#2e3e34';
+  const GLOBE_Y = m(3.78);
+  const globe = () => new THREE.SphereGeometry(m(0.24), 16, 12).scale(1, 1.45, 1).translate(0, GLOBE_Y, 0);
+  const ring = (r, h, y) => paint(new THREE.CylinderGeometry(r, r, m(h), 16).translate(0, y, 0), IRON_HI);
   return {
     // Faded red octagon (~0.75 m) with a white border on a 2.1 m galvanized post.
     stopSign: merge([
@@ -536,21 +539,28 @@ function furnitureKinds() {
       // a pale bar standing in for the STOP lettering
       paint(new THREE.BoxGeometry(m(0.42), m(0.1), m(0.01)).translate(0, m(2.05), m(0.072)), '#cfc9bd'),
     ]),
-    // Weathered wooden utility pole with a cobra-head lamp on a curved arm.
-    streetlight: merge([
-      paint(new THREE.CylinderGeometry(m(0.13), m(0.17), POLE_H, 8).translate(0, POLE_H / 2, 0), '#4c3d2f'),
-      paint(new THREE.BoxGeometry(m(0.9), m(0.1), m(0.1)).translate(0, POLE_H - m(0.6), 0), '#3e3228'), // crossarm
-      paint(new THREE.CylinderGeometry(m(0.04), m(0.04), ARM, 6).rotateZ(Math.PI / 2 - 0.12)
-        .translate(ARM / 2, POLE_H - m(1.2) + Math.sin(0.12) * ARM / 2, 0), '#7c7f82'),
-      paint(new THREE.SphereGeometry(m(0.35), 10, 6).scale(1.6, 0.45, 0.9)
-        .translate(ARM + m(0.15), POLE_H - m(1.2) + Math.sin(0.12) * ARM, 0), '#7a7d80'),
+    lampPost: merge([
+      paint(new THREE.CylinderGeometry(m(0.28), m(0.32), m(0.22), 8).translate(0, m(0.11), 0), IRON),     // plinth
+      paint(new THREE.CylinderGeometry(m(0.13), m(0.25), m(0.55), 8).translate(0, m(0.22) + m(0.275), 0), IRON), // flared base
+      ring(m(0.15), 0.08, m(0.8)),
+      paint(new THREE.CylinderGeometry(m(0.07), m(0.095), m(2.5), 12).translate(0, m(0.84) + m(1.25), 0), IRON), // fluted shaft
+      ring(m(0.11), 0.07, m(1.6)),
+      ring(m(0.12), 0.1, m(3.32)),
+      // Ladder bar with ball ends, for the lamplighter's ladder.
+      paint(new THREE.BoxGeometry(m(0.8), m(0.05), m(0.05)).translate(0, m(3.05), 0), IRON),
+      paint(new THREE.SphereGeometry(m(0.045), 8, 6).translate(m(0.42), m(3.05), 0), IRON_HI),
+      paint(new THREE.SphereGeometry(m(0.045), 8, 6).translate(-m(0.42), m(3.05), 0), IRON_HI),
+      // Fitter holding the globe.
+      paint(new THREE.CylinderGeometry(m(0.13), m(0.09), m(0.16), 12).translate(0, m(3.45), 0), IRON),
+      // Cap over the globe, and a finial.
+      paint(new THREE.ConeGeometry(m(0.2), m(0.22), 12).translate(0, m(4.2), 0), IRON),
+      ring(m(0.21), 0.04, m(4.09)),
+      paint(new THREE.SphereGeometry(m(0.045), 8, 6).translate(0, m(4.34), 0), IRON_HI),
+      paint(new THREE.ConeGeometry(m(0.025), m(0.12), 6).translate(0, m(4.44), 0), IRON_HI),
     ]),
-    // The lens under the cobra head: lit or dead.
-    lampOn: new THREE.SphereGeometry(m(0.26), 10, 4, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2)
-      .scale(1.5, 0.5, 0.8).translate(ARM + m(0.15), POLE_H - m(1.25) + Math.sin(0.12) * ARM, 0),
-    lampOff: new THREE.SphereGeometry(m(0.26), 10, 4, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2)
-      .scale(1.5, 0.5, 0.8).translate(ARM + m(0.15), POLE_H - m(1.25) + Math.sin(0.12) * ARM, 0),
-    lampHalo: new THREE.SphereGeometry(m(0.65), 12, 8)
-      .translate(ARM + m(0.15), POLE_H - m(1.3) + Math.sin(0.12) * ARM, 0),
+    // The acorn globe: glowing or dark.
+    globeOn: globe(),
+    globeOff: globe(),
+    lampHalo: new THREE.SphereGeometry(m(0.75), 14, 10).translate(0, GLOBE_Y, 0),
   };
 }

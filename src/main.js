@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {
   GridState, COLS, ROWS, MIN_SIZE, MAX_SIZE, AREAS, colLabel, cellLabel, defaultCell, defaultWalkable, areaLabel, parseEdgeKey,
+  hasStreetLamp,
 } from './state.js';
 import { createWaterSurface } from './water.js';
 import { createProps } from './props.js';
@@ -62,6 +63,9 @@ const PALETTE = {
   areaDeck: '#b39a72',
   blockedShade: 0.88,
   glowOutdoor: '#c6e0c0',
+  glowLamp: '#ffd38a',       // warm incandescent glow of an antique street lamp
+  lightLamp: '#fff0c4',      // Light view: the lamp cell itself
+  spillWarm: '#b89a62',      // surfaces near a lit lamp
   glowIndoor: '#ffbe73',
   // single-layer views
   areaOutdoor: '#34574c',
@@ -90,8 +94,13 @@ const paintArea = (area, sub) => (c) => {
 const BRUSHES = {
   bridge: (c) => (c.area === 'water' ? { bridge: true, walkable: true } : null),
   unbridge: (c) => (c.bridge ? { bridge: false, walkable: false } : null),
-  unlit: { lit: false },
+  unlit: { lit: false, lamp: false },
   lit: { lit: true },
+  // Switch on the street lamp: only where one stands (T-junctions, crossings).
+  lamp: (c, i, g) => {
+    const { x, y } = g.coords(i);
+    return hasStreetLamp(g, x, y) ? { lamp: true, lit: true } : null;
+  },
   walkable: { walkable: true },
   blocked: { walkable: false },
   reset: defaultCell(),
@@ -101,7 +110,7 @@ for (const area in AREAS) {
 }
 const BRUSH_KEYS = {
   1: 'outdoor:ground', 2: 'indoor:hardwood', 3: 'unlit', 4: 'lit', 5: 'walkable', 6: 'blocked',
-  7: 'water:lake', 8: 'water:river', 9: 'bridge', 0: 'reset',
+  7: 'water:lake', 8: 'water:river', 9: 'bridge', 0: 'reset', l: 'lamp', L: 'lamp',
 };
 
 // ---------------------------------------------------------------------------
@@ -494,7 +503,7 @@ function refreshWaterAndBridges() {
   deckGlow.needsUpdate = true;
   decks.computeBoundingSphere();
   bridges.update(grid, { visible: ui.view === 'all', deckTop: DECK_TOP, bedY: BED_H });
-  streets.update(grid, { visible: ui.view === 'all', cellToWorld, surfaceY: SUB_LOOK.street.h + 0.002 });
+  streets.update(grid, { visible: ui.view === 'all', cellToWorld, surfaceY: SUB_LOOK.street.h + 0.002, lightLevels, lampsOn });
   refreshPropsAndWalls();
 }
 
@@ -594,8 +603,20 @@ const tmpQuat = new THREE.Quaternion();
 const tmpScale = new THREE.Vector3();
 const ZERO = new THREE.Vector3(0, 0, 0);
 
-function cellLook(cell) {
-  // Returns { color: hex, glow: number, height: number (tile top), pool: hexOrNull, poolY }
+// Light level per cell (0..1, includes lamp spill) and which lamps are on;
+// recomputed on every change because a lamp lights its neighbours too.
+let lightLevels = new Float32Array(0);
+let lampsOn = new Uint8Array(0);
+function recomputeLight() {
+  lightLevels = grid.lightLevels();
+  lampsOn = Uint8Array.from(grid.cells, (_, i) => (grid.lampOn(i) ? 1 : 0));
+}
+
+const mixHex = (a, b, t) => tmpColor2.set(a).lerp(new THREE.Color(b), t).getHex();
+const tmpColor2 = new THREE.Color();
+
+function cellLook(cell, level = 0, lamp = false) {
+  // Returns { color, glow, height (tile top), pool: hexOrNull, poolY, poolScale }
   const blocked = !cell.walkable;
   const isWater = cell.area === 'water';
   const look = SUB_LOOK[cell.sub] ?? {};
@@ -610,7 +631,12 @@ function cellLook(cell) {
         glow: 0.15, height: isWater ? BED_H : surfaceH, pool: null,
       };
     case 'light':
-      return { color: cell.lit ? PALETTE.lightOn : PALETTE.lightOff, glow: cell.lit ? 0.45 : 0, height: isWater ? BED_H : FLOOR_H, pool: null };
+      // Gradient: dark -> lit by light level; lamp cells brightest.
+      return {
+        color: lamp ? PALETTE.lightLamp : mixHex(PALETTE.lightOff, PALETTE.lightOn, level),
+        glow: lamp ? 0.6 : 0.45 * level,
+        height: isWater ? BED_H : FLOOR_H, pool: null,
+      };
     case 'walk':
       return { color: blocked ? PALETTE.walkNo : PALETTE.walkOk, glow: 0.2, height, pool: null };
     default: {
@@ -622,9 +648,19 @@ function cellLook(cell) {
         };
       }
       const set = SUB_LOOK[cell.sub] ?? PALETTE[cell.area];
+      if (lamp) {
+        // Bright pool spreading over the neighbouring cells.
+        return {
+          color: set.lit, glow: 0.3, height,
+          pool: PALETTE.glowLamp, poolScale: 1.45, poolY: FLOOR_H + 0.045,
+          shade: blocked ? PALETTE.blockedShade : 1,
+        };
+      }
       return {
-        color: cell.lit ? set.lit : set.unlit,
-        glow: cell.lit ? 0.18 : 0,
+        // Lit cells use their lit colour; lamp spill warms the surface toward
+        // the lamp's incandescent glow by how much light reaches it.
+        color: cell.lit ? set.lit : level > 0 ? mixHex(set.unlit, PALETTE.spillWarm, level * 0.55) : set.unlit,
+        glow: 0.18 * level,
         height,
         pool: cell.lit ? (cell.area === 'indoor' ? PALETTE.glowIndoor : PALETTE.glowOutdoor) : null,
         shade: blocked ? PALETTE.blockedShade : 1,
@@ -634,7 +670,7 @@ function cellLook(cell) {
 }
 
 function refreshCell(i) {
-  const look = cellLook(grid.cells[i]);
+  const look = cellLook(grid.cells[i], lightLevels[i], !!lampsOn[i]);
   tmpColor.set(look.color);
   tmpColor.offsetHSL(0, 0, jitter[i] * (ui.view === 'all' ? 0.18 : 0.06));
   if (look.shade) tmpColor.multiplyScalar(look.shade);
@@ -645,7 +681,8 @@ function refreshCell(i) {
   const { x, y } = grid.coords(i);
   if (look.pool) {
     tmpPos.copy(cellToWorld(x, y)).setY(look.poolY ?? FLOOR_H + 0.04); // above curbs
-    tmpMatrix.compose(tmpPos, tmpQuat.identity(), tmpScale.set(1, 1, 1));
+    const ps = look.poolScale ?? 1;
+    tmpMatrix.compose(tmpPos, tmpQuat.identity(), tmpScale.set(ps, 1, ps));
     pools.setColorAt(i, tmpColor.set(look.pool));
   } else {
     tmpMatrix.compose(ZERO, tmpQuat.identity(), tmpScale.set(0, 0, 0));
@@ -662,6 +699,7 @@ function writeTileMatrix(i) {
 }
 
 function refreshAll(instant = false) {
+  recomputeLight();
   for (let i = 0; i < N; i++) refreshCell(i);
   if (instant) heights.set(targetHeights);
   for (let i = 0; i < N; i++) writeTileMatrix(i);
@@ -939,7 +977,14 @@ grid.onChange((indices, resized) => {
     setCamera(window.innerWidth < window.innerHeight ? 'top' : 'angled');
     syncSizeInputs();
   } else {
-    for (const i of indices) refreshCell(i);
+    // Light spills between cells: also refresh any cell whose level changed.
+    const oldLevels = lightLevels, oldLamps = lampsOn;
+    recomputeLight();
+    const dirty = new Set(indices);
+    for (let i = 0; i < N; i++) {
+      if (lightLevels[i] !== oldLevels[i] || lampsOn[i] !== oldLamps[i]) dirty.add(i);
+    }
+    for (const i of dirty) refreshCell(i);
     refreshWaterAndBridges();
     flagDirty();
   }
@@ -1493,7 +1538,7 @@ function updateHoverInfo() {
     `<span class="id">${cellLabel(x, y)}</span>` +
     `<span class="tag">${AREAS[c.area].label} · ${areaLabel(c)}</span>` +
     (c.bridge ? `<span class="tag">Bridge (spans ${grid.bridgeAxis(x, y) === 'x' ? 'E–W' : 'N–S'})</span>` : '') +
-    `<span class="tag">${c.lit ? 'Lit' : 'Unlit'}</span>` +
+    `<span class="tag">${lampsOn[hoverIndex] ? 'Lit lamp' : c.lit ? 'Lit' : lightLevels[hoverIndex] > 0 ? `Lamp light ${Math.round(lightLevels[hoverIndex] * 100)}%` : 'Unlit'}</span>` +
     `<span class="tag">${c.walkable ? 'Walkable' : 'Blocked'}</span>`;
 }
 
@@ -1509,7 +1554,7 @@ function updateCounts() {
   $('#counts').innerHTML =
     `Outdoor <b>${n.outdoor}</b> · Indoor <b>${n.indoor}</b> · Water <b>${n.water}</b><br>` +
     `<span class="sub-counts">${subs.join(' · ')}</span><br>` +
-    `Bridges <b>${n.bridge}</b> · Walls <b>${n.wall}</b> · Doors <b>${n.door}</b><br>` +
+    `Bridges <b>${n.bridge}</b> · Walls <b>${n.wall}</b> · Doors <b>${n.door}</b> · Lit lamps <b>${n.lamp}</b><br>` +
     `Lit <b>${n.lit}</b> · Unlit <b>${n.unlit}</b><br>` +
     `Walkable <b>${n.walkable}</b> · Blocked <b>${n.blocked}</b> · ${grid.cols}×${grid.rows}`;
 }

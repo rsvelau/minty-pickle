@@ -39,14 +39,49 @@ export const AREAS = {
     subs: { lake: { label: 'Lake' }, river: { label: 'River' } },
   },
 };
-export const CELL_KEYS = ['area', 'sub', 'lit', 'walkable', 'bridge'];
+export const CELL_KEYS = ['area', 'sub', 'lit', 'walkable', 'bridge', 'lamp'];
 
 // Whether a freshly painted area/subcategory is walkable.
 export const defaultWalkable = (area, sub) =>
   (AREAS[area]?.walkable ?? true) && (AREAS[area]?.subs[sub]?.walkable ?? true);
 
 // bridge: a walkable deck over a water cell (only valid when area is water).
-export const defaultCell = () => ({ area: 'outdoor', sub: 'ground', lit: false, walkable: true, bridge: false });
+// lamp:   the cell's street lamp is switched on ("Lit lamp"). Only street
+//         cells with a lamp (T-junctions and crossings) can have one; it
+//         lights the cell fully and spills dimmer light onto its neighbours.
+export const defaultCell = () => ({ area: 'outdoor', sub: 'ground', lit: false, walkable: true, bridge: false, lamp: false });
+
+// Light a switched-on lamp throws onto neighbouring cells (0..1).
+export const LAMP_SPILL = { side: 0.55, diagonal: 0.35 };
+
+// Street layout: which sides continue the road (street or bridge
+// neighbours), as a N=1, E=2, S=4, W=8 bitmask. Off the board, a side counts
+// as open when the road runs straight through from the opposite side.
+export function streetMask(grid, x, y) {
+  const N = 1, E = 2, S = 4, W = 8;
+  const conn = (nx, ny) => {
+    if (!grid.inBounds(nx, ny)) return null; // decided below
+    const c = grid.cells[grid.index(nx, ny)];
+    return c.sub === 'street' || c.bridge;
+  };
+  const sides = [[N, 0, -1, S], [E, 1, 0, W], [S, 0, 1, N], [W, -1, 0, E]];
+  const open = {};
+  for (const [bit, dx, dy] of sides) open[bit] = conn(x + dx, y + dy);
+  let mask = 0;
+  for (const [bit, , , opp] of sides) {
+    if (open[bit] === true) mask |= bit;
+    else if (open[bit] === null && open[opp] === true) mask |= bit;
+  }
+  return mask;
+}
+
+// Street lamps stand at intersections: street cells open on 3 or 4 sides.
+export function hasStreetLamp(grid, x, y) {
+  if (!grid.inBounds(x, y) || grid.cells[grid.index(x, y)].sub !== 'street') return false;
+  let mask = streetMask(grid, x, y), n = 0;
+  while (mask) { n += mask & 1; mask >>= 1; }
+  return n >= 3;
+}
 
 // Walls and doors live on the edges between cells, not in cells.
 //  'v' edge (x, y): the vertical line on the west side of cell (x, y), x in 0..cols
@@ -74,6 +109,7 @@ export function normalizeCell(c = {}) {
     lit: !!c.lit,
     walkable: c.walkable === undefined ? defaultWalkable(area, sub) || (water && !!c.bridge) : !!c.walkable,
     bridge: water && !!c.bridge,
+    lamp: !!c.lamp,
   };
 }
 
@@ -148,7 +184,7 @@ export class GridState {
   // Returns true if anything changed.
   apply(i, patch, { silent = false } = {}) {
     const cell = this.cells[i];
-    if (typeof patch === 'function') patch = patch(cell);
+    if (typeof patch === 'function') patch = patch(cell, i, this);
     if (!patch) return false;
     let changed = false;
     for (const k in patch) if (cell[k] !== patch[k]) { changed = true; break; }
@@ -272,7 +308,7 @@ export class GridState {
   // Totals per category, per subcategory (`subs`), and for bridges, light,
   // movement, walls and doors.
   counts() {
-    const n = { bridge: 0, lit: 0, unlit: 0, walkable: 0, blocked: 0, wall: 0, door: 0, subs: {} };
+    const n = { bridge: 0, lit: 0, unlit: 0, walkable: 0, blocked: 0, wall: 0, door: 0, lamp: 0, subs: {} };
     for (const a in AREAS) n[a] = 0;
     for (const c of this.cells) {
       n[c.area]++;
@@ -282,10 +318,39 @@ export class GridState {
       c.walkable ? n.walkable++ : n.blocked++;
     }
     for (const t of this.edges.values()) n[t]++;
+    this.cells.forEach((_, i) => { if (this.lampOn(i)) n.lamp++; });
     return n;
   }
 
   isWater(x, y) { return this.inBounds(x, y) && this.cells[this.index(x, y)].area === 'water'; }
+
+  // Is this cell's street lamp switched on? (A lamp flag left on a cell that
+  // is no longer an intersection does nothing.)
+  lampOn(i) {
+    if (!this.cells[i].lamp) return false;
+    const { x, y } = this.coords(i);
+    return hasStreetLamp(this, x, y);
+  }
+
+  // Light level per cell, 0..1: Lit cells and switched-on lamps are 1; cells
+  // next to a lamp get its spill (sides brighter than diagonals).
+  lightLevels() {
+    const out = new Float32Array(this.cells.length);
+    this.cells.forEach((c, i) => { if (c.lit) out[i] = 1; });
+    this.cells.forEach((c, i) => {
+      if (!this.lampOn(i)) return;
+      out[i] = 1;
+      const { x, y } = this.coords(i);
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if ((!dx && !dy) || !this.inBounds(x + dx, y + dy)) continue;
+          const j = this.index(x + dx, y + dy);
+          out[j] = Math.max(out[j], dx && dy ? LAMP_SPILL.diagonal : LAMP_SPILL.side);
+        }
+      }
+    });
+    return out;
+  }
 
   // River flow: for each cell, a unit (dx, dy) in grid space (+x = right,
   // +y = down the rows); zero for non-river cells. Water enters at the
@@ -386,6 +451,7 @@ export class GridState {
   // --- serialization -----------------------------------------------------------
 
   toJSON() {
+    const levels = this.lightLevels();
     return {
       format: 'minty-pickle-grid',
       version: FORMAT_VERSION,
@@ -397,6 +463,8 @@ export class GridState {
         return {
           x, y, id: cellLabel(x, y),
           area: c.area, sub: c.sub, lit: c.lit, walkable: c.walkable, bridge: c.bridge,
+          lamp: this.lampOn(i),
+          light: Math.round(levels[i] * 100) / 100, // 0..1 incl. lamp spill
           ...(c.bridge ? { bridgeAxis: this.bridgeAxis(x, y) } : {}),
         };
       }),
