@@ -10,6 +10,7 @@ const vertexShader = /* glsl */ `
   void main() {
     vec4 w = modelMatrix * vec4(position, 1.0);
     vW = w.xyz;
+    w.y += terrainHeight(w.xz); // follow the elevation preset
     vec4 mvPosition = viewMatrix * w;
     gl_Position = projectionMatrix * mvPosition;
     #include <fog_vertex>
@@ -113,7 +114,7 @@ export function createWaterSurface() {
     // Board dimensions changed: resize the plane and textures.
     resize(cols, rows) {
       mesh.geometry.dispose();
-      mesh.geometry = new THREE.PlaneGeometry(cols, rows).rotateX(-Math.PI / 2);
+      mesh.geometry = new THREE.PlaneGeometry(cols, rows, cols * 2, rows * 2).rotateX(-Math.PI / 2);
       mask?.dispose();
       flowTex?.dispose();
       mask = new THREE.DataTexture(new Uint8Array(cols * rows * 4), cols, rows);

@@ -193,6 +193,10 @@ export class GridState {
     this.undoStack = [];
     this.redoStack = [];
     this.edges = new Map(); // edgeKey -> 'wall' | 'door'
+    // Board-wide elevation preset (see src/terrain.js) and, optionally, a
+    // function giving a cell's ground elevation in metres (for export).
+    this.terrain = 'flat';
+    this.elevationAt = null;
     this.stroke = null; // Map<index, cellSnapshotBeforeStroke>
     this.strokeEdges = null; // Map<edgeKey, typeBeforeStroke>
     this.listeners = new Set();
@@ -743,6 +747,7 @@ export class GridState {
       version: FORMAT_VERSION,
       cols: this.cols,
       rows: this.rows,
+      terrain: this.terrain, // elevation preset
       // Row-major, y = row (1..26 on the board), x = column (A..T).
       cells: this.cells.map((c, i) => {
         const { x, y } = this.coords(i);
@@ -753,6 +758,7 @@ export class GridState {
           ...(c.lit ? { radius: c.radius } : {}),
           lamp: this.lampOn(i),
           marker: c.marker,
+          ...(this.elevationAt && this.terrain !== 'flat' ? { elevation: Math.round(this.elevationAt(x, y) * 10) / 10 } : {}),
           ...(c.marker === 'key' ? {
             unlocks: this.keyDoors(i).map((k) => {
               const e = parseEdgeKey(k);
@@ -807,11 +813,13 @@ export class GridState {
       const fits = e.edge === 'v' ? e.x >= 0 && e.x <= cols && e.y >= 0 && e.y < rows : e.x >= 0 && e.x < cols && e.y >= 0 && e.y <= rows;
       if (Number.isInteger(e.x) && Number.isInteger(e.y) && fits) edges.set(edgeKey(e.edge, e.x, e.y), type);
     }
-    return { cols, rows, cells, edges };
+    const terrain = typeof data.terrain === 'string' ? data.terrain : 'flat';
+    return { cols, rows, cells, edges, terrain };
   }
 
   // Load parsed data without touching undo history (used at startup).
-  load({ cols, rows, cells, edges }) {
+  load({ cols, rows, cells, edges, terrain }) {
+    if (terrain) this.terrain = terrain;
     this.#restore({ cols, rows, cells, edges: edges ?? new Map() });
   }
 }

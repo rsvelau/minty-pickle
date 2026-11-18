@@ -11,6 +11,13 @@ import { METERS_PER_CELL, m } from './scale.js';
 import { createStreets } from './street.js';
 import { createBridges } from './bridge.js';
 import { createMarkers, drawMarkerIcon } from './markers.js';
+import {
+  installTerrain, setTerrain, terrainHeight, rayTerrain, isFlat, terrainId, TERRAIN_PRESETS,
+} from './terrain.js';
+
+// Elevation is applied to every material on the GPU; patch three's shader
+// chunks before anything compiles.
+installTerrain();
 
 // ---------------------------------------------------------------------------
 // Config
@@ -150,6 +157,12 @@ const rand32 = (seed) => () => ((seed = (seed * 16807) % 2147483647) / 214748364
 // Renderer / scene / camera
 // ---------------------------------------------------------------------------
 
+setTerrain(grid.terrain);
+grid.elevationAt = (x, y) => {
+  const p = cellToWorld(x, y);
+  return terrainHeight(p.x, p.z) * METERS_PER_CELL;
+};
+
 const container = document.getElementById('app');
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -279,6 +292,25 @@ const cellToWorld = (x, y) => new THREE.Vector3(
 
 const slabMat = new THREE.MeshLambertMaterial({ color: '#07090b' });
 const groundMat = new THREE.MeshLambertMaterial({ color: '#0b100e' });
+// Forest floor: hidden over the board (and, for the outer ring, over the
+// inner ground) so sunken water and the board edge show through.
+const groundHole = { value: new THREE.Vector2(1, 1) };
+const outerHole = { value: new THREE.Vector2(1, 1) };
+function holedGround(hole) {
+  const mat = new THREE.MeshLambertMaterial({ color: '#0b100e' });
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uHole = hole;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vGroundXZ;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGroundXZ = (modelMatrix * vec4(transformed, 1.0)).xz;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vGroundXZ;\nuniform vec2 uHole;')
+      .replace('void main() {', 'void main() {\n  if (abs(vGroundXZ.x) < uHole.x && abs(vGroundXZ.y) < uHole.y) discard;');
+  };
+  return mat;
+}
+const innerGroundMat = holedGround(groundHole);
+const outerGroundMat = holedGround(outerHole);
 
 const tileGeoBase = new THREE.BoxGeometry(INSET * TILE, 1, INSET * TILE).translate(0, 0.5, 0); // origin at bottom
 const tileMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
@@ -361,14 +393,24 @@ function buildBoard() {
   slab.receiveShadow = true;
   boardGroup.add(slab);
 
-  // Forest floor level with the town, with a hole where the board sits so
-  // sunken water cells show through.
-  const shape = new THREE.Shape().absarc(0, 0, board.radius + 260, 0, Math.PI * 2, false);
+  // Forest floor level with the town. Near the board it is finely divided so
+  // it follows the elevation; further out a coarse ring runs into the fog.
+  // Both are hidden over what they surround (sunken water shows through).
   const hw = board.w / 2 + 0.2, hd = board.d / 2 + 0.2;
-  shape.holes.push(new THREE.Path().moveTo(-hw, -hd).lineTo(hw, -hd).lineTo(hw, hd).lineTo(-hw, hd).lineTo(-hw, -hd));
-  ground = new THREE.Mesh(new THREE.ShapeGeometry(shape, 64).rotateX(-Math.PI / 2), groundMat);
+  groundHole.value.set(hw, hd);
+  const innerW = board.w + 64, innerD = board.d + 64;
+  outerHole.value.set(innerW / 2 - 0.5, innerD / 2 - 0.5);
+  ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(innerW, innerD, Math.ceil(innerW * 2), Math.ceil(innerD * 2)).rotateX(-Math.PI / 2),
+    innerGroundMat,
+  );
   ground.receiveShadow = true;
   boardGroup.add(ground);
+  const outerSize = 2 * (board.radius + 260);
+  const outer = new THREE.Mesh(new THREE.PlaneGeometry(outerSize, outerSize, 140, 140).rotateX(-Math.PI / 2), outerGroundMat);
+  outer.position.y = -0.04;
+  outer.receiveShadow = true;
+  boardGroup.add(outer);
 
   // Water surface + its per-cell textures.
   water.resize(cols, rows);
@@ -533,7 +575,7 @@ function refreshMarkers() {
     if (!c.marker) return;
     const { x, y } = grid.coords(i);
     const p = cellToWorld(x, y);
-    list.push({ type: c.marker, x: p.x, y: Math.max(visibleTop(i), WATER_Y), z: p.z, dim: !c.walkable });
+    list.push({ type: c.marker, x: p.x, y: Math.max(visibleTop(i), WATER_Y) + terrainHeight(p.x, p.z), z: p.z, dim: !c.walkable });
   });
   markers.update(list);
   markers.setVisible(ui.showMarkers);
@@ -1169,6 +1211,18 @@ function pickCell(ev, { clamp = false } = {}) {
   const r = renderer.domElement.getBoundingClientRect();
   pointer.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
   raycaster.setFromCamera(pointer, camera);
+  if (!isFlat()) {
+    // Ground isn't flat: find where the ray meets street level on the terrain.
+    const tp = rayTerrain(raycaster.ray, FLOOR_H);
+    if (!tp) return null;
+    let x = Math.floor(tp.x / TILE + grid.cols / 2);
+    let y = Math.floor(tp.z / TILE + grid.rows / 2);
+    if (clamp) {
+      x = THREE.MathUtils.clamp(x, 0, grid.cols - 1);
+      y = THREE.MathUtils.clamp(y, 0, grid.rows - 1);
+    }
+    return grid.inBounds(x, y) ? { x, y } : null;
+  }
   const hit = raycaster.intersectObjects([tiles, decks], false)[0];
   // Water surfaces aren't meshes we can hit, so test their plane too: the
   // cell under the surface is what the eye sees, not the bed below it.
@@ -1247,7 +1301,7 @@ function gridPoint(ev) {
   const r = renderer.domElement.getBoundingClientRect();
   pointer.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
   raycaster.setFromCamera(pointer, camera);
-  const p = raycaster.ray.intersectPlane(floorPlane, new THREE.Vector3());
+  const p = isFlat() ? raycaster.ray.intersectPlane(floorPlane, new THREE.Vector3()) : rayTerrain(raycaster.ray, FLOOR_H);
   return p ? { gx: p.x / TILE + grid.cols / 2, gy: p.z / TILE + grid.rows / 2 } : null;
 }
 const clampV = (v) => ({
@@ -1692,6 +1746,30 @@ $('#optGhost').addEventListener('change', (e) => { ui.ghost = e.target.checked; 
 $('#optLowWalls').addEventListener('change', (e) => { ui.lowWalls = e.target.checked; refreshPropsAndWalls(); });
 $('#optMarkers').addEventListener('change', (e) => { ui.showMarkers = e.target.checked; refreshMarkers(); });
 
+// Elevation presets: switch the height formula, then rebuild every shader.
+function applyTerrain(id) {
+  setTerrain(id);
+  grid.terrain = terrainId();
+  scene.traverse((o) => {
+    for (const mat of [].concat(o.material ?? [])) mat.needsUpdate = true;
+  });
+  document.querySelectorAll('[data-terrain]').forEach((b) => b.classList.toggle('on', b.dataset.terrain === grid.terrain));
+  $('#terrainNote').textContent = TERRAIN_PRESETS[grid.terrain].note;
+  refreshMarkers();
+}
+{
+  const host = $('#terrainPresets');
+  for (const [id, t] of Object.entries(TERRAIN_PRESETS)) {
+    const b = document.createElement('button');
+    b.dataset.terrain = id;
+    b.textContent = t.label;
+    b.title = t.note;
+    b.addEventListener('click', () => { applyTerrain(id); scheduleSave(); });
+    host.appendChild(b);
+  }
+  applyTerrain(grid.terrain);
+}
+
 // Marker brushes: icons drawn from the same art as the board badges.
 function setMarkerBrush(name) {
   ui.markerBrush = name;
@@ -1789,6 +1867,7 @@ dlg.root.addEventListener('click', (e) => { if (e.target === dlg.root) closeDial
 function importText(text) {
   try {
     const data = grid.parse(JSON.parse(text));
+    applyTerrain(data.terrain);
     grid.replaceAll(data.cols, data.rows, data.cells, data.edges);
     updateUndoButtons();
     closeDialog();
@@ -2078,4 +2157,4 @@ renderer.setAnimationLoop(() => {
 });
 
 // Handy for debugging / future tooling from the console.
-window.gridPlanner = { grid, scene, camera, controls, brushes: BRUSHES };
+window.gridPlanner = { grid, scene, camera, controls, brushes: BRUSHES, terrainHeight };

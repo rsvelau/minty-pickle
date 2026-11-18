@@ -197,6 +197,24 @@ on the **edges between cells**, not in cells:
   (`bridgeAxis()` in `src/state.js`, and `bridgeAxis` in exported JSON): toward land or other bridge cells
   and across the water. That is what future bridge assets and pylons should use.
 
+## Elevation
+
+**Elevation** in the View section picks a board-wide preset. All are mild; nothing changes how cells, walls,
+light or movement work.
+
+| Preset | Shape |
+|--------|-------|
+| Flat | Level ground (the default, exactly as before) |
+| Gentle hillside | Rises about 4 % from the bottom row to the top (≈7 m over the default board), with soft left-to-right undulations |
+| Rolling hills | Soft hills and dips across the whole board, up to about 3 m either way |
+| Hill and hollow | A rounded rise toward the top right (≈5 m), a damp hollow toward the bottom left, a low ridge between |
+
+Everything follows the ground: tiles, streets, water, walls, props, bridges, lamps, markers and the
+surrounding forest. Each preset is one height formula in `TERRAIN_PRESETS` (`src/terrain.js`), written so
+the same text runs on the GPU (lifting every vertex) and in JavaScript (picking cells under the pointer).
+The preset is saved with the board, and exported cells carry their ground `elevation` in metres when the
+board isn't flat. Water surfaces follow the slope too, so on the hillside a lake tilts gently with it.
+
 ## Scale
 
 One cell is about **7 m (23 ft)**: the width of a narrow two-lane street with small sidewalks. The default
@@ -279,6 +297,7 @@ outdoor/indoor, no edges) are converted on load, outdoor to Ground and indoor to
 - `src/markers.js` — gameplay marker badges and icons.
 - `src/bridge.js` — steel truss bridge structures built from connected bridge cells.
 - `src/street.js` — street surfaces: lane lines, crosswalks, sidewalks, chosen from neighbouring cells.
+- `src/terrain.js` — elevation presets (one height formula each, shared by GPU and picking).
 - `src/scale.js` — metres per cell and the street cross-section.
 - `src/style.css` — panel styling.
 
