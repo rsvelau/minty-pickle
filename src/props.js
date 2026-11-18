@@ -34,13 +34,31 @@ function buildKinds() {
   const iron = '#3c3e42';
   return {
     headstone: merge(box(0.6, 0.9, 0.2, stone)),
-    // Small mausoleum ~2.4 x 3 m footprint, ~3.2 m to the roof peak.
-    tomb: merge(
-      box(2.6, 0.3, 3.2, '#6c706b'),
-      box(2.2, 2.0, 2.8, '#7b7f7a', 0, 0, 0.3),
-      part(new THREE.ConeGeometry(m(2.0), m(0.9), 4).rotateY(Math.PI / 4).scale(1, 1, 1.25)
-        .translate(0, m(2.3) + m(0.45), 0), '#5f625e'),
-      box(0.9, 1.6, 0.05, '#141617', 0, 1.43, 0.3), // dark doorway
+    // Round-topped headstone ~0.6 m wide, 0.9 m tall.
+    roundstone: merge(
+      box(0.6, 0.6, 0.2, '#9a9d98'),
+      part(new THREE.CylinderGeometry(m(0.3), m(0.3), m(0.2), 12, 1, false, 0, Math.PI)
+        .rotateX(Math.PI / 2).rotateZ(Math.PI / 2).translate(0, m(0.6), 0), '#9a9d98'),
+    ),
+    // Stone cross ~1.2 m tall on a low plinth.
+    cross: merge(
+      box(0.45, 0.15, 0.3, '#7d817c'),
+      box(0.14, 1.1, 0.12, '#858984', 0, 0, 0.15),
+      box(0.6, 0.14, 0.12, '#858984', 0, 0, 0.8),
+    ),
+    // Large: obelisk ~3 m tall on a stepped base.
+    obelisk: merge(
+      box(1.1, 0.3, 1.1, '#6c706b'),
+      box(0.8, 0.4, 0.8, '#767a75', 0, 0, 0.3),
+      part(new THREE.CylinderGeometry(m(0.2), m(0.32), m(2.2), 4).rotateY(Math.PI / 4).translate(0, m(0.7) + m(1.1), 0), '#8d918c'),
+      part(new THREE.ConeGeometry(m(0.24), m(0.35), 4).rotateY(Math.PI / 4).translate(0, m(2.9) + m(0.17), 0), '#8d918c'),
+    ),
+    // Large: wide family monument ~1.4 m wide, ~2 m tall.
+    monument: merge(
+      box(1.6, 0.3, 0.7, '#6c706b'),
+      box(1.4, 1.3, 0.35, '#868a85', 0, 0, 0.3),
+      part(new THREE.CylinderGeometry(m(0.7), m(0.7), m(0.35), 16, 1, false, 0, Math.PI)
+        .rotateX(Math.PI / 2).rotateZ(Math.PI / 2).translate(0, m(1.6), 0), '#868a85'),
     ),
     boulder: merge(part(new THREE.IcosahedronGeometry(m(0.8), 0).scale(1, 0.7, 1).translate(0, m(0.35), 0), '#5d615e')),
     shrub: merge(part(new THREE.IcosahedronGeometry(m(0.9), 1).scale(1, 0.8, 1).translate(0, m(0.6), 0), '#284034')),
@@ -81,8 +99,6 @@ function buildKinds() {
     table: merge(box(1.1, 0.06, 0.6, '#6e4a2e', 0, 0, 0.4), box(0.9, 0.4, 0.4, '#4e321e')),
     // Flat stepping stone for a ford.
     steppingStone: merge(part(new THREE.CylinderGeometry(m(0.5), m(0.55), m(0.25), 7), '#727670')),
-    // Gravel strip through a walkable cemetery (runs along x, full cell).
-    gravelStrip: merge(part(new THREE.BoxGeometry(m(1.5), 0.012, 1.0).rotateY(Math.PI / 2).translate(0, 0.006, 0), '#7c7666')),
   };
 }
 
@@ -93,6 +109,8 @@ function buildKinds() {
 // along that direction. `ctx.rnd()` is a stable per-cell random number.
 
 const jit = (r, a) => (r() - 0.5) * a;
+// Mostly plain headstones, some round-topped, the odd cross.
+const smallMarker = (r) => { const v = r(); return v < 0.5 ? 'headstone' : v < 0.85 ? 'roundstone' : 'cross'; };
 
 const VARIANTS = {
   ground: {
@@ -124,24 +142,34 @@ const VARIANTS = {
     ],
   },
   cemetery: {
-    // A gravel path through the middle, a grave either side.
-    walkable: ({ along, rnd }) => {
-      const alongX = along === 0;
-      // Offset `s` (+/-1) to one side of the path, jittered along it.
-      const beside = (s) => (alongX ? [jit(rnd, 0.3), s * 0.33] : [s * 0.33, jit(rnd, 0.3)]);
-      const [ax, az] = beside(-1);
-      const [bx, bz] = beside(1);
-      return [
-        ['gravelStrip', 0, 0, along],
-        ['headstone', ax, az, along + jit(rnd, 0.3)],
-        ['headstone', bx, bz, along + Math.PI + jit(rnd, 0.3)],
-      ];
+    // A few small markers scattered loosely; plenty of room to walk.
+    walkable: ({ rnd }) => {
+      const spots = [[-0.25, -0.25], [0.25, -0.25], [-0.25, 0.25], [0.25, 0.25]];
+      const count = 2 + (rnd() < 0.4 ? 1 : 0);
+      const out = [];
+      for (let k = 0; k < count; k++) {
+        const [dx, dz] = spots.splice(Math.floor(rnd() * spots.length), 1)[0];
+        out.push([smallMarker(rnd), dx + jit(rnd, 0.12), dz + jit(rnd, 0.12), jit(rnd, 0.5), 0.9 + rnd() * 0.25]);
+      }
+      return out;
     },
-    // A tomb crowded by headstones.
+    // Packed rows of markers with one or two large monuments among them.
     blocked: ({ rnd }) => {
-      const out = [['tomb', -0.12, -0.05, jit(rnd, 0.2)]];
-      for (const [dx, dz] of [[0.36, -0.32], [0.36, -0.05], [0.36, 0.22], [-0.3, 0.38], [-0.05, 0.4], [0.2, 0.42]]) {
-        out.push(['headstone', dx + jit(rnd, 0.04), dz + jit(rnd, 0.04), jit(rnd, 0.6), 0.85 + rnd() * 0.3]);
+      const out = [];
+      const large = [];
+      const corners = [[-0.24, -0.24], [0.24, -0.24], [-0.24, 0.24], [0.24, 0.24]];
+      const bigCount = 1 + (rnd() < 0.4 ? 1 : 0);
+      for (let k = 0; k < bigCount; k++) {
+        const [dx, dz] = corners.splice(Math.floor(rnd() * corners.length), 1)[0];
+        large.push([dx, dz]);
+        out.push([rnd() < 0.5 ? 'obelisk' : 'monument', dx, dz, jit(rnd, 0.25), 0.9 + rnd() * 0.2]);
+      }
+      // Four rows of four small markers, skipping spots the monuments take.
+      for (const dz of [-0.36, -0.12, 0.12, 0.36]) {
+        for (const dx of [-0.36, -0.12, 0.12, 0.36]) {
+          if (large.some(([lx, lz]) => Math.abs(lx - dx) < 0.3 && Math.abs(lz - dz) < 0.3)) continue;
+          out.push([smallMarker(rnd), dx + jit(rnd, 0.05), dz + jit(rnd, 0.05), jit(rnd, 0.35), 0.75 + rnd() * 0.3]);
+        }
       }
       return out;
     },
@@ -152,14 +180,14 @@ const VARIANTS = {
   forestCemetery: {
     walkable: ({ rnd }) => [
       ['fir', -0.3, -0.3, rnd() * 6, 0.75],
-      ['headstone', 0.25, 0.2, jit(rnd, 0.5)],
+      [smallMarker(rnd), 0.25, 0.2, jit(rnd, 0.5)],
     ],
     blocked: ({ rnd }) => [
       ['fir', -0.25, -0.25, rnd() * 6, 1],
       ['fir', 0.25, -0.15, rnd() * 6, 0.85],
       ['fir', -0.1, 0.28, rnd() * 6, 0.9],
-      ['headstone', 0.28, 0.25, jit(rnd, 0.6)],
-      ['headstone', 0.05, -0.05, jit(rnd, 0.6), 0.9],
+      [smallMarker(rnd), 0.28, 0.25, jit(rnd, 0.6)],
+      [smallMarker(rnd), 0.05, -0.05, jit(rnd, 0.6), 0.9],
     ],
   },
   forest: {

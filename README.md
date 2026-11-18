@@ -26,7 +26,7 @@ slightly below the curb and sidewalks slightly above.
 
 ### Walkable and blocked versions
 
-Blocked cells stay flat; props show what's in the way. Barricades, gates, logs and cemetery paths turn to fit
+Blocked cells stay flat; props show what's in the way. Barricades, gates, logs and stepping stones turn to fit
 the cells around them (across a road, along a path).
 
 | Surface | Walkable | Blocked |
@@ -35,7 +35,7 @@ the cells around them (across a road, along a path).
 | Road | Clear road | Sawhorse barricade across the road, traffic cones |
 | Sidewalk | Clear | Dumpster and a cone |
 | Path | Clear | Fallen log across the path, rocks |
-| Cemetery | Gravel path through the middle, sparse headstones | Tomb crowded by headstones |
+| Cemetery | Sparse grave markers (2–3 per cell) | Dense rows of markers with one or two large monuments (obelisks, family monuments) |
 | Cemetery path | Clear gravel | Wrought-iron gate across the path |
 | Forest cemetery | One fir and a headstone | Dense firs and headstones |
 | Forest | A clearing with one young fir | Dense young firs |
