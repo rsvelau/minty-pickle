@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {
   GridState, COLS, ROWS, MIN_SIZE, MAX_SIZE, AREAS, colLabel, cellLabel, defaultCell, defaultWalkable, areaLabel, parseEdgeKey,
-  hasStreetLamp,
+  hasStreetLamp, lightKind, centreBrightness, MAX_RADIUS,
 } from './state.js';
 import { createWaterSurface } from './water.js';
 import { createProps } from './props.js';
@@ -94,8 +94,9 @@ const paintArea = (area, sub) => (c) => {
 const BRUSHES = {
   bridge: (c) => (c.area === 'water' ? { bridge: true, walkable: true } : null),
   unbridge: (c) => (c.bridge ? { bridge: false, walkable: false } : null),
-  unlit: { lit: false, lamp: false },
-  lit: { lit: true },
+  unlit: { lit: false, radius: 0, lamp: false },
+  // Light source with the radius set in the panel.
+  lit: () => ({ lit: true, radius: ui.lightRadius }),
   // Switch on the street lamp: only where one stands (T-junctions, crossings).
   lamp: (c, i, g) => {
     const { x, y } = g.coords(i);
@@ -123,6 +124,7 @@ const ui = {
   tool: 'cells',       // 'cells' | 'walls'
   edgeBrush: 'wall',   // 'wall' | 'door' | 'erase'
   lowWalls: true,
+  lightRadius: 1,      // radius for the Light source brush (cells)
   shape: 'brush',      // 'brush' | 'rect'
   view: 'all',         // 'all' | 'area' | 'light' | 'walk'
   orbitMode: false,    // toggle: left-drag orbits
@@ -295,6 +297,12 @@ const poolGeo = new THREE.PlaneGeometry(2.6 * TILE, 2.6 * TILE).rotateX(-Math.PI
 const unitBoxGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
 const wallMat = new THREE.MeshLambertMaterial({ color: '#b8b0a0' });
 const doorMat = new THREE.MeshLambertMaterial({ color: '#d08a40', emissive: '#5a3414' });
+// Storefront windows: painted frames (instance colour), and glass that is
+// dark, or glows warm when light reaches either side.
+const frameMat = new THREE.MeshLambertMaterial({ color: '#ffffff' });
+const glassDarkMat = new THREE.MeshLambertMaterial({ color: '#2b3c46', transparent: true, opacity: 0.6, depthWrite: false });
+const glassLitMat = new THREE.MeshBasicMaterial({ color: '#ffd9a0', transparent: true, opacity: 0.78, depthWrite: false });
+const FRAME_COLOURS = ['#1f3a2e', '#5a1f1c', '#1b1b1d', '#c8bfa6', '#2a3550']; // green, oxblood, black, cream, navy
 
 
 // ---------------------------------------------------------------------------
@@ -303,7 +311,7 @@ const doorMat = new THREE.MeshLambertMaterial({ color: '#d08a40', emissive: '#5a
 
 let N = 0;
 let tiles, pools, glowAttr, slab, ground, decks, deckGlow, rails;
-let walls, doorLeaves;
+let walls, doorLeaves, frames, glassDark, glassLit;
 let props = null; // walkable/blocked variants of every surface (src/props.js)
 let bridges = null; // steel truss bridge structures (src/bridge.js)
 let streets = null; // street surfaces: lanes, lines, sidewalks (src/street.js)
@@ -398,7 +406,11 @@ function buildBoard() {
   const maxEdges = 2 * N + cols + rows;
   walls = new THREE.InstancedMesh(unitBoxGeo, wallMat, maxEdges * 3);
   doorLeaves = new THREE.InstancedMesh(unitBoxGeo, doorMat, maxEdges * 2);
-  for (const mesh of [walls, doorLeaves]) {
+  frames = new THREE.InstancedMesh(unitBoxGeo, frameMat, maxEdges * 8);
+  glassDark = new THREE.InstancedMesh(unitBoxGeo, glassDarkMat, maxEdges);
+  glassLit = new THREE.InstancedMesh(unitBoxGeo, glassLitMat, maxEdges);
+  glassDark.renderOrder = glassLit.renderOrder = 3;
+  for (const mesh of [walls, doorLeaves, frames, glassDark, glassLit]) {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.raycast = () => {};
@@ -478,7 +490,7 @@ function refreshWaterAndBridges() {
       tmpPos.copy(cellToWorld(x, y)).setY(DECK_TOP);
       tmpMatrix.compose(tmpPos, tmpQuat.identity(), tmpScale.set(1, 1, 1));
       decks.setMatrixAt(i, tmpMatrix);
-      const look = deckLook(c);
+      const look = deckLook(c, i);
       decks.setColorAt(i, tmpColor.set(look.color));
       deckGlow.array[i] = look.glow;
       if (ui.view === 'all') {
@@ -535,6 +547,18 @@ function refreshPropsAndWalls() {
     );
     walls.setMatrixAt(nw++, tmpMatrix);
   };
+  let nf = 0, ngd = 0, ngl = 0;
+  // A box along the edge into any instanced mesh (`colour` for frames).
+  const strip = (mesh, n, cx, cz, along, len, y0, y1, thick, vertical, colour) => {
+    const px = vertical ? cx : cx + along;
+    const pz = vertical ? cz + along : cz;
+    tmpMatrix.compose(
+      tmpPos.set(px, y0, pz), tmpQuat.identity(),
+      vertical ? tmpScale.set(thick, y1 - y0, len) : tmpScale.set(len, y1 - y0, thick),
+    );
+    mesh.setMatrixAt(n, tmpMatrix);
+    if (colour) mesh.setColorAt(n, tmpColor.set(colour));
+  };
   for (const [k, type] of grid.edges) {
     const { o, x, y } = parseEdgeKey(k);
     const vertical = o === 'v';
@@ -542,6 +566,46 @@ function refreshPropsAndWalls() {
     const cz = vertical ? y - grid.rows / 2 + 0.5 : y - grid.rows / 2;
     if (type === 'wall') {
       piece(cx, cz, 0, TILE + WALL_T, FLOOR_H, H, vertical);
+      continue;
+    }
+    if (type === 'window') {
+      // Storefront: masonry piers at the ends, a painted wooden bulkhead
+      // under a big glass pane, mullions/transom by variant, a header above.
+      const hash = (x * 73856093) ^ (y * 19349663) ^ (vertical ? 83492791 : 0);
+      const variant = (hash >>> 0) % 4;
+      const colour = FRAME_COLOURS[(hash >>> 3) % FRAME_COLOURS.length];
+      const pier = m(0.35);
+      const sill = ui.lowWalls ? m(0.3) : m(0.6);
+      const head = m(2.8);
+      const top = Math.min(head, H);
+      const inner = TILE - 2 * pier;
+      piece(cx, cz, -(TILE / 2 - pier / 2), pier + WALL_T, FLOOR_H, H, vertical);
+      piece(cx, cz, TILE / 2 - pier / 2, pier + WALL_T, FLOOR_H, H, vertical);
+      if (H > head) piece(cx, cz, 0, inner, FLOOR_H + head, H, vertical);
+      strip(frames, nf++, cx, cz, 0, inner, FLOOR_H, FLOOR_H + sill, WALL_T * 1.1, vertical, colour); // bulkhead
+      // Glass: lit if light reaches either side of the window.
+      const [ca, cb] = grid.edgeCells(o, x, y);
+      const lvl = (c) => (grid.inBounds(c.x, c.y) ? lightLevels[grid.index(c.x, c.y)] : 0);
+      const lit = Math.max(lvl(ca), lvl(cb)) > 0.2;
+      strip(lit ? glassLit : glassDark, lit ? ngl++ : ngd++, cx, cz, 0, inner, FLOOR_H + sill, FLOOR_H + top, WALL_T * 0.35, vertical);
+      // Frame: sill and head rails, mullions, transom.
+      const rail = m(0.12), bar = m(0.1);
+      strip(frames, nf++, cx, cz, 0, inner, FLOOR_H + sill, FLOOR_H + sill + rail, WALL_T * 0.9, vertical, colour);
+      if (H > head) strip(frames, nf++, cx, cz, 0, inner, FLOOR_H + head - rail, FLOOR_H + head, WALL_T * 0.9, vertical, colour);
+      const transom = m(2.15);
+      const panes = [2, 3, 1, 4][variant];
+      const hasTransom = variant === 0 || variant === 2;
+      const mullionTop = hasTransom ? Math.min(transom, top) : top;
+      for (let i = 1; i < panes; i++) {
+        strip(frames, nf++, cx, cz, -inner / 2 + (inner * i) / panes, bar, FLOOR_H + sill, FLOOR_H + mullionTop, WALL_T * 0.8, vertical, colour);
+      }
+      if (hasTransom && top > transom) {
+        strip(frames, nf++, cx, cz, 0, inner, FLOOR_H + transom, FLOOR_H + transom + bar, WALL_T * 0.8, vertical, colour);
+        // Small transom lights above a single big pane.
+        if (variant === 2) {
+          for (let i = 1; i < 3; i++) strip(frames, nf++, cx, cz, -inner / 2 + (inner * i) / 3, bar, FLOOR_H + transom, FLOOR_H + top, WALL_T * 0.8, vertical, colour);
+        }
+      }
       continue;
     }
     // Door: wall either side of a centred opening.
@@ -572,16 +636,21 @@ function refreshPropsAndWalls() {
   }
   walls.count = nw;
   doorLeaves.count = nd;
-  for (const mesh of [walls, doorLeaves]) {
+  frames.count = nf;
+  glassDark.count = ngd;
+  glassLit.count = ngl;
+  for (const mesh of [walls, doorLeaves, frames, glassDark, glassLit]) {
     mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     mesh.computeBoundingSphere();
   }
 }
 
-function deckLook(c) {
+function deckLook(c, i) {
   if (ui.view === 'area') return { color: PALETTE.areaDeck, glow: 0.15 };
   if (ui.view === 'walk') return { color: c.walkable ? PALETTE.walkOk : PALETTE.walkNo, glow: 0.2 };
-  return { color: c.lit ? PALETTE.deck.lit : PALETTE.deck.unlit, glow: c.lit ? 0.18 : 0 };
+  const lvl = lightLevels[i] ?? 0;
+  return { color: mixHex(PALETTE.deck.unlit, PALETTE.deck.lit, lvl), glow: 0.18 * lvl };
 }
 
 // Top of what you see in a cell: deck, water surface, or tile.
@@ -644,6 +713,7 @@ function cellLook(cell, level = 0, lamp = false) {
         return {
           color: PALETTE.bed, glow: 0, height,
           pool: cell.lit ? PALETTE.glowOutdoor : null,
+          poolScale: cell.lit ? 0.6 + 0.2 * Math.min(cell.radius, 2) : 1,
           poolY: (cell.bridge ? DECK_TOP : WATER_Y) + 0.012,
         };
       }
@@ -652,17 +722,22 @@ function cellLook(cell, level = 0, lamp = false) {
         // Bright pool spreading over the neighbouring cells.
         return {
           color: set.lit, glow: 0.3, height,
-          pool: PALETTE.glowLamp, poolScale: 1.45, poolY: FLOOR_H + 0.045,
+          pool: PALETTE.glowLamp, poolScale: 1.15, poolY: FLOOR_H + 0.045,
           shade: blocked ? PALETTE.blockedShade : 1,
         };
       }
       return {
         // Lit cells use their lit colour; lamp spill warms the surface toward
         // the lamp's incandescent glow by how much light reaches it.
-        color: cell.lit ? set.lit : level > 0 ? mixHex(set.unlit, PALETTE.spillWarm, level * 0.55) : set.unlit,
+        // A light source cell takes its lit colour by how bright it is (a
+        // candle is faint); cells reached by light warm toward lamplight.
+        color: cell.lit ? mixHex(set.unlit, set.lit, level) : level > 0 ? mixHex(set.unlit, PALETTE.spillWarm, level * 0.55) : set.unlit,
         glow: 0.18 * level,
         height,
+        // Glow pool on the source itself (small: walls aren't drawn into it;
+        // the per-cell light levels carry the real reach).
         pool: cell.lit ? (cell.area === 'indoor' ? PALETTE.glowIndoor : PALETTE.glowOutdoor) : null,
+        poolScale: 0.55 + 0.2 * Math.min(cell.radius, 2),
         shade: blocked ? PALETTE.blockedShade : 1,
       };
     }
@@ -1151,7 +1226,7 @@ function setHoverEdge(e) {
   edgeMarker.position.set(cx, FLOOR_H, cz);
   const h = (ui.lowWalls ? WALL_LOW : WALL_FULL) + 0.02;
   edgeMarker.scale.set(vertical ? 0.1 : 1, h, vertical ? 1 : 0.1);
-  edgeMarker.material.color.set(ui.edgeBrush === 'erase' ? '#e88a7f' : ui.edgeBrush === 'door' ? '#f0b060' : '#f1d9a8');
+  edgeMarker.material.color.set({ erase: '#e88a7f', door: '#f0b060', window: '#9fd0e8' }[ui.edgeBrush] ?? '#f1d9a8');
 }
 
 const canvas = renderer.domElement;
@@ -1352,6 +1427,23 @@ $('#optAtmos').addEventListener('change', (e) => { ui.atmosphere = e.target.chec
 $('#optGhost').addEventListener('change', (e) => { ui.ghost = e.target.checked; });
 $('#optLowWalls').addEventListener('change', (e) => { ui.lowWalls = e.target.checked; refreshPropsAndWalls(); });
 
+// Light source radius: the centre brightness follows the size of the light.
+function syncRadius() {
+  const r = ui.lightRadius;
+  $('#lightRadiusOut').textContent = `${r} · ${Math.round(centreBrightness(r) * 100)}%`;
+  $('#lightRadiusNote').textContent =
+    `${lightKind(r)}: centre ${Math.round(centreBrightness(r) * 100)}% bright` +
+    (r < 1 ? ', lights only its own cell.' : `, reaches ${r} cell${r === 1 ? '' : 's'} out. Walls block it; windows and doors let it through.`);
+}
+$('#lightRadius').max = MAX_RADIUS;
+$('#lightRadius').addEventListener('input', (e) => {
+  ui.lightRadius = Number(e.target.value);
+  syncRadius();
+  setTool('cells');
+  setBrush('lit');
+});
+syncRadius();
+
 // Board size
 function syncSizeInputs() {
   $('#sizeCols').value = grid.cols;
@@ -1502,9 +1594,9 @@ window.addEventListener('keydown', (e) => {
   }
   const key = e.key.toLowerCase();
   if (BRUSH_KEYS[e.key]) { setTool('cells'); setBrush(BRUSH_KEYS[e.key]); }
-  else if (key === 'w' || key === 'd' || key === 'x') {
+  else if (key === 'w' || key === 'd' || key === 'x' || key === 'g') {
     setTool('walls');
-    setEdgeBrush({ w: 'wall', d: 'door', x: 'erase' }[key]);
+    setEdgeBrush({ w: 'wall', d: 'door', x: 'erase', g: 'window' }[key]);
   }
   else if (e.key === 'r' || e.key === 'R') setShape(ui.shape === 'rect' ? 'brush' : 'rect');
   else if (e.key === 't' || e.key === 'T') setCamera('top');
@@ -1528,7 +1620,8 @@ function updateHoverInfo() {
     const type = grid.edges.get(`${o}${x},${y}`);
     const names = grid.edgeCells(o, x, y).map((c) => (grid.inBounds(c.x, c.y) ? cellLabel(c.x, c.y) : 'edge'));
     el.innerHTML = `<span class="id">${names.join(' | ')}</span>` +
-      `<span class="tag">${type === 'door' ? 'Door' : type === 'wall' ? 'Wall' : 'Open'}</span>`;
+      `<span class="tag">${{ door: 'Door', wall: 'Wall', window: 'Window' }[type] ?? 'Open'}</span>` +
+      `<span class="tag">${type === 'wall' ? 'Blocks light' : 'Light passes'}</span>`;
     return;
   }
   if (hoverIndex < 0) { el.textContent = 'Hover a cell'; return; }
@@ -1538,8 +1631,15 @@ function updateHoverInfo() {
     `<span class="id">${cellLabel(x, y)}</span>` +
     `<span class="tag">${AREAS[c.area].label} · ${areaLabel(c)}</span>` +
     (c.bridge ? `<span class="tag">Bridge (spans ${grid.bridgeAxis(x, y) === 'x' ? 'E–W' : 'N–S'})</span>` : '') +
-    `<span class="tag">${lampsOn[hoverIndex] ? 'Lit lamp' : c.lit ? 'Lit' : lightLevels[hoverIndex] > 0 ? `Lamp light ${Math.round(lightLevels[hoverIndex] * 100)}%` : 'Unlit'}</span>` +
+    `<span class="tag">${lightLabel(c, hoverIndex)}</span>` +
     `<span class="tag">${c.walkable ? 'Walkable' : 'Blocked'}</span>`;
+}
+
+function lightLabel(c, i) {
+  const pct = `${Math.round(lightLevels[i] * 100)}%`;
+  if (lampsOn[i]) return `Lit lamp · ${pct}`;
+  if (c.lit) return `Light source r ${c.radius} (${lightKind(c.radius)}) · ${pct}`;
+  return lightLevels[i] > 0 ? `Light ${pct}` : 'Dark';
 }
 
 function updateCounts() {
@@ -1554,8 +1654,8 @@ function updateCounts() {
   $('#counts').innerHTML =
     `Outdoor <b>${n.outdoor}</b> · Indoor <b>${n.indoor}</b> · Water <b>${n.water}</b><br>` +
     `<span class="sub-counts">${subs.join(' · ')}</span><br>` +
-    `Bridges <b>${n.bridge}</b> · Walls <b>${n.wall}</b> · Doors <b>${n.door}</b> · Lit lamps <b>${n.lamp}</b><br>` +
-    `Lit <b>${n.lit}</b> · Unlit <b>${n.unlit}</b><br>` +
+    `Bridges <b>${n.bridge}</b> · Walls <b>${n.wall}</b> · Doors <b>${n.door}</b> · Windows <b>${n.window}</b> · Lit lamps <b>${n.lamp}</b><br>` +
+    `Light sources <b>${n.lit}</b> · Lit cells <b>${lightLevels.reduce((k, v) => k + (v > 0), 0)}</b><br>` +
     `Walkable <b>${n.walkable}</b> · Blocked <b>${n.blocked}</b> · ${grid.cols}×${grid.rows}`;
 }
 

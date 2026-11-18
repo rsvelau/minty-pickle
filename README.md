@@ -50,17 +50,31 @@ cells become Street when loaded. The street surface lives in `src/street.js`.
   in old dark-green paint (flared base, fluted shaft, ladder bar) with an acorn glass globe, cap and finial,
   about 4.4 m tall. At a T it stands on the sidewalk opposite the side street; at a crossing, on a corner.
 
-### Lit lamps
+### Light
 
-**Lit lamp** (`L`) switches on the street lamp in a cell. It only works on cells that have a lamp (street
-T-junctions and crossings) and does nothing elsewhere; **Unlit** switches it off. A lit lamp:
+Light comes from **light sources**. Place one with **Light source** (`4`) at the radius set by the slider
+(0–6 cells, in half steps); **No light** (`3`) removes it. The centre brightness follows the size of the
+light, so a small radius is a small light:
 
-- lights its own cell fully (the globe glows warm and a bright pool spreads from it), and
-- spills dimmer light onto the 8 cells around it: **55 %** on the four sides, **35 %** on the diagonals.
+| Radius | Like | Centre brightness |
+|--------|------|-------------------|
+| 0–0.5 | Candle / dim bulb (lights only its own cell) | 45–55 % |
+| 1–1.5 | Porch light / lamp | 65–75 % |
+| 2–2.5 | Bright room / shop light | 85–95 % |
+| 3+ | Floodlight and up | 100 % |
 
-The spill is real data, not just a picture: hovering a cell shows "Lamp light 55 %", the **Light** view shows
-the gradient, and exported JSON gives every cell a `light` level from 0 to 1 (plus `"lamp": true` on cells with
-a lit lamp). The spill amounts are `LAMP_SPILL` in `src/state.js`.
+Brightness falls off with distance to `centre / (radius + 1)` at the edge of the radius. Overlapping lights
+add up. **Light travels in straight lines: walls block it, while windows and (open) doors let it through**,
+so a lit shop spills light onto the street through its storefront but not through its side walls.
+
+**Lit lamp** (`L`) switches on the street lamp at a street T-junction or crossing (it does nothing elsewhere).
+A street lamp is a light source of radius 1.5 at full brightness.
+
+Light levels are data: hovering a cell shows its light (`Light 50 %`, `Light source r 3 (Floodlight)`), the
+**Light** view shows the levels as a gradient, storefront glass glows when light reaches either side, and
+exported JSON gives every cell a `light` level from 0 to 1 (plus `lit`/`radius` on sources and `"lamp": true`
+on lit lamps). The rules live in `src/state.js` (`centreBrightness`, `lightAt`, `lightReaches`). Saves from
+before light sources had a radius load their lit cells as radius-½ bulbs.
 
 ### Walkable and blocked versions
 
@@ -91,7 +105,7 @@ colour in `SUB_LOOK` in `src/main.js`.
 
 ### Walls and doors
 
-Walls and doors are a separate tool (**Walls & doors** in the panel, or `W` / `D` / `X`) because they live
+Walls, doors and windows are a separate tool (**Walls & doors** in the panel, or `W` / `D` / `G` / `X`) because they live
 on the **edges between cells**, not in cells:
 
 - **Drag along grid lines** to draw walls; the pointer snaps to grid corners.
@@ -100,6 +114,11 @@ on the **edges between cells**, not in cells:
   rectangle.
 - **Doors are centred on their edge, between the two cells.** Each is drawn as a 1.2 m opening with an
   open door leaf, with wall on either side.
+- **Windows** (`G`) are large storefront windows centred on their edge: masonry piers at the ends, a painted
+  wooden bulkhead under a big glass pane, and mullions/transoms that vary from window to window (two panes
+  with a transom, three panes, one big pane with transom lights, four narrow panes), in old painted-frame
+  colours (dark green, oxblood, black, cream, navy). Glass glows warm when light reaches either side.
+- **Light:** walls block light; doors and windows let it through (see Light above).
 - **Low walls (cutaway view)** in View keeps walls short so you can see into rooms; untick for full 2.6 m walls.
 
 ### Water and bridges
@@ -147,8 +166,8 @@ npm run build      # static site in dist/ (works from any sub-path, e.g. GitHub 
 |--------|-------|
 | Paint with the current brush | Left-drag |
 | Paint a rectangle | Shift + left-drag, or the **Rectangle** toggle (`R`) |
-| Choose a brush | `1` Ground · `2` Hardwood · `7` Lake · `8` River · `9` Bridge · `3` Unlit · `4` Lit · `L` Lit lamp · `5` Walkable · `6` Blocked · `0` Reset (other subcategories: click) |
-| Walls & doors | `W` wall · `D` door · `X` erase |
+| Choose a brush | `1` Ground · `2` Hardwood · `7` Lake · `8` River · `9` Bridge · `3` No light · `4` Light source · `L` Lit lamp · `5` Walkable · `6` Blocked · `0` Reset (other subcategories: click) |
+| Walls & doors | `W` wall · `D` door · `G` window · `X` erase |
 | Orbit camera | Right-drag, or hold `Space` and left-drag, or **Orbit mode** |
 | Zoom | Mouse wheel or pinch; zooms toward the pointer, so you can zoom into any corner of the board |
 | Pan | Middle-drag, Shift + right-drag (trackpads), arrow keys, or two-finger drag on touch |

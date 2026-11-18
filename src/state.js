@@ -39,7 +39,7 @@ export const AREAS = {
     subs: { lake: { label: 'Lake' }, river: { label: 'River' } },
   },
 };
-export const CELL_KEYS = ['area', 'sub', 'lit', 'walkable', 'bridge', 'lamp'];
+export const CELL_KEYS = ['area', 'sub', 'lit', 'radius', 'walkable', 'bridge', 'lamp'];
 
 // Whether a freshly painted area/subcategory is walkable.
 export const defaultWalkable = (area, sub) =>
@@ -49,10 +49,30 @@ export const defaultWalkable = (area, sub) =>
 // lamp:   the cell's street lamp is switched on ("Lit lamp"). Only street
 //         cells with a lamp (T-junctions and crossings) can have one; it
 //         lights the cell fully and spills dimmer light onto its neighbours.
-export const defaultCell = () => ({ area: 'outdoor', sub: 'ground', lit: false, walkable: true, bridge: false, lamp: false });
+// lit:    the cell holds a light source of the given `radius` (in cells).
+export const defaultCell = () => ({
+  area: 'outdoor', sub: 'ground', lit: false, radius: 0, walkable: true, bridge: false, lamp: false,
+});
 
-// Light a switched-on lamp throws onto neighbouring cells (0..1).
-export const LAMP_SPILL = { side: 0.55, diagonal: 0.35 };
+// --- light ---------------------------------------------------------------------
+// A light source lights cells within its radius (cell-centre distance) that it
+// can see: walls block light; windows and (open) doors let it through.
+// Brightness falls off linearly from the centre to 1 / (radius + 1) of it at
+// the edge, and the centre is brighter for bigger lights, so a radius under 1
+// is a candle or dim bulb lighting only its own cell, and radius 3+ a floodlight.
+export const MAX_RADIUS = 6;
+export const centreBrightness = (r) => Math.min(1, 0.45 + 0.2 * r);
+export const lightAt = (r, d) => (d > r + 1e-6 ? 0 : centreBrightness(r) * (1 - d / (r + 1)));
+// What a radius is like, for the panel.
+export function lightKind(r) {
+  if (r < 1) return 'Candle / dim bulb';
+  if (r < 2) return 'Porch light / lamp';
+  if (r < 3) return 'Bright room / shop light';
+  if (r < 4) return 'Floodlight';
+  return 'Stadium / searchlight';
+}
+// A switched-on street lamp is a source like any other.
+export const LAMP_SOURCE = { radius: 1.5, brightness: 1 };
 
 // Street layout: which sides continue the road (street or bridge
 // neighbours), as a N=1, E=2, S=4, W=8 bitmask. Off the board, a side counts
@@ -86,7 +106,8 @@ export function hasStreetLamp(grid, x, y) {
 // Walls and doors live on the edges between cells, not in cells.
 //  'v' edge (x, y): the vertical line on the west side of cell (x, y), x in 0..cols
 //  'h' edge (x, y): the horizontal line on the north side of cell (x, y), y in 0..rows
-export const EDGE_TYPES = ['wall', 'door'];
+// Walls block light; doors (drawn open) and windows let it through.
+export const EDGE_TYPES = ['wall', 'door', 'window'];
 export const edgeKey = (o, x, y) => `${o}${x},${y}`;
 export function parseEdgeKey(k) {
   const [x, y] = k.slice(1).split(',').map(Number);
@@ -107,11 +128,18 @@ export function normalizeCell(c = {}) {
     area,
     sub,
     lit: !!c.lit,
+    // Older saves had lit cells with no radius: they become small bulbs.
+    radius: c.lit ? clampRadius(c.radius ?? 0.5) : 0,
     walkable: c.walkable === undefined ? defaultWalkable(area, sub) || (water && !!c.bridge) : !!c.walkable,
     bridge: water && !!c.bridge,
     lamp: !!c.lamp,
   };
 }
+
+const clampRadius = (r) => {
+  const v = Math.round(Number(r) * 2) / 2;
+  return Number.isFinite(v) ? Math.min(MAX_RADIUS, Math.max(0, v)) : 0.5;
+};
 
 export const areaLabel = (c) => {
   const a = AREAS[c.area];
@@ -308,7 +336,7 @@ export class GridState {
   // Totals per category, per subcategory (`subs`), and for bridges, light,
   // movement, walls and doors.
   counts() {
-    const n = { bridge: 0, lit: 0, unlit: 0, walkable: 0, blocked: 0, wall: 0, door: 0, lamp: 0, subs: {} };
+    const n = { bridge: 0, lit: 0, unlit: 0, walkable: 0, blocked: 0, wall: 0, door: 0, window: 0, lamp: 0, subs: {} };
     for (const a in AREAS) n[a] = 0;
     for (const c of this.cells) {
       n[c.area]++;
@@ -332,24 +360,68 @@ export class GridState {
     return hasStreetLamp(this, x, y);
   }
 
-  // Light level per cell, 0..1: Lit cells and switched-on lamps are 1; cells
-  // next to a lamp get its spill (sides brighter than diagonals).
+  // Light level per cell, 0..1, from every light source (lit cells and
+  // switched-on street lamps). Overlapping lights add up like real light
+  // (1 - (1-a)(1-b)), and walls block it.
   lightLevels() {
     const out = new Float32Array(this.cells.length);
-    this.cells.forEach((c, i) => { if (c.lit) out[i] = 1; });
+    const add = (j, v) => { out[j] = 1 - (1 - out[j]) * (1 - v); };
     this.cells.forEach((c, i) => {
-      if (!this.lampOn(i)) return;
-      out[i] = 1;
-      const { x, y } = this.coords(i);
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          if ((!dx && !dy) || !this.inBounds(x + dx, y + dy)) continue;
-          const j = this.index(x + dx, y + dy);
-          out[j] = Math.max(out[j], dx && dy ? LAMP_SPILL.diagonal : LAMP_SPILL.side);
+      const lamp = this.lampOn(i);
+      if (!c.lit && !lamp) return;
+      const r = lamp ? Math.max(LAMP_SOURCE.radius, c.lit ? c.radius : 0) : c.radius;
+      const bright = (d) => (lamp
+        ? Math.max(LAMP_SOURCE.brightness * (d > LAMP_SOURCE.radius ? 0 : 1 - d / (LAMP_SOURCE.radius + 1)), c.lit ? lightAt(c.radius, d) : 0)
+        : lightAt(r, d));
+      const { x: sx, y: sy } = this.coords(i);
+      const reach = Math.floor(r);
+      for (let y = sy - reach; y <= sy + reach; y++) {
+        for (let x = sx - reach; x <= sx + reach; x++) {
+          if (!this.inBounds(x, y)) continue;
+          const d = Math.hypot(x - sx, y - sy);
+          const v = bright(d);
+          if (v <= 0 || !this.lightReaches(sx, sy, x, y)) continue;
+          add(this.index(x, y), v);
         }
       }
     });
     return out;
+  }
+
+  // Can light travel in a straight line from the centre of cell (ax, ay) to
+  // the centre of (bx, by)? Walks the grid cells along the line and checks
+  // each edge it crosses: a wall blocks; doors and windows don't. Passing
+  // exactly through a grid corner is clear if either way round is clear.
+  lightReaches(ax, ay, bx, by) {
+    const blocks = (o, x, y) => this.edges.get(edgeKey(o, x, y)) === 'wall';
+    let x = ax, y = ay;
+    const dx = bx - ax, dy = by - ay;
+    const stepX = Math.sign(dx), stepY = Math.sign(dy);
+    // Ray from (ax+.5, ay+.5); distance (in t) to the next vertical/horizontal line.
+    const tDeltaX = dx ? 1 / Math.abs(dx) : Infinity;
+    const tDeltaY = dy ? 1 / Math.abs(dy) : Infinity;
+    let tMaxX = dx ? 0.5 * tDeltaX : Infinity;
+    let tMaxY = dy ? 0.5 * tDeltaY : Infinity;
+    // Edge crossed when stepping from (x, y) in x or y.
+    const vEdge = (cx, cy) => ['v', stepX > 0 ? cx + 1 : cx, cy];
+    const hEdge = (cx, cy) => ['h', cx, stepY > 0 ? cy + 1 : cy];
+    while (x !== bx || y !== by) {
+      if (Math.abs(tMaxX - tMaxY) < 1e-9) {
+        // Through a corner: clear if x-then-y or y-then-x is clear.
+        const viaX = !blocks(...vEdge(x, y)) && !blocks(...hEdge(x + stepX, y));
+        const viaY = !blocks(...hEdge(x, y)) && !blocks(...vEdge(x, y + stepY));
+        if (!viaX && !viaY) return false;
+        x += stepX; y += stepY;
+        tMaxX += tDeltaX; tMaxY += tDeltaY;
+      } else if (tMaxX < tMaxY) {
+        if (blocks(...vEdge(x, y))) return false;
+        x += stepX; tMaxX += tDeltaX;
+      } else {
+        if (blocks(...hEdge(x, y))) return false;
+        y += stepY; tMaxY += tDeltaY;
+      }
+    }
+    return true;
   }
 
   // River flow: for each cell, a unit (dx, dy) in grid space (+x = right,
@@ -462,7 +534,9 @@ export class GridState {
         const { x, y } = this.coords(i);
         return {
           x, y, id: cellLabel(x, y),
-          area: c.area, sub: c.sub, lit: c.lit, walkable: c.walkable, bridge: c.bridge,
+          area: c.area, sub: c.sub, walkable: c.walkable, bridge: c.bridge,
+          lit: c.lit, // light source here
+          ...(c.lit ? { radius: c.radius } : {}),
           lamp: this.lampOn(i),
           light: Math.round(levels[i] * 100) / 100, // 0..1 incl. lamp spill
           ...(c.bridge ? { bridgeAxis: this.bridgeAxis(x, y) } : {}),

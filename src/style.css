@@ -275,3 +275,8 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px
 .sw-door { background: linear-gradient(90deg, #b8b0a0 0 30%, #c0803c 30% 70%, #b8b0a0 70%); }
 .sw-erase { background: transparent; border: 1px dashed #e88a7f; }
 .sw-lamp { background: radial-gradient(circle, #fff0c4 0 25%, #f0b060 45%, #3a2a18 75%); }
+.sw-window { background: linear-gradient(90deg, #5a1f1c 0 12%, #9fd0e8 12% 46%, #5a1f1c 46% 54%, #9fd0e8 54% 88%, #5a1f1c 88%); }
+.radius-row { display: grid; grid-template-columns: 44px 1fr 56px; gap: 6px; align-items: center; margin: 2px 0 2px; }
+.radius-row label { color: var(--muted); font-size: 11px; }
+.radius-row input { width: 100%; accent-color: var(--accent); }
+.radius-row output { font-variant-numeric: tabular-nums; color: var(--text); text-align: right; }

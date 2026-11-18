@@ -51,7 +51,7 @@ export function createStreets(group) {
   const mats = LEVELS.map(({ e }) => (e
     ? new THREE.MeshLambertMaterial({ map: atlas, emissiveMap: atlas, emissive: new THREE.Color(e) })
     : new THREE.MeshLambertMaterial({ map: atlas })));
-  const levelIndex = (level, lamp, lit) => (lamp ? 4 : lit ? 3 : level >= 0.5 ? 2 : level > 0 ? 1 : 0);
+  const levelIndex = (level, lamp) => (lamp ? 4 : level >= 0.8 ? 3 : level >= 0.45 ? 2 : level > 0 ? 1 : 0);
   const geos = new Map();
   const meshes = new Map();
   const tmpM = new THREE.Matrix4();
@@ -90,7 +90,7 @@ export function createStreets(group) {
         const lamp = !!lampsOn?.[i];
         placeFurniture(items, mask, cellToWorld(x, y), surfaceY + CURB, lamp, x * 31 + y * 17);
         const wear = ((x * 73856093) ^ (y * 19349663)) >>> 0 & 1;
-        const lvl = levelIndex(lightLevels?.[i] ?? 0, lamp, c.lit);
+        const lvl = levelIndex(lightLevels?.[i] ?? 0, lamp);
         const key = `${mask}:${wear}:${lvl}`;
         if (!buckets.has(key)) buckets.set(key, { positions: [] });
         buckets.get(key).positions.push(cellToWorld(x, y));
