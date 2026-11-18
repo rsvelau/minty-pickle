@@ -21,6 +21,7 @@
           <div class="seg tool-seg" role="group" aria-label="Tool">
             <button data-tool="cells" class="on">Spaces</button>
             <button data-tool="walls">Walls &amp; doors</button>
+            <button data-tool="move">Movement <kbd>M</kbd></button>
           </div>
 
           <div id="cellTools">
@@ -55,6 +56,17 @@
               <span class="row-label"></span>
               <button class="brush wide" data-brush="reset">Reset cell to default<kbd>0</kbd></button>
             </div>
+          </div>
+
+          <div id="moveTools" hidden>
+            <p class="note">Click a start cell, then hover any cell to see the shortest route; click to pin it. Click the start again (or press Esc) to clear. Blocked cells, walls, windows and locked doors stop movement; one-way doors only go their arrow's way.</p>
+            <div class="radius-row">
+              <label for="moveRange">Range</label>
+              <input type="range" id="moveRange" min="0" max="20" step="1" value="0" />
+              <output id="moveRangeOut" for="moveRange">off</output>
+            </div>
+            <label class="check"><input type="checkbox" id="moveDiagonal" /> Allow diagonal moves</label>
+            <p class="move-info" id="moveInfo">No start cell yet.</p>
           </div>
 
           <div id="wallTools" hidden>

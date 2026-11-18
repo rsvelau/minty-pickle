@@ -1097,6 +1097,9 @@ grid.onChange((indices, resized) => {
     refreshWaterAndBridges();
     flagDirty();
   }
+  if (move.start >= N) { move.start = -1; move.pinned = -1; }
+  if (move.pinned >= N) move.pinned = -1;
+  refreshMoveOverlay();
   updateCounts();
   updateHoverInfo();
   scheduleSave();
@@ -1329,6 +1332,7 @@ canvas.addEventListener('pointerdown', (ev) => {
   }
   if (ev.button !== 0 || !paintAllowed() || activeTouches.size > 1) return;
   if (ui.tool === 'walls') { startEdgeStroke(ev); return; }
+  if (ui.tool === 'move') { moveClick(pickCell(ev)); return; }
   const cell = pickCell(ev);
   if (!cell) return;
   canvas.setPointerCapture(ev.pointerId);
@@ -1340,6 +1344,11 @@ canvas.addEventListener('pointerdown', (ev) => {
 
 canvas.addEventListener('pointermove', (ev) => {
   const cell = pickCell(ev, { clamp: !!painting });
+  if (ui.tool === 'move') {
+    setHover(cell);
+    if (move.start >= 0 && move.pinned < 0) refreshMoveOverlay();
+    return;
+  }
   if (ui.tool === 'walls') {
     const rect = (ui.shape === 'rect' || ev.shiftKey) && !isDoorBrush();
     setHoverEdge(rect ? null : nearestEdge(gridPoint(ev)));
@@ -1386,9 +1395,126 @@ function setTool(tool) {
   $$('[data-tool]').forEach((b) => b.classList.toggle('on', b.dataset.tool === tool));
   $('#cellTools').hidden = tool !== 'cells';
   $('#wallTools').hidden = tool !== 'walls';
+  $('#moveTools').hidden = tool !== 'move';
   setHoverEdge(null);
   setHover(null);
+  refreshMoveOverlay();
 }
+
+// --- Movement check ------------------------------------------------------------
+// Pick a start cell; the route to the hovered (or pinned) cell is drawn with
+// its move count, and an optional range shades every cell reachable within N
+// moves. Rules live in GridState (canStep / moveField / route).
+
+const move = { start: -1, pinned: -1, range: 0, diagonal: false };
+const moveGroup = new THREE.Group();
+scene.add(moveGroup);
+const movePlates = new THREE.InstancedMesh(
+  new THREE.PlaneGeometry(0.92, 0.92).rotateX(-Math.PI / 2),
+  new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.38, depthWrite: false }),
+  64 * 64,
+);
+const moveBars = new THREE.InstancedMesh(
+  new THREE.BoxGeometry(1, 1, 1),
+  new THREE.MeshBasicMaterial({ color: '#58d0e8', depthTest: false, transparent: true, opacity: 0.95 }),
+  64 * 64,
+);
+const ringGeo = new THREE.RingGeometry(0.28, 0.4, 28).rotateX(-Math.PI / 2);
+const startRing = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: '#6fe07a', depthTest: false, transparent: true }));
+const endRing = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: '#f0b060', depthTest: false, transparent: true }));
+for (const o of [movePlates, moveBars, startRing, endRing]) { o.raycast = () => {}; o.renderOrder = 12; moveGroup.add(o); }
+movePlates.renderOrder = 5;
+moveGroup.visible = false;
+
+// Height of what you see in a cell, plus a hair.
+const overlayY = (i) => Math.max(visibleTop(i), WATER_Y) + 0.02;
+
+function refreshMoveOverlay() {
+  const active = ui.tool === 'move' && move.start >= 0 && move.start < N;
+  moveGroup.visible = active;
+  if (!active) {
+    if (ui.tool === 'move') $('#moveInfo').textContent = 'No start cell yet. Click one.';
+    return;
+  }
+  const { x: sx, y: sy } = grid.coords(move.start);
+  const field = grid.moveField(sx, sy, { diagonal: move.diagonal });
+
+  // Range shading: reachable within N moves, brighter when closer.
+  let np = 0;
+  let reachable = 0;
+  if (move.range > 0) {
+    for (let i = 0; i < N; i++) {
+      const d = field.dist[i];
+      if (d < 1 || d > move.range) continue;
+      reachable++;
+      const { x, y } = grid.coords(i);
+      tmpMatrix.makeTranslation(tmpPos.copy(cellToWorld(x, y)).setY(overlayY(i)));
+      movePlates.setMatrixAt(np, tmpMatrix);
+      movePlates.setColorAt(np++, tmpColor.set('#3fc06a').multiplyScalar(1.15 - 0.6 * (d / move.range)));
+    }
+  }
+  movePlates.count = np;
+  movePlates.instanceMatrix.needsUpdate = true;
+  if (movePlates.instanceColor) movePlates.instanceColor.needsUpdate = true;
+
+  startRing.position.copy(cellToWorld(sx, sy)).setY(overlayY(move.start) + 0.005);
+
+  // Route to the pinned cell, else the hovered one.
+  const target = move.pinned >= 0 ? move.pinned : hoverIndex;
+  let nb = 0;
+  endRing.visible = target >= 0 && target !== move.start;
+  const startLabel = cellLabel(sx, sy);
+  let line = `Start <b>${startLabel}</b>. Hover a cell to see the route.`;
+  if (target >= 0 && target !== move.start) {
+    const { x: tx, y: ty } = grid.coords(target);
+    endRing.position.copy(cellToWorld(tx, ty)).setY(overlayY(target) + 0.005);
+    const d = field.dist[target];
+    if (d < 0) {
+      endRing.material.color.set('#e8665a');
+      line = `${startLabel} → <b>${cellLabel(tx, ty)}</b>: <b>no route</b> (walls, windows, locked or one-way doors, or blocked cells are in the way).`;
+    } else {
+      endRing.material.color.set('#f0b060');
+      // Walk back along prev to draw the route.
+      const pts = [];
+      for (let i = target; i >= 0; i = field.prev[i]) pts.push(i);
+      pts.reverse();
+      for (let k = 0; k + 1 < pts.length; k++) {
+        const a = grid.coords(pts[k]);
+        const b = grid.coords(pts[k + 1]);
+        const pa = cellToWorld(a.x, a.y).setY(overlayY(pts[k]) + 0.03);
+        const pb = cellToWorld(b.x, b.y).setY(overlayY(pts[k + 1]) + 0.03);
+        const len = pa.distanceTo(pb);
+        tmpQuat.setFromUnitVectors(new THREE.Vector3(1, 0, 0), pb.clone().sub(pa).normalize());
+        tmpMatrix.compose(pa.add(pb).multiplyScalar(0.5), tmpQuat, tmpScale.set(len + 0.06, 0.03, 0.06));
+        moveBars.setMatrixAt(nb++, tmpMatrix);
+      }
+      line = `${startLabel} → <b>${cellLabel(tx, ty)}</b>: <b>${d}</b> move${d === 1 ? '' : 's'}${move.pinned >= 0 ? ' (pinned)' : ''}.`;
+    }
+  }
+  if (move.range > 0) line += `<br><b>${reachable}</b> cells reachable within ${move.range} move${move.range === 1 ? '' : 's'}.`;
+  moveBars.count = nb;
+  moveBars.instanceMatrix.needsUpdate = true;
+  $('#moveInfo').innerHTML = line;
+}
+
+function clearMove() {
+  move.start = -1;
+  move.pinned = -1;
+  refreshMoveOverlay();
+}
+
+// Click in the Movement tool: set the start, pin/unpin a destination, or
+// clear by clicking the start again.
+function moveClick(cell) {
+  if (!cell) return;
+  const i = grid.index(cell.x, cell.y);
+  if (move.start < 0) move.start = i;
+  else if (i === move.start) { clearMove(); return; }
+  else move.pinned = move.pinned === i ? -1 : i;
+  refreshMoveOverlay();
+}
+
+
 function setEdgeBrush(name) {
   ui.edgeBrush = name;
   $$('[data-edge]').forEach((b) => b.classList.toggle('on', b.dataset.edge === name));
@@ -1463,6 +1589,12 @@ function setOrbitMode(on) {
 }
 $$('.brush[data-brush]').forEach((b) => b.addEventListener('click', () => setBrush(b.dataset.brush)));
 $$('[data-tool]').forEach((b) => b.addEventListener('click', () => setTool(b.dataset.tool)));
+$('#moveRange').addEventListener('input', (e) => {
+  move.range = Number(e.target.value);
+  $('#moveRangeOut').textContent = move.range ? `${move.range}` : 'off';
+  refreshMoveOverlay();
+});
+$('#moveDiagonal').addEventListener('change', (e) => { move.diagonal = e.target.checked; refreshMoveOverlay(); });
 $$('[data-edge]').forEach((b) => b.addEventListener('click', () => setEdgeBrush(b.dataset.edge)));
 $$('[data-shape]').forEach((b) => b.addEventListener('click', () => setShape(b.dataset.shape)));
 $$('[data-view]').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
@@ -1624,6 +1756,7 @@ if (window.innerWidth < 700) { $('#panel').hidden = true; $('#expand').hidden = 
 
 window.addEventListener('keydown', (e) => {
   if (!dlg.root.hidden) { if (e.key === 'Escape') closeDialog(); return; }
+  if (e.key === 'Escape' && ui.tool === 'move') { clearMove(); return; }
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
   const mod = e.ctrlKey || e.metaKey;
   if (mod && e.key.toLowerCase() === 'z') {
@@ -1641,6 +1774,7 @@ window.addEventListener('keydown', (e) => {
   }
   const key = e.key.toLowerCase();
   if (BRUSH_KEYS[e.key]) { setTool('cells'); setBrush(BRUSH_KEYS[e.key]); }
+  else if (key === 'm') setTool('move');
   else if (['w', 'd', 'k', 'o', 'x', 'g'].includes(key)) {
     setTool('walls');
     setEdgeBrush({ w: 'wall', d: 'door', k: 'lockedDoor', o: 'oneWayDoor', x: 'erase', g: 'window' }[key]);

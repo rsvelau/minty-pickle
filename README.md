@@ -104,6 +104,22 @@ Everything is defined once in `AREAS` in `src/state.js` (label, default walkabil
 generated from it, so a new subcategory added there shows up in the panel, saves and imports. Give it a
 colour in `SUB_LOOK` in `src/main.js`.
 
+### Movement check
+
+The **Movement** tool (`M`) checks routes with the same rules your game will use:
+
+- **Click a start cell**, then hover any cell: the shortest route is drawn and the info box gives the move
+  count (`O11 → J11: 5 moves`) or says there is no route. Click a cell to pin it as the destination; click
+  the start again (or press `Esc`) to clear.
+- **Range** shades every cell reachable within N moves (brighter = closer) and counts them.
+- **Allow diagonal moves** adds diagonal steps. A diagonal step needs both ways round the corner to be clear,
+  so you can't squeeze between two walls or past a door's frame.
+
+Rules: you can only enter **walkable** cells; **walls, windows and locked doors** can't be crossed;
+**unlocked doors** can be crossed both ways; **one-way doors** only in their arrow's direction. Each move is
+one cell. The rules live in `src/state.js` (`canCross`, `canStep`, `moveField`, `route`) so game code can
+reuse them.
+
 ### Walls and doors
 
 Walls, doors and windows are a separate tool (**Walls & doors** in the panel, or `W` / `D` / `K` / `O` / `G` / `X`) because they live
@@ -179,6 +195,7 @@ npm run build      # static site in dist/ (works from any sub-path, e.g. GitHub 
 | Paint with the current brush | Left-drag |
 | Paint a rectangle | Shift + left-drag, or the **Rectangle** toggle (`R`) |
 | Choose a brush | `1` Ground · `2` Hardwood · `7` Lake · `8` River · `9` Bridge · `3` No light · `4` Light source · `L` Lit lamp · `5` Walkable · `6` Blocked · `0` Reset (other subcategories: click) |
+| Movement check | `M` (click start, hover/click destination, `Esc` clears) |
 | Walls & doors | `W` wall · `D` unlocked door · `K` locked door · `O` one-way door · `G` window · `X` erase |
 | Orbit camera | Right-drag, or hold `Space` and left-drag, or **Orbit mode** |
 | Zoom | Mouse wheel or pinch; zooms toward the pointer, so you can zoom into any corner of the board |

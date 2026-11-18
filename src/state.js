@@ -406,6 +406,73 @@ export class GridState {
     return out;
   }
 
+  // --- movement ---------------------------------------------------------------
+  // Movement rules: you can only enter walkable cells; walls, windows and
+  // locked doors can't be crossed; unlocked doors can be crossed both ways;
+  // one-way doors only in their direction ('+' = toward east/south).
+
+  // Can you cross the edge between (x, y) and the orthogonal neighbour
+  // (x + dx, y + dy)?
+  canCross(x, y, dx, dy) {
+    const [o, ex, ey] = dx ? ['v', dx > 0 ? x + 1 : x, y] : ['h', x, dy > 0 ? y + 1 : y];
+    const t = this.edges.get(edgeKey(o, ex, ey));
+    if (!t || t === 'door') return true;
+    if (t === 'oneWayDoor+') return dx > 0 || dy > 0;
+    if (t === 'oneWayDoor-') return dx < 0 || dy < 0;
+    return false; // wall, window, locked door
+  }
+
+  canEnter(x, y) { return this.inBounds(x, y) && this.cells[this.index(x, y)].walkable; }
+
+  // One move from (x, y) by (dx, dy). Diagonal moves need both ways round
+  // the corner to be clear, so you can't squeeze between two walls.
+  canStep(x, y, dx, dy) {
+    const nx = x + dx, ny = y + dy;
+    if (!this.canEnter(nx, ny)) return false;
+    if (!dx || !dy) return this.canCross(x, y, dx, dy);
+    const viaX = this.canEnter(x + dx, y) && this.canCross(x, y, dx, 0) && this.canCross(x + dx, y, 0, dy);
+    const viaY = this.canEnter(x, y + dy) && this.canCross(x, y, 0, dy) && this.canCross(x, y + dy, dx, 0);
+    return viaX && viaY;
+  }
+
+  // Breadth-first moves from a cell. Returns { dist: Int32Array (-1 =
+  // unreachable), prev: Int32Array } over the board.
+  moveField(sx, sy, { diagonal = false, maxSteps = Infinity } = {}) {
+    const n = this.cells.length;
+    const dist = new Int32Array(n).fill(-1);
+    const prev = new Int32Array(n).fill(-1);
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    if (diagonal) dirs.push([1, 1], [1, -1], [-1, 1], [-1, -1]);
+    const start = this.index(sx, sy);
+    dist[start] = 0;
+    const queue = [start];
+    for (let k = 0; k < queue.length; k++) {
+      const i = queue[k];
+      if (dist[i] >= maxSteps) continue;
+      const { x, y } = this.coords(i);
+      for (const [dx, dy] of dirs) {
+        if (!this.canStep(x, y, dx, dy)) continue;
+        const j = this.index(x + dx, y + dy);
+        if (dist[j] >= 0) continue;
+        dist[j] = dist[i] + 1;
+        prev[j] = i;
+        queue.push(j);
+      }
+    }
+    return { dist, prev };
+  }
+
+  // Shortest route between two cells as a list of cell indices (start
+  // first), or null if there is none.
+  route(sx, sy, tx, ty, opts = {}) {
+    const { dist, prev } = this.moveField(sx, sy, opts);
+    let i = this.index(tx, ty);
+    if (dist[i] < 0) return null;
+    const out = [];
+    for (; i >= 0; i = prev[i]) out.push(i);
+    return out.reverse();
+  }
+
   // Can light travel in a straight line from the centre of cell (ax, ay) to
   // the centre of (bx, by)? Walks the grid cells along the line and checks
   // each edge it crosses: a wall blocks; doors and windows don't. Passing
