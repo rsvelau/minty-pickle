@@ -10,6 +10,7 @@ import { createProps } from './props.js';
 import { METERS_PER_CELL, m } from './scale.js';
 import { createStreets } from './street.js';
 import { createBridges } from './bridge.js';
+import { createPlay } from './play.js';
 import { createMarkers, drawMarkerIcon } from './markers.js';
 import {
   installTerrain, setTerrain, terrainHeight, rayTerrain, isFlat, terrainId, TERRAIN_PRESETS,
@@ -1232,6 +1233,8 @@ grid.onChange((indices, resized) => {
     flagDirty();
   }
   if (move.start >= N) { move.start = -1; move.pinned = -1; }
+  play.boardChanged();
+  renderPlay();
   if (move.pinned >= N) move.pinned = -1;
   refreshMoveOverlay();
   updateCounts();
@@ -1488,6 +1491,11 @@ canvas.addEventListener('pointerdown', (ev) => {
   if (ev.button !== 0 || !paintAllowed() || activeTouches.size > 1) return;
   if (ui.tool === 'walls') { startEdgeStroke(ev); return; }
   if (ui.tool === 'move') { moveClick(pickCell(ev)); return; }
+  if (ui.tool === 'play') {
+    const cell = pickCell(ev);
+    if (cell) play.choose(grid.index(cell.x, cell.y));
+    return;
+  }
   const cell = pickCell(ev);
   if (!cell) return;
   canvas.setPointerCapture(ev.pointerId);
@@ -1499,6 +1507,11 @@ canvas.addEventListener('pointerdown', (ev) => {
 
 canvas.addEventListener('pointermove', (ev) => {
   const cell = pickCell(ev, { clamp: !!painting });
+  if (ui.tool === 'play') {
+    setHover(cell);
+    canvas.style.cursor = cell && play.isOption(grid.index(cell.x, cell.y)) ? 'pointer' : 'crosshair';
+    return;
+  }
   if (ui.tool === 'move') {
     setHover(cell);
     if (move.start >= 0 && move.pinned < 0) refreshMoveOverlay();
@@ -1555,6 +1568,9 @@ function setTool(tool) {
   $('#wallTools').hidden = tool !== 'walls';
   $('#moveTools').hidden = tool !== 'move';
   $('#markerTools').hidden = tool !== 'markers';
+  $('#playTools').hidden = tool !== 'play';
+  play.setActive(tool === 'play');
+  renderPlay();
   setHoverEdge(null);
   setHover(null);
   refreshMoveOverlay();
@@ -1777,6 +1793,43 @@ $('#moveRange').addEventListener('input', (e) => {
 });
 $('#moveDiagonal').addEventListener('change', (e) => { move.diagonal = e.target.checked; refreshMoveOverlay(); });
 $('#moveKeys').addEventListener('change', (e) => { move.keys = e.target.checked; refreshMoveOverlay(); });
+
+// --- Play demo -------------------------------------------------------------------
+const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+$('#playDie').innerHTML = '<i></i>'.repeat(9);
+function renderPlay() {
+  if (ui.tool !== 'play') return;
+  const s = play.state;
+  const face = s.phase === 'rolling' ? s.rollFace : s.roll;
+  [...$('#playDie').children].forEach((el, n) => el.classList.toggle('on', !!face && PIPS[face].includes(n)));
+  const roll = $('#playRoll');
+  roll.disabled = !['idle', 'done'].includes(s.phase);
+  const here = s.pos >= 0 ? (() => { const c = grid.coords(s.pos); return cellLabel(c.x, c.y); })() : '';
+  $('#playStatus').innerHTML = {
+    nostart: 'No Start space yet. Paint one (Spaces → Outdoor → Start space).',
+    idle: s.turn ? `On <b>${here}</b>. Roll again.` : `On <b>${here}</b>. Roll to move.`,
+    rolling: 'Rolling…',
+    moving: `Moving… <b>${s.steps}</b> left`,
+    choosing: `Choose a direction: <b>${s.steps}</b> move${s.steps === 1 ? '' : 's'} left (${s.options.map((o) => o.name).join(', ')})`,
+    done: `On <b>${here}</b>. Turn ${s.turn} done; roll again.`,
+  }[s.phase] ?? '';
+  $('#playStats').innerHTML = `Turn <b>${s.turn}</b> · White Dice <b>${s.white}</b> · Black Dice attuned <b>${s.black}</b>` +
+    (s.keys ? ` · Keys <b>${s.keys.toString(2).split('').filter((b) => b === '1').length}</b>` : '');
+  $('#playLog').innerHTML = s.log.map((l) => `<li>${l}</li>`).join('');
+}
+const play = createPlay({
+  grid, scene, camera, controls, cellToWorld, terrainify, cellLabel,
+  cellTop: (i) => Math.max(visibleTop(i), WATER_Y) + 0.01,
+  onChange: renderPlay,
+});
+$('#playRoll').addEventListener('click', () => play.roll());
+$('#playReset').addEventListener('click', () => play.reset());
+$('#playFollow').addEventListener('change', (e) => { play.state.follow = e.target.checked; });
+// Arrow keys choose a direction at a fork (before the camera can pan).
+window.addEventListener('keydown', (e) => {
+  if (ui.tool !== 'play' || !dlg.root.hidden) return;
+  if (e.key.startsWith('Arrow') && play.chooseByKey(e.key)) { e.preventDefault(); e.stopImmediatePropagation(); }
+}, true);
 $$('[data-edge]').forEach((b) => b.addEventListener('click', () => setEdgeBrush(b.dataset.edge)));
 $$('[data-shape]').forEach((b) => b.addEventListener('click', () => setShape(b.dataset.shape)));
 $$('[data-view]').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
@@ -1982,6 +2035,7 @@ if (window.innerWidth < 700) { $('#panel').hidden = true; $('#expand').hidden = 
 window.addEventListener('keydown', (e) => {
   if (!dlg.root.hidden) { if (e.key === 'Escape') closeDialog(); return; }
   if (e.key === 'Escape' && ui.tool === 'move') { clearMove(); return; }
+  if (ui.tool === 'play' && e.key === 'Enter') { e.preventDefault(); play.roll(); return; }
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
   const mod = e.ctrlKey || e.metaKey;
   if (mod && e.key.toLowerCase() === 'z') {
@@ -2001,6 +2055,7 @@ window.addEventListener('keydown', (e) => {
   if (BRUSH_KEYS[e.key]) { setTool('cells'); setBrush(BRUSH_KEYS[e.key]); }
   else if (key === 'm') setTool('move');
   else if (key === 'p') setTool('markers');
+  else if (key === 'y') setTool('play');
   else if (['w', 'd', 'k', 'o', 'x', 'g'].includes(key)) {
     setTool('walls');
     setEdgeBrush({ w: 'wall', d: 'door', k: 'lockedDoor', o: 'oneWayDoor', x: 'erase', g: 'window' }[key]);
@@ -2196,10 +2251,11 @@ renderer.setAnimationLoop(() => {
   water.tick(clock.elapsedTime);
   props?.tick(clock.elapsedTime);
   markers.tick(clock.elapsedTime, camera);
+  play.tick(dt, clock.elapsedTime);
   updateTreeFade();
   if (atmos.visible) updateRain(dt);
   renderer.render(scene, camera);
 });
 
 // Handy for debugging / future tooling from the console.
-window.gridPlanner = { grid, scene, camera, controls, brushes: BRUSHES, terrainHeight };
+window.gridPlanner = { grid, scene, camera, controls, brushes: BRUSHES, terrainHeight, play };

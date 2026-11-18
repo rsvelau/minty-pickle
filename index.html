@@ -23,6 +23,7 @@
             <button data-tool="walls">Walls &amp; doors</button>
             <button data-tool="move">Movement <kbd>M</kbd></button>
             <button data-tool="markers">Markers <kbd>P</kbd></button>
+            <button data-tool="play" class="play-btn">Play demo <kbd>Y</kbd></button>
           </div>
 
           <div id="cellTools">
@@ -57,6 +58,23 @@
               <span class="row-label"></span>
               <button class="brush wide" data-brush="reset">Reset cell to default<kbd>0</kbd></button>
             </div>
+          </div>
+
+          <div id="playTools" hidden>
+            <div class="play-row">
+              <div class="die" id="playDie" aria-label="Black die"></div>
+              <div class="play-main">
+                <button id="playRoll" class="on">Roll black die <kbd>Enter</kbd></button>
+                <p class="play-status" id="playStatus"></p>
+              </div>
+            </div>
+            <p class="play-stats" id="playStats"></p>
+            <ol class="play-log" id="playLog"></ol>
+            <div class="file-row">
+              <button id="playReset">Restart</button>
+              <label class="check play-follow"><input type="checkbox" id="playFollow" checked /> Follow</label>
+            </div>
+            <p class="note">The pawn starts on the Start space and moves one cell per pip. It keeps going while there's one way forward and stops at forks: click a green arrow or use the arrow keys. Walls, windows, locked and one-way doors and blocked cells stop it; walking over a Key unlocks its building.</p>
           </div>
 
           <div id="markerTools" hidden>

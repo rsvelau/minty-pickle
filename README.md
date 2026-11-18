@@ -137,6 +137,24 @@ Exported cells carry `"marker"`, and key cells also list the doors they unlock (
 markers** in View hides them. Marker art lives in `src/markers.js`; the list of markers is `MARKERS` in
 `src/state.js`.
 
+### Play demo
+
+**Play demo** (`Y`) plays one character on the board you've built:
+
+- The pawn starts on the **Start space** (paint one first).
+- **Roll black die** (or `Enter`) rolls a d6; the pawn then moves one cell per pip with a little hop.
+- It keeps going while there's only one way forward, and never doubles back unless it hits a dead end.
+  At a fork, and at the start of every move, it stops and puts green arrows on the cells it can go to:
+  click one or use the **arrow keys** (relative to the camera).
+- Movement follows the board rules: walkable cells only; walls, windows, locked doors and one-way doors
+  (against their arrow) stop it; walking over a **Key** unlocks its building's locked and one-way doors for
+  the rest of the game.
+- Landing on a marker reports it: White Dice are collected and Black Dice attuned (once per marker; the
+  panel keeps count), Research is used once, Investigation and Objective spots are announced.
+- **Follow** keeps the camera on the pawn; **Restart** puts it back on the Start space.
+
+The demo never changes the board. Its logic is in `src/play.js`.
+
 ### Movement check
 
 The **Movement** tool (`M`) checks routes with the same rules your game will use:
@@ -264,6 +282,7 @@ npm run build      # static site in dist/ (works from any sub-path, e.g. GitHub 
 | Paint with the current brush | Left-drag |
 | Paint a rectangle | Shift + left-drag, or the **Rectangle** toggle (`R`) |
 | Choose a brush | `1` Ground · `2` Hardwood · `7` Lake · `8` River · `9` Bridge · `3` No light · `4` Light source · `L` Lit lamp · `5` Walkable · `6` Blocked · `0` Reset (other subcategories: click) |
+| Play demo | `Y`, then `Enter` to roll, click or arrow keys to choose at forks |
 | Markers | `P` (pick a marker, click/drag on walkable cells) |
 | Movement check | `M` (click start, hover/click destination, `Esc` clears) |
 | Walls & doors | `W` wall · `D` unlocked door · `K` locked door · `O` one-way door · `G` window · `X` erase |
@@ -315,6 +334,7 @@ outdoor/indoor, no edges) are converted on load, outdoor to Ground and indoor to
 - `src/main.js` — three.js scene, tile rendering, bridges, painting, UI wiring.
 - `src/water.js` — water surface shader (flow-mapped river currents, still lakes).
 - `src/props.js` — walkable/blocked props for every surface (`VARIANTS`).
+- `src/play.js` — the playable demo (die roll, stepping, fork choices).
 - `src/markers.js` — gameplay marker badges and icons.
 - `src/bridge.js` — steel truss bridge structures built from connected bridge cells.
 - `src/street.js` — street surfaces: lane lines, crosswalks, sidewalks, chosen from neighbouring cells.
