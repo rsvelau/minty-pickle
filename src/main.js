@@ -49,6 +49,7 @@ const DOOR_H = m(2.1);        // door height (lintel above when walls are full h
 const SUB_LOOK = {
   ground: { unlit: '#4a6158', lit: '#9fbf8f', area: '#3e6b5a' },
   street: { unlit: '#34383b', lit: '#8a9599', area: '#4a5058', h: FLOOR_H - 0.01 },
+  start: { unlit: '#34383b', lit: '#8a9599', area: '#e0b030', h: FLOOR_H - 0.01 },
   path: { unlit: '#544537', lit: '#b5946f', area: '#8c6a45' },
   cemetery: { unlit: '#33463a', lit: '#86a487', area: '#5b7f5f' },
   cemeteryPath: { unlit: '#5a564c', lit: '#b3ab92', area: '#a39a80' },
@@ -2193,6 +2194,7 @@ renderer.setAnimationLoop(() => {
   ghostHouse.visible = ui.ghost && hoverIndex >= 0;
 
   water.tick(clock.elapsedTime);
+  props?.tick(clock.elapsedTime);
   markers.tick(clock.elapsedTime, camera);
   updateTreeFade();
   if (atmos.visible) updateRain(dt);

@@ -84,11 +84,12 @@ export function createStreets(group) {
     const items = [];          // street furniture: [kind, x, y, z, rotY]
     if (visible) {
       grid.cells.forEach((c, i) => {
-        if (c.sub !== 'street') return;
+        // Start spaces are drawn as street (the van is a prop on top).
+        if (c.sub !== 'street' && c.sub !== 'start') return;
         const { x, y } = grid.coords(i);
         const mask = streetMask(grid, x, y);
         const lamp = !!lampsOn?.[i];
-        placeFurniture(items, mask, cellToWorld(x, y), surfaceY + CURB, lamp, x * 31 + y * 17);
+        if (c.sub === 'street') placeFurniture(items, mask, cellToWorld(x, y), surfaceY + CURB, lamp, x * 31 + y * 17);
         const wear = ((x * 73856093) ^ (y * 19349663)) >>> 0 & 1;
         const lvl = levelIndex(lightLevels?.[i] ?? 0, lamp);
         const key = `${mask}:${wear}:${lvl}`;

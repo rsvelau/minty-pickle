@@ -16,7 +16,7 @@ the edges between cells.
 
 | Category | Subcategories |
 |----------|---------------|
-| Outdoor | Ground (default), Street, Path, Cemetery, Cemetery path, Forest cemetery\*, Forest\*, Brambles\* |
+| Outdoor | Ground (default), Street, Start space, Path, Cemetery, Cemetery path, Forest cemetery\*, Forest\*, Brambles\* |
 | Indoor | Hardwood (default), Carpet |
 | Water | Lake, River (always start blocked) |
 
@@ -49,6 +49,16 @@ cells become Street when loaded. The street surface lives in `src/street.js`.
 - **An antique street lamp**: the town is a late-1800s logging town kept historic, so lamps are cast-iron posts
   in old dark-green paint (flared base, fluted shaft, ladder bar) with an acorn glass globe, cap and finial,
   about 4.4 m tall. At a T it stands on the sidewalk opposite the side street; at a crossing, on a corner.
+
+### Start space
+
+**Start space** (an Outdoor subcategory) marks where all players start. It is drawn as a street cell, and
+joins the street network like one, with the players' used early-80s van parked diagonally across it:
+two-tone cream and brown with an orange stripe, rust spots, chrome bumpers, a roof rack and a spare tyre on
+the back. To make it easy to find without a floating badge, the van has its headlights and tail lights on,
+headlight beams on the road and blinking amber hazards, and the cell has a pulsing yellow painted box with
+corner marks and a soft amber glow. It counts as walkable. The van is built in `src/props.js` (`van`,
+`startSpace`).
 
 ### Light
 

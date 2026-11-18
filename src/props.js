@@ -96,6 +96,66 @@ function buildKinds() {
       box(0.9, 0.45, 0.9, '#6b4f5c'), box(0.9, 0.5, 0.2, '#6b4f5c', 0, -0.35, 0.45),
     ),
     table: merge(box(1.1, 0.06, 0.6, '#6e4a2e', 0, 0, 0.4), box(0.9, 0.4, 0.4, '#4e321e')),
+    // Used early-80s full-size van, ~4.8 m long, 2 m wide, 2.1 m tall, along
+    // x with the front at +x: two-tone cream and brown with an orange stripe,
+    // rust spots, chrome bumpers, a spare on the back door.
+    van: (() => {
+      const cream = '#e6d6a6', brown = '#8a5530', glass = '#1a252d', tyre = '#141414', rust = '#7a3e1c';
+      const wheel = (x, z) => part(new THREE.CylinderGeometry(m(0.36), m(0.36), m(0.24), 12)
+        .rotateX(Math.PI / 2).translate(m(x), m(0.36), m(z)), tyre);
+      return merge(
+        wheel(1.55, 0.92), wheel(1.55, -0.92), wheel(-1.6, 0.92), wheel(-1.6, -0.92),
+        box(4.8, 0.85, 1.98, cream, 0, 0, 0.32),            // lower body
+        box(4.82, 0.16, 2.0, '#cf7a2e', 0, 0, 1.12),         // orange stripe
+        box(4.7, 0.78, 1.96, brown, -0.05, 0, 1.28),         // upper body
+        box(4.5, 0.1, 1.86, cream, -0.1, 0, 2.06),           // roof
+        box(1.2, 0.12, 1.4, '#3a3d40', -0.6, 0, 2.16),       // roof rack
+        box(0.06, 0.62, 1.7, glass, 2.4, 0, 1.3),            // windshield
+        box(0.9, 0.5, 0.03, glass, 1.7, 0.99, 1.38),         // cab windows
+        box(0.9, 0.5, 0.03, glass, 1.7, -0.99, 1.38),
+        box(2.6, 0.42, 0.03, glass, -0.6, 0.99, 1.42),       // side windows
+        box(2.6, 0.42, 0.03, glass, -0.6, -0.99, 1.42),
+        box(0.06, 0.45, 1.2, glass, -2.41, 0, 1.4),          // rear windows
+        box(0.14, 0.24, 2.04, '#9a9c9e', 2.44, 0, 0.36),     // bumpers
+        box(0.14, 0.24, 2.04, '#9a9c9e', -2.44, 0, 0.36),
+        box(0.05, 0.3, 0.9, '#2a2c2e', 2.43, 0, 0.72),       // grille
+        box(0.7, 0.3, 0.02, rust, -1.3, 1.0, 0.42),          // rust
+        box(0.45, 0.25, 0.02, rust, 0.9, -1.0, 0.5),
+        box(0.3, 0.2, 0.02, rust, 2.0, 1.0, 1.0),
+        part(new THREE.CylinderGeometry(m(0.34), m(0.34), m(0.22), 12)   // spare tyre
+          .rotateZ(Math.PI / 2).translate(-m(2.55), m(1.1), 0), tyre),
+      );
+    })(),
+    // Glowing bits (separate unlit materials): headlights + tail lights,
+    // blinking hazards, headlight beams on the road, painted start box.
+    vanLights: merge(
+      box(0.04, 0.2, 0.32, '#fff3d0', 2.47, 0.68, 0.62), box(0.04, 0.2, 0.32, '#fff3d0', 2.47, -0.68, 0.62),
+      box(0.04, 0.28, 0.16, '#ff3020', -2.47, 0.86, 0.8), box(0.04, 0.28, 0.16, '#ff3020', -2.47, -0.86, 0.8),
+    ),
+    vanHazard: merge(
+      box(0.1, 0.12, 0.18, '#ffffff', 2.42, 0.9, 0.95), box(0.1, 0.12, 0.18, '#ffffff', 2.42, -0.9, 0.95),
+      box(0.1, 0.12, 0.18, '#ffffff', -2.42, 0.9, 1.15), box(0.1, 0.12, 0.18, '#ffffff', -2.42, -0.9, 1.15),
+    ),
+    vanBeam: (() => {
+      const sh = new THREE.Shape();
+      sh.moveTo(m(2.5), -m(0.9)); sh.lineTo(m(7.5), -m(2.4)); sh.lineTo(m(7.5), m(2.4)); sh.lineTo(m(2.5), m(0.9));
+      sh.closePath();
+      return part(new THREE.ShapeGeometry(sh).rotateX(Math.PI / 2).translate(0, 0.03, 0), '#ffe6b0');
+    })(),
+    // Painted box around the cell edge (cell units) plus corner chevrons.
+    startFrame: (() => {
+      const y = 0.022, t = 0.065, e = 0.45, hex = '#ffffff';
+      const strip = (w, d, x, z) => part(new THREE.BoxGeometry(w, 0.006, d).translate(x, y, z), hex);
+      return merge(
+        strip(2 * e + t, t, 0, -e), strip(2 * e + t, t, 0, e), strip(t, 2 * e, -e, 0), strip(t, 2 * e, e, 0),
+        strip(0.2, t * 1.5, -e + 0.1, -e + 0.08), strip(t * 1.5, 0.2, -e + 0.08, -e + 0.1),
+        strip(0.2, t * 1.5, e - 0.1, e - 0.08), strip(t * 1.5, 0.2, e - 0.08, e - 0.1),
+        strip(0.2, t * 1.5, e - 0.1, -e + 0.08), strip(t * 1.5, 0.2, e - 0.08, -e + 0.1),
+        strip(0.2, t * 1.5, -e + 0.1, e - 0.08), strip(t * 1.5, 0.2, -e + 0.08, e - 0.1),
+      );
+    })(),
+    // Soft amber wash over the whole start cell.
+    startFill: part(new THREE.PlaneGeometry(0.94, 0.94).rotateX(-Math.PI / 2).translate(0, 0.02, 0), '#ffffff'),
     // Flat stepping stone for a ford.
     steppingStone: merge(part(new THREE.CylinderGeometry(m(0.5), m(0.55), m(0.25), 7), '#727670')),
   };
@@ -127,6 +187,12 @@ const VARIANTS = {
   ground: {
     // Overgrown: boulders in a thicket of shrubs.
     blocked: ({ rnd }) => scatter(rnd, 3, 0.3, (k) => (k % 3 === 1 ? ['boulder', 1.2 + rnd() * 0.6] : ['shrub', 1.1 + rnd() * 0.6])),
+  },
+  // Start space: the players' van parked diagonally across the street with
+  // its lights on and hazards blinking, inside a glowing painted box.
+  start: {
+    walkable: ({ along }) => startSpace(along),
+    blocked: ({ along }) => startSpace(along),
   },
   street: {
     // Two sawhorse barricades across both lanes, cones on the sidewalk edge.
@@ -242,6 +308,14 @@ const VARIANTS = {
   river: { walkable: (ctx) => ford(ctx) },
 };
 
+function startSpace(along) {
+  const rot = along + Math.PI / 4;
+  return [
+    ['van', 0, 0, rot], ['vanLights', 0, 0, rot], ['vanHazard', 0, 0, rot], ['vanBeam', 0, 0, rot],
+    ['startFrame', 0, 0, 0], ['startFill', 0, 0, 0],
+  ];
+}
+
 function ford({ along, rnd }) {
   const out = [];
   for (const t of [-0.32, 0, 0.32]) {
@@ -256,6 +330,20 @@ function ford({ along, rnd }) {
 export function createProps(group, { firGeo, firMat }) {
   const kinds = buildKinds();
   const material = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+  // Unlit, glowing materials for the start space.
+  const glow = {
+    vanLights: new THREE.MeshBasicMaterial({ vertexColors: true }),
+    vanHazard: new THREE.MeshBasicMaterial({ color: '#ffa424' }),
+    vanBeam: new THREE.MeshBasicMaterial({
+      vertexColors: true, transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+    }),
+    startFill: new THREE.MeshBasicMaterial({
+      color: '#ffb43a', transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+    }),
+    startFrame: new THREE.MeshBasicMaterial({ color: '#ffd23a', transparent: true, opacity: 0.95 }),
+  };
   const meshes = {};
   const tmpM = new THREE.Matrix4();
   const tmpP = new THREE.Vector3();
@@ -271,8 +359,9 @@ export function createProps(group, { firGeo, firMat }) {
     const cap = Math.max(64, Math.ceil(needed * 1.5));
     mesh = kind === 'fir'
       ? new THREE.InstancedMesh(firGeo, firMat, cap)
-      : new THREE.InstancedMesh(kinds[kind], material, cap);
-    mesh.castShadow = true;
+      : new THREE.InstancedMesh(kinds[kind], glow[kind] ?? material, cap);
+    mesh.castShadow = !glow[kind];
+    if (glow[kind]) mesh.renderOrder = 3;
     mesh.receiveShadow = true;
     mesh.raycast = () => {};
     mesh.count = 0;
@@ -316,7 +405,7 @@ export function createProps(group, { firGeo, firMat }) {
           : tmpS.setScalar(scale);
         tmpM.compose(tmpP.set(x, y, z), tmpQ.setFromAxisAngle(UP, rot), s);
         mesh.setMatrixAt(n, tmpM);
-        mesh.setColorAt(n, tmpC.setScalar(0.85 + ((i * 37 + n * 11) % 30) / 100));
+        mesh.setColorAt(n, glow[kind] ? tmpC.setScalar(1) : tmpC.setScalar(0.85 + ((i * 37 + n * 11) % 30) / 100));
       });
       mesh.count = list.length;
       mesh.instanceMatrix.needsUpdate = true;
@@ -329,7 +418,14 @@ export function createProps(group, { firGeo, firMat }) {
     for (const k in meshes) { group.remove(meshes[k]); meshes[k].dispose(); delete meshes[k]; }
   }
 
-  return { update, clear };
+  // Hazards blink; the painted start box pulses.
+  function tick(t) {
+    glow.vanHazard.color.set(Math.sin(t * 5.5) > 0 ? '#ffa424' : '#2a1804');
+    glow.startFrame.opacity = 0.65 + 0.35 * Math.sin(t * 2.4);
+    glow.startFill.opacity = 0.16 + 0.1 * Math.sin(t * 2.4);
+  }
+
+  return { update, clear, tick };
 }
 
 // Which way the surrounding cells run: 'x' (east-west) or 'y' (north-south).
@@ -338,10 +434,12 @@ export function createProps(group, { firGeo, firMat }) {
 // with same-surface neighbours counting double.
 function runAxis(grid, x, y, c) {
   const water = c.area === 'water';
-  const sameRun = ['street', 'path', 'cemeteryPath'].includes(c.sub);
+  const sameRun = ['street', 'start', 'path', 'cemeteryPath'].includes(c.sub);
   const pred = (nx, ny) => {
     if (!grid.inBounds(nx, ny)) return 0;
     const n = grid.cells[grid.index(nx, ny)];
+    const roadLike = (k) => k.sub === 'street' || k.sub === 'start' || k.bridge;
+    if (c.sub === 'start') return roadLike(n) ? 1 : 0;
     if (sameRun) return n.sub === c.sub || (c.sub === 'street' && n.bridge) ? 1 : 0;
     // Paths and fords lead on to walkable cells, preferring the same surface.
     if (water || c.sub === 'cemetery') return n.walkable ? (n.sub === c.sub ? 2 : 1) : 0;

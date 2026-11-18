@@ -21,6 +21,8 @@ export const AREAS = {
       ground: { label: 'Ground' },
       // Two-lane street with sidewalks; lines and curbs follow its neighbours.
       street: { label: 'Street' },
+      // Where every player starts: a street cell with the players' van.
+      start: { label: 'Start space' },
       path: { label: 'Path' },
       cemetery: { label: 'Cemetery' },
       cemeteryPath: { label: 'Cemetery path' },
@@ -96,7 +98,7 @@ export function streetMask(grid, x, y) {
   const conn = (nx, ny) => {
     if (!grid.inBounds(nx, ny)) return null; // decided below
     const c = grid.cells[grid.index(nx, ny)];
-    return c.sub === 'street' || c.bridge;
+    return c.sub === 'street' || c.sub === 'start' || c.bridge;
   };
   const sides = [[N, 0, -1, S], [E, 1, 0, W], [S, 0, 1, N], [W, -1, 0, E]];
   const open = {};
