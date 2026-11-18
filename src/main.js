@@ -3,13 +3,14 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {
   GridState, COLS, ROWS, MIN_SIZE, MAX_SIZE, AREAS, colLabel, cellLabel, defaultCell, defaultWalkable, areaLabel, parseEdgeKey,
-  hasStreetLamp, lightKind, centreBrightness, MAX_RADIUS, blocksLight,
+  hasStreetLamp, lightKind, centreBrightness, MAX_RADIUS, blocksLight, MARKERS,
 } from './state.js';
 import { createWaterSurface } from './water.js';
 import { createProps } from './props.js';
 import { METERS_PER_CELL, m } from './scale.js';
 import { createStreets } from './street.js';
 import { createBridges } from './bridge.js';
+import { createMarkers, drawMarkerIcon } from './markers.js';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -125,6 +126,8 @@ const ui = {
   edgeBrush: 'wall',   // 'wall' | 'door' | 'erase'
   lowWalls: true,
   lightRadius: 1,      // radius for the Light source brush (cells)
+  markerBrush: 'investigation', // marker the Markers tool places ('erase' removes)
+  showMarkers: true,
   shape: 'brush',      // 'brush' | 'rect'
   view: 'all',         // 'all' | 'area' | 'light' | 'walk'
   orbitMode: false,    // toggle: left-drag orbits
@@ -138,6 +141,8 @@ try {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) grid.load(grid.parse(JSON.parse(saved)));
 } catch { /* storage unavailable or corrupt: start fresh */ }
+
+let hoverIndex = -1; // cell under the pointer (-1 = none)
 
 const rand32 = (seed) => () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
 
@@ -517,6 +522,50 @@ function refreshWaterAndBridges() {
   bridges.update(grid, { visible: ui.view === 'all', deckTop: DECK_TOP, bedY: BED_H });
   streets.update(grid, { visible: ui.view === 'all', cellToWorld, surfaceY: SUB_LOOK.street.h + 0.002, lightLevels, lampsOn });
   refreshPropsAndWalls();
+  refreshMarkers();
+}
+
+// Gameplay markers float over their cells in every view.
+const markers = createMarkers(scene);
+function refreshMarkers() {
+  const list = [];
+  grid.cells.forEach((c, i) => {
+    if (!c.marker) return;
+    const { x, y } = grid.coords(i);
+    const p = cellToWorld(x, y);
+    list.push({ type: c.marker, x: p.x, y: Math.max(visibleTop(i), WATER_Y), z: p.z, dim: !c.walkable });
+  });
+  markers.update(list);
+  markers.setVisible(ui.showMarkers);
+  refreshKeyHighlight();
+}
+
+// Hovering a key marker outlines every door it would unlock.
+const keyHighlight = new THREE.InstancedMesh(
+  new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0),
+  new THREE.MeshBasicMaterial({ color: '#ffd24a', transparent: true, opacity: 0.85, depthTest: false }),
+  256,
+);
+keyHighlight.renderOrder = 13;
+keyHighlight.raycast = () => {};
+keyHighlight.count = 0;
+scene.add(keyHighlight);
+function refreshKeyHighlight() {
+  let n = 0;
+  if (hoverIndex >= 0 && hoverIndex < N && grid.cells[hoverIndex].marker === 'key' && ui.showMarkers) {
+    const h = (ui.lowWalls ? WALL_LOW : WALL_FULL) + 0.05;
+    for (const k of grid.keyDoors(hoverIndex).slice(0, 256)) {
+      const { o, x, y } = parseEdgeKey(k);
+      const vertical = o === 'v';
+      const cx = vertical ? x - grid.cols / 2 : x - grid.cols / 2 + 0.5;
+      const cz = vertical ? y - grid.rows / 2 + 0.5 : y - grid.rows / 2;
+      tmpMatrix.compose(tmpPos.set(cx, FLOOR_H, cz), tmpQuat.identity(),
+        vertical ? tmpScale.set(0.2, h, 0.6) : tmpScale.set(0.6, h, 0.2));
+      keyHighlight.setMatrixAt(n++, tmpMatrix);
+    }
+  }
+  keyHighlight.count = n;
+  keyHighlight.instanceMatrix.needsUpdate = true;
 }
 
 // Props on cells (main view only) and walls/doors on edges (every view).
@@ -1113,7 +1162,6 @@ const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 const boardPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 const waterPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -WATER_Y);
-let hoverIndex = -1;
 let painting = null; // { pointerId, start:{x,y}, last:{x,y}, rect:boolean }
 const activeTouches = new Set();
 
@@ -1147,9 +1195,19 @@ function pickCell(ev, { clamp = false } = {}) {
 
 const paintAllowed = () => !ui.orbitMode && !ui.spaceHeld;
 
+// What a stroke paints: a cell brush, or (Markers tool) just the marker.
+function currentPatch() {
+  if (ui.tool !== 'markers') return BRUSHES[ui.brush];
+  if (ui.markerBrush === 'erase') return (c) => (c.marker ? { marker: null } : null);
+  return (c) => {
+    if (!c.walkable) { if (painting) painting.skipped = true; return null; }
+    return { marker: ui.markerBrush };
+  };
+}
+
 function paintLine(a, b) {
   // Bresenham so quick drags don't skip cells.
-  const patch = BRUSHES[ui.brush];
+  const patch = currentPatch();
   let { x: x0, y: y0 } = a;
   const { x: x1, y: y1 } = b;
   const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0);
@@ -1166,7 +1224,7 @@ function paintLine(a, b) {
 
 function paintRect(a, b) {
   grid.revertStroke();
-  const patch = BRUSHES[ui.brush];
+  const patch = currentPatch();
   const touched = [];
   for (let y = Math.min(a.y, b.y); y <= Math.max(a.y, b.y); y++) {
     for (let x = Math.min(a.x, b.x); x <= Math.max(a.x, b.x); x++) {
@@ -1368,6 +1426,7 @@ function finishPainting(ev) {
   if (ev && ev.pointerType === 'touch') activeTouches.delete(ev.pointerId);
   if (!painting || (ev && ev.pointerId !== painting.pointerId)) return;
   if (painting.edges) endEdgeStroke();
+  if (painting.skipped) toast('Markers only go on walkable cells; blocked cells were skipped.');
   painting = null;
   grid.endStroke();
   updateUndoButtons();
@@ -1385,9 +1444,11 @@ canvas.addEventListener('pointercancel', (ev) => {
 canvas.addEventListener('pointerleave', () => { if (!painting) { setHover(null); setHoverEdge(null); } });
 
 function setHover(cell) {
+  const prev = hoverIndex;
   hoverIndex = cell ? grid.index(cell.x, cell.y) : -1;
   hoverBox.visible = !!cell;
   updateHoverInfo();
+  if (prev !== hoverIndex) refreshKeyHighlight();
 }
 
 function setTool(tool) {
@@ -1396,6 +1457,7 @@ function setTool(tool) {
   $('#cellTools').hidden = tool !== 'cells';
   $('#wallTools').hidden = tool !== 'walls';
   $('#moveTools').hidden = tool !== 'move';
+  $('#markerTools').hidden = tool !== 'markers';
   setHoverEdge(null);
   setHover(null);
   refreshMoveOverlay();
@@ -1605,6 +1667,23 @@ $('#optLabels').addEventListener('change', (e) => { ui.labels = e.target.checked
 $('#optAtmos').addEventListener('change', (e) => { ui.atmosphere = e.target.checked; applyAtmosphere(); });
 $('#optGhost').addEventListener('change', (e) => { ui.ghost = e.target.checked; });
 $('#optLowWalls').addEventListener('change', (e) => { ui.lowWalls = e.target.checked; refreshPropsAndWalls(); });
+$('#optMarkers').addEventListener('change', (e) => { ui.showMarkers = e.target.checked; refreshMarkers(); });
+
+// Marker brushes: icons drawn from the same art as the board badges.
+function setMarkerBrush(name) {
+  ui.markerBrush = name;
+  document.querySelectorAll('[data-marker]').forEach((b) => b.classList.toggle('on', b.dataset.marker === name));
+}
+document.querySelectorAll('[data-marker]').forEach((b) => {
+  const t = b.dataset.marker;
+  if (MARKERS[t]) {
+    const icon = b.querySelector('.marker-icon');
+    if (icon) icon.style.backgroundImage = `url(${drawMarkerIcon(t, 64).toDataURL()})`;
+    b.title = MARKERS[t].note;
+  }
+  b.addEventListener('click', () => { setTool('markers'); setMarkerBrush(t); });
+});
+setMarkerBrush(ui.markerBrush);
 
 // Light source radius: the centre brightness follows the size of the light.
 function syncRadius() {
@@ -1775,6 +1854,7 @@ window.addEventListener('keydown', (e) => {
   const key = e.key.toLowerCase();
   if (BRUSH_KEYS[e.key]) { setTool('cells'); setBrush(BRUSH_KEYS[e.key]); }
   else if (key === 'm') setTool('move');
+  else if (key === 'p') setTool('markers');
   else if (['w', 'd', 'k', 'o', 'x', 'g'].includes(key)) {
     setTool('walls');
     setEdgeBrush({ w: 'wall', d: 'door', k: 'lockedDoor', o: 'oneWayDoor', x: 'erase', g: 'window' }[key]);
@@ -1813,7 +1893,8 @@ function updateHoverInfo() {
     `<span class="tag">${AREAS[c.area].label} · ${areaLabel(c)}</span>` +
     (c.bridge ? `<span class="tag">Bridge (spans ${grid.bridgeAxis(x, y) === 'x' ? 'E–W' : 'N–S'})</span>` : '') +
     `<span class="tag">${lightLabel(c, hoverIndex)}</span>` +
-    `<span class="tag">${c.walkable ? 'Walkable' : 'Blocked'}</span>`;
+    `<span class="tag">${c.walkable ? 'Walkable' : 'Blocked'}</span>` +
+    (c.marker ? `<span class="tag marker-tag">${markerLabel(c, hoverIndex)}</span>` : '');
 }
 
 function edgeLabel(o, x, y, type) {
@@ -1822,6 +1903,16 @@ function edgeLabel(o, x, y, type) {
     return type.endsWith('+') ? `One-way door ${a} → ${b}` : `One-way door ${b} → ${a}`;
   }
   return { door: 'Unlocked door', lockedDoor: 'Locked door', wall: 'Wall', window: 'Window' }[type] ?? 'Open';
+}
+
+function markerLabel(c, i) {
+  const label = `${MARKERS[c.marker].label} marker`;
+  if (!c.walkable) return `${label} (cell is blocked)`;
+  if (c.marker === 'key') {
+    const n = grid.keyDoors(i).length;
+    return `${label}: unlocks ${n} door${n === 1 ? '' : 's'}`;
+  }
+  return label;
 }
 
 function lightLabel(c, i) {
@@ -1846,6 +1937,9 @@ function updateCounts() {
     `Bridges <b>${n.bridge}</b> · Walls <b>${n.wall}</b> · Windows <b>${n.window}</b> · Lit lamps <b>${n.lamp}</b><br>` +
     `Doors: unlocked <b>${n.door}</b> · locked <b>${n.lockedDoor}</b> · one-way <b>${n.oneWayDoor}</b><br>` +
     `Light sources <b>${n.lit}</b> · Lit cells <b>${lightLevels.reduce((k, v) => k + (v > 0), 0)}</b><br>` +
+    (Object.keys(n.markers).length
+      ? `Markers: ${Object.keys(MARKERS).filter((t) => n.markers[t]).map((t) => `${MARKERS[t].label} <b>${n.markers[t]}</b>`).join(' · ')}<br>`
+      : '') +
     `Walkable <b>${n.walkable}</b> · Blocked <b>${n.blocked}</b> · ${grid.cols}×${grid.rows}`;
 }
 
@@ -1954,6 +2048,7 @@ renderer.setAnimationLoop(() => {
   ghostHouse.visible = ui.ghost && hoverIndex >= 0;
 
   water.tick(clock.elapsedTime);
+  markers.tick(clock.elapsedTime, camera);
   updateTreeFade();
   if (atmos.visible) updateRain(dt);
   renderer.render(scene, camera);

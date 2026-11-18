@@ -104,6 +104,29 @@ Everything is defined once in `AREAS` in `src/state.js` (label, default walkabil
 generated from it, so a new subcategory added there shows up in the panel, saves and imports. Give it a
 colour in `SUB_LOOK` in `src/main.js`.
 
+### Gameplay markers
+
+The **Markers** tool (`P`) places gameplay markers on **walkable** cells (blocked cells are skipped). A marker
+sits on top of its cell and never changes the cell's area, light, walkability or walls. Each shows as a large
+icon badge floating over the cell (it faces the camera and never shrinks below an easy-to-see size when you
+zoom out) with a coloured ring on the floor.
+
+| Marker | Icon | Meaning |
+|--------|------|---------|
+| Investigation | Magnifying glass (amber) | Can be investigated to look for clues |
+| Objective | Flag (red) | Objectives appear here once the monster reveals itself |
+| White Dice | White die | Single-use white dice to collect |
+| Black Dice | Black die | Black dice to attune (renew every turn) |
+| Key | Skeleton key (gold) | Touching it unlocks every locked and one-way door in its building |
+| Research | Open book (violet) | Single use: uncovers a piece of evidence without investigating |
+
+One marker per cell; **Remove marker** clears it, and undo works as usual. A key's **building** is the
+connected indoor area it sits in (interior walls don't split it), or, for a key just outside, the buildings
+its cell touches. Hovering a key outlines the doors it unlocks in gold and the info box says how many.
+Exported cells carry `"marker"`, and key cells also list the doors they unlock (`"unlocks"`). **Show
+markers** in View hides them. Marker art lives in `src/markers.js`; the list of markers is `MARKERS` in
+`src/state.js`.
+
 ### Movement check
 
 The **Movement** tool (`M`) checks routes with the same rules your game will use:
@@ -195,6 +218,7 @@ npm run build      # static site in dist/ (works from any sub-path, e.g. GitHub 
 | Paint with the current brush | Left-drag |
 | Paint a rectangle | Shift + left-drag, or the **Rectangle** toggle (`R`) |
 | Choose a brush | `1` Ground · `2` Hardwood · `7` Lake · `8` River · `9` Bridge · `3` No light · `4` Light source · `L` Lit lamp · `5` Walkable · `6` Blocked · `0` Reset (other subcategories: click) |
+| Markers | `P` (pick a marker, click/drag on walkable cells) |
 | Movement check | `M` (click start, hover/click destination, `Esc` clears) |
 | Walls & doors | `W` wall · `D` unlocked door · `K` locked door · `O` one-way door · `G` window · `X` erase |
 | Orbit camera | Right-drag, or hold `Space` and left-drag, or **Orbit mode** |
@@ -245,6 +269,7 @@ outdoor/indoor, no edges) are converted on load, outdoor to Ground and indoor to
 - `src/main.js` — three.js scene, tile rendering, bridges, painting, UI wiring.
 - `src/water.js` — water surface shader (flow-mapped river currents, still lakes).
 - `src/props.js` — walkable/blocked props for every surface (`VARIANTS`).
+- `src/markers.js` — gameplay marker badges and icons.
 - `src/bridge.js` — steel truss bridge structures built from connected bridge cells.
 - `src/street.js` — street surfaces: lane lines, crosswalks, sidewalks, chosen from neighbouring cells.
 - `src/scale.js` — metres per cell and the street cross-section.

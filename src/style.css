@@ -284,3 +284,10 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px
 .sw-oneway { background: linear-gradient(90deg, #c0803c 0 40%, #5fcf6a 40%); clip-path: polygon(0 20%, 60% 20%, 60% 0, 100% 50%, 60% 100%, 60% 80%, 0 80%); }
 .move-info { margin: 8px 0 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; color: var(--text); font-variant-numeric: tabular-nums; }
 .move-info b { color: var(--accent); }
+
+/* Markers tool ---------------------------------------------------------------- */
+.marker-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 6px; }
+.marker-grid .brush { gap: 8px; }
+.marker-icon { width: 22px; height: 22px; flex: none; background-size: contain; background-repeat: no-repeat; }
+.tool-seg button { flex: 1 1 40%; }
+.marker-tag { border-color: var(--accent); color: #f3e3cf; }

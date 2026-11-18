@@ -39,7 +39,7 @@ export const AREAS = {
     subs: { lake: { label: 'Lake' }, river: { label: 'River' } },
   },
 };
-export const CELL_KEYS = ['area', 'sub', 'lit', 'radius', 'walkable', 'bridge', 'lamp'];
+export const CELL_KEYS = ['area', 'sub', 'lit', 'radius', 'walkable', 'bridge', 'lamp', 'marker'];
 
 // Whether a freshly painted area/subcategory is walkable.
 export const defaultWalkable = (area, sub) =>
@@ -50,9 +50,21 @@ export const defaultWalkable = (area, sub) =>
 //         cells with a lamp (T-junctions and crossings) can have one; it
 //         lights the cell fully and spills dimmer light onto its neighbours.
 // lit:    the cell holds a light source of the given `radius` (in cells).
+// marker: an optional gameplay marker on a walkable cell (see MARKERS). It
+//         sits on top of the cell and never changes the cell itself.
 export const defaultCell = () => ({
-  area: 'outdoor', sub: 'ground', lit: false, radius: 0, walkable: true, bridge: false, lamp: false,
+  area: 'outdoor', sub: 'ground', lit: false, radius: 0, walkable: true, bridge: false, lamp: false, marker: null,
 });
+
+// Gameplay markers, placed on walkable cells.
+export const MARKERS = {
+  investigation: { label: 'Investigation', note: 'Can be investigated to look for clues' },
+  objective: { label: 'Objective', note: 'Objectives appear here once the monster reveals itself' },
+  whiteDice: { label: 'White Dice', note: 'Single-use white dice to collect' },
+  blackDice: { label: 'Black Dice', note: 'Black dice to attune (renew every turn)' },
+  key: { label: 'Key', note: 'Touching it unlocks every locked and one-way door in its building' },
+  research: { label: 'Research', note: 'Single use: uncovers a piece of evidence without investigating' },
+};
 
 // --- light ---------------------------------------------------------------------
 // A light source lights cells within its radius (cell-centre distance) that it
@@ -144,6 +156,7 @@ export function normalizeCell(c = {}) {
     walkable: c.walkable === undefined ? defaultWalkable(area, sub) || (water && !!c.bridge) : !!c.walkable,
     bridge: water && !!c.bridge,
     lamp: !!c.lamp,
+    marker: MARKERS[c.marker] ? c.marker : null,
   };
 }
 
@@ -352,12 +365,13 @@ export class GridState {
   // Totals per category, per subcategory (`subs`), and for bridges, light,
   // movement, walls and doors.
   counts() {
-    const n = { bridge: 0, lit: 0, unlit: 0, walkable: 0, blocked: 0, wall: 0, door: 0, window: 0, lamp: 0, subs: {} };
+    const n = { bridge: 0, lit: 0, unlit: 0, walkable: 0, blocked: 0, wall: 0, door: 0, window: 0, lamp: 0, subs: {}, markers: {} };
     for (const a in AREAS) n[a] = 0;
     for (const c of this.cells) {
       n[c.area]++;
       if (c.sub) n.subs[c.sub] = (n.subs[c.sub] ?? 0) + 1;
       if (c.bridge) n.bridge++;
+      if (c.marker) n.markers[c.marker] = (n.markers[c.marker] ?? 0) + 1;
       c.lit ? n.lit++ : n.unlit++;
       c.walkable ? n.walkable++ : n.blocked++;
     }
@@ -404,6 +418,51 @@ export class GridState {
       }
     });
     return out;
+  }
+
+  // --- markers ----------------------------------------------------------------
+
+  // The building a key marker belongs to: the connected indoor cells (any
+  // walls inside don't split it) containing the key, or, for a key just
+  // outside, every building touching its cell. Returns a Set of cell indices.
+  keyBuilding(i) {
+    const indoor = (j) => this.cells[j].area === 'indoor';
+    const seeds = [];
+    const { x, y } = this.coords(i);
+    if (indoor(i)) seeds.push(i);
+    else {
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        if (this.inBounds(x + dx, y + dy) && indoor(this.index(x + dx, y + dy))) seeds.push(this.index(x + dx, y + dy));
+      }
+    }
+    const out = new Set(seeds);
+    const queue = [...seeds];
+    while (queue.length) {
+      const j = queue.pop();
+      const c = this.coords(j);
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        if (!this.inBounds(c.x + dx, c.y + dy)) continue;
+        const k = this.index(c.x + dx, c.y + dy);
+        if (!out.has(k) && indoor(k)) { out.add(k); queue.push(k); }
+      }
+    }
+    return out;
+  }
+
+  // Locked and one-way doors a key marker in cell i would unlock: those on
+  // any edge of its building. Returns edge keys.
+  keyDoors(i) {
+    const building = this.keyBuilding(i);
+    const doors = new Set();
+    for (const j of building) {
+      const { x, y } = this.coords(j);
+      for (const [o, ex, ey] of [['v', x, y], ['v', x + 1, y], ['h', x, y], ['h', x, y + 1]]) {
+        const k = edgeKey(o, ex, ey);
+        const t = this.edges.get(k);
+        if (t === 'lockedDoor' || t?.startsWith('oneWayDoor')) doors.add(k);
+      }
+    }
+    return [...doors];
   }
 
   // --- movement ---------------------------------------------------------------
@@ -623,6 +682,13 @@ export class GridState {
           lit: c.lit, // light source here
           ...(c.lit ? { radius: c.radius } : {}),
           lamp: this.lampOn(i),
+          marker: c.marker,
+          ...(c.marker === 'key' ? {
+            unlocks: this.keyDoors(i).map((k) => {
+              const e = parseEdgeKey(k);
+              return { edge: e.o, x: e.x, y: e.y, between: this.edgeCellsLabels(e.o, e.x, e.y) };
+            }),
+          } : {}),
           light: Math.round(levels[i] * 100) / 100, // 0..1 incl. lamp spill
           ...(c.bridge ? { bridgeAxis: this.bridgeAxis(x, y) } : {}),
         };

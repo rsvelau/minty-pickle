@@ -22,6 +22,7 @@
             <button data-tool="cells" class="on">Spaces</button>
             <button data-tool="walls">Walls &amp; doors</button>
             <button data-tool="move">Movement <kbd>M</kbd></button>
+            <button data-tool="markers">Markers <kbd>P</kbd></button>
           </div>
 
           <div id="cellTools">
@@ -56,6 +57,22 @@
               <span class="row-label"></span>
               <button class="brush wide" data-brush="reset">Reset cell to default<kbd>0</kbd></button>
             </div>
+          </div>
+
+          <div id="markerTools" hidden>
+            <div class="marker-grid">
+              <button class="brush" data-marker="investigation"><i class="marker-icon"></i>Investigation</button>
+              <button class="brush" data-marker="objective"><i class="marker-icon"></i>Objective</button>
+              <button class="brush" data-marker="whiteDice"><i class="marker-icon"></i>White Dice</button>
+              <button class="brush" data-marker="blackDice"><i class="marker-icon"></i>Black Dice</button>
+              <button class="brush" data-marker="key"><i class="marker-icon"></i>Key</button>
+              <button class="brush" data-marker="research"><i class="marker-icon"></i>Research</button>
+            </div>
+            <div class="brush-row">
+              <span class="row-label"></span>
+              <button class="brush wide" data-marker="erase"><i class="sw sw-erase"></i>Remove marker</button>
+            </div>
+            <p class="note">Click or drag to place on walkable cells (Shift-drag fills a rectangle). Markers sit on top of a cell and never change it. Hover a Key to see the locked and one-way doors it unlocks in its building.</p>
           </div>
 
           <div id="moveTools" hidden>
@@ -118,6 +135,7 @@
           <label class="check"><input type="checkbox" id="optLabels" checked /> Coordinate labels</label>
           <label class="check"><input type="checkbox" id="optAtmos" checked /> Atmosphere (rain, trees, fog)</label>
           <label class="check"><input type="checkbox" id="optLowWalls" checked /> Low walls (cutaway view)</label>
+          <label class="check"><input type="checkbox" id="optMarkers" checked /> Show markers</label>
         </section>
 
         <section>
