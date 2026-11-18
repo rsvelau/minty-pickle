@@ -2,7 +2,7 @@
 
 export const COLS = 20;
 export const ROWS = 26;
-export const FORMAT_VERSION = 2;
+export const FORMAT_VERSION = 3;
 export const MIN_SIZE = 4;
 export const MAX_SIZE = 60;
 const clampSize = (n, fallback) => {
@@ -10,18 +10,53 @@ const clampSize = (n, fallback) => {
   return Number.isFinite(v) ? Math.min(MAX_SIZE, Math.max(MIN_SIZE, v)) : fallback;
 };
 
-// Space categories and their subcategories. Add a subcategory here (e.g.
-// outdoor: road / grass, indoor: hardwood) and it is accepted everywhere:
-// painting, saving, importing. `sub` is null for categories without one.
+// Space categories and their subcategories. Add a subcategory here and it is
+// accepted everywhere: painting, saving, importing. The first subcategory is
+// the category's default. `walkable: false` marks subcategories that start
+// out blocked when painted (the Walkable brush can still override a cell).
 export const AREAS = {
-  outdoor: { label: 'Outdoor', subs: {} },
-  indoor: { label: 'Indoor', subs: {} },
-  water: { label: 'Water', subs: { lake: { label: 'Lake' }, river: { label: 'River' } } },
+  outdoor: {
+    label: 'Outdoor',
+    subs: {
+      ground: { label: 'Ground' },
+      road: { label: 'Road' },
+      sidewalk: { label: 'Sidewalk' },
+      path: { label: 'Path' },
+      cemetery: { label: 'Cemetery' },
+      cemeteryPath: { label: 'Cemetery path' },
+      forestCemetery: { label: 'Forest cemetery', walkable: false },
+      forest: { label: 'Forest', walkable: false },
+      brambles: { label: 'Brambles', walkable: false },
+    },
+  },
+  indoor: {
+    label: 'Indoor',
+    subs: { hardwood: { label: 'Hardwood' }, carpet: { label: 'Carpet' } },
+  },
+  water: {
+    label: 'Water',
+    walkable: false,
+    subs: { lake: { label: 'Lake' }, river: { label: 'River' } },
+  },
 };
 export const CELL_KEYS = ['area', 'sub', 'lit', 'walkable', 'bridge'];
 
+// Whether a freshly painted area/subcategory is walkable.
+export const defaultWalkable = (area, sub) =>
+  (AREAS[area]?.walkable ?? true) && (AREAS[area]?.subs[sub]?.walkable ?? true);
+
 // bridge: a walkable deck over a water cell (only valid when area is water).
-export const defaultCell = () => ({ area: 'outdoor', sub: null, lit: false, walkable: true, bridge: false });
+export const defaultCell = () => ({ area: 'outdoor', sub: 'ground', lit: false, walkable: true, bridge: false });
+
+// Walls and doors live on the edges between cells, not in cells.
+//  'v' edge (x, y): the vertical line on the west side of cell (x, y), x in 0..cols
+//  'h' edge (x, y): the horizontal line on the north side of cell (x, y), y in 0..rows
+export const EDGE_TYPES = ['wall', 'door'];
+export const edgeKey = (o, x, y) => `${o}${x},${y}`;
+export function parseEdgeKey(k) {
+  const [x, y] = k.slice(1).split(',').map(Number);
+  return { o: k[0], x, y };
+}
 
 // Normalise any saved cell (format v1 used `indoor: bool`) into the current shape.
 export function normalizeCell(c = {}) {
@@ -33,7 +68,7 @@ export function normalizeCell(c = {}) {
     area,
     sub,
     lit: !!c.lit,
-    walkable: c.walkable === undefined ? !water || !!c.bridge : !!c.walkable,
+    walkable: c.walkable === undefined ? defaultWalkable(area, sub) || (water && !!c.bridge) : !!c.walkable,
     bridge: water && !!c.bridge,
   };
 }
@@ -63,7 +98,9 @@ export class GridState {
     this.cells = Array.from({ length: cols * rows }, defaultCell);
     this.undoStack = [];
     this.redoStack = [];
+    this.edges = new Map(); // edgeKey -> 'wall' | 'door'
     this.stroke = null; // Map<index, cellSnapshotBeforeStroke>
+    this.strokeEdges = null; // Map<edgeKey, typeBeforeStroke>
     this.listeners = new Set();
   }
 
@@ -77,7 +114,30 @@ export class GridState {
 
   // --- strokes -------------------------------------------------------------
 
-  beginStroke() { this.stroke = new Map(); }
+  beginStroke() { this.stroke = new Map(); this.strokeEdges = new Map(); }
+
+  edgeInBounds(o, x, y) {
+    return o === 'v'
+      ? x >= 0 && x <= this.cols && y >= 0 && y < this.rows
+      : x >= 0 && x < this.cols && y >= 0 && y <= this.rows;
+  }
+
+  // The two cells an edge separates (either may be off the board).
+  edgeCells(o, x, y) {
+    return o === 'v' ? [{ x: x - 1, y }, { x, y }] : [{ x, y: y - 1 }, { x, y }];
+  }
+
+  // Set or clear (type = null) a wall/door. Returns true if it changed.
+  setEdge(o, x, y, type, { silent = false } = {}) {
+    if (!this.edgeInBounds(o, x, y)) return false;
+    const k = edgeKey(o, x, y);
+    const before = this.edges.get(k) ?? null;
+    if (before === type) return false;
+    if (this.strokeEdges && !this.strokeEdges.has(k)) this.strokeEdges.set(k, before);
+    if (type) this.edges.set(k, type); else this.edges.delete(k);
+    if (!silent) this.emit([]);
+    return true;
+  }
 
   // Apply a patch (any of CELL_KEYS) to one cell, or a function
   // (cell) => patch|null. Records undo info when inside a stroke.
@@ -105,22 +165,32 @@ export class GridState {
       touched.push(i);
     }
     this.stroke.clear();
-    if (touched.length) this.emit(touched);
+    const edgesTouched = this.strokeEdges.size > 0;
+    for (const [k, before] of this.strokeEdges) {
+      if (before) this.edges.set(k, before); else this.edges.delete(k);
+    }
+    this.strokeEdges.clear();
+    if (touched.length || edgesTouched) this.emit(touched);
   }
 
   endStroke() {
     const stroke = this.stroke;
+    const strokeEdges = this.strokeEdges;
     this.stroke = null;
-    if (!stroke || stroke.size === 0) return;
-    const entries = [];
+    this.strokeEdges = null;
+    if (!stroke) return;
+    const cells = [];
     for (const [i, before] of stroke) {
       const after = { ...this.cells[i] };
-      if (CELL_KEYS.some((k) => before[k] !== after[k])) {
-        entries.push({ i, before, after });
-      }
+      if (CELL_KEYS.some((k) => before[k] !== after[k])) cells.push({ i, before, after });
     }
-    if (!entries.length) return;
-    this.undoStack.push(entries);
+    const edges = [];
+    for (const [k, before] of strokeEdges) {
+      const after = this.edges.get(k) ?? null;
+      if (before !== after) edges.push({ k, before, after });
+    }
+    if (!cells.length && !edges.length) return;
+    this.undoStack.push({ cells, edges });
     if (this.undoStack.length > 200) this.undoStack.shift();
     this.redoStack.length = 0;
   }
@@ -136,13 +206,20 @@ export class GridState {
       this.#restore(entries.snapshot[which]);
       return true;
     }
-    for (const e of entries) Object.assign(this.cells[e.i], e[which]);
-    this.emit(entries.map((e) => e.i));
+    for (const e of entries.cells) Object.assign(this.cells[e.i], e[which]);
+    for (const e of entries.edges) {
+      if (e[which]) this.edges.set(e.k, e[which]); else this.edges.delete(e.k);
+    }
+    this.emit(entries.cells.map((e) => e.i));
     return true;
   }
 
   #snapshot() {
-    return { cols: this.cols, rows: this.rows, cells: this.cells.map((c) => ({ ...c })) };
+    return {
+      cols: this.cols, rows: this.rows,
+      cells: this.cells.map((c) => ({ ...c })),
+      edges: new Map(this.edges),
+    };
   }
 
   #restore(snap) {
@@ -150,13 +227,23 @@ export class GridState {
     this.cols = snap.cols;
     this.rows = snap.rows;
     this.cells = snap.cells.map((c) => ({ ...c }));
+    this.edges = new Map(snap.edges);
     this.emit(this.cells.map((_, i) => i), resized);
   }
 
-  // Replace the whole board (optionally with new dimensions) as one undoable step.
-  replaceAll(cols, rows, cells) {
+  // Replace the whole board (optionally with new dimensions) as one undoable
+  // step. `edges` defaults to the current walls/doors that still fit.
+  replaceAll(cols, rows, cells, edges = null) {
     const before = this.#snapshot();
-    const after = { cols, rows, cells: cells.map((c) => ({ ...c })) };
+    if (!edges) {
+      edges = new Map();
+      for (const [k, t] of this.edges) {
+        const { o, x, y } = parseEdgeKey(k);
+        const fits = o === 'v' ? x <= cols && y < rows : x < cols && y <= rows;
+        if (fits) edges.set(k, t);
+      }
+    }
+    const after = { cols, rows, cells: cells.map((c) => ({ ...c })), edges: new Map(edges) };
     this.undoStack.push({ snapshot: { before, after } });
     if (this.undoStack.length > 200) this.undoStack.shift();
     this.redoStack.length = 0;
@@ -178,14 +265,19 @@ export class GridState {
     return true;
   }
 
+  // Totals per category, per subcategory (`subs`), and for bridges, light,
+  // movement, walls and doors.
   counts() {
-    const n = { outdoor: 0, indoor: 0, lake: 0, river: 0, bridge: 0, lit: 0, unlit: 0, walkable: 0, blocked: 0 };
+    const n = { bridge: 0, lit: 0, unlit: 0, walkable: 0, blocked: 0, wall: 0, door: 0, subs: {} };
+    for (const a in AREAS) n[a] = 0;
     for (const c of this.cells) {
-      n[c.sub ?? c.area]++;
+      n[c.area]++;
+      if (c.sub) n.subs[c.sub] = (n.subs[c.sub] ?? 0) + 1;
       if (c.bridge) n.bridge++;
       c.lit ? n.lit++ : n.unlit++;
       c.walkable ? n.walkable++ : n.blocked++;
     }
+    for (const t of this.edges.values()) n[t]++;
     return n;
   }
 
@@ -304,6 +396,14 @@ export class GridState {
           ...(c.bridge ? { bridgeAxis: this.bridgeAxis(x, y) } : {}),
         };
       }),
+      // Walls and doors on cell edges. "v" = west side of cell (x, y);
+      // "h" = north side of cell (x, y). `between` names the two cells
+      // (an off-board cell is null). Doors sit centred on their edge.
+      edges: [...this.edges].map(([k, type]) => {
+        const { o, x, y } = parseEdgeKey(k);
+        const between = this.edgeCells(o, x, y).map((c) => (this.inBounds(c.x, c.y) ? cellLabel(c.x, c.y) : null));
+        return { edge: o, x, y, type, between };
+      }),
     };
   }
 
@@ -321,11 +421,17 @@ export class GridState {
       if (x < 0 || y < 0 || x >= cols || y >= rows) return;
       cells[y * cols + x] = normalizeCell(c);
     });
-    return { cols, rows, cells };
+    const edges = new Map();
+    for (const e of Array.isArray(data.edges) ? data.edges : []) {
+      if (!['v', 'h'].includes(e.edge) || !EDGE_TYPES.includes(e.type)) continue;
+      const fits = e.edge === 'v' ? e.x >= 0 && e.x <= cols && e.y >= 0 && e.y < rows : e.x >= 0 && e.x < cols && e.y >= 0 && e.y <= rows;
+      if (Number.isInteger(e.x) && Number.isInteger(e.y) && fits) edges.set(edgeKey(e.edge, e.x, e.y), e.type);
+    }
+    return { cols, rows, cells, edges };
   }
 
   // Load parsed data without touching undo history (used at startup).
-  load({ cols, rows, cells }) {
-    this.#restore({ cols, rows, cells });
+  load({ cols, rows, cells, edges }) {
+    this.#restore({ cols, rows, cells, edges: edges ?? new Map() });
   }
 }

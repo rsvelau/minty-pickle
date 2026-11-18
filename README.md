@@ -2,20 +2,45 @@
 
 A 3D planning board for a night-time, 90s Pacific Northwest board game.
 The board is a whole town: a 20 × 26 grid by default (columns **A–T**, rows **1–26**), resizable from 4 to 60
-cells per side. Every cell has three attributes:
+cells per side. Every cell has an area (category + subcategory), light and movement; walls and doors sit on
+the edges between cells.
 
 | Attribute | Values | How it shows |
 |-----------|--------|--------------|
-| Area | Outdoor / Indoor / Water (Lake, River) | Mossy blue-grey, warm wood brown, or sunken water |
+| Area | Outdoor / Indoor / Water, each with subcategories (below) | A surface colour per subcategory; water is sunken |
 | Bridge | On water cells only | A wooden deck at street level with railings along open water |
 | Light | Unlit / Lit | Lit cells glow and spill a soft light pool onto neighbours (mercury-vapour green outside, incandescent amber inside) |
 | Movement | Walkable / Blocked | Blocked cells rise as solid blocks (buildings, dense brush) |
 
 ### Areas and subcategories
 
-Areas are categories with optional subcategories, defined once in `AREAS` in `src/state.js`. Water has
-**Lake** and **River**; Outdoor and Indoor have none yet. Adding one there (e.g. `road`, `hardwood`) makes it
-valid everywhere: painting, saving and importing.
+| Category | Subcategories |
+|----------|---------------|
+| Outdoor | Ground (default), Road, Sidewalk, Path, Cemetery, Cemetery path, Forest cemetery\*, Forest\*, Brambles\* |
+| Indoor | Hardwood (default), Carpet |
+| Water | Lake, River (always start blocked) |
+
+\* Starts out **blocked** when painted. Forest shows young firs, Forest cemetery firs and headstones,
+Brambles low thorny mounds, and Cemetery headstones. Painting an ordinary subcategory over a default-blocked
+cell unblocks it; otherwise painting keeps the cell's walkability, and the Walkable/Blocked brushes always win.
+Roads sit slightly below the curb and sidewalks slightly above.
+
+Everything is defined once in `AREAS` in `src/state.js` (label, default walkability). The brush buttons are
+generated from it, so a new subcategory added there shows up in the panel, saves and imports. Give it a
+colour in `SUB_LOOK` in `src/main.js`.
+
+### Walls and doors
+
+Walls and doors are a separate tool (**Walls & doors** in the panel, or `W` / `D` / `X`) because they live
+on the **edges between cells**, not in cells:
+
+- **Drag along grid lines** to draw walls; the pointer snaps to grid corners.
+- **Click an edge** to place a single piece; clicking the same piece again removes it.
+- **Rectangle** (or Shift-drag) outlines a room. With **Erase**, it clears every wall and door inside the
+  rectangle.
+- **Doors are centred on their edge, between the two cells.** Each is drawn as a 1.2 m opening with an
+  open door leaf, with wall on either side.
+- **Low walls (cutaway view)** in View keeps walls short so you can see into rooms; untick for full 2.6 m walls.
 
 ### Water and bridges
 
@@ -57,7 +82,8 @@ npm run build      # static site in dist/ (works from any sub-path, e.g. GitHub 
 |--------|-------|
 | Paint with the current brush | Left-drag |
 | Paint a rectangle | Shift + left-drag, or the **Rectangle** toggle (`R`) |
-| Choose a brush | `1` Outdoor · `2` Indoor · `7` Lake · `8` River · `9` Bridge · `3` Unlit · `4` Lit · `5` Walkable · `6` Blocked · `0` Reset |
+| Choose a brush | `1` Ground · `2` Hardwood · `7` Lake · `8` River · `9` Bridge · `3` Unlit · `4` Lit · `5` Walkable · `6` Blocked · `0` Reset (other subcategories: click) |
+| Walls & doors | `W` wall · `D` door · `X` erase |
 | Orbit camera | Right-drag, or hold `Space` and left-drag, or **Orbit mode** |
 | Pan / zoom | Middle-drag / mouse wheel |
 | Camera presets | `A` angled · `T` top-down |
@@ -78,17 +104,25 @@ future tools can read it:
 ```json
 {
   "format": "minty-pickle-grid",
-  "version": 2,
+  "version": 3,
   "cols": 20,
   "rows": 26,
   "cells": [
     { "x": 0, "y": 0, "id": "A1", "area": "outdoor", "sub": null, "lit": false, "walkable": true, "bridge": false },
     { "x": 9, "y": 4, "id": "J5", "area": "water", "sub": "river", "lit": true, "walkable": true, "bridge": true, "bridgeAxis": "y" }
+  ],
+  "edges": [
+    { "edge": "v", "x": 3, "y": 2, "type": "wall", "between": ["C3", "D3"] },
+    { "edge": "h", "x": 5, "y": 9, "type": "door", "between": ["F9", "F10"] }
   ]
 }
 ```
 
-Version 1 files (`"indoor": true/false`) still import; they are converted on load.
+An edge `"v"` at (x, y) is the west side of cell (x, y); `"h"` is its north side. `between` names the two
+cells it separates (`null` past the board edge).
+
+Older files still import: version 1 (`"indoor": true/false`) and version 2 (no subcategories for
+outdoor/indoor, no edges) are converted on load, outdoor to Ground and indoor to Hardwood.
 
 ## Code layout
 

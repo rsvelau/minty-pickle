@@ -138,6 +138,7 @@ h2 {
   top: 12px;
   right: 12px;
   min-width: 220px;
+  max-width: 340px;
   padding: 10px 12px;
   background: var(--panel);
   border: 1px solid var(--line);
@@ -261,3 +262,15 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px
 .sw-river { background: repeating-linear-gradient(90deg, #2f5a60 0 3px, #10262c 3px 6px); }
 .sw-bridge { background: repeating-linear-gradient(0deg, #8a735c 0 2px, #5d4f42 2px 4px); }
 .sw-unbridge { background: #1d3d4a; box-shadow: inset 0 0 0 2px #5d4f42; }
+
+/* Area groups + wall tool -------------------------------------------------- */
+.area-group { margin-bottom: 8px; }
+.area-group .group-label { display: block; margin-bottom: 4px; color: var(--muted); font-size: 11px; }
+.area-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.area-grid .brush { padding: 5px 6px; font-size: 12px; min-width: 0; }
+.area-grid .brush span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brush-row.three { grid-template-columns: repeat(3, 1fr); }
+.tool-seg { margin-top: 0; }
+.sw-wall { background: #b8b0a0; }
+.sw-door { background: linear-gradient(90deg, #b8b0a0 0 30%, #c0803c 30% 70%, #b8b0a0 70%); }
+.sw-erase { background: transparent; border: 1px dashed #e88a7f; }

@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { GridState, COLS, ROWS, MIN_SIZE, MAX_SIZE, colLabel, cellLabel, defaultCell, areaLabel } from './state.js';
+import {
+  GridState, COLS, ROWS, MIN_SIZE, MAX_SIZE, AREAS, colLabel, cellLabel, defaultCell, defaultWalkable, areaLabel, parseEdgeKey,
+} from './state.js';
 import { createWaterSurface } from './water.js';
 
 // ---------------------------------------------------------------------------
@@ -26,6 +28,29 @@ const BED_H = -m(2.4);        // river/lake bed
 const DECK_TOP = FLOOR_H + 0.03; // bridge decks sit just above street level
 const DECK_T = m(0.5);        // deck thickness
 const RAIL_H = m(1.1);        // railing height
+const WALL_FULL = m(2.6);     // interior wall height
+const WALL_LOW = m(0.8);      // cutaway wall height (default, keeps rooms visible)
+const WALL_T = 0.06;          // wall thickness
+const DOOR_W = m(1.2);        // door opening, centred on its edge
+const DOOR_H = m(2.1);        // door height (lintel above when walls are full height)
+
+// Per-subcategory surface colours (night) and tile heights. Roads sit a touch
+// lower than the curb; sidewalks a touch higher.
+const SUB_LOOK = {
+  ground: { unlit: '#4a6158', lit: '#9fbf8f', area: '#3e6b5a' },
+  road: { unlit: '#363d43', lit: '#8a9599', area: '#3b4148', h: FLOOR_H - 0.025 },
+  sidewalk: { unlit: '#6a706d', lit: '#b9c0ba', area: '#8d9390', h: FLOOR_H + 0.02 },
+  path: { unlit: '#544537', lit: '#b5946f', area: '#8c6a45' },
+  cemetery: { unlit: '#33463a', lit: '#86a487', area: '#5b7f5f' },
+  cemeteryPath: { unlit: '#5a564c', lit: '#b3ab92', area: '#a39a80' },
+  forestCemetery: { unlit: '#24312a', lit: '#6f8f74', area: '#3f5a44' },
+  forest: { unlit: '#1e2c24', lit: '#5f8566', area: '#24503a' },
+  brambles: { unlit: '#2e2926', lit: '#7a6a5c', area: '#6b4a5e' },
+  hardwood: { unlit: '#7a5338', lit: '#f0a85a', area: '#9a6a3e' },
+  carpet: { unlit: '#58303a', lit: '#c4727c', area: '#8a3f52' },
+};
+// Vegetation shows a blocked cell, so these don't rise as a block in the main view.
+const NATURAL_BLOCKERS = new Set(['forest', 'forestCemetery', 'brambles']);
 
 // Night-time PNW palette. "Lit" outdoor reads as old mercury-vapor streetlight
 // (sickly green-white); lit indoor reads as warm incandescent.
@@ -54,13 +79,17 @@ const PALETTE = {
 // - Painting water makes land unwalkable; painting land over water makes it
 //   walkable again and removes any bridge.
 // - Bridges only go on water and are walkable.
-const toLand = (area) => (c) => ({ area, sub: null, bridge: false, ...(c.area === 'water' ? { walkable: true } : {}) });
-const toWater = (sub) => (c) => ({ area: 'water', sub, ...(c.area === 'water' ? {} : { walkable: false, bridge: false }) });
+// - Subcategories that start blocked (forest, brambles...) block the cell;
+//   painting something ordinary over a default-blocked cell unblocks it.
+//   Otherwise the cell keeps whatever walkability it had.
+const paintArea = (area, sub) => (c) => {
+  if (area === 'water' && c.area === 'water') return { sub }; // keep bridge + walkability
+  const patch = { area, sub, bridge: false };
+  if (!defaultWalkable(area, sub)) patch.walkable = false;
+  else if (!defaultWalkable(c.area, c.sub) && !c.bridge) patch.walkable = true;
+  return patch;
+};
 const BRUSHES = {
-  outdoor: toLand('outdoor'),
-  indoor: toLand('indoor'),
-  lake: toWater('lake'),
-  river: toWater('river'),
   bridge: (c) => (c.area === 'water' ? { bridge: true, walkable: true } : null),
   unbridge: (c) => (c.bridge ? { bridge: false, walkable: false } : null),
   unlit: { lit: false },
@@ -69,9 +98,12 @@ const BRUSHES = {
   blocked: { walkable: false },
   reset: defaultCell(),
 };
+for (const area in AREAS) {
+  for (const sub in AREAS[area].subs) BRUSHES[`${area}:${sub}`] = paintArea(area, sub);
+}
 const BRUSH_KEYS = {
-  1: 'outdoor', 2: 'indoor', 3: 'unlit', 4: 'lit', 5: 'walkable', 6: 'blocked',
-  7: 'lake', 8: 'river', 9: 'bridge', 0: 'reset',
+  1: 'outdoor:ground', 2: 'indoor:hardwood', 3: 'unlit', 4: 'lit', 5: 'walkable', 6: 'blocked',
+  7: 'water:lake', 8: 'water:river', 9: 'bridge', 0: 'reset',
 };
 
 // ---------------------------------------------------------------------------
@@ -80,7 +112,10 @@ const BRUSH_KEYS = {
 
 const grid = new GridState(COLS, ROWS);
 const ui = {
-  brush: 'indoor',
+  brush: 'indoor:hardwood',
+  tool: 'cells',       // 'cells' | 'walls'
+  edgeBrush: 'wall',   // 'wall' | 'door' | 'erase'
+  lowWalls: true,
   shape: 'brush',      // 'brush' | 'rect'
   view: 'all',         // 'all' | 'area' | 'light' | 'walk'
   orbitMode: false,    // toggle: left-drag orbits
@@ -206,12 +241,24 @@ const poolMat = new THREE.MeshBasicMaterial({
 });
 const poolGeo = new THREE.PlaneGeometry(2.6 * TILE, 2.6 * TILE).rotateX(-Math.PI / 2);
 
+// Unit box with its base at y = 0 (walls, door leaves).
+const unitBoxGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+const wallMat = new THREE.MeshLambertMaterial({ color: '#b8b0a0' });
+const doorMat = new THREE.MeshLambertMaterial({ color: '#d08a40', emissive: '#5a3414' });
+// Headstone ~0.6 m wide, 0.9 m tall, 0.2 m thick.
+const headstoneGeo = new THREE.BoxGeometry(m(0.6), m(0.9), m(0.2)).translate(0, m(0.45), 0);
+const headstoneMat = new THREE.MeshLambertMaterial({ color: '#8b908c' });
+// Bramble mound ~1.4 m across, ~0.8 m tall.
+const brambleGeo = new THREE.IcosahedronGeometry(m(0.9), 0).scale(1, 0.6, 1);
+const brambleMat = new THREE.MeshLambertMaterial({ color: '#5e4a4e', flatShading: true });
+
 // ---------------------------------------------------------------------------
 // Board (rebuilt whenever the dimensions change)
 // ---------------------------------------------------------------------------
 
 let N = 0;
 let tiles, pools, glowAttr, slab, ground, decks, deckGlow, rails;
+let propFirs, headstones, brambles, walls, doorLeaves;
 let deckVisible = new Uint8Array(0);
 const water = createWaterSurface();
 scene.add(water.mesh);
@@ -228,7 +275,7 @@ function disposeChildren(group) {
     group.remove(child);
     child.traverse((o) => {
       if (o.isInstancedMesh) o.dispose();
-      if (o.geometry && ![tileGeoBase, poolGeo, firGeo].includes(o.geometry)) o.geometry.dispose();
+      if (o.geometry && ![tileGeoBase, poolGeo, firGeo, unitBoxGeo, headstoneGeo, brambleGeo].includes(o.geometry)) o.geometry.dispose();
       if (o.material && o.userData.ownMaterial) {
         o.material.map?.dispose();
         o.material.dispose();
@@ -284,6 +331,31 @@ function buildBoard() {
   rails.raycast = () => {};
   rails.count = 0;
   boardGroup.add(rails);
+
+  // Cell props: young firs (forest), headstones (cemeteries), bramble mounds.
+  propFirs = new THREE.InstancedMesh(firGeo, firMat, N);
+  headstones = new THREE.InstancedMesh(headstoneGeo, headstoneMat, N * 2);
+  brambles = new THREE.InstancedMesh(brambleGeo, brambleMat, N * 3);
+  for (const mesh of [propFirs, headstones, brambles]) {
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.raycast = () => {};
+    mesh.count = 0;
+    boardGroup.add(mesh);
+  }
+
+  // Walls and doors on cell edges (a door = two short wall pieces, an
+  // optional lintel, and an open door leaf).
+  const maxEdges = 2 * N + cols + rows;
+  walls = new THREE.InstancedMesh(unitBoxGeo, wallMat, maxEdges * 3);
+  doorLeaves = new THREE.InstancedMesh(unitBoxGeo, doorMat, maxEdges * 2);
+  for (const mesh of [walls, doorLeaves]) {
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.raycast = () => {};
+    mesh.count = 0;
+    boardGroup.add(mesh);
+  }
 
   // Tiles: one instanced mesh, per-instance colour + per-instance "glow" (lit).
   const tileGeo = tileGeoBase.clone();
@@ -381,6 +453,117 @@ function refreshWaterAndBridges() {
   decks.instanceColor.needsUpdate = true;
   deckGlow.needsUpdate = true;
   decks.computeBoundingSphere();
+  refreshPropsAndWalls();
+}
+
+// Props on cells (main view only) and walls/doors on edges (every view).
+function refreshPropsAndWalls() {
+  let nf = 0, nh = 0, nb = 0;
+  if (ui.view === 'all') {
+    for (let i = 0; i < N; i++) {
+      const sub = grid.cells[i].sub;
+      if (!['forest', 'forestCemetery', 'cemetery', 'brambles'].includes(sub)) continue;
+      const { x, y } = grid.coords(i);
+      const c = cellToWorld(x, y).setY(FLOOR_H);
+      const rnd = rand32(i * 7919 + 17);
+      rnd();
+      if (sub === 'forest' || sub === 'forestCemetery') {
+        // Young firs, 5-8 m: tall enough to read as forest, short enough to
+        // see past.
+        const h = m(sub === 'forest' ? 6 + rnd() * 2.5 : 4.5 + rnd() * 2);
+        const r = h * 0.3;
+        tmpMatrix.compose(
+          tmpPos.copy(c).add(tmpScale.set((rnd() - 0.5) * 0.3, 0, (rnd() - 0.5) * 0.3)),
+          tmpQuat.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rnd() * 6.28),
+          tmpScale.set(r, h, r),
+        );
+        propFirs.setMatrixAt(nf++, tmpMatrix);
+      }
+      if (sub === 'cemetery' || sub === 'forestCemetery') {
+        const count = sub === 'cemetery' ? 2 : 1;
+        for (let k = 0; k < count; k++) {
+          const ox = count === 2 ? (k ? 0.22 : -0.22) : 0.25;
+          const lean = new THREE.Euler((rnd() - 0.5) * 0.25, (rnd() - 0.5) * 0.3, (rnd() - 0.5) * 0.2);
+          tmpMatrix.compose(
+            tmpPos.copy(c).add(tmpScale.set(ox, 0, (rnd() - 0.5) * 0.2 + (count === 1 ? 0.25 : 0))),
+            tmpQuat.setFromEuler(lean),
+            tmpScale.set(1, 0.85 + rnd() * 0.3, 1),
+          );
+          headstones.setMatrixAt(nh++, tmpMatrix);
+        }
+      }
+      if (sub === 'brambles') {
+        for (let k = 0; k < 3; k++) {
+          const s = 0.7 + rnd() * 0.5;
+          tmpMatrix.compose(
+            tmpPos.copy(c).add(tmpScale.set((rnd() - 0.5) * 0.5, 0.02, (rnd() - 0.5) * 0.5)),
+            tmpQuat.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rnd() * 6.28),
+            tmpScale.set(s, s, s),
+          );
+          brambles.setMatrixAt(nb++, tmpMatrix);
+        }
+      }
+    }
+  }
+  propFirs.count = nf;
+  headstones.count = nh;
+  brambles.count = nb;
+
+  // Walls and doors.
+  const H = ui.lowWalls ? WALL_LOW : WALL_FULL;
+  let nw = 0, nd = 0;
+  const piece = (cx, cz, along, len, base, height, vertical) => {
+    // `along` is the offset along the edge from its centre.
+    const px = vertical ? cx : cx + along;
+    const pz = vertical ? cz + along : cz;
+    tmpMatrix.compose(
+      tmpPos.set(px, base, pz),
+      tmpQuat.identity(),
+      vertical ? tmpScale.set(WALL_T, height, len) : tmpScale.set(len, height, WALL_T),
+    );
+    walls.setMatrixAt(nw++, tmpMatrix);
+  };
+  for (const [k, type] of grid.edges) {
+    const { o, x, y } = parseEdgeKey(k);
+    const vertical = o === 'v';
+    const cx = vertical ? x - grid.cols / 2 : x - grid.cols / 2 + 0.5;
+    const cz = vertical ? y - grid.rows / 2 + 0.5 : y - grid.rows / 2;
+    if (type === 'wall') {
+      piece(cx, cz, 0, TILE + WALL_T, FLOOR_H, H, vertical);
+      continue;
+    }
+    // Door: wall either side of a centred opening.
+    const side = (TILE - DOOR_W) / 2;
+    piece(cx, cz, -(DOOR_W / 2 + side / 2), side + WALL_T, FLOOR_H, H, vertical);
+    piece(cx, cz, DOOR_W / 2 + side / 2, side + WALL_T, FLOOR_H, H, vertical);
+    if (H > DOOR_H) piece(cx, cz, 0, DOOR_W, FLOOR_H + DOOR_H, H - DOOR_H, vertical);
+    // Leaf hinged on one jamb, swung ~70 degrees open.
+    const swing = 1.2;
+    const hingeAlong = -DOOR_W / 2;
+    const hx = vertical ? cx : cx + hingeAlong;
+    const hz = vertical ? cz + hingeAlong : cz;
+    const angle = vertical ? -Math.PI / 2 + swing : -swing;
+    const dir = new THREE.Vector3(Math.cos(angle), 0, -Math.sin(angle));
+    tmpMatrix.compose(
+      tmpPos.set(hx + dir.x * DOOR_W / 2, FLOOR_H, hz + dir.z * DOOR_W / 2),
+      tmpQuat.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, angle),
+      tmpScale.set(DOOR_W, Math.min(DOOR_H, H) * 0.98, 0.05),
+    );
+    doorLeaves.setMatrixAt(nd++, tmpMatrix);
+    // Threshold plate across the opening so doors read from any angle.
+    tmpMatrix.compose(
+      tmpPos.set(cx, FLOOR_H, cz),
+      tmpQuat.identity(),
+      vertical ? tmpScale.set(0.3, 0.015, DOOR_W) : tmpScale.set(DOOR_W, 0.015, 0.3),
+    );
+    doorLeaves.setMatrixAt(nd++, tmpMatrix);
+  }
+  walls.count = nw;
+  doorLeaves.count = nd;
+  for (const mesh of [propFirs, headstones, brambles, walls, doorLeaves]) {
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+  }
 }
 
 function deckLook(c) {
@@ -412,14 +595,17 @@ function cellLook(cell) {
   // Returns { color: hex, glow: number, height: number (tile top), pool: hexOrNull, poolY }
   const blocked = !cell.walkable;
   const isWater = cell.area === 'water';
-  // Water cells are always sunken; blocked land rises one storey.
-  const landH = blocked ? BLOCK_H : FLOOR_H;
-  const height = isWater ? BED_H : landH;
+  const look = SUB_LOOK[cell.sub] ?? {};
+  const surfaceH = look.h ?? FLOOR_H;
+  // Water cells are always sunken; blocked land rises one storey (in the main
+  // view vegetation shows forest/bramble blocking instead).
+  const raise = blocked && !(ui.view === 'all' && NATURAL_BLOCKERS.has(cell.sub));
+  const height = isWater ? BED_H : raise ? BLOCK_H : surfaceH;
   switch (ui.view) {
     case 'area':
       return {
-        color: isWater ? PALETTE.areaWater : cell.area === 'indoor' ? PALETTE.areaIndoor : PALETTE.areaOutdoor,
-        glow: 0.15, height: isWater ? BED_H : FLOOR_H, pool: null,
+        color: isWater ? PALETTE.areaWater : look.area ?? PALETTE.areaOutdoor,
+        glow: 0.15, height: isWater ? BED_H : surfaceH, pool: null,
       };
     case 'light':
       return { color: cell.lit ? PALETTE.lightOn : PALETTE.lightOff, glow: cell.lit ? 0.45 : 0, height: isWater ? BED_H : FLOOR_H, pool: null };
@@ -433,13 +619,13 @@ function cellLook(cell) {
           poolY: (cell.bridge ? DECK_TOP : WATER_Y) + 0.012,
         };
       }
-      const set = PALETTE[cell.area];
+      const set = SUB_LOOK[cell.sub] ?? PALETTE[cell.area];
       return {
         color: cell.lit ? set.lit : set.unlit,
         glow: cell.lit ? 0.18 : 0,
         height,
         pool: cell.lit ? (cell.area === 'indoor' ? PALETTE.glowIndoor : PALETTE.glowOutdoor) : null,
-        shade: blocked ? PALETTE.blockedShade : 1,
+        shade: raise ? PALETTE.blockedShade : 1,
       };
     }
   }
@@ -829,8 +1015,140 @@ function paintRect(a, b) {
   if (touched.length) grid.emit(touched);
 }
 
+// --- Walls & doors tool --------------------------------------------------------
+// Edges are drawn along grid lines: the pointer snaps to grid corners and each
+// step between neighbouring corners sets one edge. A click without moving
+// toggles the edge nearest the pointer. Rectangle mode outlines a room.
+
+const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -FLOOR_H);
+
+// Pointer -> fractional grid coordinates on the floor (0..cols, 0..rows).
+function gridPoint(ev) {
+  const r = renderer.domElement.getBoundingClientRect();
+  pointer.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+  raycaster.setFromCamera(pointer, camera);
+  const p = raycaster.ray.intersectPlane(floorPlane, new THREE.Vector3());
+  return p ? { gx: p.x / TILE + grid.cols / 2, gy: p.z / TILE + grid.rows / 2 } : null;
+}
+const clampV = (v) => ({
+  x: THREE.MathUtils.clamp(Math.round(v.gx), 0, grid.cols),
+  y: THREE.MathUtils.clamp(Math.round(v.gy), 0, grid.rows),
+});
+function nearestEdge(pt) {
+  if (!pt) return null;
+  const dv = Math.abs(pt.gx - Math.round(pt.gx));
+  const dh = Math.abs(pt.gy - Math.round(pt.gy));
+  const e = dv < dh
+    ? { o: 'v', x: Math.round(pt.gx), y: Math.floor(pt.gy) }
+    : { o: 'h', x: Math.floor(pt.gx), y: Math.round(pt.gy) };
+  return grid.edgeInBounds(e.o, e.x, e.y) ? e : null;
+}
+const edgeType = () => (ui.edgeBrush === 'erase' ? null : ui.edgeBrush);
+
+// Walk corner to corner, setting the edge for each unit step.
+function drawEdgePath(a, b) {
+  let { x, y } = a;
+  const type = edgeType();
+  let any = false;
+  while (x !== b.x || y !== b.y) {
+    if (Math.abs(b.x - x) >= Math.abs(b.y - y)) {
+      const nx = x + Math.sign(b.x - x);
+      any = grid.setEdge('h', Math.min(x, nx), y, type) || any;
+      x = nx;
+    } else {
+      const ny = y + Math.sign(b.y - y);
+      any = grid.setEdge('v', x, Math.min(y, ny), type) || any;
+      y = ny;
+    }
+  }
+  return any;
+}
+
+// Outline the cell rectangle a..b with walls; Erase clears inside it too.
+function edgeRect(a, b) {
+  grid.revertStroke();
+  const x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x);
+  const y0 = Math.min(a.y, b.y), y1 = Math.max(a.y, b.y);
+  const type = edgeType();
+  const opt = { silent: true };
+  if (type === null) {
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1 + 1; x++) grid.setEdge('v', x, y, null, opt);
+    for (let y = y0; y <= y1 + 1; y++) for (let x = x0; x <= x1; x++) grid.setEdge('h', x, y, null, opt);
+  } else {
+    for (let x = x0; x <= x1; x++) { grid.setEdge('h', x, y0, type, opt); grid.setEdge('h', x, y1 + 1, type, opt); }
+    for (let y = y0; y <= y1; y++) { grid.setEdge('v', x0, y, type, opt); grid.setEdge('v', x1 + 1, y, type, opt); }
+  }
+  grid.emit([]);
+}
+
+// Highlight for the edge under the pointer.
+const edgeMarker = new THREE.Mesh(
+  new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0),
+  new THREE.MeshBasicMaterial({ color: '#f1d9a8', transparent: true, opacity: 0.85, depthTest: false }),
+);
+edgeMarker.renderOrder = 11;
+edgeMarker.visible = false;
+scene.add(edgeMarker);
+let hoverEdge = null;
+
+function setHoverEdge(e) {
+  hoverEdge = e;
+  edgeMarker.visible = !!e;
+  if (!e) return;
+  const vertical = e.o === 'v';
+  const cx = vertical ? e.x - grid.cols / 2 : e.x - grid.cols / 2 + 0.5;
+  const cz = vertical ? e.y - grid.rows / 2 + 0.5 : e.y - grid.rows / 2;
+  edgeMarker.position.set(cx, FLOOR_H, cz);
+  const h = (ui.lowWalls ? WALL_LOW : WALL_FULL) + 0.02;
+  edgeMarker.scale.set(vertical ? 0.1 : 1, h, vertical ? 1 : 0.1);
+  edgeMarker.material.color.set(ui.edgeBrush === 'erase' ? '#e88a7f' : ui.edgeBrush === 'door' ? '#f0b060' : '#f1d9a8');
+}
+
 const canvas = renderer.domElement;
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+function startEdgeStroke(ev) {
+  const pt = gridPoint(ev);
+  if (!pt) return;
+  canvas.setPointerCapture(ev.pointerId);
+  const rect = (ui.shape === 'rect' || ev.shiftKey) && ui.edgeBrush !== 'door';
+  painting = { edges: true, pointerId: ev.pointerId, rect, moved: false, click: nearestEdge(pt) };
+  grid.beginStroke();
+  if (rect) {
+    const cell = pickCell(ev, { clamp: true });
+    painting.start = painting.last = cell;
+    if (cell) edgeRect(cell, cell);
+  } else {
+    painting.lastV = clampV(pt);
+  }
+}
+
+function moveEdgeStroke(ev) {
+  if (painting.rect) {
+    const cell = pickCell(ev, { clamp: true });
+    if (!cell || !painting.start) return;
+    if (cell.x === painting.last.x && cell.y === painting.last.y) return;
+    painting.last = cell;
+    edgeRect(painting.start, cell);
+    return;
+  }
+  const pt = gridPoint(ev);
+  if (!pt) return;
+  const v = clampV(pt);
+  if (v.x === painting.lastV.x && v.y === painting.lastV.y) return;
+  if (drawEdgePath(painting.lastV, v)) painting.moved = true;
+  painting.lastV = v;
+}
+
+function endEdgeStroke() {
+  // A click (no drag) toggles the single edge under the pointer.
+  if (!painting.rect && !painting.moved && painting.click) {
+    const { o, x, y } = painting.click;
+    const current = grid.edges.get(`${o}${x},${y}`) ?? null;
+    const type = edgeType();
+    grid.setEdge(o, x, y, type && current === type ? null : type);
+  }
+}
 
 canvas.addEventListener('pointerdown', (ev) => {
   if (ev.pointerType === 'touch') {
@@ -838,6 +1156,7 @@ canvas.addEventListener('pointerdown', (ev) => {
     if (activeTouches.size > 1 && painting) { cancelPainting(); return; }
   }
   if (ev.button !== 0 || !paintAllowed() || activeTouches.size > 1) return;
+  if (ui.tool === 'walls') { startEdgeStroke(ev); return; }
   const cell = pickCell(ev);
   if (!cell) return;
   canvas.setPointerCapture(ev.pointerId);
@@ -849,6 +1168,13 @@ canvas.addEventListener('pointerdown', (ev) => {
 
 canvas.addEventListener('pointermove', (ev) => {
   const cell = pickCell(ev, { clamp: !!painting });
+  if (ui.tool === 'walls') {
+    const rect = (ui.shape === 'rect' || ev.shiftKey) && ui.edgeBrush !== 'door';
+    setHoverEdge(rect ? null : nearestEdge(gridPoint(ev)));
+    setHover(rect ? cell : null);
+    if (painting?.edges && ev.pointerId === painting.pointerId) moveEdgeStroke(ev);
+    return;
+  }
   setHover(cell);
   if (!painting || ev.pointerId !== painting.pointerId || !cell) return;
   if (cell.x === painting.last.x && cell.y === painting.last.y) return;
@@ -860,6 +1186,7 @@ canvas.addEventListener('pointermove', (ev) => {
 function finishPainting(ev) {
   if (ev && ev.pointerType === 'touch') activeTouches.delete(ev.pointerId);
   if (!painting || (ev && ev.pointerId !== painting.pointerId)) return;
+  if (painting.edges) endEdgeStroke();
   painting = null;
   grid.endStroke();
   updateUndoButtons();
@@ -874,12 +1201,26 @@ canvas.addEventListener('pointercancel', (ev) => {
   activeTouches.delete(ev.pointerId);
   if (painting && ev.pointerId === painting.pointerId) cancelPainting();
 });
-canvas.addEventListener('pointerleave', () => { if (!painting) setHover(null); });
+canvas.addEventListener('pointerleave', () => { if (!painting) { setHover(null); setHoverEdge(null); } });
 
 function setHover(cell) {
   hoverIndex = cell ? grid.index(cell.x, cell.y) : -1;
   hoverBox.visible = !!cell;
   updateHoverInfo();
+}
+
+function setTool(tool) {
+  ui.tool = tool;
+  $$('[data-tool]').forEach((b) => b.classList.toggle('on', b.dataset.tool === tool));
+  $('#cellTools').hidden = tool !== 'cells';
+  $('#wallTools').hidden = tool !== 'walls';
+  setHoverEdge(null);
+  setHover(null);
+}
+function setEdgeBrush(name) {
+  ui.edgeBrush = name;
+  $$('[data-edge]').forEach((b) => b.classList.toggle('on', b.dataset.edge === name));
+  if (hoverEdge) setHoverEdge(hoverEdge);
 }
 
 // ---------------------------------------------------------------------------
@@ -909,7 +1250,7 @@ const $$ = (s) => [...document.querySelectorAll(s)];
 
 function setBrush(name) {
   ui.brush = name;
-  $$('.brush').forEach((b) => b.classList.toggle('on', b.dataset.brush === name));
+  $$('.brush[data-brush]').forEach((b) => b.classList.toggle('on', b.dataset.brush === name));
 }
 function setShape(name) {
   ui.shape = name;
@@ -926,7 +1267,31 @@ function setOrbitMode(on) {
   applyControlBindings();
 }
 
-$$('.brush').forEach((b) => b.addEventListener('click', () => setBrush(b.dataset.brush)));
+// Area brushes are generated from AREAS so new subcategories show up here.
+{
+  const keyFor = Object.fromEntries(Object.entries(BRUSH_KEYS).map(([k, v]) => [v, k]));
+  const host = $('#areaBrushes');
+  for (const [area, def] of Object.entries(AREAS)) {
+    const group = document.createElement('div');
+    group.className = 'area-group';
+    group.innerHTML = `<span class="group-label">${def.label}</span><div class="area-grid"></div>`;
+    for (const [sub, sdef] of Object.entries(def.subs)) {
+      const id = `${area}:${sub}`;
+      const look = SUB_LOOK[sub];
+      const b = document.createElement('button');
+      b.className = 'brush';
+      b.dataset.brush = id;
+      b.title = `${def.label}: ${sdef.label}${defaultWalkable(area, sub) ? '' : ' (blocked)'}`;
+      const sw = look ? `<i class="sw" style="background:${look.unlit}"></i>` : `<i class="sw sw-${sub}"></i>`;
+      b.innerHTML = `${sw}<span>${sdef.label}</span>${keyFor[id] ? `<kbd>${keyFor[id]}</kbd>` : ''}`;
+      group.querySelector('.area-grid').appendChild(b);
+    }
+    host.appendChild(group);
+  }
+}
+$$('.brush[data-brush]').forEach((b) => b.addEventListener('click', () => setBrush(b.dataset.brush)));
+$$('[data-tool]').forEach((b) => b.addEventListener('click', () => setTool(b.dataset.tool)));
+$$('[data-edge]').forEach((b) => b.addEventListener('click', () => setEdgeBrush(b.dataset.edge)));
 $$('[data-shape]').forEach((b) => b.addEventListener('click', () => setShape(b.dataset.shape)));
 $$('[data-view]').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
 $$('[data-cam]').forEach((b) => b.addEventListener('click', () => setCamera(b.dataset.cam)));
@@ -935,6 +1300,7 @@ $('#camMode').addEventListener('click', () => setOrbitMode(!ui.orbitMode));
 $('#optLabels').addEventListener('change', (e) => { ui.labels = e.target.checked; labelGroup.visible = ui.labels; });
 $('#optAtmos').addEventListener('change', (e) => { ui.atmosphere = e.target.checked; applyAtmosphere(); });
 $('#optGhost').addEventListener('change', (e) => { ui.ghost = e.target.checked; });
+$('#optLowWalls').addEventListener('change', (e) => { ui.lowWalls = e.target.checked; refreshPropsAndWalls(); });
 
 // Board size
 function syncSizeInputs() {
@@ -964,7 +1330,7 @@ syncSizeInputs();
 $('#undo').addEventListener('click', () => { grid.undo(); updateUndoButtons(); });
 $('#redo').addEventListener('click', () => { grid.redo(); updateUndoButtons(); });
 $('#clear').addEventListener('click', () => {
-  grid.replaceAll(grid.cols, grid.rows, Array.from({ length: N }, defaultCell));
+  grid.replaceAll(grid.cols, grid.rows, Array.from({ length: N }, defaultCell), new Map());
   updateUndoButtons();
   toast('Board cleared. Undo (Ctrl/Cmd+Z) brings it back.');
 });
@@ -1000,7 +1366,7 @@ dlg.root.addEventListener('click', (e) => { if (e.target === dlg.root) closeDial
 function importText(text) {
   try {
     const data = grid.parse(JSON.parse(text));
-    grid.replaceAll(data.cols, data.rows, data.cells);
+    grid.replaceAll(data.cols, data.rows, data.cells, data.edges);
     updateUndoButtons();
     closeDialog();
     toast('Layout imported. Undo restores the previous board.');
@@ -1084,7 +1450,12 @@ window.addEventListener('keydown', (e) => {
     if (!ui.spaceHeld) { ui.spaceHeld = true; applyControlBindings(); }
     return;
   }
-  if (BRUSH_KEYS[e.key]) setBrush(BRUSH_KEYS[e.key]);
+  const key = e.key.toLowerCase();
+  if (BRUSH_KEYS[e.key]) { setTool('cells'); setBrush(BRUSH_KEYS[e.key]); }
+  else if (key === 'w' || key === 'd' || key === 'x') {
+    setTool('walls');
+    setEdgeBrush({ w: 'wall', d: 'door', x: 'erase' }[key]);
+  }
   else if (e.key === 'r' || e.key === 'R') setShape(ui.shape === 'rect' ? 'brush' : 'rect');
   else if (e.key === 't' || e.key === 'T') setCamera('top');
   else if (e.key === 'a' || e.key === 'A') setCamera('angled');
@@ -1101,12 +1472,20 @@ function updateUndoButtons() {
 
 function updateHoverInfo() {
   const el = $('#hover');
+  if (hoverEdge && hoverIndex < 0) {
+    const { o, x, y } = hoverEdge;
+    const type = grid.edges.get(`${o}${x},${y}`);
+    const names = grid.edgeCells(o, x, y).map((c) => (grid.inBounds(c.x, c.y) ? cellLabel(c.x, c.y) : 'edge'));
+    el.innerHTML = `<span class="id">${names.join(' | ')}</span>` +
+      `<span class="tag">${type === 'door' ? 'Door' : type === 'wall' ? 'Wall' : 'Open'}</span>`;
+    return;
+  }
   if (hoverIndex < 0) { el.textContent = 'Hover a cell'; return; }
   const { x, y } = grid.coords(hoverIndex);
   const c = grid.cells[hoverIndex];
   el.innerHTML =
     `<span class="id">${cellLabel(x, y)}</span>` +
-    `<span class="tag">${c.area === 'water' ? `Water · ${areaLabel(c)}` : areaLabel(c)}</span>` +
+    `<span class="tag">${AREAS[c.area].label} · ${areaLabel(c)}</span>` +
     (c.bridge ? `<span class="tag">Bridge (spans ${grid.bridgeAxis(x, y) === 'x' ? 'E–W' : 'N–S'})</span>` : '') +
     `<span class="tag">${c.lit ? 'Lit' : 'Unlit'}</span>` +
     `<span class="tag">${c.walkable ? 'Walkable' : 'Blocked'}</span>`;
@@ -1114,9 +1493,17 @@ function updateHoverInfo() {
 
 function updateCounts() {
   const n = grid.counts();
+  // Category totals, then every subcategory in use.
+  const subs = [];
+  for (const area in AREAS) {
+    for (const sub in AREAS[area].subs) {
+      if (n.subs[sub]) subs.push(`${AREAS[area].subs[sub].label} <b>${n.subs[sub]}</b>`);
+    }
+  }
   $('#counts').innerHTML =
-    `Outdoor <b>${n.outdoor}</b> · Indoor <b>${n.indoor}</b><br>` +
-    `Lake <b>${n.lake}</b> · River <b>${n.river}</b> · Bridge <b>${n.bridge}</b><br>` +
+    `Outdoor <b>${n.outdoor}</b> · Indoor <b>${n.indoor}</b> · Water <b>${n.water}</b><br>` +
+    `<span class="sub-counts">${subs.join(' · ')}</span><br>` +
+    `Bridges <b>${n.bridge}</b> · Walls <b>${n.wall}</b> · Doors <b>${n.door}</b><br>` +
     `Lit <b>${n.lit}</b> · Unlit <b>${n.unlit}</b><br>` +
     `Walkable <b>${n.walkable}</b> · Blocked <b>${n.blocked}</b> · ${grid.cols}×${grid.rows}`;
 }
@@ -1161,6 +1548,7 @@ function makeRadialTexture() {
 }
 
 setBrush(ui.brush);
+setEdgeBrush(ui.edgeBrush);
 setShape(ui.shape);
 updateUndoButtons();
 updateCounts();
@@ -1226,4 +1614,4 @@ renderer.setAnimationLoop(() => {
 });
 
 // Handy for debugging / future tooling from the console.
-window.gridPlanner = { grid, scene, camera };
+window.gridPlanner = { grid, scene, camera, controls, brushes: BRUSHES };
