@@ -586,13 +586,15 @@ function refreshWaterAndBridges() {
 
 // Gameplay markers float over their cells in every view.
 const markers = createMarkers(scene);
+// Markers the play demo has collected or used (set once the demo exists).
+let markerUsed = () => false;
 function refreshMarkers() {
   const list = [];
   grid.cells.forEach((c, i) => {
     if (!c.marker) return;
     const { x, y } = grid.coords(i);
     const p = cellToWorld(x, y);
-    list.push({ type: c.marker, x: p.x, y: Math.max(visibleTop(i), WATER_Y) + terrainHeight(p.x, p.z, { bridge: c.bridge }), z: p.z, dim: !c.walkable });
+    list.push({ type: c.marker, x: p.x, y: Math.max(visibleTop(i), WATER_Y) + terrainHeight(p.x, p.z, { bridge: c.bridge }), z: p.z, dim: !c.walkable, faded: markerUsed(i) });
   });
   markers.update(list);
   markers.setVisible(ui.showMarkers);
@@ -1570,6 +1572,7 @@ function setTool(tool) {
   $('#markerTools').hidden = tool !== 'markers';
   $('#playTools').hidden = tool !== 'play';
   play.setActive(tool === 'play');
+  refreshMarkers();
   renderPlay();
   setHoverEdge(null);
   setHover(null);
@@ -1821,7 +1824,9 @@ const play = createPlay({
   grid, scene, camera, controls, cellToWorld, terrainify, cellLabel,
   cellTop: (i) => Math.max(visibleTop(i), WATER_Y) + 0.01,
   onChange: renderPlay,
+  onUsed: () => refreshMarkers(),
 });
+markerUsed = (i) => ui.tool === 'play' && play.state.used.has(i);
 $('#playRoll').addEventListener('click', () => play.roll());
 $('#playReset').addEventListener('click', () => play.reset());
 $('#playFollow').addEventListener('change', (e) => { play.state.follow = e.target.checked; });
@@ -2109,6 +2114,7 @@ function edgeLabel(o, x, y, type) {
 function markerLabel(c, i) {
   const label = `${MARKERS[c.marker].label} marker`;
   if (!c.walkable) return `${label} (cell is blocked)`;
+  if (markerUsed(i)) return `${label} (${c.marker === 'whiteDice' ? 'collected' : c.marker === 'blackDice' ? 'attuned' : 'used'})`;
   if (c.marker === 'key') {
     const n = grid.keyDoors(i).length;
     return `${label}: unlocks ${n} door${n === 1 ? '' : 's'}`;

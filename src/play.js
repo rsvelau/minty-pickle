@@ -14,7 +14,7 @@ const DIRS = [[0, -1, 'north'], [1, 0, 'east'], [0, 1, 'south'], [-1, 0, 'west']
 const STEP_TIME = 0.32;   // seconds per hop
 const ROLL_TIME = 0.7;    // die tumble before it lands
 
-export function createPlay({ grid, scene, camera, controls, cellToWorld, cellTop, terrainify, cellLabel, onChange }) {
+export function createPlay({ grid, scene, camera, controls, cellToWorld, cellTop, terrainify, cellLabel, onChange, onUsed = () => {} }) {
   const st = {
     pos: -1,           // cell index of the pawn
     prev: -1,          // cell it came from this move (no doubling back)
@@ -131,13 +131,13 @@ export function createPlay({ grid, scene, camera, controls, cellToWorld, cellTop
       const once = !st.used.has(i);
       if (m === 'whiteDice') {
         msg += once ? ' Collected a single-use White Die.' : ' White Die already collected here.';
-        if (once) { st.white++; st.used.add(i); }
+        if (once) { st.white++; st.used.add(i); onUsed(); }
       } else if (m === 'blackDice') {
         msg += once ? ' Attuned a Black Die.' : ' Black Die already attuned here.';
-        if (once) { st.black++; st.used.add(i); }
+        if (once) { st.black++; st.used.add(i); onUsed(); }
       } else if (m === 'research') {
         msg += once ? ' Research: a piece of evidence uncovered for free.' : ' Research already used.';
-        st.used.add(i);
+        if (once) { st.used.add(i); onUsed(); }
       } else if (m === 'investigation') {
         msg += ' You can investigate here for clues.';
       } else if (m === 'objective') {
@@ -157,6 +157,7 @@ export function createPlay({ grid, scene, camera, controls, cellToWorld, cellTop
       turn: 0, keys: 0, keyGroups: grid.keyGroups(), white: 0, black: 0, anim: null,
     });
     st.used = new Set();
+    onUsed();
     st.log = s >= 0 ? [`Ready on the Start space (${label(s)}). Roll the black die.`] : [];
     if (s >= 0) { placePawn(s); enter(s); }
     showOptions();

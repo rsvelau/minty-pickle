@@ -107,6 +107,8 @@ function roundRect(g, x, y, w, h, r) {
 export function createMarkers(group) {
   const spriteMats = {};
   const ringMats = {};
+  const fadedSpriteMats = {};
+  const fadedRingMats = {};
   for (const type of Object.keys(MARKERS)) {
     const tex = new THREE.CanvasTexture(drawMarkerIcon(type));
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -114,6 +116,13 @@ export function createMarkers(group) {
     spriteMats[type] = new THREE.SpriteMaterial({ map: tex, depthTest: true, fog: false });
     ringMats[type] = new THREE.MeshBasicMaterial({
       color: MARKER_STYLE[type].ring, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide,
+    });
+    // Collected / used markers: greyed-out, mostly transparent.
+    fadedSpriteMats[type] = new THREE.SpriteMaterial({
+      map: tex, depthTest: true, fog: false, transparent: true, opacity: 0.3, color: '#8a8a8a',
+    });
+    fadedRingMats[type] = new THREE.MeshBasicMaterial({
+      color: MARKER_STYLE[type].ring, transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide,
     });
   }
   const ringGeo = new THREE.RingGeometry(0.33, 0.44, 32).rotateX(-Math.PI / 2);
@@ -125,7 +134,7 @@ export function createMarkers(group) {
   const SIZE = 0.62;    // badge size in cells
   const LIFT = 0.55;    // badge height above the floor (cells)
 
-  // list: [{ type, x, y, z (floor), dim }]
+  // list: [{ type, x, y, z (floor), dim, faded }]
   function update(list) {
     while (items.length > list.length) {
       const it = items.pop();
@@ -148,19 +157,19 @@ export function createMarkers(group) {
     }
     list.forEach((m, n) => {
       const it = items[n];
-      it.sprite.material = spriteMats[m.type];
-      it.ring.material = ringMats[m.type];
+      it.sprite.material = (m.faded ? fadedSpriteMats : spriteMats)[m.type];
+      it.ring.material = (m.faded ? fadedRingMats : ringMats)[m.type];
       it.baseY = m.y;
       it.phase = (m.x * 3.1 + m.z * 1.7) % (Math.PI * 2);
       it.ring.position.set(m.x, m.y + 0.015, m.z);
       it.stem.position.set(m.x, m.y, m.z);
       it.stem.scale.set(1, LIFT - SIZE / 2, 1);
       it.sprite.position.set(m.x, m.y + LIFT, m.z);
-      // A marker left on a cell that became blocked is shown faded.
-      it.sprite.material.opacity = 1;
-      it.sprite.visible = it.ring.visible = it.stem.visible = true;
-      it.dim = m.dim;
-      it.sprite.scale.set(m.dim ? SIZE * 0.7 : SIZE, m.dim ? SIZE * 0.7 : SIZE, 1);
+      it.sprite.visible = it.ring.visible = true;
+      it.stem.visible = !m.faded;
+      // Smaller badge: a marker left on a blocked cell, or one collected.
+      it.dim = m.dim || m.faded;
+      it.sprite.scale.set(it.dim ? SIZE * 0.7 : SIZE, it.dim ? SIZE * 0.7 : SIZE, 1);
     });
   }
 

@@ -151,7 +151,9 @@ markers** in View hides them. Marker art lives in `src/markers.js`; the list of 
   the rest of the game.
 - Landing on a marker reports it: White Dice are collected and Black Dice attuned (once per marker; the
   panel keeps count), Research is used once, Investigation and Objective spots are announced.
-- **Follow** keeps the camera on the pawn; **Restart** puts it back on the Start space.
+- Collected and used markers (White Dice, Black Dice, Research) fade to a small grey, see-through badge and
+  hover says `(collected)` / `(attuned)` / `(used)`. This only shows while playing; the board itself is unchanged.
+- **Follow** keeps the camera on the pawn; **Restart** puts it back on the Start space and brings faded markers back.
 
 The demo never changes the board. Its logic is in `src/play.js`.
 
