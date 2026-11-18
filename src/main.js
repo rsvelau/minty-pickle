@@ -5,6 +5,7 @@ import {
   GridState, COLS, ROWS, MIN_SIZE, MAX_SIZE, AREAS, colLabel, cellLabel, defaultCell, defaultWalkable, areaLabel, parseEdgeKey,
 } from './state.js';
 import { createWaterSurface } from './water.js';
+import { createProps } from './props.js';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -21,7 +22,6 @@ const m = (meters) => meters / METERS_PER_CELL; // metres -> world units (cells)
 const TILE = 1;               // world units per cell
 const INSET = 0.94;           // tile size inside its cell (gap = grid lines)
 const FLOOR_H = 0.06;         // top of a land tile (ground level ~ 0)
-const BLOCK_H = m(3);         // blocked cells rise one storey (~3 m)
 const BASE = m(3);            // tiles are columns reaching down this far
 const WATER_Y = -m(1);        // water surface sits ~1.2 m below the land
 const BED_H = -m(2.4);        // river/lake bed
@@ -49,8 +49,7 @@ const SUB_LOOK = {
   hardwood: { unlit: '#7a5338', lit: '#f0a85a', area: '#9a6a3e' },
   carpet: { unlit: '#58303a', lit: '#c4727c', area: '#8a3f52' },
 };
-// Vegetation shows a blocked cell, so these don't rise as a block in the main view.
-const NATURAL_BLOCKERS = new Set(['forest', 'forestCemetery', 'brambles']);
+
 
 // Night-time PNW palette. "Lit" outdoor reads as old mercury-vapor streetlight
 // (sickly green-white); lit indoor reads as warm incandescent.
@@ -62,7 +61,7 @@ const PALETTE = {
   rail: '#2c2a27',
   areaWater: '#24506a',
   areaDeck: '#b39a72',
-  blockedShade: 0.8,
+  blockedShade: 0.88,
   glowOutdoor: '#c6e0c0',
   glowIndoor: '#ffbe73',
   // single-layer views
@@ -245,12 +244,7 @@ const poolGeo = new THREE.PlaneGeometry(2.6 * TILE, 2.6 * TILE).rotateX(-Math.PI
 const unitBoxGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
 const wallMat = new THREE.MeshLambertMaterial({ color: '#b8b0a0' });
 const doorMat = new THREE.MeshLambertMaterial({ color: '#d08a40', emissive: '#5a3414' });
-// Headstone ~0.6 m wide, 0.9 m tall, 0.2 m thick.
-const headstoneGeo = new THREE.BoxGeometry(m(0.6), m(0.9), m(0.2)).translate(0, m(0.45), 0);
-const headstoneMat = new THREE.MeshLambertMaterial({ color: '#8b908c' });
-// Bramble mound ~1.4 m across, ~0.8 m tall.
-const brambleGeo = new THREE.IcosahedronGeometry(m(0.9), 0).scale(1, 0.6, 1);
-const brambleMat = new THREE.MeshLambertMaterial({ color: '#5e4a4e', flatShading: true });
+
 
 // ---------------------------------------------------------------------------
 // Board (rebuilt whenever the dimensions change)
@@ -258,7 +252,8 @@ const brambleMat = new THREE.MeshLambertMaterial({ color: '#5e4a4e', flatShading
 
 let N = 0;
 let tiles, pools, glowAttr, slab, ground, decks, deckGlow, rails;
-let propFirs, headstones, brambles, walls, doorLeaves;
+let walls, doorLeaves;
+let props = null; // walkable/blocked variants of every surface (src/props.js)
 let deckVisible = new Uint8Array(0);
 const water = createWaterSurface();
 scene.add(water.mesh);
@@ -275,7 +270,7 @@ function disposeChildren(group) {
     group.remove(child);
     child.traverse((o) => {
       if (o.isInstancedMesh) o.dispose();
-      if (o.geometry && ![tileGeoBase, poolGeo, firGeo, unitBoxGeo, headstoneGeo, brambleGeo].includes(o.geometry)) o.geometry.dispose();
+      if (o.geometry && ![tileGeoBase, poolGeo, firGeo, unitBoxGeo].includes(o.geometry)) o.geometry.dispose();
       if (o.material && o.userData.ownMaterial) {
         o.material.map?.dispose();
         o.material.dispose();
@@ -332,17 +327,9 @@ function buildBoard() {
   rails.count = 0;
   boardGroup.add(rails);
 
-  // Cell props: young firs (forest), headstones (cemeteries), bramble mounds.
-  propFirs = new THREE.InstancedMesh(firGeo, firMat, N);
-  headstones = new THREE.InstancedMesh(headstoneGeo, headstoneMat, N * 2);
-  brambles = new THREE.InstancedMesh(brambleGeo, brambleMat, N * 3);
-  for (const mesh of [propFirs, headstones, brambles]) {
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    mesh.raycast = () => {};
-    mesh.count = 0;
-    boardGroup.add(mesh);
-  }
+  // Cell props: each surface's walkable / blocked look.
+  props?.clear();
+  props = createProps(boardGroup, { firGeo, firMat });
 
   // Walls and doors on cell edges (a door = two short wall pieces, an
   // optional lintel, and an open door leaf).
@@ -458,56 +445,17 @@ function refreshWaterAndBridges() {
 
 // Props on cells (main view only) and walls/doors on edges (every view).
 function refreshPropsAndWalls() {
-  let nf = 0, nh = 0, nb = 0;
-  if (ui.view === 'all') {
-    for (let i = 0; i < N; i++) {
-      const sub = grid.cells[i].sub;
-      if (!['forest', 'forestCemetery', 'cemetery', 'brambles'].includes(sub)) continue;
-      const { x, y } = grid.coords(i);
-      const c = cellToWorld(x, y).setY(FLOOR_H);
-      const rnd = rand32(i * 7919 + 17);
-      rnd();
-      if (sub === 'forest' || sub === 'forestCemetery') {
-        // Young firs, 5-8 m: tall enough to read as forest, short enough to
-        // see past.
-        const h = m(sub === 'forest' ? 6 + rnd() * 2.5 : 4.5 + rnd() * 2);
-        const r = h * 0.3;
-        tmpMatrix.compose(
-          tmpPos.copy(c).add(tmpScale.set((rnd() - 0.5) * 0.3, 0, (rnd() - 0.5) * 0.3)),
-          tmpQuat.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rnd() * 6.28),
-          tmpScale.set(r, h, r),
-        );
-        propFirs.setMatrixAt(nf++, tmpMatrix);
-      }
-      if (sub === 'cemetery' || sub === 'forestCemetery') {
-        const count = sub === 'cemetery' ? 2 : 1;
-        for (let k = 0; k < count; k++) {
-          const ox = count === 2 ? (k ? 0.22 : -0.22) : 0.25;
-          const lean = new THREE.Euler((rnd() - 0.5) * 0.25, (rnd() - 0.5) * 0.3, (rnd() - 0.5) * 0.2);
-          tmpMatrix.compose(
-            tmpPos.copy(c).add(tmpScale.set(ox, 0, (rnd() - 0.5) * 0.2 + (count === 1 ? 0.25 : 0))),
-            tmpQuat.setFromEuler(lean),
-            tmpScale.set(1, 0.85 + rnd() * 0.3, 1),
-          );
-          headstones.setMatrixAt(nh++, tmpMatrix);
-        }
-      }
-      if (sub === 'brambles') {
-        for (let k = 0; k < 3; k++) {
-          const s = 0.7 + rnd() * 0.5;
-          tmpMatrix.compose(
-            tmpPos.copy(c).add(tmpScale.set((rnd() - 0.5) * 0.5, 0.02, (rnd() - 0.5) * 0.5)),
-            tmpQuat.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rnd() * 6.28),
-            tmpScale.set(s, s, s),
-          );
-          brambles.setMatrixAt(nb++, tmpMatrix);
-        }
-      }
-    }
-  }
-  propFirs.count = nf;
-  headstones.count = nh;
-  brambles.count = nb;
+  props.update(grid, {
+    visible: ui.view === 'all',
+    cellToWorld,
+    // Props stand on whatever the cell's surface is: deck, water or floor.
+    baseY: (i) => {
+      const c = grid.cells[i];
+      if (c.bridge) return DECK_TOP;
+      if (c.area === 'water') return WATER_Y;
+      return targetHeights[i];
+    },
+  });
 
   // Walls and doors.
   const H = ui.lowWalls ? WALL_LOW : WALL_FULL;
@@ -560,7 +508,7 @@ function refreshPropsAndWalls() {
   }
   walls.count = nw;
   doorLeaves.count = nd;
-  for (const mesh of [propFirs, headstones, brambles, walls, doorLeaves]) {
+  for (const mesh of [walls, doorLeaves]) {
     mesh.instanceMatrix.needsUpdate = true;
     mesh.computeBoundingSphere();
   }
@@ -597,10 +545,9 @@ function cellLook(cell) {
   const isWater = cell.area === 'water';
   const look = SUB_LOOK[cell.sub] ?? {};
   const surfaceH = look.h ?? FLOOR_H;
-  // Water cells are always sunken; blocked land rises one storey (in the main
-  // view vegetation shows forest/bramble blocking instead).
-  const raise = blocked && !(ui.view === 'all' && NATURAL_BLOCKERS.has(cell.sub));
-  const height = isWater ? BED_H : raise ? BLOCK_H : surfaceH;
+  // Water cells are sunken. Blocked cells stay flat: their props (see
+  // src/props.js) show why you can't walk there.
+  const height = isWater ? BED_H : surfaceH;
   switch (ui.view) {
     case 'area':
       return {
@@ -625,7 +572,7 @@ function cellLook(cell) {
         glow: cell.lit ? 0.18 : 0,
         height,
         pool: cell.lit ? (cell.area === 'indoor' ? PALETTE.glowIndoor : PALETTE.glowOutdoor) : null,
-        shade: raise ? PALETTE.blockedShade : 1,
+        shade: blocked ? PALETTE.blockedShade : 1,
       };
     }
   }

@@ -1,0 +1,313 @@
+// Cell props: the walkable and blocked look of every surface.
+//
+// Blocked cells no longer rise as blocks. Each subcategory has two variants,
+// chosen by the cell's `walkable` flag (see VARIANTS below). Props are built
+// to real-world scale (metres -> cells via `m`), drawn with one InstancedMesh
+// per prop kind, and rebuilt from the grid after every change.
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+
+const METERS_PER_CELL = 4;
+const m = (metres) => metres / METERS_PER_CELL;
+
+// --- geometry helpers --------------------------------------------------------
+
+// Bake a flat colour into a geometry (so one material serves every prop).
+function part(geo, hex) {
+  geo = geo.index ? geo.toNonIndexed() : geo;
+  geo.deleteAttribute('uv');
+  const c = new THREE.Color(hex);
+  const n = geo.attributes.position.count;
+  const arr = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) arr.set([c.r, c.g, c.b], i * 3);
+  geo.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+  return geo;
+}
+// Box sitting on y = 0 at (x, z), size in metres.
+const box = (w, h, d, hex, x = 0, z = 0, y = 0) =>
+  part(new THREE.BoxGeometry(m(w), m(h), m(d)).translate(m(x), m(y) + m(h) / 2, m(z)), hex);
+const merge = (...parts) => mergeGeometries(parts);
+
+// All prop shapes, modelled along the x axis (rotate 90 degrees to run along z).
+function buildKinds() {
+  const stone = '#8b908c';
+  const iron = '#3c3e42';
+  return {
+    headstone: merge(box(0.6, 0.9, 0.2, stone)),
+    // Small mausoleum ~2.4 x 3 m footprint, ~3.2 m to the roof peak.
+    tomb: merge(
+      box(2.6, 0.3, 3.2, '#6c706b'),
+      box(2.2, 2.0, 2.8, '#7b7f7a', 0, 0, 0.3),
+      part(new THREE.ConeGeometry(m(2.0), m(0.9), 4).rotateY(Math.PI / 4).scale(1, 1, 1.25)
+        .translate(0, m(2.3) + m(0.45), 0), '#5f625e'),
+      box(0.9, 1.6, 0.05, '#141617', 0, 1.43, 0.3), // dark doorway
+    ),
+    boulder: merge(part(new THREE.IcosahedronGeometry(m(0.8), 0).scale(1, 0.7, 1).translate(0, m(0.35), 0), '#5d615e')),
+    shrub: merge(part(new THREE.IcosahedronGeometry(m(0.9), 1).scale(1, 0.8, 1).translate(0, m(0.6), 0), '#284034')),
+    bramble: merge(part(new THREE.IcosahedronGeometry(m(0.9), 0).scale(1, 0.6, 1).translate(0, m(0.3), 0), '#5e4a4e')),
+    // Sawhorse barricade, ~2.4 m wide, orange/white rails.
+    barricade: merge(
+      box(0.1, 1.0, 0.5, '#4a4a48', -1.0), box(0.1, 1.0, 0.5, '#4a4a48', 1.0),
+      box(2.4, 0.22, 0.06, '#d8742a', 0, 0, 0.75), box(2.4, 0.22, 0.06, '#e0dcd0', 0, 0, 0.4),
+    ),
+    cone: merge(
+      box(0.4, 0.04, 0.4, '#c8602a'),
+      part(new THREE.ConeGeometry(m(0.16), m(0.7), 10).translate(0, m(0.39), 0), '#e07030'),
+    ),
+    // Dumpster ~1.9 x 1.1 m, 1.3 m tall.
+    dumpster: merge(box(1.9, 1.2, 1.1, '#2f4a3a'), box(2.0, 0.1, 1.2, '#3c5a48', 0, 0, 1.2)),
+    // Fallen log ~3.6 m long, 0.7 m thick, with a broken stub branch.
+    log: merge(
+      part(new THREE.CylinderGeometry(m(0.35), m(0.4), m(3.6), 8).rotateZ(Math.PI / 2).translate(0, m(0.35), 0), '#3e2c1f'),
+      part(new THREE.CylinderGeometry(m(0.08), m(0.1), m(0.8), 5).rotateZ(-0.6).translate(m(0.6), m(0.7), 0), '#3e2c1f'),
+    ),
+    // Wrought-iron gate ~3.6 m wide, 1.8 m tall: two stone posts, bars, rails.
+    gate: merge(
+      box(0.35, 2.0, 0.35, stone, -1.8), box(0.35, 2.0, 0.35, stone, 1.8),
+      box(3.4, 0.06, 0.06, iron, 0, 0, 1.6), box(3.4, 0.06, 0.06, iron, 0, 0, 0.3),
+      ...Array.from({ length: 11 }, (_, i) => box(0.04, 1.75, 0.04, iron, -1.5 + i * 0.3)),
+    ),
+    crate: merge(box(1.0, 1.0, 1.0, '#8a6a40'), box(1.02, 0.08, 1.02, '#6e5232', 0, 0, 0.5)),
+    // Wardrobe 1.4 m wide, 2 m tall.
+    cabinet: merge(box(1.4, 2.0, 0.6, '#5a3a24'), box(0.02, 1.7, 0.02, '#2a1a10', 0, 0.31, 0.15)),
+    // 90s sofa, 2.2 m long, dusty teal.
+    sofa: merge(
+      box(2.2, 0.45, 0.9, '#4f6b6b'), box(2.2, 0.55, 0.22, '#4f6b6b', 0, -0.34, 0.45),
+      box(0.2, 0.3, 0.9, '#45605f', -1.0, 0, 0.45), box(0.2, 0.3, 0.9, '#45605f', 1.0, 0, 0.45),
+    ),
+    armchair: merge(
+      box(0.9, 0.45, 0.9, '#6b4f5c'), box(0.9, 0.5, 0.2, '#6b4f5c', 0, -0.35, 0.45),
+    ),
+    table: merge(box(1.1, 0.06, 0.6, '#6e4a2e', 0, 0, 0.4), box(0.9, 0.4, 0.4, '#4e321e')),
+    // Flat stepping stone for a ford.
+    steppingStone: merge(part(new THREE.CylinderGeometry(m(0.5), m(0.55), m(0.25), 7), '#727670')),
+    // Gravel strip through a walkable cemetery (runs along x, full cell).
+    gravelStrip: merge(part(new THREE.BoxGeometry(m(1.5), 0.012, 1.0).rotateY(Math.PI / 2).translate(0, 0.006, 0), '#7c7666')),
+  };
+}
+
+// --- variants ----------------------------------------------------------------
+// Each entry: (ctx) => list of placements [kind, dx, dz, rotY, scale?, dy?]
+// in cell units from the cell centre. `ctx.across` is the rotation that lays a
+// prop across the direction the neighbouring cells run; `ctx.along` lays it
+// along that direction. `ctx.rnd()` is a stable per-cell random number.
+
+const jit = (r, a) => (r() - 0.5) * a;
+
+const VARIANTS = {
+  ground: {
+    blocked: ({ rnd }) => [
+      ['boulder', -0.18 + jit(rnd, 0.1), -0.12, rnd() * 6, 1.3],
+      ['boulder', 0.2, 0.15 + jit(rnd, 0.1), rnd() * 6, 0.9],
+      ['shrub', 0.15, -0.22, 0, 1.1],
+      ['shrub', -0.2, 0.22, 0, 0.9],
+    ],
+  },
+  road: {
+    blocked: ({ across, rnd }) => [
+      ['barricade', 0, 0, across],
+      ['cone', 0.3, 0.3 + jit(rnd, 0.1), 0],
+      ['cone', -0.3, -0.3, 0],
+    ],
+  },
+  sidewalk: {
+    blocked: ({ along }) => [
+      ['dumpster', 0, -0.05, along],
+      ['cone', 0.32, 0.3, 0],
+    ],
+  },
+  path: {
+    blocked: ({ across, rnd }) => [
+      ['log', 0, jit(rnd, 0.1), across + jit(rnd, 0.3)],
+      ['boulder', 0.3, 0.28, rnd() * 6, 0.7],
+      ['boulder', -0.32, -0.25, rnd() * 6, 0.6],
+    ],
+  },
+  cemetery: {
+    // A gravel path through the middle, a grave either side.
+    walkable: ({ along, rnd }) => {
+      const alongX = along === 0;
+      // Offset `s` (+/-1) to one side of the path, jittered along it.
+      const beside = (s) => (alongX ? [jit(rnd, 0.3), s * 0.33] : [s * 0.33, jit(rnd, 0.3)]);
+      const [ax, az] = beside(-1);
+      const [bx, bz] = beside(1);
+      return [
+        ['gravelStrip', 0, 0, along],
+        ['headstone', ax, az, along + jit(rnd, 0.3)],
+        ['headstone', bx, bz, along + Math.PI + jit(rnd, 0.3)],
+      ];
+    },
+    // A tomb crowded by headstones.
+    blocked: ({ rnd }) => {
+      const out = [['tomb', -0.12, -0.05, jit(rnd, 0.2)]];
+      for (const [dx, dz] of [[0.36, -0.32], [0.36, -0.05], [0.36, 0.22], [-0.3, 0.38], [-0.05, 0.4], [0.2, 0.42]]) {
+        out.push(['headstone', dx + jit(rnd, 0.04), dz + jit(rnd, 0.04), jit(rnd, 0.6), 0.85 + rnd() * 0.3]);
+      }
+      return out;
+    },
+  },
+  cemeteryPath: {
+    blocked: ({ across }) => [['gate', 0, 0, across]],
+  },
+  forestCemetery: {
+    walkable: ({ rnd }) => [
+      ['fir', -0.3, -0.3, rnd() * 6, 0.75],
+      ['headstone', 0.25, 0.2, jit(rnd, 0.5)],
+    ],
+    blocked: ({ rnd }) => [
+      ['fir', -0.25, -0.25, rnd() * 6, 1],
+      ['fir', 0.25, -0.15, rnd() * 6, 0.85],
+      ['fir', -0.1, 0.28, rnd() * 6, 0.9],
+      ['headstone', 0.28, 0.25, jit(rnd, 0.6)],
+      ['headstone', 0.05, -0.05, jit(rnd, 0.6), 0.9],
+    ],
+  },
+  forest: {
+    // A clearing with one young fir.
+    walkable: ({ rnd }) => [['fir', 0.3 * (rnd() > 0.5 ? 1 : -1), 0.3 * (rnd() > 0.5 ? 1 : -1), rnd() * 6, 0.7]],
+    blocked: ({ rnd }) => [
+      ['fir', -0.22 + jit(rnd, 0.1), -0.22, rnd() * 6, 1.05],
+      ['fir', 0.24, -0.2 + jit(rnd, 0.1), rnd() * 6, 0.9],
+      ['fir', -0.2, 0.24, rnd() * 6, 0.95],
+      ['fir', 0.22 + jit(rnd, 0.1), 0.24, rnd() * 6, 1.1],
+    ],
+  },
+  brambles: {
+    walkable: ({ rnd }) => [['bramble', 0.3, -0.28, rnd() * 6, 0.55], ['bramble', -0.3, 0.3, rnd() * 6, 0.45]],
+    blocked: ({ rnd }) => [
+      ['bramble', -0.22, -0.2, rnd() * 6, 1.3],
+      ['bramble', 0.22, -0.18, rnd() * 6, 1.1],
+      ['bramble', -0.18, 0.22, rnd() * 6, 1.2],
+      ['bramble', 0.2, 0.24, rnd() * 6, 1.35],
+      ['bramble', 0, 0, rnd() * 6, 1.0],
+    ],
+  },
+  hardwood: {
+    blocked: ({ along, rnd }) => [
+      ['cabinet', -0.12, -0.25, along],
+      ['crate', 0.25, 0.18, jit(rnd, 0.4)],
+      ['crate', 0.25, 0.18, jit(rnd, 0.6), 0.8, m(1.0)],
+      ['crate', -0.18, 0.22, jit(rnd, 0.4), 0.9],
+    ],
+  },
+  carpet: {
+    blocked: ({ along }) => [
+      ['sofa', 0, -0.2, along],
+      ['table', 0, 0.12, along],
+      ['armchair', 0.32, 0.3, along + Math.PI * 0.75],
+    ],
+  },
+  // Water: a ford of stepping stones when walkable; open water otherwise.
+  lake: { walkable: (ctx) => ford(ctx) },
+  river: { walkable: (ctx) => ford(ctx) },
+};
+
+function ford({ along, rnd }) {
+  const out = [];
+  for (const t of [-0.32, 0, 0.32]) {
+    const a = along === 0 ? [t, jit(rnd, 0.14)] : [jit(rnd, 0.14), t];
+    out.push(['steppingStone', a[0], a[1], rnd() * 6, 0.9 + rnd() * 0.3]);
+  }
+  return out;
+}
+
+// --- renderer ------------------------------------------------------------------
+
+export function createProps(group, { firGeo, firMat }) {
+  const kinds = buildKinds();
+  const material = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+  const meshes = {};
+  const tmpM = new THREE.Matrix4();
+  const tmpP = new THREE.Vector3();
+  const tmpQ = new THREE.Quaternion();
+  const tmpS = new THREE.Vector3();
+  const tmpC = new THREE.Color();
+  const UP = new THREE.Vector3(0, 1, 0);
+
+  function meshFor(kind, needed) {
+    let mesh = meshes[kind];
+    if (mesh && mesh.instanceMatrix.count >= needed) return mesh;
+    if (mesh) { group.remove(mesh); mesh.dispose(); }
+    const cap = Math.max(64, Math.ceil(needed * 1.5));
+    mesh = kind === 'fir'
+      ? new THREE.InstancedMesh(firGeo, firMat, cap)
+      : new THREE.InstancedMesh(kinds[kind], material, cap);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.raycast = () => {};
+    mesh.count = 0;
+    meshes[kind] = mesh;
+    group.add(mesh);
+    return mesh;
+  }
+
+  // ctx: { visible, cellToWorld(x,y), baseY(i) }
+  function update(grid, ctx) {
+    const placements = {}; // kind -> array of [x, y, z, rot, scale]
+    if (ctx.visible) {
+      grid.cells.forEach((c, i) => {
+        const variant = VARIANTS[c.sub]?.[c.walkable ? 'walkable' : 'blocked'];
+        const { x, y } = grid.coords(i);
+        let list = variant ? null : [];
+        // Blocked bridges get a barricade on the deck.
+        if (c.bridge) {
+          list = c.walkable ? [] : [['barricade', 0, 0, grid.bridgeAxis(x, y) === 'x' ? Math.PI / 2 : 0]];
+        } else if (variant) {
+          let seed = (i * 2654435761) % 2147483647 || 1;
+          const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+          const axis = runAxis(grid, x, y, c);
+          list = variant({ rnd, along: axis === 'x' ? 0 : Math.PI / 2, across: axis === 'x' ? Math.PI / 2 : 0 });
+        }
+        if (!list.length) return;
+        const centre = ctx.cellToWorld(x, y);
+        const base = ctx.baseY(i);
+        for (const [kind, dx, dz, rot = 0, scale = 1, dy = 0] of list) {
+          (placements[kind] ??= []).push([centre.x + dx, base + dy, centre.z + dz, rot, scale, i]);
+        }
+      });
+    }
+    for (const kind of new Set([...Object.keys(meshes), ...Object.keys(placements)])) {
+      const list = placements[kind] ?? [];
+      const mesh = meshFor(kind, list.length);
+      list.forEach(([x, y, z, rot, scale, i], n) => {
+        // Firs are unit-height geometry: scale to young trees ~5-8 m.
+        const s = kind === 'fir'
+          ? tmpS.set(m(7) * 0.3 * scale, m(7) * scale, m(7) * 0.3 * scale)
+          : tmpS.setScalar(scale);
+        tmpM.compose(tmpP.set(x, y, z), tmpQ.setFromAxisAngle(UP, rot), s);
+        mesh.setMatrixAt(n, tmpM);
+        mesh.setColorAt(n, tmpC.setScalar(0.85 + ((i * 37 + n * 11) % 30) / 100));
+      });
+      mesh.count = list.length;
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      mesh.computeBoundingSphere();
+    }
+  }
+
+  function clear() {
+    for (const k in meshes) { group.remove(meshes[k]); meshes[k].dispose(); delete meshes[k]; }
+  }
+
+  return { update, clear };
+}
+
+// Which way the surrounding cells run: 'x' (east-west) or 'y' (north-south).
+// For roads, paths and gates that's neighbours of the same surface; for a
+// walkable cemetery or a ford, walkable neighbours (where the path leads),
+// with same-surface neighbours counting double.
+function runAxis(grid, x, y, c) {
+  const water = c.area === 'water';
+  const sameRun = ['road', 'sidewalk', 'path', 'cemeteryPath'].includes(c.sub);
+  const pred = (nx, ny) => {
+    if (!grid.inBounds(nx, ny)) return 0;
+    const n = grid.cells[grid.index(nx, ny)];
+    if (sameRun) return n.sub === c.sub ? 1 : 0;
+    // Paths and fords lead on to walkable cells, preferring the same surface.
+    if (water || c.sub === 'cemetery') return n.walkable ? (n.sub === c.sub ? 2 : 1) : 0;
+    return 0;
+  };
+  const ew = pred(x - 1, y) + pred(x + 1, y);
+  const ns = pred(x, y - 1) + pred(x, y + 1);
+  return ew >= ns ? 'x' : 'y';
+}

@@ -10,7 +10,7 @@ the edges between cells.
 | Area | Outdoor / Indoor / Water, each with subcategories (below) | A surface colour per subcategory; water is sunken |
 | Bridge | On water cells only | A wooden deck at street level with railings along open water |
 | Light | Unlit / Lit | Lit cells glow and spill a soft light pool onto neighbours (mercury-vapour green outside, incandescent amber inside) |
-| Movement | Walkable / Blocked | Blocked cells rise as solid blocks (buildings, dense brush) |
+| Movement | Walkable / Blocked | Every surface has a walkable and a blocked version (below) |
 
 ### Areas and subcategories
 
@@ -20,10 +20,33 @@ the edges between cells.
 | Indoor | Hardwood (default), Carpet |
 | Water | Lake, River (always start blocked) |
 
-\* Starts out **blocked** when painted. Forest shows young firs, Forest cemetery firs and headstones,
-Brambles low thorny mounds, and Cemetery headstones. Painting an ordinary subcategory over a default-blocked
-cell unblocks it; otherwise painting keeps the cell's walkability, and the Walkable/Blocked brushes always win.
-Roads sit slightly below the curb and sidewalks slightly above.
+\* Starts out **blocked** when painted. Painting an ordinary subcategory over a default-blocked cell unblocks
+it; otherwise painting keeps the cell's walkability, and the Walkable/Blocked brushes always win. Roads sit
+slightly below the curb and sidewalks slightly above.
+
+### Walkable and blocked versions
+
+Blocked cells stay flat; props show what's in the way. Barricades, gates, logs and cemetery paths turn to fit
+the cells around them (across a road, along a path).
+
+| Surface | Walkable | Blocked |
+|---------|----------|---------|
+| Ground | Open grass | Boulders and shrubs |
+| Road | Clear road | Sawhorse barricade across the road, traffic cones |
+| Sidewalk | Clear | Dumpster and a cone |
+| Path | Clear | Fallen log across the path, rocks |
+| Cemetery | Gravel path through the middle, sparse headstones | Tomb crowded by headstones |
+| Cemetery path | Clear gravel | Wrought-iron gate across the path |
+| Forest cemetery | One fir and a headstone | Dense firs and headstones |
+| Forest | A clearing with one young fir | Dense young firs |
+| Brambles | Trampled, a couple of low mounds | Thick thorn mounds |
+| Hardwood | Clear floor | Wardrobe and stacked crates |
+| Carpet | Clear floor | 90s sofa, armchair and coffee table |
+| Lake / River | Stepping stones (a ford) | Open water |
+| Bridge | Open deck | Barricade on the deck |
+
+The variants live in `VARIANTS` in `src/props.js`: one entry per subcategory, each returning the props
+for its walkable and blocked look. Props are built to scale (1 cell = 4 m).
 
 Everything is defined once in `AREAS` in `src/state.js` (label, default walkability). The brush buttons are
 generated from it, so a new subcategory added there shows up in the panel, saves and imports. Give it a
@@ -63,7 +86,6 @@ default board is roughly 80 × 104 m. Everything outside the board is built to t
 
 - Douglas firs 16–44 m tall (4–11 cells), younger ones at the forest edge
 - A small reference house (2 × 2 cells, 3 m walls) in the clearing beside the board
-- Blocked cells rise one storey (3 m)
 - **Show small-home footprint at cursor** draws a ghost 2 × 2 house where you hover
 
 Trees between the camera and the board dissolve so they never hide cells.
@@ -129,6 +151,7 @@ outdoor/indoor, no edges) are converted on load, outdoor to Ground and indoor to
 - `src/state.js` — grid data model, strokes, undo/redo, JSON (de)serialization. No rendering.
 - `src/main.js` — three.js scene, tile rendering, bridges, painting, UI wiring.
 - `src/water.js` — water surface shader (flow-mapped river currents, still lakes).
+- `src/props.js` — walkable/blocked props for every surface (`VARIANTS`).
 - `src/style.css` — panel styling.
 
 Tiles are a single `InstancedMesh`; each cell's look comes from `cellLook()` in `main.js`. That's the place
