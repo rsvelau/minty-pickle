@@ -9,9 +9,8 @@
 // get a single truss pair across their full width; irregular ones fall back
 // to one truss pair per run of cells.
 import * as THREE from 'three';
+import { m } from './scale.js';
 
-const METERS_PER_CELL = 4;
-const m = (metres) => metres / METERS_PER_CELL;
 
 const TRUSS_H = m(6);        // top chord height above the deck
 const CHORD = m(0.45);       // chord/end-post section
@@ -27,6 +26,8 @@ export function createBridges(group) {
   const unitCyl = new THREE.CylinderGeometry(1, 1, 1, 12);   // centred, axis y
   const steel = new THREE.MeshLambertMaterial({ color: RUST, emissive: '#1c0b06' });
   const concrete = new THREE.MeshLambertMaterial({ color: CONCRETE });
+  // Faded yellow centre-line dashes, matching the streets.
+  const paint = new THREE.MeshLambertMaterial({ color: '#a8893e', emissive: '#2a220c' });
   const meshes = {};
   const tmpM = new THREE.Matrix4();
   const tmpQ = new THREE.Quaternion();
@@ -50,9 +51,10 @@ export function createBridges(group) {
   function update(grid, { visible, deckTop, bedY }) {
     const steelBars = [];   // [ax, ay, az, bx, by, bz, thickness]
     const blocks = [];      // concrete boxes: [cx, cy, cz, sx, sy, sz]
+    const dashes = [];      // paint boxes, same layout as blocks
     const columns = [];     // concrete cylinders: [x, yBottom, yTop, z]
     if (visible) {
-      for (const bridge of findBridges(grid)) buildBridge(grid, bridge, deckTop, bedY, steelBars, blocks, columns);
+      for (const bridge of findBridges(grid)) buildBridge(grid, bridge, deckTop, bedY, steelBars, blocks, columns, dashes);
     }
 
     // Steel members: unit boxes stretched between their end points.
@@ -74,6 +76,13 @@ export function createBridges(group) {
       boxes.setMatrixAt(n, tmpM);
     });
     boxes.count = blocks.length;
+
+    const marks = meshFor('paint', unitBox, paint, dashes.length);
+    dashes.forEach(([cx, cy, cz, sx, sy, sz], n) => {
+      tmpM.compose(a.set(cx, cy, cz), tmpQ.identity(), tmpS.set(sx, sy, sz));
+      marks.setMatrixAt(n, tmpM);
+    });
+    marks.count = dashes.length;
 
     const cols = meshFor('columns', unitCyl, concrete, columns.length);
     columns.forEach(([x, y0, y1, z], n) => {
@@ -128,7 +137,7 @@ function findBridges(grid) {
   return out;
 }
 
-function buildBridge(grid, br, deckTop, bedY, steelBars, blocks, columns) {
+function buildBridge(grid, br, deckTop, bedY, steelBars, blocks, columns, dashes) {
   const full = (br.maxX - br.minX + 1) * (br.maxY - br.minY + 1) === br.cells.length;
   // Spans: [alongStart, length, acrossMin, acrossMax] in grid units, along
   // the bridge axis. Rectangles: one span; otherwise one per run of cells.
@@ -187,6 +196,14 @@ function buildBridge(grid, br, deckTop, bedY, steelBars, blocks, columns) {
         bar(s0 + i + 0.5, c, yt, s0 + i + 1, c, yb, i === L - 1 ? CHORD : WEB);
         if (L > 1 && i > 0 && i < L - 1) bar(s0 + i + 0.5, c, yb, s0 + i + 0.5, c, yt, WEB * 0.8);
       }
+    }
+    // Centre line down the middle of the roadway: one 3 m dash per cell,
+    // in step with the street dashes.
+    const mid = (cMin + cMax) / 2;
+    for (let i = 0; i < L; i++) {
+      const [ax, az] = toWorld(s0 + i + 0.5 - m(1.5), mid - m(0.06));
+      const [bx, bz] = toWorld(s0 + i + 0.5 + m(1.5), mid + m(0.06));
+      dashes.push([(ax + bx) / 2, deckTop + 0.002, (az + bz) / 2, Math.abs(bx - ax), 0.003, Math.abs(bz - az)]);
     }
     // Overhead: struts at each top panel point, X bracing between them,
     // and a portal strut at each end.

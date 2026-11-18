@@ -5,10 +5,9 @@
 // to real-world scale (metres -> cells via `m`), drawn with one InstancedMesh
 // per prop kind, and rebuilt from the grid after every change.
 import * as THREE from 'three';
+import { m } from './scale.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
-const METERS_PER_CELL = 4;
-const m = (metres) => metres / METERS_PER_CELL;
 
 // --- geometry helpers --------------------------------------------------------
 
@@ -109,30 +108,40 @@ function buildKinds() {
 // along that direction. `ctx.rnd()` is a stable per-cell random number.
 
 const jit = (r, a) => (r() - 0.5) * a;
+// An n x n grid of jittered placements across the cell; `make(k)` returns
+// [kind, scale] for the k-th spot.
+function scatter(rnd, n, wobble, make) {
+  const out = [];
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      const [kind, scale] = make(j * n + i);
+      out.push([kind, ((i + 0.5) / n - 0.5) * 0.9 + jit(rnd, wobble / n), ((j + 0.5) / n - 0.5) * 0.9 + jit(rnd, wobble / n), rnd() * 6, scale]);
+    }
+  }
+  return out;
+}
 // Mostly plain headstones, some round-topped, the odd cross.
 const smallMarker = (r) => { const v = r(); return v < 0.5 ? 'headstone' : v < 0.85 ? 'roundstone' : 'cross'; };
 
 const VARIANTS = {
   ground: {
-    blocked: ({ rnd }) => [
-      ['boulder', -0.18 + jit(rnd, 0.1), -0.12, rnd() * 6, 1.3],
-      ['boulder', 0.2, 0.15 + jit(rnd, 0.1), rnd() * 6, 0.9],
-      ['shrub', 0.15, -0.22, 0, 1.1],
-      ['shrub', -0.2, 0.22, 0, 0.9],
-    ],
+    // Overgrown: boulders in a thicket of shrubs.
+    blocked: ({ rnd }) => scatter(rnd, 3, 0.3, (k) => (k % 3 === 1 ? ['boulder', 1.2 + rnd() * 0.6] : ['shrub', 1.1 + rnd() * 0.6])),
   },
-  road: {
-    blocked: ({ across, rnd }) => [
-      ['barricade', 0, 0, across],
-      ['cone', 0.3, 0.3 + jit(rnd, 0.1), 0],
-      ['cone', -0.3, -0.3, 0],
-    ],
-  },
-  sidewalk: {
-    blocked: ({ along }) => [
-      ['dumpster', 0, -0.05, along],
-      ['cone', 0.32, 0.3, 0],
-    ],
+  street: {
+    // Two sawhorse barricades across both lanes, cones on the sidewalk edge.
+    blocked: ({ across, rnd }) => {
+      const alongX = across !== 0; // road runs along x when barricades turn
+      const off = (t) => (alongX ? [0, t] : [t, 0]);
+      const [ax, az] = off(-0.18), [bx, bz] = off(0.18);
+      const [cx, cz] = off(0.38), [dx, dz] = off(-0.38);
+      return [
+        ['barricade', ax, az, across],
+        ['barricade', bx, bz, across + jit(rnd, 0.15)],
+        ['cone', cx + (alongX ? 0.15 : 0), cz + (alongX ? 0 : 0.15), 0],
+        ['cone', dx - (alongX ? 0.12 : 0), dz - (alongX ? 0 : 0.12), 0],
+      ];
+    },
   },
   path: {
     blocked: ({ across, rnd }) => [
@@ -193,36 +202,39 @@ const VARIANTS = {
   forest: {
     // A clearing with one young fir.
     walkable: ({ rnd }) => [['fir', 0.3 * (rnd() > 0.5 ? 1 : -1), 0.3 * (rnd() > 0.5 ? 1 : -1), rnd() * 6, 0.7]],
+    // Dense stand of young firs with undergrowth.
     blocked: ({ rnd }) => [
-      ['fir', -0.22 + jit(rnd, 0.1), -0.22, rnd() * 6, 1.05],
-      ['fir', 0.24, -0.2 + jit(rnd, 0.1), rnd() * 6, 0.9],
-      ['fir', -0.2, 0.24, rnd() * 6, 0.95],
-      ['fir', 0.22 + jit(rnd, 0.1), 0.24, rnd() * 6, 1.1],
+      ...scatter(rnd, 3, 0.3, () => ['fir', 0.85 + rnd() * 0.45]),
+      ['shrub', jit(rnd, 0.5), jit(rnd, 0.5), 0, 0.9],
     ],
   },
   brambles: {
     walkable: ({ rnd }) => [['bramble', 0.3, -0.28, rnd() * 6, 0.55], ['bramble', -0.3, 0.3, rnd() * 6, 0.45]],
-    blocked: ({ rnd }) => [
-      ['bramble', -0.22, -0.2, rnd() * 6, 1.3],
-      ['bramble', 0.22, -0.18, rnd() * 6, 1.1],
-      ['bramble', -0.18, 0.22, rnd() * 6, 1.2],
-      ['bramble', 0.2, 0.24, rnd() * 6, 1.35],
-      ['bramble', 0, 0, rnd() * 6, 1.0],
-    ],
+    // A solid thorn thicket.
+    blocked: ({ rnd }) => scatter(rnd, 4, 0.24, () => ['bramble', 1.3 + rnd() * 0.6]),
   },
   hardwood: {
+    // A storeroom: wardrobes along the back, stacked crates in front.
     blocked: ({ along, rnd }) => [
-      ['cabinet', -0.12, -0.25, along],
-      ['crate', 0.25, 0.18, jit(rnd, 0.4)],
-      ['crate', 0.25, 0.18, jit(rnd, 0.6), 0.8, m(1.0)],
-      ['crate', -0.18, 0.22, jit(rnd, 0.4), 0.9],
+      ['cabinet', -0.2, -0.32, along],
+      ['cabinet', 0.12, -0.32, along],
+      ['crate', -0.25, 0.05, jit(rnd, 0.4)],
+      ['crate', -0.25, 0.05, jit(rnd, 0.6), 0.8, m(1.0)],
+      ['crate', 0.05, 0.12, jit(rnd, 0.4), 0.95],
+      ['crate', 0.3, 0.05, jit(rnd, 0.4), 0.9],
+      ['crate', 0.3, 0.05, jit(rnd, 0.5), 0.75, m(0.9)],
+      ['crate', -0.05, 0.36, jit(rnd, 0.4), 0.85],
+      ['crate', 0.25, 0.34, jit(rnd, 0.4), 1.0],
     ],
   },
   carpet: {
+    // A cluttered living room: two sofas facing over a coffee table, armchairs.
     blocked: ({ along }) => [
-      ['sofa', 0, -0.2, along],
-      ['table', 0, 0.12, along],
-      ['armchair', 0.32, 0.3, along + Math.PI * 0.75],
+      ['sofa', 0, -0.25, along],
+      ['sofa', 0, 0.25, along + Math.PI],
+      ['table', 0, 0, along],
+      ['armchair', -0.33, 0, along + Math.PI / 2],
+      ['armchair', 0.33, 0, along - Math.PI / 2],
     ],
   },
   // Water: a ford of stepping stones when walkable; open water otherwise.
@@ -326,11 +338,11 @@ export function createProps(group, { firGeo, firMat }) {
 // with same-surface neighbours counting double.
 function runAxis(grid, x, y, c) {
   const water = c.area === 'water';
-  const sameRun = ['road', 'sidewalk', 'path', 'cemeteryPath'].includes(c.sub);
+  const sameRun = ['street', 'path', 'cemeteryPath'].includes(c.sub);
   const pred = (nx, ny) => {
     if (!grid.inBounds(nx, ny)) return 0;
     const n = grid.cells[grid.index(nx, ny)];
-    if (sameRun) return n.sub === c.sub ? 1 : 0;
+    if (sameRun) return n.sub === c.sub || (c.sub === 'street' && n.bridge) ? 1 : 0;
     // Paths and fords lead on to walkable cells, preferring the same surface.
     if (water || c.sub === 'cemetery') return n.walkable ? (n.sub === c.sub ? 2 : 1) : 0;
     return 0;

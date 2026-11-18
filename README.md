@@ -16,13 +16,31 @@ the edges between cells.
 
 | Category | Subcategories |
 |----------|---------------|
-| Outdoor | Ground (default), Road, Sidewalk, Path, Cemetery, Cemetery path, Forest cemetery\*, Forest\*, Brambles\* |
+| Outdoor | Ground (default), Street, Path, Cemetery, Cemetery path, Forest cemetery\*, Forest\*, Brambles\* |
 | Indoor | Hardwood (default), Carpet |
 | Water | Lake, River (always start blocked) |
 
 \* Starts out **blocked** when painted. Painting an ordinary subcategory over a default-blocked cell unblocks
-it; otherwise painting keeps the cell's walkability, and the Walkable/Blocked brushes always win. Roads sit
-slightly below the curb and sidewalks slightly above.
+it; otherwise painting keeps the cell's walkability, and the Walkable/Blocked brushes always win.
+
+### Streets
+
+**Street** is a narrow small-town two-lane road with a small sidewalk each side, all in one cell (2.5 m lanes,
+1 m sidewalks). Each street cell looks at its four neighbours (street or bridge cells connect) and lays
+itself out to match:
+
+| Connections | Layout |
+|-------------|--------|
+| Two opposite sides | Straight: dashed centre line (one 3 m dash per cell, so runs line up), sidewalks on the closed sides |
+| Two adjacent sides | Corner: the centre line curves round; sidewalks on the outer edges and a square on the inner corner |
+| Three sides | T: the through road keeps its centre line; a crosswalk runs across the side street |
+| Four sides | Crossing: corner sidewalk squares and crosswalks on every approach |
+| One side | Dead end: the line stops short and the sidewalk wraps around the end |
+
+A street running straight to the board edge continues off it rather than dead-ending, and streets carry on
+across bridges (the deck has the same centre line). Paint is faded and chipped, the asphalt cracked and
+patched, and the sidewalks are jointed concrete with moss and raised curbs. Old **Road** and **Sidewalk**
+cells become Street when loaded. The street surface lives in `src/street.js`.
 
 ### Walkable and blocked versions
 
@@ -32,8 +50,7 @@ the cells around them (across a road, along a path).
 | Surface | Walkable | Blocked |
 |---------|----------|---------|
 | Ground | Open grass | Boulders and shrubs |
-| Road | Clear road | Sawhorse barricade across the road, traffic cones |
-| Sidewalk | Clear | Dumpster and a cone |
+| Street | Open road | Two sawhorse barricades across both lanes, cones on the curbs |
 | Path | Clear | Fallen log across the path, rocks |
 | Cemetery | Sparse grave markers (2–3 per cell) | Dense rows of markers with one or two large monuments (obelisks, family monuments) |
 | Cemetery path | Clear gravel | Wrought-iron gate across the path |
@@ -46,7 +63,7 @@ the cells around them (across a road, along a path).
 | Bridge | Open deck | Barricade on the deck |
 
 The variants live in `VARIANTS` in `src/props.js`: one entry per subcategory, each returning the props
-for its walkable and blocked look. Props are built to scale (1 cell = 4 m).
+for its walkable and blocked look. Props are built to scale (1 cell = 7 m).
 
 Everything is defined once in `AREAS` in `src/state.js` (label, default walkability). The brush buttons are
 generated from it, so a new subcategory added there shows up in the panel, saves and imports. Give it a
@@ -78,20 +95,21 @@ on the **edges between cells**, not in cells:
   Avenue D bridge): rust-red Warren trusses with inclined end posts and verticals, overhead struts with X
   bracing, an asphalt deck with a pale concrete edge girder and pipe railings, and round concrete piers
   with cap beams in the water at each end and every two cells. Connected bridge cells form one bridge, so a
-  2 × 3 block of bridge cells is one two-lane, three-cell span (`src/bridge.js`).
+  line of three bridge cells is one two-lane, three-cell span (`src/bridge.js`).
 - **Bridge** only applies to water cells and makes them walkable. Each bridge cell knows which way it spans
   (`bridgeAxis()` in `src/state.js`, and `bridgeAxis` in exported JSON): toward land or other bridge cells
   and across the water. That is what future bridge assets and pylons should use.
 
 ## Scale
 
-One cell is about **4 m (13 ft)**, so a small home covers **2 × 2 cells** (about 8 m / 26 ft square) and the
-default board is roughly 80 × 104 m. Everything outside the board is built to that scale
-(`METERS_PER_CELL` in `src/main.js`):
+One cell is about **7 m (23 ft)**: the width of a narrow two-lane street with small sidewalks. The default
+board is roughly 140 × 182 m. Everything is built in metres and converted through `METERS_PER_CELL` in
+`src/scale.js`:
 
-- Douglas firs 16–44 m tall (4–11 cells), younger ones at the forest edge
-- A small reference house (2 × 2 cells, 3 m walls) in the clearing beside the board
-- **Show small-home footprint at cursor** draws a ghost 2 × 2 house where you hover
+- Douglas firs 16–44 m tall (about 2–6 cells), younger ones at the forest edge
+- A small reference house (9 × 8 m, about 1.3 × 1.1 cells, 3 m walls) in the clearing beside the board
+- **Show small home at cursor** draws that house as a ghost where you hover
+- Props, walls (2.6 m), doors (1.2 m), bridges and water depth all use real sizes
 
 Trees between the camera and the board dissolve so they never hide cells.
 
@@ -160,6 +178,8 @@ outdoor/indoor, no edges) are converted on load, outdoor to Ground and indoor to
 - `src/water.js` — water surface shader (flow-mapped river currents, still lakes).
 - `src/props.js` — walkable/blocked props for every surface (`VARIANTS`).
 - `src/bridge.js` — steel truss bridge structures built from connected bridge cells.
+- `src/street.js` — street surfaces: lane lines, crosswalks, sidewalks, chosen from neighbouring cells.
+- `src/scale.js` — metres per cell and the street cross-section.
 - `src/style.css` — panel styling.
 
 Tiles are a single `InstancedMesh`; each cell's look comes from `cellLook()` in `main.js`. That's the place

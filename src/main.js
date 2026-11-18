@@ -6,6 +6,8 @@ import {
 } from './state.js';
 import { createWaterSurface } from './water.js';
 import { createProps } from './props.js';
+import { METERS_PER_CELL, m } from './scale.js';
+import { createStreets } from './street.js';
 import { createBridges } from './bridge.js';
 
 // ---------------------------------------------------------------------------
@@ -14,11 +16,8 @@ import { createBridges } from './bridge.js';
 
 const STORAGE_KEY = 'minty-pickle.grid.v1';
 
-// Real-world scale. The board is a whole town; a small home covers 2 x 2 cells
-// (about 8 m x 8 m / 26 ft square), so one cell is about 4 m (13 ft).
-// Everything around the board (trees, the reference house, rain) uses this.
-const METERS_PER_CELL = 4;
-const m = (meters) => meters / METERS_PER_CELL; // metres -> world units (cells)
+// Real-world scale lives in src/scale.js: one cell is a narrow two-lane street
+// with small sidewalks (~7 m). Everything built in metres converts through m().
 
 const TILE = 1;               // world units per cell
 const INSET = 0.94;           // tile size inside its cell (gap = grid lines)
@@ -35,12 +34,11 @@ const WALL_T = 0.06;          // wall thickness
 const DOOR_W = m(1.2);        // door opening, centred on its edge
 const DOOR_H = m(2.1);        // door height (lintel above when walls are full height)
 
-// Per-subcategory surface colours (night) and tile heights. Roads sit a touch
-// lower than the curb; sidewalks a touch higher.
+// Per-subcategory surface colours (night) and tile heights. Street cells are
+// drawn by src/street.js on top of a tile just below street level.
 const SUB_LOOK = {
   ground: { unlit: '#4a6158', lit: '#9fbf8f', area: '#3e6b5a' },
-  road: { unlit: '#363d43', lit: '#8a9599', area: '#3b4148', h: FLOOR_H - 0.025 },
-  sidewalk: { unlit: '#6a706d', lit: '#b9c0ba', area: '#8d9390', h: FLOOR_H + 0.02 },
+  street: { unlit: '#34383b', lit: '#8a9599', area: '#4a5058', h: FLOOR_H - 0.01 },
   path: { unlit: '#544537', lit: '#b5946f', area: '#8c6a45' },
   cemetery: { unlit: '#33463a', lit: '#86a487', area: '#5b7f5f' },
   cemeteryPath: { unlit: '#5a564c', lit: '#b3ab92', area: '#a39a80' },
@@ -299,6 +297,7 @@ let tiles, pools, glowAttr, slab, ground, decks, deckGlow, rails;
 let walls, doorLeaves;
 let props = null; // walkable/blocked variants of every surface (src/props.js)
 let bridges = null; // steel truss bridge structures (src/bridge.js)
+let streets = null; // street surfaces: lanes, lines, sidewalks (src/street.js)
 let deckVisible = new Uint8Array(0);
 const water = createWaterSurface();
 scene.add(water.mesh);
@@ -382,6 +381,8 @@ function buildBoard() {
   props = createProps(boardGroup, { firGeo, firMat });
   bridges?.clear();
   bridges = createBridges(boardGroup);
+  streets?.clear();
+  streets = createStreets(boardGroup);
 
   // Walls and doors on cell edges (a door = two short wall pieces, an
   // optional lintel, and an open door leaf).
@@ -493,6 +494,7 @@ function refreshWaterAndBridges() {
   deckGlow.needsUpdate = true;
   decks.computeBoundingSphere();
   bridges.update(grid, { visible: ui.view === 'all', deckTop: DECK_TOP, bedY: BED_H });
+  streets.update(grid, { visible: ui.view === 'all', cellToWorld, surfaceY: SUB_LOOK.street.h + 0.002 });
   refreshPropsAndWalls();
 }
 
@@ -642,7 +644,7 @@ function refreshCell(i) {
 
   const { x, y } = grid.coords(i);
   if (look.pool) {
-    tmpPos.copy(cellToWorld(x, y)).setY(look.poolY ?? FLOOR_H + 0.012);
+    tmpPos.copy(cellToWorld(x, y)).setY(look.poolY ?? FLOOR_H + 0.04); // above curbs
     tmpMatrix.compose(tmpPos, tmpQuat.identity(), tmpScale.set(1, 1, 1));
     pools.setColorAt(i, tmpColor.set(look.pool));
   } else {
@@ -761,19 +763,21 @@ firMat.onBeforeCompile = (shader) => {
       if (fade > noise * 0.999) discard;`);
 };
 
-// Small-home reference: 2 x 2 cells, ~3 m walls, hipped roof to ~6.5 m.
+// Small-home reference: a ~9 x 8 m house (about 1.3 x 1.1 cells), ~3 m walls,
+// hipped roof to ~6.5 m. Built centred on the origin.
+const HOUSE_W = m(9), HOUSE_D = m(8);
 function makeHouse({ ghost = false } = {}) {
   const g = new THREE.Group();
-  const w = 2 * TILE - 0.2;
+  const w = HOUSE_W, d = HOUSE_D;
   const wallMat = ghost
     ? new THREE.MeshBasicMaterial({ color: '#f1d9a8', transparent: true, opacity: 0.18, depthWrite: false })
     : new THREE.MeshLambertMaterial({ color: '#3b3a36' });
   const roofMat = ghost
     ? wallMat
     : new THREE.MeshLambertMaterial({ color: '#1c1f22' });
-  const walls = new THREE.Mesh(new THREE.BoxGeometry(w, m(3), w).translate(0, m(3) / 2, 0), wallMat);
+  const walls = new THREE.Mesh(new THREE.BoxGeometry(w, m(3), d).translate(0, m(3) / 2, 0), wallMat);
   const roof = new THREE.Mesh(
-    new THREE.ConeGeometry(w * 0.78, m(3.5), 4).rotateY(Math.PI / 4).translate(0, m(3) + m(3.5) / 2, 0),
+    new THREE.ConeGeometry(w * 0.78, m(3.5), 4).rotateY(Math.PI / 4).scale(1, 1, d / w).translate(0, m(3) + m(3.5) / 2, 0),
     roofMat,
   );
   for (const part of [walls, roof]) {
@@ -796,7 +800,7 @@ function makeHouse({ ghost = false } = {}) {
       new THREE.MeshBasicMaterial({ color: '#e9a85c' }),
     );
     win.userData.ownMaterial = true;
-    win.position.set(-w / 4, m(1.6), w / 2 + 0.005);
+    win.position.set(-w / 4, m(1.6), d / 2 + 0.005);
     g.add(win);
   }
   return g;
@@ -814,23 +818,24 @@ function buildSurroundings() {
 
   // Reference house in the clearing off the right edge, near the front.
   const house = makeHouse();
-  house.position.set(halfW + 4.2, 0, halfD - 2);
+  house.position.set(halfW + 3, 0, halfD - 2);
   surroundGroup.add(house);
-  const porch = new THREE.PointLight('#ffb866', 2.2, 7, 1.6);
-  porch.position.set(halfW + 4.2 - 0.4, m(2.6), halfD - 2 + 1.2);
+  const porch = new THREE.PointLight('#ffb866', 2.2, 4, 1.6);
+  porch.position.set(halfW + 3 - HOUSE_W / 4, m(2.6), halfD - 2 + HOUSE_D / 2 + m(1));
   surroundGroup.add(porch);
 
-  // Fir forest: a ring starting ~10 m (2.5 cells) past the labels.
+  // Fir forest: a ring starting ~17 m past the labels, ~150 m deep.
   // Mature Douglas firs: 20-40 m tall, crown about a third as wide as tall.
-  const clear = 3.5;
-  const depth = 32;
+  const clear = m(17) + 1;
+  const depth = m(150);
   const ringArea = (board.w + 2 * (clear + depth)) * (board.d + 2 * (clear + depth)) - (board.w + 2 * clear) * (board.d + 2 * clear);
-  const count = Math.min(3500, Math.round(ringArea / 4.2));
+  const spacing = m(6);
+  const count = Math.min(4500, Math.round(ringArea / (spacing * spacing * 1.4)));
   const firs = new THREE.InstancedMesh(firGeo, firMat, count);
   firs.castShadow = true;
   firs.receiveShadow = true;
   const cellHash = new Map();
-  const key = (x, z) => `${Math.floor(x / 1.5)},${Math.floor(z / 1.5)}`;
+  const key = (x, z) => `${Math.floor(x / spacing)},${Math.floor(z / spacing)}`;
   const shade = new THREE.Color();
   let placed = 0;
   for (let tries = 0; placed < count && tries < count * 12; tries++) {
@@ -843,7 +848,7 @@ function buildSurroundings() {
     if (cellHash.has(k)) continue;
     cellHash.set(k, true);
     // Younger, shorter trees at the forest edge; old growth further back.
-    const maturity = Math.min(1, (edge - clear) / 10);
+    const maturity = Math.min(1, (edge - clear) / m(40));
     const h = m(16 + 14 * maturity + rnd() * 14);   // 16-44 m
     const r = h * (0.15 + rnd() * 0.06);            // crown radius
     tmpMatrix.compose(
@@ -1608,7 +1613,8 @@ renderer.setAnimationLoop(() => {
       hoverBox.scale.set(1, top + 0.02, 1);
     }
     // Ghost home covers the hovered cell and the cells right/below it.
-    ghostHouse.position.copy(cellToWorld(x, y)).add(tmpPos.set(0.5 * TILE, FLOOR_H, 0.5 * TILE));
+    // Ghost home's north-west corner sits on the hovered cell's corner.
+    ghostHouse.position.copy(cellToWorld(x, y)).add(tmpPos.set(HOUSE_W / 2 - 0.5 * TILE, FLOOR_H, HOUSE_D / 2 - 0.5 * TILE));
   }
   ghostHouse.visible = ui.ghost && hoverIndex >= 0;
 

@@ -19,8 +19,8 @@ export const AREAS = {
     label: 'Outdoor',
     subs: {
       ground: { label: 'Ground' },
-      road: { label: 'Road' },
-      sidewalk: { label: 'Sidewalk' },
+      // Two-lane street with sidewalks; lines and curbs follow its neighbours.
+      street: { label: 'Street' },
       path: { label: 'Path' },
       cemetery: { label: 'Cemetery' },
       cemeteryPath: { label: 'Cemetery path' },
@@ -58,11 +58,15 @@ export function parseEdgeKey(k) {
   return { o: k[0], x, y };
 }
 
+// Retired subcategories and what they became.
+const SUB_ALIASES = { road: 'street', sidewalk: 'street' };
+
 // Normalise any saved cell (format v1 used `indoor: bool`) into the current shape.
 export function normalizeCell(c = {}) {
   let area = typeof c.area === 'string' && AREAS[c.area] ? c.area : (c.indoor ? 'indoor' : 'outdoor');
   const subs = Object.keys(AREAS[area].subs);
-  let sub = subs.includes(c.sub) ? c.sub : (subs[0] ?? null);
+  const wanted = SUB_ALIASES[c.sub] ?? c.sub;
+  let sub = subs.includes(wanted) ? wanted : (subs[0] ?? null);
   const water = area === 'water';
   return {
     area,
