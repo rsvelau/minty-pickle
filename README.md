@@ -67,13 +67,18 @@ on the **edges between cells**, not in cells:
 
 ### Water and bridges
 
-- Water cells sit below the land: the surface is about 1.2 m under street level and the bed about 2.4 m down,
+- Water cells sit below the land: the surface is about 2 m under street level and the bed about 3.6 m down,
   so banks show around every lake and river.
 - **Rivers flow from the right side of the board to the left, following the painted path.** Each connected
   river starts at its right-most cells; flow follows the walking distance from there, so a river that bends
   down and back across turns with it. Lakes are still water.
 - Painting water makes a cell unwalkable; painting land over water makes it walkable again and removes any
   bridge.
+- **Bridges are steel through-truss road bridges** in the Pacific Northwest style (loosely after Snohomish's
+  Avenue D bridge): rust-red Warren trusses with inclined end posts and verticals, overhead struts with X
+  bracing, an asphalt deck with a pale concrete edge girder and pipe railings, and round concrete piers
+  with cap beams in the water at each end and every two cells. Connected bridge cells form one bridge, so a
+  2 × 3 block of bridge cells is one two-lane, three-cell span (`src/bridge.js`).
 - **Bridge** only applies to water cells and makes them walkable. Each bridge cell knows which way it spans
   (`bridgeAxis()` in `src/state.js`, and `bridgeAxis` in exported JSON): toward land or other bridge cells
   and across the water. That is what future bridge assets and pylons should use.
@@ -152,6 +157,7 @@ outdoor/indoor, no edges) are converted on load, outdoor to Ground and indoor to
 - `src/main.js` — three.js scene, tile rendering, bridges, painting, UI wiring.
 - `src/water.js` — water surface shader (flow-mapped river currents, still lakes).
 - `src/props.js` — walkable/blocked props for every surface (`VARIANTS`).
+- `src/bridge.js` — steel truss bridge structures built from connected bridge cells.
 - `src/style.css` — panel styling.
 
 Tiles are a single `InstancedMesh`; each cell's look comes from `cellLook()` in `main.js`. That's the place

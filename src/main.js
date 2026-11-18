@@ -6,6 +6,7 @@ import {
 } from './state.js';
 import { createWaterSurface } from './water.js';
 import { createProps } from './props.js';
+import { createBridges } from './bridge.js';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -22,9 +23,9 @@ const m = (meters) => meters / METERS_PER_CELL; // metres -> world units (cells)
 const TILE = 1;               // world units per cell
 const INSET = 0.94;           // tile size inside its cell (gap = grid lines)
 const FLOOR_H = 0.06;         // top of a land tile (ground level ~ 0)
-const BASE = m(3);            // tiles are columns reaching down this far
-const WATER_Y = -m(1);        // water surface sits ~1.2 m below the land
-const BED_H = -m(2.4);        // river/lake bed
+const BASE = m(4.5);          // tiles are columns reaching down this far
+const WATER_Y = -m(2);        // water surface sits ~2 m below the street (bridge piers show)
+const BED_H = -m(3.6);        // river/lake bed
 const DECK_TOP = FLOOR_H + 0.03; // bridge decks sit just above street level
 const DECK_T = m(0.5);        // deck thickness
 const RAIL_H = m(1.1);        // railing height
@@ -57,8 +58,8 @@ const PALETTE = {
   outdoor: { unlit: '#4a6158', lit: '#9fbf8f' },
   indoor: { unlit: '#7a5338', lit: '#f0a85a' },
   bed: '#1b231f',
-  deck: { unlit: '#7d6a57', lit: '#d4a574' },
-  rail: '#2c2a27',
+  deck: { unlit: '#3a3f44', lit: '#9aa0a4' }, // asphalt road deck
+  rail: '#8a8e92',                             // galvanized pipe railing
   areaWater: '#24506a',
   areaDeck: '#b39a72',
   blockedShade: 0.88,
@@ -254,6 +255,7 @@ let N = 0;
 let tiles, pools, glowAttr, slab, ground, decks, deckGlow, rails;
 let walls, doorLeaves;
 let props = null; // walkable/blocked variants of every surface (src/props.js)
+let bridges = null; // steel truss bridge structures (src/bridge.js)
 let deckVisible = new Uint8Array(0);
 const water = createWaterSurface();
 scene.add(water.mesh);
@@ -319,7 +321,12 @@ function buildBoard() {
   boardGroup.add(decks);
 
   // Railings along bridge edges that face open water (up to 4 per cell).
-  const railGeo = new THREE.BoxGeometry(TILE, RAIL_H, 0.05).translate(0, RAIL_H / 2, 0);
+  // Pipe railing: top and mid rails on posts.
+  const railGeo = mergeGeometries([
+    new THREE.BoxGeometry(TILE, 0.025, 0.025).translate(0, RAIL_H, 0),
+    new THREE.BoxGeometry(TILE, 0.02, 0.02).translate(0, RAIL_H * 0.5, 0),
+    ...[-0.375, -0.125, 0.125, 0.375].map((x) => new THREE.BoxGeometry(0.02, RAIL_H, 0.02).translate(x, RAIL_H / 2, 0)),
+  ]);
   rails = new THREE.InstancedMesh(railGeo, new THREE.MeshLambertMaterial({ color: PALETTE.rail }), N * 4);
   rails.userData.ownMaterial = true;
   rails.castShadow = true;
@@ -330,6 +337,8 @@ function buildBoard() {
   // Cell props: each surface's walkable / blocked look.
   props?.clear();
   props = createProps(boardGroup, { firGeo, firMat });
+  bridges?.clear();
+  bridges = createBridges(boardGroup);
 
   // Walls and doors on cell edges (a door = two short wall pieces, an
   // optional lintel, and an open door leaf).
@@ -421,7 +430,7 @@ function refreshWaterAndBridges() {
       deckGlow.array[i] = look.glow;
       if (ui.view === 'all') {
         const p = cellToWorld(x, y).setY(DECK_TOP);
-        const e = 0.5 * TILE - 0.03;
+        const e = 0.5 * TILE - 0.15; // just inside the truss
         if (openWater(x, y - 1)) railAt(p.clone().add(tmpScale.set(0, 0, -e)), 0);
         if (openWater(x, y + 1)) railAt(p.clone().add(tmpScale.set(0, 0, e)), 0);
         if (openWater(x - 1, y)) railAt(p.clone().add(tmpScale.set(-e, 0, 0)), Math.PI / 2);
@@ -440,6 +449,7 @@ function refreshWaterAndBridges() {
   decks.instanceColor.needsUpdate = true;
   deckGlow.needsUpdate = true;
   decks.computeBoundingSphere();
+  bridges.update(grid, { visible: ui.view === 'all', deckTop: DECK_TOP, bedY: BED_H });
   refreshPropsAndWalls();
 }
 
