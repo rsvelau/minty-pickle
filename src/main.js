@@ -158,8 +158,11 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.maxPolarAngle = Math.PI * 0.47;
-controls.minDistance = 4;
-controls.screenSpacePanning = false;
+controls.minDistance = 1.5;      // close enough for detail work on one cell
+controls.screenSpacePanning = false; // pan across the board, not up into the sky
+controls.zoomToCursor = true;    // wheel / pinch zooms toward the pointer, not the centre
+controls.keyPanSpeed = 25;
+controls.listenToKeyEvents(window); // arrow keys pan
 applyControlBindings();
 
 // Board extents in world units, refreshed by buildBoard().
@@ -186,6 +189,46 @@ function fitPreset(name) {
   controls.maxDistance = dist * 2.5;
   return { pos: dir.multiplyScalar(dist).add(target), target };
 }
+// Keep the orbit/zoom focus over the board (plus a small margin) so panning
+// to the edges never loses it. The camera moves with the target, so the view
+// doesn't swing.
+function clampTarget() {
+  const t = controls.target;
+  const hx = board.w / 2 + 1, hz = board.d / 2 + 1;
+  const cx = THREE.MathUtils.clamp(t.x, -hx, hx);
+  const cz = THREE.MathUtils.clamp(t.z, -hz, hz);
+  const dy = THREE.MathUtils.clamp(t.y, 0, 2) - t.y;
+  if (cx !== t.x || cz !== t.z || dy) {
+    const shift = new THREE.Vector3(cx - t.x, dy, cz - t.z);
+    t.add(shift);
+    camera.position.add(shift);
+  }
+}
+
+// F: fly to the cell (or edge) under the pointer and move in close.
+function focusHovered() {
+  let point = null;
+  if (hoverIndex >= 0) {
+    const { x, y } = grid.coords(hoverIndex);
+    point = cellToWorld(x, y);
+  } else if (hoverEdge) {
+    const { o, x, y } = hoverEdge;
+    point = o === 'v'
+      ? new THREE.Vector3(x - grid.cols / 2, 0, y - grid.rows / 2 + 0.5)
+      : new THREE.Vector3(x - grid.cols / 2 + 0.5, 0, y - grid.rows / 2);
+  }
+  if (!point) return;
+  const offset = camera.position.clone().sub(controls.target);
+  offset.setLength(Math.min(offset.length(), 9));
+  camTween = {
+    t: 0,
+    fromPos: camera.position.clone(),
+    fromTarget: controls.target.clone(),
+    toPos: point.clone().add(offset),
+    toTarget: point,
+  };
+}
+
 function setCamera(name, instant = false) {
   const c = fitPreset(name);
   if (instant) {
@@ -1193,7 +1236,7 @@ function applyControlBindings() {
   };
   controls.touches = {
     ONE: orbitLeft ? THREE.TOUCH.ROTATE : null,
-    TWO: THREE.TOUCH.DOLLY_ROTATE,
+    TWO: THREE.TOUCH.DOLLY_PAN, // pinch zooms toward the fingers, drag pans
   };
   if (renderer) renderer.domElement.style.cursor = orbitLeft ? 'grab' : 'crosshair';
 }
@@ -1416,6 +1459,7 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === 'r' || e.key === 'R') setShape(ui.shape === 'rect' ? 'brush' : 'rect');
   else if (e.key === 't' || e.key === 'T') setCamera('top');
   else if (e.key === 'a' || e.key === 'A') setCamera('angled');
+  else if (key === 'f') focusHovered();
 });
 window.addEventListener('keyup', (e) => {
   if (e.code === 'Space') { ui.spaceHeld = false; applyControlBindings(); }
@@ -1533,7 +1577,11 @@ renderer.setAnimationLoop(() => {
     controls.target.lerpVectors(camTween.fromTarget, camTween.toTarget, k);
     if (camTween.t >= 1) camTween = null;
   }
+  // Zoom-to-cursor re-derives the target from the camera's facing after a
+  // wheel zoom; switch it off while we animate the camera ourselves.
+  controls.zoomToCursor = !camTween;
   controls.update();
+  clampTarget();
 
   // Ease tile heights toward their targets.
   let moved = false;

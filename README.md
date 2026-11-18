@@ -112,7 +112,9 @@ npm run build      # static site in dist/ (works from any sub-path, e.g. GitHub 
 | Choose a brush | `1` Ground · `2` Hardwood · `7` Lake · `8` River · `9` Bridge · `3` Unlit · `4` Lit · `5` Walkable · `6` Blocked · `0` Reset (other subcategories: click) |
 | Walls & doors | `W` wall · `D` door · `X` erase |
 | Orbit camera | Right-drag, or hold `Space` and left-drag, or **Orbit mode** |
-| Pan / zoom | Middle-drag / mouse wheel |
+| Zoom | Mouse wheel or pinch; zooms toward the pointer, so you can zoom into any corner of the board |
+| Pan | Middle-drag, Shift + right-drag (trackpads), arrow keys, or two-finger drag on touch |
+| Focus a cell | `F` flies in close to the cell or edge under the pointer |
 | Camera presets | `A` angled · `T` top-down |
 | Undo / redo | `Ctrl/Cmd+Z` / `Ctrl/Cmd+Shift+Z` (or `Ctrl+Y`) |
 | Touch | One finger paints, two fingers orbit/zoom |
