@@ -13,6 +13,13 @@
 // Paint is faded yellow/white; asphalt is cracked and patched; sidewalks are
 // jointed, cracked concrete with moss. Everything is drawn once into an atlas
 // (16 layouts x 2 wear variants) and instanced per layout.
+//
+// Intersections (T and crossing) also get street furniture:
+//   stop signs   on the corner to the right of each approach that must stop
+//                (all four at a crossing; only the side street at a T),
+//                facing oncoming traffic
+//   streetlight  a cobra-head lamp on a wooden utility pole, arm over the
+//                junction; the lamp glows when the cell is Lit, else it's dead
 import * as THREE from 'three';
 import { METERS_PER_CELL, m, SIDEWALK_W } from './scale.js';
 
@@ -55,14 +62,18 @@ export function createStreets(group) {
     return mesh;
   }
 
+  const furniture = createFurniture(group);
+
   // ctx: { visible, cellToWorld(x, y), surfaceY }
   function update(grid, { visible, cellToWorld, surfaceY }) {
     const buckets = new Map(); // key -> { mask, wear, lit, positions[] }
+    const items = [];          // street furniture: [kind, x, y, z, rotY]
     if (visible) {
       grid.cells.forEach((c, i) => {
         if (c.sub !== 'street') return;
         const { x, y } = grid.coords(i);
         const mask = streetMask(grid, x, y);
+        placeFurniture(items, mask, cellToWorld(x, y), surfaceY + CURB, c.lit, x * 31 + y * 17);
         const wear = ((x * 73856093) ^ (y * 19349663)) >>> 0 & 1;
         const key = `${mask}:${wear}:${c.lit ? 1 : 0}`;
         if (!buckets.has(key)) buckets.set(key, { mask, wear, lit: c.lit, positions: [] });
@@ -82,11 +93,13 @@ export function createStreets(group) {
       mesh.instanceMatrix.needsUpdate = true;
       mesh.computeBoundingSphere();
     }
+    furniture.update(items);
   }
 
   function clear() {
     for (const mesh of meshes.values()) { group.remove(mesh); mesh.dispose(); }
     meshes.clear();
+    furniture.clear();
   }
 
   return { update, clear };
@@ -391,4 +404,153 @@ function crack(g, r, n, colour, T, rect = [0, 0, T, T]) {
     }
     g.stroke();
   }
+}
+
+// --- street furniture --------------------------------------------------------
+
+const SW = SIDEWALK_W / METERS_PER_CELL;
+const CORNER = 0.5 - SW / 2; // centre of a corner sidewalk square (cell units)
+
+// Unit vector (x, z) pointing from the cell centre toward each side.
+const DIR = { [N]: [0, -1], [E]: [1, 0], [S]: [0, 1], [W]: [-1, 0] };
+// Rotation that turns a +z-facing prop to face a side.
+const FACE = { [N]: Math.PI, [S]: 0, [E]: Math.PI / 2, [W]: -Math.PI / 2 };
+// Traffic keeps right: a car arriving from side d stops at this corner.
+const RIGHT_CORNER = { [N]: [-1, -1], [E]: [1, -1], [S]: [1, 1], [W]: [-1, 1] };
+
+function placeFurniture(items, mask, centre, y, lit, hash) {
+  const open = [N, E, S, W].filter((b) => mask & b);
+  if (open.length < 3) return;
+  const stops = open.length === 4 ? open : open.filter((b) => !(mask & opposite(b))); // T: the stem only
+  for (const d of stops) {
+    const [cx, cz] = RIGHT_CORNER[d];
+    const [dx, dz] = DIR[d];
+    // On the corner square, nudged back toward the approach.
+    const px = centre.x + cx * CORNER + dx * 0.02;
+    const pz = centre.z + cz * CORNER + dz * 0.02;
+    items.push(['stopSign', px, y, pz, FACE[d]]);
+  }
+  // Streetlight: at a T, mid-sidewalk opposite the stem; at a crossing, on a
+  // corner (varies per junction). The arm reaches toward the middle.
+  let lx, lz;
+  if (open.length === 3) {
+    const closed = [N, E, S, W].find((b) => !(mask & b));
+    [lx, lz] = DIR[closed].map((v) => v * CORNER);
+  } else {
+    const corners = [[1, 1], [-1, 1], [-1, -1], [1, -1]];
+    [lx, lz] = corners[hash % 4].map((v) => v * CORNER);
+  }
+  const rot = Math.atan2(lz, -lx); // turns the +x arm toward the cell centre
+  items.push(['streetlight', centre.x + lx, y, centre.z + lz, rot]);
+  items.push([lit ? 'lampOn' : 'lampOff', centre.x + lx, y, centre.z + lz, rot]);
+  if (lit) items.push(['lampHalo', centre.x + lx, y, centre.z + lz, rot]);
+}
+
+function createFurniture(group) {
+  const kinds = furnitureKinds();
+  const vcMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const mats = {
+    stopSign: vcMat,
+    streetlight: vcMat,
+    lampOn: new THREE.MeshBasicMaterial({ color: '#ffc46b' }),         // sodium glow
+    lampOff: new THREE.MeshLambertMaterial({ color: '#3a3c3a' }),      // dead lamp
+    // Soft glow round a lit lamp so it reads from above too.
+    lampHalo: new THREE.MeshBasicMaterial({
+      color: '#ffb457', transparent: true, opacity: 0.16, depthWrite: false, blending: THREE.AdditiveBlending,
+    }),
+  };
+  const meshes = {};
+  const tmpM = new THREE.Matrix4();
+  const tmpQ = new THREE.Quaternion();
+  const tmpP = new THREE.Vector3();
+  const one = new THREE.Vector3(1, 1, 1);
+  const UP = new THREE.Vector3(0, 1, 0);
+
+  function meshFor(kind, needed) {
+    let mesh = meshes[kind];
+    if (mesh && mesh.instanceMatrix.count >= needed) return mesh;
+    if (mesh) { group.remove(mesh); mesh.dispose(); }
+    mesh = new THREE.InstancedMesh(kinds[kind], mats[kind], Math.max(16, Math.ceil(needed * 1.5)));
+    mesh.castShadow = kind !== 'lampOn' && kind !== 'lampHalo';
+    mesh.receiveShadow = true;
+    mesh.raycast = () => {};
+    meshes[kind] = mesh;
+    group.add(mesh);
+    return mesh;
+  }
+
+  function update(items) {
+    const byKind = {};
+    for (const it of items) (byKind[it[0]] ??= []).push(it);
+    for (const kind of Object.keys(kinds)) {
+      const list = byKind[kind] ?? [];
+      const mesh = meshFor(kind, list.length);
+      list.forEach(([, x, y, z, rot], n) => {
+        tmpM.compose(tmpP.set(x, y, z), tmpQ.setFromAxisAngle(UP, rot), one);
+        mesh.setMatrixAt(n, tmpM);
+      });
+      mesh.count = list.length;
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.computeBoundingSphere();
+    }
+  }
+
+  function clear() {
+    for (const k in meshes) { group.remove(meshes[k]); meshes[k].dispose(); delete meshes[k]; }
+  }
+
+  return { update, clear };
+}
+
+// Geometry in metres (via m()), base at y = 0.
+function furnitureKinds() {
+  const paint = (geo, hex) => {
+    geo = geo.index ? geo.toNonIndexed() : geo;
+    geo.deleteAttribute('uv');
+    const c = new THREE.Color(hex);
+    const arr = new Float32Array(geo.attributes.position.count * 3);
+    for (let i = 0; i < arr.length; i += 3) arr.set([c.r, c.g, c.b], i);
+    geo.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+    return geo;
+  };
+  const merge = (parts) => {
+    const geo = mergeBoxes(parts);
+    const total = parts.reduce((n, g) => n + g.attributes.position.count, 0);
+    const col = new Float32Array(total * 3);
+    let o = 0;
+    for (const g of parts) { col.set(g.attributes.color.array, o * 3); o += g.attributes.position.count; }
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    return geo;
+  };
+  // Octagonal sign plate facing +z, centred at (0, y).
+  const octagon = (r, t, y, z, hex) => paint(
+    new THREE.CylinderGeometry(r, r, t, 8).rotateX(Math.PI / 2).rotateZ(Math.PI / 8).translate(0, y, z), hex);
+
+  const POLE_H = m(8.5), ARM = m(2.6);
+  return {
+    // Faded red octagon (~0.75 m) with a white border on a 2.1 m galvanized post.
+    stopSign: merge([
+      paint(new THREE.CylinderGeometry(m(0.035), m(0.035), m(2.1), 6).translate(0, m(1.05), 0), '#8a8d90'),
+      octagon(m(0.39), m(0.02), m(2.05), m(0.04), '#d3cfc4'),
+      octagon(m(0.34), m(0.03), m(2.05), m(0.05), '#9a2b25'),
+      // a pale bar standing in for the STOP lettering
+      paint(new THREE.BoxGeometry(m(0.42), m(0.1), m(0.01)).translate(0, m(2.05), m(0.072)), '#cfc9bd'),
+    ]),
+    // Weathered wooden utility pole with a cobra-head lamp on a curved arm.
+    streetlight: merge([
+      paint(new THREE.CylinderGeometry(m(0.13), m(0.17), POLE_H, 8).translate(0, POLE_H / 2, 0), '#4c3d2f'),
+      paint(new THREE.BoxGeometry(m(0.9), m(0.1), m(0.1)).translate(0, POLE_H - m(0.6), 0), '#3e3228'), // crossarm
+      paint(new THREE.CylinderGeometry(m(0.04), m(0.04), ARM, 6).rotateZ(Math.PI / 2 - 0.12)
+        .translate(ARM / 2, POLE_H - m(1.2) + Math.sin(0.12) * ARM / 2, 0), '#7c7f82'),
+      paint(new THREE.SphereGeometry(m(0.35), 10, 6).scale(1.6, 0.45, 0.9)
+        .translate(ARM + m(0.15), POLE_H - m(1.2) + Math.sin(0.12) * ARM, 0), '#7a7d80'),
+    ]),
+    // The lens under the cobra head: lit or dead.
+    lampOn: new THREE.SphereGeometry(m(0.26), 10, 4, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2)
+      .scale(1.5, 0.5, 0.8).translate(ARM + m(0.15), POLE_H - m(1.25) + Math.sin(0.12) * ARM, 0),
+    lampOff: new THREE.SphereGeometry(m(0.26), 10, 4, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2)
+      .scale(1.5, 0.5, 0.8).translate(ARM + m(0.15), POLE_H - m(1.25) + Math.sin(0.12) * ARM, 0),
+    lampHalo: new THREE.SphereGeometry(m(0.65), 12, 8)
+      .translate(ARM + m(0.15), POLE_H - m(1.3) + Math.sin(0.12) * ARM, 0),
+  };
 }

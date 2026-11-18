@@ -42,6 +42,15 @@ across bridges (the deck has the same centre line). Paint is faded and chipped, 
 patched, and the sidewalks are jointed concrete with moss and raised curbs. Old **Road** and **Sidewalk**
 cells become Street when loaded. The street surface lives in `src/street.js`.
 
+**Intersections** (T-junctions and crossings) get street furniture:
+
+- **Stop signs**: a faded red octagon on a post, on the corner to the right of each approach that has to stop,
+  facing oncoming traffic. Crossings are all-way stops (four signs); at a T only the side street stops.
+- **A streetlight**: a cobra-head lamp on a weathered wooden utility pole with its arm over the junction. At a
+  T it stands on the sidewalk opposite the side street; at a crossing, on a corner. The lamp follows the
+  cell's **Lit** setting: paint the intersection Lit and it glows sodium-orange; leave it unlit and it's a
+  dead lamp.
+
 ### Walkable and blocked versions
 
 Blocked cells stay flat; props show what's in the way. Barricades, gates, logs and stepping stones turn to fit
