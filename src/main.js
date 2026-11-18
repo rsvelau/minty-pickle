@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {
   GridState, COLS, ROWS, MIN_SIZE, MAX_SIZE, AREAS, colLabel, cellLabel, defaultCell, defaultWalkable, areaLabel, parseEdgeKey,
-  hasStreetLamp, lightKind, centreBrightness, MAX_RADIUS,
+  hasStreetLamp, lightKind, centreBrightness, MAX_RADIUS, blocksLight,
 } from './state.js';
 import { createWaterSurface } from './water.js';
 import { createProps } from './props.js';
@@ -406,7 +406,7 @@ function buildBoard() {
   const maxEdges = 2 * N + cols + rows;
   walls = new THREE.InstancedMesh(unitBoxGeo, wallMat, maxEdges * 3);
   doorLeaves = new THREE.InstancedMesh(unitBoxGeo, doorMat, maxEdges * 2);
-  frames = new THREE.InstancedMesh(unitBoxGeo, frameMat, maxEdges * 8);
+  frames = new THREE.InstancedMesh(unitBoxGeo, frameMat, maxEdges * 9);
   glassDark = new THREE.InstancedMesh(unitBoxGeo, glassDarkMat, maxEdges);
   glassLit = new THREE.InstancedMesh(unitBoxGeo, glassLitMat, maxEdges);
   glassDark.renderOrder = glassLit.renderOrder = 3;
@@ -613,8 +613,13 @@ function refreshPropsAndWalls() {
     piece(cx, cz, -(DOOR_W / 2 + side / 2), side + WALL_T, FLOOR_H, H, vertical);
     piece(cx, cz, DOOR_W / 2 + side / 2, side + WALL_T, FLOOR_H, H, vertical);
     if (H > DOOR_H) piece(cx, cz, 0, DOOR_W, FLOOR_H + DOOR_H, H - DOOR_H, vertical);
-    // Leaf hinged on one jamb, swung ~70 degrees open.
-    const swing = 1.2;
+    // Leaf hinged on one jamb. Unlocked doors stand open (~70 degrees);
+    // locked doors are shut; one-way doors stand ajar toward the side they
+    // open to. Positive swing opens into the east/south cell.
+    const oneWay = type.startsWith('oneWayDoor');
+    const sign = type.endsWith('-') ? -1 : 1;
+    const swing = type === 'door' ? 1.2 : oneWay ? 0.5 * sign : 0;
+    const leafH = Math.min(DOOR_H, H) * 0.98;
     const hingeAlong = -DOOR_W / 2;
     const hx = vertical ? cx : cx + hingeAlong;
     const hz = vertical ? cz + hingeAlong : cz;
@@ -623,16 +628,45 @@ function refreshPropsAndWalls() {
     tmpMatrix.compose(
       tmpPos.set(hx + dir.x * DOOR_W / 2, FLOOR_H, hz + dir.z * DOOR_W / 2),
       tmpQuat.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, angle),
-      tmpScale.set(DOOR_W, Math.min(DOOR_H, H) * 0.98, 0.05),
+      tmpScale.set(DOOR_W, leafH, 0.05),
     );
     doorLeaves.setMatrixAt(nd++, tmpMatrix);
-    // Threshold plate across the opening so doors read from any angle.
-    tmpMatrix.compose(
-      tmpPos.set(cx, FLOOR_H, cz),
-      tmpQuat.identity(),
-      vertical ? tmpScale.set(0.3, 0.015, DOOR_W) : tmpScale.set(DOOR_W, 0.015, 0.3),
-    );
-    doorLeaves.setMatrixAt(nd++, tmpMatrix);
+    // Rotated marker box into the frames mesh (instance colour).
+    const mark = (px, py, pz, sx, sy, sz, rot, colour) => {
+      tmpMatrix.compose(tmpPos.set(px, py, pz), tmpQuat.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rot), tmpScale.set(sx, sy, sz));
+      frames.setMatrixAt(nf, tmpMatrix);
+      frames.setColorAt(nf++, tmpColor.set(colour));
+    };
+    const edgeRot = vertical ? Math.PI / 2 : 0; // a box's x axis along the edge
+    if (type === 'lockedDoor') {
+      // Red lock plate through the leaf (shows on both faces), a brass lock,
+      // and a red threshold.
+      mark(cx, FLOOR_H + leafH * 0.4, cz, DOOR_W * 0.55, Math.max(leafH * 0.18, 0.01), 0.075, edgeRot, '#b8322a');
+      mark(cx + (vertical ? 0 : DOOR_W * 0.32), FLOOR_H + leafH * 0.48, cz + (vertical ? DOOR_W * 0.32 : 0),
+        m(0.18), Math.max(leafH * 0.12, 0.008), 0.09, edgeRot, '#c9a23a');
+      mark(cx, FLOOR_H, cz, DOOR_W, 0.016, 0.3, edgeRot, '#9a2a22');
+    } else if (oneWay) {
+      // Green arrow on the floor through the doorway, pointing the way you
+      // can go.
+      const nx = vertical ? sign : 0, nz = vertical ? 0 : sign;
+      const phi = Math.atan2(-nz, nx);
+      const len = 0.38;
+      mark(cx, FLOOR_H, cz, len, 0.014, 0.05, phi, '#5fcf6a');
+      const tipX = cx + nx * len / 2, tipZ = cz + nz * len / 2;
+      for (const off of [0.75 * Math.PI, -0.75 * Math.PI]) {
+        const a2 = phi + off;
+        const arm = 0.14;
+        mark(tipX + Math.cos(a2) * arm / 2, FLOOR_H, tipZ - Math.sin(a2) * arm / 2, arm, 0.014, 0.05, a2, '#5fcf6a');
+      }
+    } else {
+      // Threshold plate across the opening so doors read from any angle.
+      tmpMatrix.compose(
+        tmpPos.set(cx, FLOOR_H, cz),
+        tmpQuat.identity(),
+        vertical ? tmpScale.set(0.3, 0.015, DOOR_W) : tmpScale.set(DOOR_W, 0.015, 0.3),
+      );
+      doorLeaves.setMatrixAt(nd++, tmpMatrix);
+    }
   }
   walls.count = nw;
   doorLeaves.count = nd;
@@ -1168,21 +1202,30 @@ function nearestEdge(pt) {
     : { o: 'h', x: Math.floor(pt.gx), y: Math.round(pt.gy) };
   return grid.edgeInBounds(e.o, e.x, e.y) ? e : null;
 }
-const edgeType = () => (ui.edgeBrush === 'erase' ? null : ui.edgeBrush);
+// The piece the current brush places on edge (o, x, y). One-way doors open
+// away from the side the pointer is on: click in the cell people come from.
+const isDoorBrush = () => ['door', 'lockedDoor', 'oneWayDoor'].includes(ui.edgeBrush);
+function edgeType(o, x, y, pt) {
+  if (ui.edgeBrush === 'erase') return null;
+  if (ui.edgeBrush !== 'oneWayDoor') return ui.edgeBrush;
+  const fromLow = pt ? (o === 'v' ? pt.gx < x : pt.gy < y) : true; // pointer in the west/north cell
+  return fromLow ? 'oneWayDoor+' : 'oneWayDoor-';
+}
 
 // Walk corner to corner, setting the edge for each unit step.
-function drawEdgePath(a, b) {
+function drawEdgePath(a, b, pt) {
   let { x, y } = a;
-  const type = edgeType();
   let any = false;
   while (x !== b.x || y !== b.y) {
     if (Math.abs(b.x - x) >= Math.abs(b.y - y)) {
       const nx = x + Math.sign(b.x - x);
-      any = grid.setEdge('h', Math.min(x, nx), y, type) || any;
+      const ex = Math.min(x, nx);
+      any = grid.setEdge('h', ex, y, edgeType('h', ex, y, pt)) || any;
       x = nx;
     } else {
       const ny = y + Math.sign(b.y - y);
-      any = grid.setEdge('v', x, Math.min(y, ny), type) || any;
+      const ey = Math.min(y, ny);
+      any = grid.setEdge('v', x, ey, edgeType('v', x, ey, pt)) || any;
       y = ny;
     }
   }
@@ -1194,7 +1237,7 @@ function edgeRect(a, b) {
   grid.revertStroke();
   const x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x);
   const y0 = Math.min(a.y, b.y), y1 = Math.max(a.y, b.y);
-  const type = edgeType();
+  const type = edgeType('v', 0, 0, null);
   const opt = { silent: true };
   if (type === null) {
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1 + 1; x++) grid.setEdge('v', x, y, null, opt);
@@ -1226,7 +1269,9 @@ function setHoverEdge(e) {
   edgeMarker.position.set(cx, FLOOR_H, cz);
   const h = (ui.lowWalls ? WALL_LOW : WALL_FULL) + 0.02;
   edgeMarker.scale.set(vertical ? 0.1 : 1, h, vertical ? 1 : 0.1);
-  edgeMarker.material.color.set({ erase: '#e88a7f', door: '#f0b060', window: '#9fd0e8' }[ui.edgeBrush] ?? '#f1d9a8');
+  edgeMarker.material.color.set({
+    erase: '#e88a7f', door: '#f0b060', lockedDoor: '#d04a3a', oneWayDoor: '#6fd07a', window: '#9fd0e8',
+  }[ui.edgeBrush] ?? '#f1d9a8');
 }
 
 const canvas = renderer.domElement;
@@ -1236,8 +1281,8 @@ function startEdgeStroke(ev) {
   const pt = gridPoint(ev);
   if (!pt) return;
   canvas.setPointerCapture(ev.pointerId);
-  const rect = (ui.shape === 'rect' || ev.shiftKey) && ui.edgeBrush !== 'door';
-  painting = { edges: true, pointerId: ev.pointerId, rect, moved: false, click: nearestEdge(pt) };
+  const rect = (ui.shape === 'rect' || ev.shiftKey) && !isDoorBrush();
+  painting = { edges: true, pointerId: ev.pointerId, rect, moved: false, click: nearestEdge(pt), startPt: pt };
   grid.beginStroke();
   if (rect) {
     const cell = pickCell(ev, { clamp: true });
@@ -1261,7 +1306,7 @@ function moveEdgeStroke(ev) {
   if (!pt) return;
   const v = clampV(pt);
   if (v.x === painting.lastV.x && v.y === painting.lastV.y) return;
-  if (drawEdgePath(painting.lastV, v)) painting.moved = true;
+  if (drawEdgePath(painting.lastV, v, painting.startPt)) painting.moved = true;
   painting.lastV = v;
 }
 
@@ -1269,8 +1314,10 @@ function endEdgeStroke() {
   // A click (no drag) toggles the single edge under the pointer.
   if (!painting.rect && !painting.moved && painting.click) {
     const { o, x, y } = painting.click;
+    // Clicking the same piece again removes it; a one-way door clicked from
+    // its other side flips direction.
     const current = grid.edges.get(`${o}${x},${y}`) ?? null;
-    const type = edgeType();
+    const type = edgeType(o, x, y, painting.startPt);
     grid.setEdge(o, x, y, type && current === type ? null : type);
   }
 }
@@ -1294,7 +1341,7 @@ canvas.addEventListener('pointerdown', (ev) => {
 canvas.addEventListener('pointermove', (ev) => {
   const cell = pickCell(ev, { clamp: !!painting });
   if (ui.tool === 'walls') {
-    const rect = (ui.shape === 'rect' || ev.shiftKey) && ui.edgeBrush !== 'door';
+    const rect = (ui.shape === 'rect' || ev.shiftKey) && !isDoorBrush();
     setHoverEdge(rect ? null : nearestEdge(gridPoint(ev)));
     setHover(rect ? cell : null);
     if (painting?.edges && ev.pointerId === painting.pointerId) moveEdgeStroke(ev);
@@ -1594,9 +1641,9 @@ window.addEventListener('keydown', (e) => {
   }
   const key = e.key.toLowerCase();
   if (BRUSH_KEYS[e.key]) { setTool('cells'); setBrush(BRUSH_KEYS[e.key]); }
-  else if (key === 'w' || key === 'd' || key === 'x' || key === 'g') {
+  else if (['w', 'd', 'k', 'o', 'x', 'g'].includes(key)) {
     setTool('walls');
-    setEdgeBrush({ w: 'wall', d: 'door', x: 'erase', g: 'window' }[key]);
+    setEdgeBrush({ w: 'wall', d: 'door', k: 'lockedDoor', o: 'oneWayDoor', x: 'erase', g: 'window' }[key]);
   }
   else if (e.key === 'r' || e.key === 'R') setShape(ui.shape === 'rect' ? 'brush' : 'rect');
   else if (e.key === 't' || e.key === 'T') setCamera('top');
@@ -1620,8 +1667,8 @@ function updateHoverInfo() {
     const type = grid.edges.get(`${o}${x},${y}`);
     const names = grid.edgeCells(o, x, y).map((c) => (grid.inBounds(c.x, c.y) ? cellLabel(c.x, c.y) : 'edge'));
     el.innerHTML = `<span class="id">${names.join(' | ')}</span>` +
-      `<span class="tag">${{ door: 'Door', wall: 'Wall', window: 'Window' }[type] ?? 'Open'}</span>` +
-      `<span class="tag">${type === 'wall' ? 'Blocks light' : 'Light passes'}</span>`;
+      `<span class="tag">${edgeLabel(o, x, y, type)}</span>` +
+      (type ? `<span class="tag">${blocksLight(type) ? 'Blocks light' : 'Light passes'}</span>` : '');
     return;
   }
   if (hoverIndex < 0) { el.textContent = 'Hover a cell'; return; }
@@ -1633,6 +1680,14 @@ function updateHoverInfo() {
     (c.bridge ? `<span class="tag">Bridge (spans ${grid.bridgeAxis(x, y) === 'x' ? 'E–W' : 'N–S'})</span>` : '') +
     `<span class="tag">${lightLabel(c, hoverIndex)}</span>` +
     `<span class="tag">${c.walkable ? 'Walkable' : 'Blocked'}</span>`;
+}
+
+function edgeLabel(o, x, y, type) {
+  if (type?.startsWith('oneWayDoor')) {
+    const [a, b] = grid.edgeCellsLabels(o, x, y).map((l) => l ?? 'edge');
+    return type.endsWith('+') ? `One-way door ${a} → ${b}` : `One-way door ${b} → ${a}`;
+  }
+  return { door: 'Unlocked door', lockedDoor: 'Locked door', wall: 'Wall', window: 'Window' }[type] ?? 'Open';
 }
 
 function lightLabel(c, i) {
@@ -1654,7 +1709,8 @@ function updateCounts() {
   $('#counts').innerHTML =
     `Outdoor <b>${n.outdoor}</b> · Indoor <b>${n.indoor}</b> · Water <b>${n.water}</b><br>` +
     `<span class="sub-counts">${subs.join(' · ')}</span><br>` +
-    `Bridges <b>${n.bridge}</b> · Walls <b>${n.wall}</b> · Doors <b>${n.door}</b> · Windows <b>${n.window}</b> · Lit lamps <b>${n.lamp}</b><br>` +
+    `Bridges <b>${n.bridge}</b> · Walls <b>${n.wall}</b> · Windows <b>${n.window}</b> · Lit lamps <b>${n.lamp}</b><br>` +
+    `Doors: unlocked <b>${n.door}</b> · locked <b>${n.lockedDoor}</b> · one-way <b>${n.oneWayDoor}</b><br>` +
     `Light sources <b>${n.lit}</b> · Lit cells <b>${lightLevels.reduce((k, v) => k + (v > 0), 0)}</b><br>` +
     `Walkable <b>${n.walkable}</b> · Blocked <b>${n.blocked}</b> · ${grid.cols}×${grid.rows}`;
 }

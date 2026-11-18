@@ -64,7 +64,8 @@ light, so a small radius is a small light:
 | 3+ | Floodlight and up | 100 % |
 
 Brightness falls off with distance to `centre / (radius + 1)` at the edge of the radius. Overlapping lights
-add up. **Light travels in straight lines: walls block it, while windows and (open) doors let it through**,
+add up. **Light travels in straight lines: walls and closed (locked or one-way) doors block it, while
+windows and open (unlocked) doors let it through**,
 so a lit shop spills light onto the street through its storefront but not through its side walls.
 
 **Lit lamp** (`L`) switches on the street lamp at a street T-junction or crossing (it does nothing elsewhere).
@@ -105,7 +106,7 @@ colour in `SUB_LOOK` in `src/main.js`.
 
 ### Walls and doors
 
-Walls, doors and windows are a separate tool (**Walls & doors** in the panel, or `W` / `D` / `G` / `X`) because they live
+Walls, doors and windows are a separate tool (**Walls & doors** in the panel, or `W` / `D` / `K` / `O` / `G` / `X`) because they live
 on the **edges between cells**, not in cells:
 
 - **Drag along grid lines** to draw walls; the pointer snaps to grid corners.
@@ -114,11 +115,22 @@ on the **edges between cells**, not in cells:
   rectangle.
 - **Doors are centred on their edge, between the two cells.** Each is drawn as a 1.2 m opening with an
   open door leaf, with wall on either side.
+- **Three kinds of door**, all centred on their edge:
+
+  | Door | Key | Looks | Movement | Light |
+  |------|-----|-------|----------|-------|
+  | Unlocked | `D` | Standing open | Both ways | Passes |
+  | Locked | `K` | Shut, red lock plate and brass lock on both faces, red threshold | Blocked | Blocked |
+  | One-way | `O` | Ajar toward the side it opens to, green arrow on the floor | Only the arrow's way | Blocked |
+
+  For a one-way door, **click on the side people come from**; the arrow points through to the other cell.
+  Clicking it again from the other side flips it; clicking from the same side removes it. Hover shows
+  e.g. `One-way door L11 → M11`, and exported JSON gives `"type": "oneWayDoor"` with `passFrom` / `passTo`.
 - **Windows** (`G`) are large storefront windows centred on their edge: masonry piers at the ends, a painted
   wooden bulkhead under a big glass pane, and mullions/transoms that vary from window to window (two panes
   with a transom, three panes, one big pane with transom lights, four narrow panes), in old painted-frame
   colours (dark green, oxblood, black, cream, navy). Glass glows warm when light reaches either side.
-- **Light:** walls block light; doors and windows let it through (see Light above).
+- **Light:** walls, locked doors and one-way doors block light; unlocked doors and windows let it through.
 - **Low walls (cutaway view)** in View keeps walls short so you can see into rooms; untick for full 2.6 m walls.
 
 ### Water and bridges
@@ -167,7 +179,7 @@ npm run build      # static site in dist/ (works from any sub-path, e.g. GitHub 
 | Paint with the current brush | Left-drag |
 | Paint a rectangle | Shift + left-drag, or the **Rectangle** toggle (`R`) |
 | Choose a brush | `1` Ground · `2` Hardwood · `7` Lake · `8` River · `9` Bridge · `3` No light · `4` Light source · `L` Lit lamp · `5` Walkable · `6` Blocked · `0` Reset (other subcategories: click) |
-| Walls & doors | `W` wall · `D` door · `G` window · `X` erase |
+| Walls & doors | `W` wall · `D` unlocked door · `K` locked door · `O` one-way door · `G` window · `X` erase |
 | Orbit camera | Right-drag, or hold `Space` and left-drag, or **Orbit mode** |
 | Zoom | Mouse wheel or pinch; zooms toward the pointer, so you can zoom into any corner of the board |
 | Pan | Middle-drag, Shift + right-drag (trackpads), arrow keys, or two-finger drag on touch |

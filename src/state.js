@@ -106,8 +106,19 @@ export function hasStreetLamp(grid, x, y) {
 // Walls and doors live on the edges between cells, not in cells.
 //  'v' edge (x, y): the vertical line on the west side of cell (x, y), x in 0..cols
 //  'h' edge (x, y): the horizontal line on the north side of cell (x, y), y in 0..rows
-// Walls block light; doors (drawn open) and windows let it through.
-export const EDGE_TYPES = ['wall', 'door', 'window'];
+// Edge pieces:
+//   wall           blocks movement and light
+//   door           unlocked: drawn open; passable, lets light through
+//   lockedDoor     shut and locked: blocks movement and light
+//   oneWayDoor+/-  shut, opens one way: passable only toward + (from the
+//                  west/north cell to the east/south cell) or - (the other
+//                  way); blocks light
+//   window         storefront glass: blocks movement, lets light through
+export const EDGE_TYPES = ['wall', 'door', 'lockedDoor', 'oneWayDoor+', 'oneWayDoor-', 'window'];
+export const isDoor = (t) => t === 'door' || t === 'lockedDoor' || t?.startsWith('oneWayDoor');
+export const blocksLight = (t) => t === 'wall' || t === 'lockedDoor' || !!t?.startsWith('oneWayDoor');
+// Which kind of piece a type is, for counts and export.
+export const edgeKind = (t) => (t?.startsWith('oneWayDoor') ? 'oneWayDoor' : t);
 export const edgeKey = (o, x, y) => `${o}${x},${y}`;
 export function parseEdgeKey(k) {
   const [x, y] = k.slice(1).split(',').map(Number);
@@ -188,6 +199,11 @@ export class GridState {
     return o === 'v'
       ? x >= 0 && x <= this.cols && y >= 0 && y < this.rows
       : x >= 0 && x < this.cols && y >= 0 && y <= this.rows;
+  }
+
+  // Labels of the two cells an edge separates on a board of the given size.
+  edgeCellsLabels(o, x, y, cols = this.cols, rows = this.rows) {
+    return this.edgeCells(o, x, y).map((c) => (c.x >= 0 && c.y >= 0 && c.x < cols && c.y < rows ? cellLabel(c.x, c.y) : null));
   }
 
   // The two cells an edge separates (either may be off the board).
@@ -345,7 +361,9 @@ export class GridState {
       c.lit ? n.lit++ : n.unlit++;
       c.walkable ? n.walkable++ : n.blocked++;
     }
-    for (const t of this.edges.values()) n[t]++;
+    n.lockedDoor = 0;
+    n.oneWayDoor = 0;
+    for (const t of this.edges.values()) n[edgeKind(t)]++;
     this.cells.forEach((_, i) => { if (this.lampOn(i)) n.lamp++; });
     return n;
   }
@@ -393,7 +411,7 @@ export class GridState {
   // each edge it crosses: a wall blocks; doors and windows don't. Passing
   // exactly through a grid corner is clear if either way round is clear.
   lightReaches(ax, ay, bx, by) {
-    const blocks = (o, x, y) => this.edges.get(edgeKey(o, x, y)) === 'wall';
+    const blocks = (o, x, y) => blocksLight(this.edges.get(edgeKey(o, x, y)));
     let x = ax, y = ay;
     const dx = bx - ax, dy = by - ay;
     const stepX = Math.sign(dx), stepY = Math.sign(dy);
@@ -548,7 +566,14 @@ export class GridState {
       edges: [...this.edges].map(([k, type]) => {
         const { o, x, y } = parseEdgeKey(k);
         const between = this.edgeCells(o, x, y).map((c) => (this.inBounds(c.x, c.y) ? cellLabel(c.x, c.y) : null));
-        return { edge: o, x, y, type, between };
+        const out = { edge: o, x, y, type: edgeKind(type), between };
+        // One-way doors: you can go from `passFrom` to `passTo` only.
+        if (type.startsWith('oneWayDoor')) {
+          const [a, b] = type.endsWith('+') ? between : [...between].reverse();
+          out.passFrom = a;
+          out.passTo = b;
+        }
+        return out;
       }),
     };
   }
@@ -569,9 +594,15 @@ export class GridState {
     });
     const edges = new Map();
     for (const e of Array.isArray(data.edges) ? data.edges : []) {
-      if (!['v', 'h'].includes(e.edge) || !EDGE_TYPES.includes(e.type)) continue;
+      // One-way doors are exported as type oneWayDoor + passFrom/passTo.
+      let type = e.type;
+      if (type === 'oneWayDoor') {
+        const [, b] = this.edgeCellsLabels(e.edge, e.x, e.y, cols, rows);
+        type = e.passTo && e.passTo === b ? 'oneWayDoor+' : e.passFrom === b ? 'oneWayDoor-' : 'oneWayDoor+';
+      }
+      if (!['v', 'h'].includes(e.edge) || !EDGE_TYPES.includes(type)) continue;
       const fits = e.edge === 'v' ? e.x >= 0 && e.x <= cols && e.y >= 0 && e.y < rows : e.x >= 0 && e.x < cols && e.y >= 0 && e.y <= rows;
-      if (Number.isInteger(e.x) && Number.isInteger(e.y) && fits) edges.set(edgeKey(e.edge, e.x, e.y), e.type);
+      if (Number.isInteger(e.x) && Number.isInteger(e.y) && fits) edges.set(edgeKey(e.edge, e.x, e.y), type);
     }
     return { cols, rows, cells, edges };
   }

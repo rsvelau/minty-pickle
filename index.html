@@ -60,13 +60,15 @@
           <div id="wallTools" hidden>
             <div class="brush-row three">
               <button class="brush" data-edge="wall"><i class="sw sw-wall"></i>Wall<kbd>W</kbd></button>
-              <button class="brush" data-edge="door"><i class="sw sw-door"></i>Door<kbd>D</kbd></button>
               <button class="brush" data-edge="window"><i class="sw sw-window"></i>Window<kbd>G</kbd></button>
-            </div>
-            <div class="brush-row three">
               <button class="brush" data-edge="erase"><i class="sw sw-erase"></i>Erase<kbd>X</kbd></button>
             </div>
-            <p class="note">Drag along grid lines to draw. Click an edge to place or remove one piece; doors and storefront windows sit centred between two cells. Walls block light; doors and windows let it through. Rectangle draws a room outline (Erase clears everything inside it).</p>
+            <div class="brush-row three">
+              <button class="brush" data-edge="door" title="Unlocked: drawn open; passable, lets light through"><i class="sw sw-door"></i>Unlocked<kbd>D</kbd></button>
+              <button class="brush" data-edge="lockedDoor" title="Locked: shut; blocks movement and light"><i class="sw sw-locked"></i>Locked<kbd>K</kbd></button>
+              <button class="brush" data-edge="oneWayDoor" title="One-way: click on the side people come FROM; click from the other side to flip"><i class="sw sw-oneway"></i>One-way<kbd>O</kbd></button>
+            </div>
+            <p class="note">Drag along grid lines to draw. Click an edge to place or remove one piece; doors and storefront windows sit centred between two cells. For a one-way door, click on the side people come from (click from the other side to flip it). Walls, locked and one-way doors block light; unlocked doors and windows let it through. Rectangle draws a room outline (Erase clears everything inside it).</p>
           </div>
           <div class="seg" role="group" aria-label="Paint shape">
             <button data-shape="brush" class="on">Freehand</button>

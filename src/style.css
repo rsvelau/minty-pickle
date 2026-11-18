@@ -280,3 +280,5 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px
 .radius-row label { color: var(--muted); font-size: 11px; }
 .radius-row input { width: 100%; accent-color: var(--accent); }
 .radius-row output { font-variant-numeric: tabular-nums; color: var(--text); text-align: right; }
+.sw-locked { background: linear-gradient(#c0803c 0 38%, #b8322a 38% 62%, #c0803c 62%); }
+.sw-oneway { background: linear-gradient(90deg, #c0803c 0 40%, #5fcf6a 40%); clip-path: polygon(0 20%, 60% 20%, 60% 0, 100% 50%, 60% 100%, 60% 80%, 0 80%); }
