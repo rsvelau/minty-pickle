@@ -13,6 +13,7 @@ import { createBridges } from './bridge.js';
 import { createMarkers, drawMarkerIcon } from './markers.js';
 import {
   installTerrain, setTerrain, terrainHeight, rayTerrain, isFlat, terrainId, TERRAIN_PRESETS,
+  updateOverrides, terrainify, cellLevel, BRIDGE_SPAN,
 } from './terrain.js';
 
 // Elevation is applied to every material on the GPU; patch three's shader
@@ -39,7 +40,7 @@ const DECK_T = m(0.5);        // deck thickness
 const RAIL_H = m(1.1);        // railing height
 const WALL_FULL = m(2.6);     // interior wall height
 const WALL_LOW = m(0.8);      // cutaway wall height (default, keeps rooms visible)
-const WALL_T = 0.06;          // wall thickness
+const WALL_T = 0.05;          // wall thickness (thin enough to rise with a levelled building)
 const DOOR_W = m(1.2);        // door opening, centred on its edge
 const DOOR_H = m(2.1);        // door height (lintel above when walls are full height)
 
@@ -157,11 +158,13 @@ const rand32 = (seed) => () => ((seed = (seed * 16807) % 2147483647) / 214748364
 // Renderer / scene / camera
 // ---------------------------------------------------------------------------
 
+// Bridge piers stretch from bed to deck when a river is lowered.
+BRIDGE_SPAN.bed = BED_H;
+BRIDGE_SPAN.deck = DECK_TOP;
 setTerrain(grid.terrain);
-grid.elevationAt = (x, y) => {
-  const p = cellToWorld(x, y);
-  return terrainHeight(p.x, p.z) * METERS_PER_CELL;
-};
+// Exported ground elevation (metres) per cell, including levelled lakes,
+// rivers and buildings.
+grid.elevationAt = (x, y) => cellLevel(x, y) * METERS_PER_CELL;
 
 const container = document.getElementById('app');
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -314,6 +317,9 @@ const outerGroundMat = holedGround(outerHole);
 
 const tileGeoBase = new THREE.BoxGeometry(INSET * TILE, 1, INSET * TILE).translate(0, 0.5, 0); // origin at bottom
 const tileMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+// Bridge decks share the tile shader but stay at bank level on slopes.
+const deckMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+const railMat = new THREE.MeshLambertMaterial({ color: '#8a8e92' });
 tileMat.onBeforeCompile = (shader) => {
   shader.vertexShader = shader.vertexShader
     .replace('#include <common>', '#include <common>\nattribute float aGlow;\nvarying float vGlow;')
@@ -323,6 +329,10 @@ tileMat.onBeforeCompile = (shader) => {
     .replace('#include <common>', '#include <common>\nvarying float vGlow;')
     .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * vGlow;');
 };
+
+deckMat.onBeforeCompile = tileMat.onBeforeCompile;
+terrainify(deckMat, { bridge: true });
+terrainify(railMat, { bridge: true });
 
 // Soft light pools that spill past lit cells onto their neighbours.
 const poolMat = new THREE.MeshBasicMaterial({
@@ -348,7 +358,8 @@ const FRAME_COLOURS = ['#1f3a2e', '#5a1f1c', '#1b1b1d', '#c8bfa6', '#2a3550']; /
 
 let N = 0;
 let tiles, pools, glowAttr, slab, ground, decks, deckGlow, rails;
-let walls, doorLeaves, frames, glassDark, glassLit;
+let walls, doorLeaves, frames, glassDark, glassLit, foundations;
+const foundationMat = new THREE.MeshLambertMaterial({ color: '#615b51' });
 let props = null; // walkable/blocked variants of every surface (src/props.js)
 let bridges = null; // steel truss bridge structures (src/bridge.js)
 let streets = null; // street surfaces: lanes, lines, sidewalks (src/street.js)
@@ -420,7 +431,7 @@ function buildBoard() {
   const deckGeo = new THREE.BoxGeometry(TILE, DECK_T, TILE).translate(0, -DECK_T / 2, 0);
   deckGlow = new THREE.InstancedBufferAttribute(new Float32Array(N), 1);
   deckGeo.setAttribute('aGlow', deckGlow);
-  decks = new THREE.InstancedMesh(deckGeo, tileMat, N);
+  decks = new THREE.InstancedMesh(deckGeo, deckMat, N);
   decks.castShadow = true;
   decks.receiveShadow = true;
   deckVisible = new Uint8Array(N);
@@ -433,7 +444,7 @@ function buildBoard() {
     new THREE.BoxGeometry(TILE, 0.02, 0.02).translate(0, RAIL_H * 0.5, 0),
     ...[-0.375, -0.125, 0.125, 0.375].map((x) => new THREE.BoxGeometry(0.02, RAIL_H, 0.02).translate(x, RAIL_H / 2, 0)),
   ]);
-  rails = new THREE.InstancedMesh(railGeo, new THREE.MeshLambertMaterial({ color: PALETTE.rail }), N * 4);
+  rails = new THREE.InstancedMesh(railGeo, railMat, N * 4);
   rails.userData.ownMaterial = true;
   rails.castShadow = true;
   rails.raycast = () => {};
@@ -454,10 +465,11 @@ function buildBoard() {
   walls = new THREE.InstancedMesh(unitBoxGeo, wallMat, maxEdges * 3);
   doorLeaves = new THREE.InstancedMesh(unitBoxGeo, doorMat, maxEdges * 2);
   frames = new THREE.InstancedMesh(unitBoxGeo, frameMat, maxEdges * 9);
+  foundations = new THREE.InstancedMesh(unitBoxGeo, foundationMat, maxEdges);
   glassDark = new THREE.InstancedMesh(unitBoxGeo, glassDarkMat, maxEdges);
   glassLit = new THREE.InstancedMesh(unitBoxGeo, glassLitMat, maxEdges);
   glassDark.renderOrder = glassLit.renderOrder = 3;
-  for (const mesh of [walls, doorLeaves, frames, glassDark, glassLit]) {
+  for (const mesh of [walls, doorLeaves, frames, glassDark, glassLit, foundations]) {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.raycast = () => {};
@@ -517,6 +529,7 @@ function buildBoard() {
 // Water mask, river flow, bridge decks and railings depend on neighbours, so
 // they are refreshed for the whole board after any change (cheap: <= 3600 cells).
 function refreshWaterAndBridges() {
+  updateOverrides(grid);
   water.update(grid, grid.riverFlow());
   water.mesh.visible = ui.view === 'all' || ui.view === 'area';
   water.setFlat(ui.view === 'area');
@@ -565,6 +578,8 @@ function refreshWaterAndBridges() {
   streets.update(grid, { visible: ui.view === 'all', cellToWorld, surfaceY: SUB_LOOK.street.h + 0.002, lightLevels, lampsOn });
   refreshPropsAndWalls();
   refreshMarkers();
+  for (const mat of bridges.materials) terrainify(mat, { bridge: true });
+  scene.traverse((o) => { for (const mat of [].concat(o.material ?? [])) terrainify(mat); });
 }
 
 // Gameplay markers float over their cells in every view.
@@ -575,7 +590,7 @@ function refreshMarkers() {
     if (!c.marker) return;
     const { x, y } = grid.coords(i);
     const p = cellToWorld(x, y);
-    list.push({ type: c.marker, x: p.x, y: Math.max(visibleTop(i), WATER_Y) + terrainHeight(p.x, p.z), z: p.z, dim: !c.walkable });
+    list.push({ type: c.marker, x: p.x, y: Math.max(visibleTop(i), WATER_Y) + terrainHeight(p.x, p.z, { bridge: c.bridge }), z: p.z, dim: !c.walkable });
   });
   markers.update(list);
   markers.setVisible(ui.showMarkers);
@@ -673,7 +688,7 @@ function refreshPropsAndWalls() {
       piece(cx, cz, -(TILE / 2 - pier / 2), pier + WALL_T, FLOOR_H, H, vertical);
       piece(cx, cz, TILE / 2 - pier / 2, pier + WALL_T, FLOOR_H, H, vertical);
       if (H > head) piece(cx, cz, 0, inner, FLOOR_H + head, H, vertical);
-      strip(frames, nf++, cx, cz, 0, inner, FLOOR_H, FLOOR_H + sill, WALL_T * 1.1, vertical, colour); // bulkhead
+      strip(frames, nf++, cx, cz, 0, inner, FLOOR_H, FLOOR_H + sill, WALL_T, vertical, colour); // bulkhead
       // Glass: lit if light reaches either side of the window.
       const [ca, cb] = grid.edgeCells(o, x, y);
       const lvl = (c) => (grid.inBounds(c.x, c.y) ? lightLevels[grid.index(c.x, c.y)] : 0);
@@ -732,9 +747,9 @@ function refreshPropsAndWalls() {
     if (type === 'lockedDoor') {
       // Red lock plate through the leaf (shows on both faces), a brass lock,
       // and a red threshold.
-      mark(cx, FLOOR_H + leafH * 0.4, cz, DOOR_W * 0.55, Math.max(leafH * 0.18, 0.01), 0.075, edgeRot, '#b8322a');
+      mark(cx, FLOOR_H + leafH * 0.4, cz, DOOR_W * 0.55, Math.max(leafH * 0.18, 0.01), 0.054, edgeRot, '#b8322a');
       mark(cx + (vertical ? 0 : DOOR_W * 0.32), FLOOR_H + leafH * 0.48, cz + (vertical ? DOOR_W * 0.32 : 0),
-        m(0.18), Math.max(leafH * 0.12, 0.008), 0.09, edgeRot, '#c9a23a');
+        m(0.18), Math.max(leafH * 0.12, 0.008), 0.054, edgeRot, '#c9a23a');
       mark(cx, FLOOR_H, cz, DOOR_W, 0.016, 0.3, edgeRot, '#9a2a22');
     } else if (oneWay) {
       // Green arrow on the floor through the doorway, pointing the way you
@@ -759,6 +774,33 @@ function refreshPropsAndWalls() {
       doorLeaves.setMatrixAt(nd++, tmpMatrix);
     }
   }
+  // Levelled buildings on slopes: stone foundation where the ground outside
+  // is lower, retaining wall where it is higher (the building is dug in).
+  let nfd = 0;
+  if (!isFlat()) {
+    for (let i = 0; i < N; i++) {
+      if (grid.cells[i].area !== 'indoor') continue;
+      const { x, y } = grid.coords(i);
+      const level = cellLevel(x, y);
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (grid.inBounds(nx, ny) && grid.cells[grid.index(nx, ny)].area === 'indoor') continue;
+        const out = cellLevel(nx, ny);
+        const diff = out - level;
+        if (Math.abs(diff) < 0.004) continue;
+        const vertical = dx !== 0;
+        const c = cellToWorld(x, y);
+        const ex = c.x + dx * 0.5, ez = c.z + dy * 0.5;
+        const y0 = Math.min(diff, 0) - 0.03, y1 = Math.max(diff, 0) + FLOOR_H;
+        tmpMatrix.compose(tmpPos.set(ex, y0, ez), tmpQuat.identity(),
+          vertical ? tmpScale.set(WALL_T, y1 - y0, TILE + WALL_T) : tmpScale.set(TILE + WALL_T, y1 - y0, WALL_T));
+        foundations.setMatrixAt(nfd++, tmpMatrix);
+      }
+    }
+  }
+  foundations.count = nfd;
+  foundations.instanceMatrix.needsUpdate = true;
+  foundations.computeBoundingSphere();
   walls.count = nw;
   doorLeaves.count = nd;
   frames.count = nf;
@@ -1750,6 +1792,7 @@ $('#optMarkers').addEventListener('change', (e) => { ui.showMarkers = e.target.c
 function applyTerrain(id) {
   setTerrain(id);
   grid.terrain = terrainId();
+  refreshWaterAndBridges();
   scene.traverse((o) => {
     for (const mat of [].concat(o.material ?? [])) mat.needsUpdate = true;
   });

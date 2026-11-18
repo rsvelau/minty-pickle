@@ -213,7 +213,18 @@ Everything follows the ground: tiles, streets, water, walls, props, bridges, lam
 surrounding forest. Each preset is one height formula in `TERRAIN_PRESETS` (`src/terrain.js`), written so
 the same text runs on the GPU (lifting every vertex) and in JavaScript (picking cells under the pointer).
 The preset is saved with the board, and exported cells carry their ground `elevation` in metres when the
-board isn't flat. Water surfaces follow the slope too, so on the hillside a lake tilts gently with it.
+board isn't flat.
+
+Some cells level the ground instead of following it (each connected group is handled together):
+
+- **Lakes** sit level at the height of their lowest cell, so the banks rise around them.
+- **Rivers** are flattened and lowered to their lowest point, wherever they run.
+- **Buildings** (connected indoor cells) are levelled at their average ground height. A stone foundation
+  shows where the ground outside falls away, and a retaining wall where the building is dug into the slope.
+- **Bridges** keep the height of the road on their banks; their piers stretch down to the lowered riverbed.
+
+These levels are per-cell overrides (`updateOverrides` in `src/terrain.js`) read by every shader through a
+small texture, and they're what the exported `elevation` reports. On the Flat preset nothing changes.
 
 ## Scale
 

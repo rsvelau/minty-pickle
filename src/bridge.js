@@ -101,7 +101,7 @@ export function createBridges(group) {
     for (const k in meshes) { group.remove(meshes[k]); meshes[k].dispose(); delete meshes[k]; }
   }
 
-  return { update, clear };
+  return { update, clear, materials: [steel, concrete, paint] };
 }
 
 // Connected bridge cells -> [{ axis, cells: [{x,y}], minX, maxX, minY, maxY }]

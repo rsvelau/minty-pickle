@@ -2,6 +2,7 @@
 // which cells are lake or river; a linearly filtered flow texture carries the
 // river direction so currents bend smoothly along the painted path.
 import * as THREE from 'three';
+import { terrainUniforms } from './terrain.js';
 
 const vertexShader = /* glsl */ `
   #include <common>
@@ -10,7 +11,7 @@ const vertexShader = /* glsl */ `
   void main() {
     vec4 w = modelMatrix * vec4(position, 1.0);
     vW = w.xyz;
-    w.y += terrainHeight(w.xz); // follow the elevation preset
+    w.y += terrainHeight(w.xyz); // follow the elevation (lakes level, rivers flattened)
     vec4 mvPosition = viewMatrix * w;
     gl_Position = projectionMatrix * mvPosition;
     #include <fog_vertex>
@@ -99,8 +100,10 @@ export function createWaterSurface() {
     uFlatLake: { value: new THREE.Color('#2a5a78') },
     uFlatRiver: { value: new THREE.Color('#3f8aa8') },
   }]);
+  // Share the terrain override map (merge() clones, so assign the originals).
+  Object.assign(uniforms, terrainUniforms);
   const material = new THREE.ShaderMaterial({
-    uniforms, vertexShader, fragmentShader, fog: true, transparent: true,
+    uniforms, vertexShader, fragmentShader, fog: true, transparent: true, defines: { TERRAIN_TEX: '' },
   });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), material);
   mesh.renderOrder = 1;

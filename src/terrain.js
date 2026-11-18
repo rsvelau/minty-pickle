@@ -45,6 +45,24 @@ export const TERRAIN_PRESETS = {
 let current = 'flat';
 let fn = () => 0;
 let installed = false;
+
+// --- per-cell overrides -------------------------------------------------------
+// Some cells don't follow the smooth formula: lakes sit level, rivers are
+// flattened down to their lowest point, buildings are levelled, and bridges
+// keep the height of the road on their banks. Each board cell stores
+//   R = 1 if its ground level is overridden, G = that level (cells),
+//   B = 1 if it is a bridge cell,           A = the bridge deck level (cells).
+// Shaders read this texture; picking and marker badges read the same array.
+export const terrainUniforms = {
+  terrainTex: { value: null },
+  terrainBoard: { value: new THREE.Vector2(1, 1) },
+};
+let overrideData = new Float32Array(4);
+let ovCols = 1, ovRows = 1;
+// Vertices this close (cells) to an overridden neighbour follow it: lets
+// walls and foundations on a building's edge rise with the building, while
+// neighbouring tiles (inset further than this) keep their own ground.
+const EDGE_GRAB = 0.027;
 const BASE_COMMON = THREE.ShaderChunk.common;
 const BASE_PROJECT = THREE.ShaderChunk.project_vertex;
 
@@ -60,18 +78,59 @@ vec4 mvPosition = vec4( transformed, 1.0 );
 	mvPosition = instanceMatrix * mvPosition;
 #endif
 vec4 terrainWorld = modelMatrix * mvPosition;
-terrainWorld.y += terrainHeight( terrainWorld.xz );
+terrainWorld.y += terrainHeight( terrainWorld.xyz );
 mvPosition = viewMatrix * terrainWorld;
 gl_Position = projectionMatrix * mvPosition;
 `;
 
+// Set by main.js: bed and deck heights, for stretching bridge piers.
+export const BRIDGE_SPAN = { bed: -0.5, deck: 0.0 };
+
 function glslFor(expr) {
   const mpc = METERS_PER_CELL.toFixed(4);
+  const f = (v) => v.toFixed(5);
   return `
-float terrainHeight( vec2 p ) {
+float terrainSmooth( vec2 p ) {
 	float X = p.x * ${mpc};
 	float Z = p.y * ${mpc};
 	return ( ${expr} ) / ${mpc};
+}
+#ifdef TERRAIN_TEX
+uniform sampler2D terrainTex;
+uniform vec2 terrainBoard;
+vec4 terrainCell( vec2 g ) {
+	ivec2 c = ivec2( floor( g ) );
+	if ( c.x < 0 || c.y < 0 || float( c.x ) >= terrainBoard.x || float( c.y ) >= terrainBoard.y ) return vec4( 0.0 );
+	return texelFetch( terrainTex, c, 0 );
+}
+// Override for a point: its own cell, else an overridden neighbour whose edge
+// it hugs (within ${f(EDGE_GRAB)} cells).
+vec4 terrainOverride( vec2 p ) {
+	vec2 g = p + terrainBoard * 0.5;
+	vec4 o = terrainCell( g );
+	if ( o.r > 0.5 || o.b > 0.5 ) return o;
+	vec2 fr = fract( g );
+	vec2 d = vec2( fr.x < ${f(EDGE_GRAB)} ? -1.0 : ( fr.x > ${f(1 - EDGE_GRAB)} ? 1.0 : 0.0 ),
+	               fr.y < ${f(EDGE_GRAB)} ? -1.0 : ( fr.y > ${f(1 - EDGE_GRAB)} ? 1.0 : 0.0 ) );
+	if ( d.x != 0.0 ) { vec4 n = terrainCell( g + vec2( d.x, 0.0 ) ); if ( n.r > 0.5 ) return n; }
+	if ( d.y != 0.0 ) { vec4 n = terrainCell( g + vec2( 0.0, d.y ) ); if ( n.r > 0.5 ) return n; }
+	if ( d.x != 0.0 && d.y != 0.0 ) { vec4 n = terrainCell( g + d ); if ( n.r > 0.5 ) return n; }
+	return vec4( 0.0 );
+}
+#endif
+// World position (cells) -> how far to lift it.
+float terrainHeight( vec3 w ) {
+	float h = terrainSmooth( w.xz );
+#ifdef TERRAIN_TEX
+	vec4 o = terrainOverride( w.xz );
+	if ( o.r > 0.5 ) h = o.g;
+	#ifdef TERRAIN_BRIDGE
+	// Bridge parts: deck and trusses at bank level; piers stretch from the
+	// (possibly lowered) riverbed up to the deck.
+	if ( o.b > 0.5 ) h = mix( h, o.a, smoothstep( ${f(BRIDGE_SPAN.bed)}, ${f(BRIDGE_SPAN.deck)} - 0.25, w.y ) );
+	#endif
+#endif
+	return h;
 }
 `;
 }
@@ -107,8 +166,133 @@ export function setTerrain(id) {
 
 export const terrainId = () => current;
 export const isFlat = () => current === 'flat';
-// Height of the ground (cells) at world (x, z).
-export const terrainHeight = (x, z) => fn(x, z);
+// Smooth preset height (cells) at world (x, z), ignoring overrides.
+export const terrainSmoothAt = (x, z) => fn(x, z);
+
+// Ground level (cells) at world (x, z), including lake/river/building
+// overrides; `bridge` uses bridge deck level on bridge cells.
+export function terrainHeight(x, z, { bridge = false } = {}) {
+  const gx = Math.floor(x + ovCols / 2), gy = Math.floor(z + ovRows / 2);
+  if (gx >= 0 && gy >= 0 && gx < ovCols && gy < ovRows) {
+    const o = (gy * ovCols + gx) * 4;
+    if (bridge && overrideData[o + 2] > 0.5) return overrideData[o + 3];
+    if (overrideData[o] > 0.5) return overrideData[o + 1];
+  }
+  return fn(x, z);
+}
+
+// Ground level of a board cell's centre (cells).
+export function cellLevel(x, y, opts) {
+  return terrainHeight(x - ovCols / 2 + 0.5, y - ovRows / 2 + 0.5, opts);
+}
+
+// Recompute per-cell overrides from the grid. Lakes: level at their lowest
+// cell. Rivers: flattened to their lowest cell. Buildings (connected indoor
+// cells): level at their average ground. Bridges: deck at the average height
+// of the ground just beyond each end of the span.
+export function updateOverrides(grid) {
+  const { cols, rows } = grid;
+  const n = cols * rows;
+  const data = new Float32Array(n * 4);
+  const centre = (i) => {
+    const x = i % cols, y = Math.floor(i / cols);
+    return fn(x - cols / 2 + 0.5, y - rows / 2 + 0.5);
+  };
+  const seen = new Uint8Array(n);
+  const flood = (i, same) => {
+    const out = [i];
+    seen[i] = 1;
+    for (let k = 0; k < out.length; k++) {
+      const j = out[k], x = j % cols, y = Math.floor(j / cols);
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+        const m = ny * cols + nx;
+        if (!seen[m] && same(m)) { seen[m] = 1; out.push(m); }
+      }
+    }
+    return out;
+  };
+  const kind = (i) => {
+    const c = grid.cells[i];
+    if (c.area === 'water') return c.sub === 'river' ? 'river' : 'lake';
+    if (c.area === 'indoor') return 'indoor';
+    return null;
+  };
+  if (current !== 'flat') {
+    for (let i = 0; i < n; i++) {
+      const k = kind(i);
+      if (!k || seen[i]) continue;
+      const cells = flood(i, (m) => kind(m) === k);
+      const hs = cells.map(centre);
+      const level = k === 'indoor' ? hs.reduce((a, b) => a + b, 0) / hs.length : Math.min(...hs);
+      for (const j of cells) { data[j * 4] = 1; data[j * 4 + 1] = level; }
+    }
+    // Bridges: deck level from the land beyond each end of the span.
+    const bseen = new Uint8Array(n);
+    for (let i = 0; i < n; i++) {
+      if (!grid.cells[i].bridge || bseen[i]) continue;
+      const cells = [i];
+      bseen[i] = 1;
+      for (let k = 0; k < cells.length; k++) {
+        const j = cells[k], x = j % cols, y = Math.floor(j / cols);
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+          const m = ny * cols + nx;
+          if (!bseen[m] && grid.cells[m].bridge) { bseen[m] = 1; cells.push(m); }
+        }
+      }
+      const ends = [];
+      for (const j of cells) {
+        const x = j % cols, y = Math.floor(j / cols);
+        const axis = grid.bridgeAxis(x, y);
+        const steps = axis === 'x' ? [[1, 0], [-1, 0]] : [[0, 1], [0, -1]];
+        for (const [dx, dy] of steps) {
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+          const m = ny * cols + nx;
+          if (grid.cells[m].bridge || grid.cells[m].area === 'water') continue;
+          ends.push(data[m * 4] > 0.5 ? data[m * 4 + 1] : centre(m));
+        }
+      }
+      const level = ends.length ? ends.reduce((a, b) => a + b, 0) / ends.length
+        : cells.map(centre).reduce((a, b) => a + b, 0) / cells.length;
+      for (const j of cells) { data[j * 4 + 2] = 1; data[j * 4 + 3] = level; }
+    }
+  }
+  overrideData = data;
+  ovCols = cols;
+  ovRows = rows;
+  let tex = terrainUniforms.terrainTex.value;
+  if (!tex || tex.image.width !== cols || tex.image.height !== rows) {
+    tex?.dispose();
+    tex = new THREE.DataTexture(data, cols, rows, THREE.RGBAFormat, THREE.FloatType);
+    tex.magFilter = tex.minFilter = THREE.NearestFilter;
+    terrainUniforms.terrainTex.value = tex;
+  } else {
+    tex.image.data = data;
+  }
+  tex.needsUpdate = true;
+  terrainUniforms.terrainBoard.value.set(cols, rows);
+}
+
+// Give a material the override map (built-in materials get it through
+// onBeforeCompile). `bridge` materials keep bridge decks at bank level.
+export function terrainify(material, { bridge = false } = {}) {
+  if (!material || material.userData.terrainified || material.isSpriteMaterial) return;
+  material.userData.terrainified = true;
+  if (material.isShaderMaterial) return; // handled by the shader itself
+  const original = material.onBeforeCompile;
+  const originalKey = material.customProgramCacheKey.call(material);
+  material.onBeforeCompile = function terrainOBC(shader, renderer) {
+    original.call(this, shader, renderer);
+    Object.assign(shader.uniforms, terrainUniforms);
+    shader.vertexShader = `#define TERRAIN_TEX\n${bridge ? '#define TERRAIN_BRIDGE\n' : ''}${shader.vertexShader}`;
+  };
+  material.customProgramCacheKey = () => `${originalKey}|tt${bridge ? 'b' : ''}|terrain:${current}`;
+  material.needsUpdate = true;
+}
 
 // Where a ray meets the terrain lifted by `offset` (cells): marches along the
 // ray and refines with bisection. Returns a Vector3 or null.
@@ -116,7 +300,7 @@ export function rayTerrain(ray, offset = 0, maxDist = 600) {
   const p = new THREE.Vector3();
   const above = (t) => {
     ray.at(t, p);
-    return p.y - (offset + fn(p.x, p.z));
+    return p.y - (offset + terrainHeight(p.x, p.z));
   };
   let t0 = 0;
   let f0 = above(0);
