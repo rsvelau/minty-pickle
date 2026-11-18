@@ -140,7 +140,14 @@ The **Movement** tool (`M`) checks routes with the same rules your game will use
 
 Rules: you can only enter **walkable** cells; **walls, windows and locked doors** can't be crossed;
 **unlocked doors** can be crossed both ways; **one-way doors** only in their arrow's direction. Each move is
-one cell. The rules live in `src/state.js` (`canCross`, `canStep`, `moveField`, `route`) so game code can
+one cell.
+
+**Keys** (on by default, **Keys unlock doors**): walking onto a Key marker picks it up (a key on the start
+cell counts too), and from then on every locked and one-way door in that key's building passes both ways.
+The search tracks which keys you carry, so a route detours to fetch a key when that's the only way in or
+it's shorter; the info box says where (`Picks up a key at M10`) and the key gets a gold ring. Range shading
+uses the same rule. Keys whose buildings unlock the same doors count as one; up to 8 distinct keys are
+tracked at once (`MAX_KEY_GROUPS`). The rules live in `src/state.js` (`canCross`, `canStep`, `keyGroups`, `moveField`, `route`) so game code can
 reuse them.
 
 ### Walls and doors

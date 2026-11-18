@@ -1468,7 +1468,7 @@ function setTool(tool) {
 // its move count, and an optional range shades every cell reachable within N
 // moves. Rules live in GridState (canStep / moveField / route).
 
-const move = { start: -1, pinned: -1, range: 0, diagonal: false };
+const move = { start: -1, pinned: -1, range: 0, diagonal: false, keys: true };
 const moveGroup = new THREE.Group();
 scene.add(moveGroup);
 const movePlates = new THREE.InstancedMesh(
@@ -1485,6 +1485,16 @@ const ringGeo = new THREE.RingGeometry(0.28, 0.4, 28).rotateX(-Math.PI / 2);
 const startRing = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: '#6fe07a', depthTest: false, transparent: true }));
 const endRing = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: '#f0b060', depthTest: false, transparent: true }));
 for (const o of [movePlates, moveBars, startRing, endRing]) { o.raycast = () => {}; o.renderOrder = 12; moveGroup.add(o); }
+// Rings marking keys a route picks up (up to 8).
+const keyRingMat = new THREE.MeshBasicMaterial({ color: '#ffd24a', depthTest: false, transparent: true });
+const keyRings = Array.from({ length: 8 }, () => {
+  const r = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.5, 28).rotateX(-Math.PI / 2), keyRingMat);
+  r.renderOrder = 12;
+  r.raycast = () => {};
+  r.visible = false;
+  moveGroup.add(r);
+  return r;
+});
 movePlates.renderOrder = 5;
 moveGroup.visible = false;
 
@@ -1499,7 +1509,7 @@ function refreshMoveOverlay() {
     return;
   }
   const { x: sx, y: sy } = grid.coords(move.start);
-  const field = grid.moveField(sx, sy, { diagonal: move.diagonal });
+  const field = grid.moveField(sx, sy, { diagonal: move.diagonal, keys: move.keys });
 
   // Range shading: reachable within N moves, brighter when closer.
   let np = 0;
@@ -1520,6 +1530,7 @@ function refreshMoveOverlay() {
   if (movePlates.instanceColor) movePlates.instanceColor.needsUpdate = true;
 
   startRing.position.copy(cellToWorld(sx, sy)).setY(overlayY(move.start) + 0.005);
+  for (const r of keyRings) r.visible = false;
 
   // Route to the pinned cell, else the hovered one.
   const target = move.pinned >= 0 ? move.pinned : hoverIndex;
@@ -1533,13 +1544,12 @@ function refreshMoveOverlay() {
     const d = field.dist[target];
     if (d < 0) {
       endRing.material.color.set('#e8665a');
-      line = `${startLabel} → <b>${cellLabel(tx, ty)}</b>: <b>no route</b> (walls, windows, locked or one-way doors, or blocked cells are in the way).`;
+      line = `${startLabel} → <b>${cellLabel(tx, ty)}</b>: <b>no route</b> (walls, windows, locked or one-way doors, or blocked cells are in the way${move.keys ? ', and no reachable key opens them' : ''}).`;
     } else {
       endRing.material.color.set('#f0b060');
-      // Walk back along prev to draw the route.
-      const pts = [];
-      for (let i = target; i >= 0; i = field.prev[i]) pts.push(i);
-      pts.reverse();
+      // The route, including any detour to pick up keys.
+      const pts = field.path(target);
+      const keyCells = field.keysOn(target);
       for (let k = 0; k + 1 < pts.length; k++) {
         const a = grid.coords(pts[k]);
         const b = grid.coords(pts[k + 1]);
@@ -1551,6 +1561,18 @@ function refreshMoveOverlay() {
         moveBars.setMatrixAt(nb++, tmpMatrix);
       }
       line = `${startLabel} → <b>${cellLabel(tx, ty)}</b>: <b>${d}</b> move${d === 1 ? '' : 's'}${move.pinned >= 0 ? ' (pinned)' : ''}.`;
+      if (keyCells.length) {
+        line += `<br>Picks up ${keyCells.length === 1 ? 'a key' : `${keyCells.length} keys`} at ` +
+          keyCells.map((i) => { const c = grid.coords(i); return `<b>${cellLabel(c.x, c.y)}</b>`; }).join(', ') +
+          ', unlocking its building\'s locked and one-way doors.';
+      }
+      // Gold rings on the keys this route picks up.
+      keyCells.forEach((i, n) => {
+        if (n >= keyRings.length) return;
+        const c = grid.coords(i);
+        keyRings[n].position.copy(cellToWorld(c.x, c.y)).setY(overlayY(i) + 0.008);
+        keyRings[n].visible = true;
+      });
     }
   }
   if (move.range > 0) line += `<br><b>${reachable}</b> cells reachable within ${move.range} move${move.range === 1 ? '' : 's'}.`;
@@ -1657,6 +1679,7 @@ $('#moveRange').addEventListener('input', (e) => {
   refreshMoveOverlay();
 });
 $('#moveDiagonal').addEventListener('change', (e) => { move.diagonal = e.target.checked; refreshMoveOverlay(); });
+$('#moveKeys').addEventListener('change', (e) => { move.keys = e.target.checked; refreshMoveOverlay(); });
 $$('[data-edge]').forEach((b) => b.addEventListener('click', () => setEdgeBrush(b.dataset.edge)));
 $$('[data-shape]').forEach((b) => b.addEventListener('click', () => setShape(b.dataset.shape)));
 $$('[data-view]').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));

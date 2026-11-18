@@ -73,6 +73,8 @@ export const MARKERS = {
 // the edge, and the centre is brighter for bigger lights, so a radius under 1
 // is a candle or dim bulb lighting only its own cell, and radius 3+ a floodlight.
 export const MAX_RADIUS = 6;
+// Distinct key groups the movement check tracks at once (2^n search states).
+export const MAX_KEY_GROUPS = 8;
 export const centreBrightness = (r) => Math.min(1, 0.45 + 0.2 * r);
 export const lightAt = (r, d) => (d > r + 1e-6 ? 0 : centreBrightness(r) * (1 - d / (r + 1)));
 // What a radius is like, for the panel.
@@ -472,10 +474,14 @@ export class GridState {
 
   // Can you cross the edge between (x, y) and the orthogonal neighbour
   // (x + dx, y + dy)?
-  canCross(x, y, dx, dy) {
+  // `unlocked(edgeKey)` (optional) says whether a key you carry has
+  // unlocked that edge's door: unlocked locked/one-way doors pass both ways.
+  canCross(x, y, dx, dy, unlocked) {
     const [o, ex, ey] = dx ? ['v', dx > 0 ? x + 1 : x, y] : ['h', x, dy > 0 ? y + 1 : y];
-    const t = this.edges.get(edgeKey(o, ex, ey));
+    const k = edgeKey(o, ex, ey);
+    const t = this.edges.get(k);
     if (!t || t === 'door') return true;
+    if ((t === 'lockedDoor' || t.startsWith('oneWayDoor')) && unlocked?.(k)) return true;
     if (t === 'oneWayDoor+') return dx > 0 || dy > 0;
     if (t === 'oneWayDoor-') return dx < 0 || dy < 0;
     return false; // wall, window, locked door
@@ -485,51 +491,115 @@ export class GridState {
 
   // One move from (x, y) by (dx, dy). Diagonal moves need both ways round
   // the corner to be clear, so you can't squeeze between two walls.
-  canStep(x, y, dx, dy) {
+  canStep(x, y, dx, dy, unlocked) {
     const nx = x + dx, ny = y + dy;
     if (!this.canEnter(nx, ny)) return false;
-    if (!dx || !dy) return this.canCross(x, y, dx, dy);
-    const viaX = this.canEnter(x + dx, y) && this.canCross(x, y, dx, 0) && this.canCross(x + dx, y, 0, dy);
-    const viaY = this.canEnter(x, y + dy) && this.canCross(x, y, 0, dy) && this.canCross(x, y + dy, dx, 0);
+    if (!dx || !dy) return this.canCross(x, y, dx, dy, unlocked);
+    const viaX = this.canEnter(x + dx, y) && this.canCross(x, y, dx, 0, unlocked) && this.canCross(x + dx, y, 0, dy, unlocked);
+    const viaY = this.canEnter(x, y + dy) && this.canCross(x, y, 0, dy, unlocked) && this.canCross(x, y + dy, dx, 0, unlocked);
     return viaX && viaY;
   }
 
-  // Breadth-first moves from a cell. Returns { dist: Int32Array (-1 =
-  // unreachable), prev: Int32Array } over the board.
-  moveField(sx, sy, { diagonal = false, maxSteps = Infinity } = {}) {
+  // Key groups for movement: keys whose buildings unlock the same doors act
+  // as one key. Returns { groups: [{ cells: [i], doors: Set<edgeKey> }],
+  // cellGroup: Map<cell, groupIndex>, edgeMask: Map<edgeKey, bitmask> }.
+  // At most MAX_KEY_GROUPS groups are tracked (the rest are ignored).
+  keyGroups() {
+    const groups = [];
+    const bySig = new Map();
+    this.cells.forEach((c, i) => {
+      if (c.marker !== 'key' || !c.walkable) return;
+      const doors = this.keyDoors(i);
+      if (!doors.length) return;
+      const sig = [...doors].sort().join('|');
+      if (!bySig.has(sig)) {
+        if (groups.length >= MAX_KEY_GROUPS) return;
+        bySig.set(sig, groups.length);
+        groups.push({ cells: [], doors: new Set(doors) });
+      }
+      groups[bySig.get(sig)].cells.push(i);
+    });
+    const cellGroup = new Map();
+    const edgeMask = new Map();
+    groups.forEach((g, gi) => {
+      for (const i of g.cells) cellGroup.set(i, gi);
+      for (const k of g.doors) edgeMask.set(k, (edgeMask.get(k) ?? 0) | (1 << gi));
+    });
+    return { groups, cellGroup, edgeMask };
+  }
+
+  // Breadth-first moves from a cell. With `keys` (default on), walking onto a
+  // key marker picks it up, and from then on the locked and one-way doors of
+  // its building pass both ways; the search tracks which keys you carry, so
+  // routes detour to fetch a key when that's needed or shorter.
+  // Returns { dist: Int32Array per cell (-1 = unreachable), path(i) -> cell
+  // indices from the start, keysOn(i) -> key cells picked up on that path }.
+  moveField(sx, sy, { diagonal = false, maxSteps = Infinity, keys = true } = {}) {
     const n = this.cells.length;
-    const dist = new Int32Array(n).fill(-1);
-    const prev = new Int32Array(n).fill(-1);
     const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
     if (diagonal) dirs.push([1, 1], [1, -1], [-1, 1], [-1, -1]);
+    const kg = keys ? this.keyGroups() : { groups: [], cellGroup: new Map(), edgeMask: new Map() };
+    const M = 1 << kg.groups.length;           // key-carrying states
+    const pick = (i, mask) => (kg.cellGroup.has(i) ? mask | (1 << kg.cellGroup.get(i)) : mask);
+    const sdist = new Int32Array(n * M).fill(-1);
+    const sprev = new Int32Array(n * M).fill(-1);
     const start = this.index(sx, sy);
-    dist[start] = 0;
-    const queue = [start];
-    for (let k = 0; k < queue.length; k++) {
-      const i = queue[k];
-      if (dist[i] >= maxSteps) continue;
+    const s0 = start * M + pick(start, 0);
+    sdist[s0] = 0;
+    const queue = [s0];
+    for (let q = 0; q < queue.length; q++) {
+      const st = queue[q];
+      if (sdist[st] >= maxSteps) continue;
+      const i = Math.floor(st / M), mask = st % M;
+      const unlocked = mask ? (k) => ((kg.edgeMask.get(k) ?? 0) & mask) !== 0 : undefined;
       const { x, y } = this.coords(i);
       for (const [dx, dy] of dirs) {
-        if (!this.canStep(x, y, dx, dy)) continue;
+        if (!this.canStep(x, y, dx, dy, unlocked)) continue;
         const j = this.index(x + dx, y + dy);
-        if (dist[j] >= 0) continue;
-        dist[j] = dist[i] + 1;
-        prev[j] = i;
-        queue.push(j);
+        const sj = j * M + pick(j, mask);
+        if (sdist[sj] >= 0) continue;
+        sdist[sj] = sdist[st] + 1;
+        sprev[sj] = st;
+        queue.push(sj);
       }
     }
-    return { dist, prev };
+    // Best state per cell.
+    const dist = new Int32Array(n).fill(-1);
+    const best = new Int32Array(n).fill(-1);
+    for (let st = 0; st < n * M; st++) {
+      const d = sdist[st];
+      if (d < 0) continue;
+      const i = Math.floor(st / M);
+      if (dist[i] < 0 || d < dist[i]) { dist[i] = d; best[i] = st; }
+    }
+    const statePath = (i) => {
+      if (dist[i] < 0) return null;
+      const out = [];
+      for (let st = best[i]; st >= 0; st = sprev[st]) out.push(st);
+      return out.reverse();
+    };
+    return {
+      dist,
+      path: (i) => statePath(i)?.map((st) => Math.floor(st / M)) ?? null,
+      // Key cells where the route picks up a new key.
+      keysOn: (i) => {
+        const sp = statePath(i);
+        if (!sp) return [];
+        const out = [];
+        for (let k = 0; k < sp.length; k++) {
+          const prevMask = k ? sp[k - 1] % M : 0;
+          if ((sp[k] % M) & ~prevMask) out.push(Math.floor(sp[k] / M));
+        }
+        return out;
+      },
+      keyGroups: kg.groups.length,
+    };
   }
 
   // Shortest route between two cells as a list of cell indices (start
-  // first), or null if there is none.
+  // first), or null if there is none. Options as for moveField.
   route(sx, sy, tx, ty, opts = {}) {
-    const { dist, prev } = this.moveField(sx, sy, opts);
-    let i = this.index(tx, ty);
-    if (dist[i] < 0) return null;
-    const out = [];
-    for (; i >= 0; i = prev[i]) out.push(i);
-    return out.reverse();
+    return this.moveField(sx, sy, opts).path(this.index(tx, ty));
   }
 
   // Can light travel in a straight line from the centre of cell (ax, ay) to

@@ -76,13 +76,14 @@
           </div>
 
           <div id="moveTools" hidden>
-            <p class="note">Click a start cell, then hover any cell to see the shortest route; click to pin it. Click the start again (or press Esc) to clear. Blocked cells, walls, windows and locked doors stop movement; one-way doors only go their arrow's way.</p>
+            <p class="note">Click a start cell, then hover any cell to see the shortest route; click to pin it. Click the start again (or press Esc) to clear. Blocked cells, walls, windows and locked doors stop movement; one-way doors only go their arrow's way. Walking onto a Key picks it up and unlocks its building's locked and one-way doors; routes fetch keys when needed.</p>
             <div class="radius-row">
               <label for="moveRange">Range</label>
               <input type="range" id="moveRange" min="0" max="20" step="1" value="0" />
               <output id="moveRangeOut" for="moveRange">off</output>
             </div>
             <label class="check"><input type="checkbox" id="moveDiagonal" /> Allow diagonal moves</label>
+            <label class="check" title="Walking onto a Key marker picks it up; its building's locked and one-way doors then pass both ways"><input type="checkbox" id="moveKeys" checked /> Keys unlock doors</label>
             <p class="move-info" id="moveInfo">No start cell yet.</p>
           </div>
 
