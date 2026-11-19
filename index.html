@@ -61,6 +61,13 @@
           </div>
 
           <div id="playTools" hidden>
+            <div class="seg" role="group" aria-label="Players" id="playCount">
+              <span class="row-label">Players</span>
+              <button data-players="1">1</button>
+              <button data-players="2">2</button>
+              <button data-players="3">3</button>
+              <button data-players="4" class="on">4</button>
+            </div>
             <div class="play-row">
               <div class="die" id="playDie" aria-label="Black die"></div>
               <div class="play-main">
@@ -69,6 +76,7 @@
               </div>
             </div>
             <p class="play-stats" id="playStats"></p>
+            <div class="play-board" id="playBoard"></div>
             <ol class="play-log" id="playLog"></ol>
             <div class="file-row">
               <button id="playReset">Restart</button>
@@ -77,7 +85,7 @@
             <div class="file-row">
               <label class="check play-follow" title="On streets, the start space and bridges, only move where the road goes (or through a door)"><input type="checkbox" id="playStreets" checked /> Follow streets</label>
             </div>
-            <p class="note">The pawn starts on the Start space and moves one cell per pip. It keeps going while there's one way forward and stops at forks: tap or click a round arrow button (or use the arrow keys). With Follow streets on, roads only go where they lead. Walls, windows, locked and one-way doors and blocked cells stop it; walking over a Key unlocks its building.</p>
+            <p class="note">Players take turns. Each starts on the Start space and moves one cell per pip. It keeps going while there's one way forward and stops at forks: tap or click a round arrow button (or use the arrow keys). With Follow streets on, roads only go where they lead. Walls, windows, locked and one-way doors and blocked cells stop it; walking over a Key unlocks its building.</p>
           </div>
 
           <div id="markerTools" hidden>

@@ -150,6 +150,17 @@ markers** in View hides them. Marker art lives in `src/markers.js`; the list of 
 
 **Play demo** (`Y`) plays one character on the board you've built:
 
+- **1–4 players** (choose in the Play panel; 4 by default) take turns. Each is a small stylised 90s figure at
+  real scale (about 1.75 m): a colour-blocked windbreaker in their colour, stonewashed jeans and white
+  sneakers, with different hair (P3 wears a backwards cap). Each stands in its own quarter of a cell, so all
+  four fit on one tile, and turns to face the way it walks.
+- **Name tags** (P1–P4, in the player's colour) float over each figure and show through buildings so you
+  can always find everyone; they stay readable when zoomed out (stacking when players share a cell) and
+  fade to nearly transparent when you zoom in close. The current player's tag pulses and a ring in their
+  colour marks them.
+- After a move the turn passes to the next player. Dice counts are per player (scoreboard in the panel);
+  markers are shared: a die or research collected by one player is gone for everyone, and a key unlocks its
+  building's doors for everyone.
 - The pawn starts on the **Start space** (paint one first).
 - **Roll black die** (or `Enter`) rolls a d6; the pawn then moves one cell per pip with a little hop.
 - It keeps going while there's only one way forward, and never doubles back unless it hits a dead end.

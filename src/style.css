@@ -433,3 +433,14 @@ body.playing .help { display: none; }
 @media (max-width: 700px) {
   .panel { width: calc(100% - 24px - 68px); }
 }
+
+/* Players ------------------------------------------------------------------------ */
+#playCount { align-items: center; margin-top: 0; }
+#playCount .row-label { flex: 0 0 auto; margin-right: 4px; }
+#playCount button { flex: 1 1 0; min-height: 36px; }
+.play-board { display: grid; gap: 3px; margin: 0 0 8px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.play-board .pl { display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 6px; border: 1px solid transparent; }
+.play-board .pl.cur { border-color: var(--line); background: rgba(255, 255, 255, 0.05); }
+.play-board .chip { width: 22px; padding: 1px 0; border-radius: 5px; text-align: center; font-weight: 700; color: #fff; font-size: 11px; text-shadow: 0 1px 1px #000; }
+.play-board .pl span:last-child { margin-left: auto; color: var(--muted); }
+.who-chip { display: inline-block; padding: 0 6px; border-radius: 5px; font-weight: 700; color: #fff; text-shadow: 0 1px 1px #000; }

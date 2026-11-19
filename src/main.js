@@ -1923,31 +1923,39 @@ function renderPlay() {
   const roll = $('#playRoll');
   roll.disabled = !['idle', 'done'].includes(s.phase);
   const here = s.pos >= 0 ? (() => { const c = grid.coords(s.pos); return cellLabel(c.x, c.y); })() : '';
-  $('#playStatus').innerHTML = {
+  const cur = s.players[s.cur];
+  const chip = cur ? `<span class="who-chip" style="background:${cur.colour}">${cur.name}</span> ` : '';
+  $('#playStatus').innerHTML = chip + ({
     nostart: 'No Start space yet. Paint one (Spaces → Outdoor → Start space).',
-    idle: s.turn ? `On <b>${here}</b>. Roll again.` : `On <b>${here}</b>. Roll to move.`,
+    idle: `On <b>${here}</b>. Roll to move.`,
     rolling: 'Rolling…',
     moving: `Moving… <b>${s.steps}</b> left`,
     choosing: `${s.stopReason ? `Stopped at <b>${s.stopReason}</b>. ` : ''}Choose a direction: <b>${s.steps}</b> move${s.steps === 1 ? '' : 's'} left (${s.options.map((o) => o.name).join(', ')})`,
-    done: `On <b>${here}</b>. Turn ${s.turn} done; roll again.`,
-  }[s.phase] ?? '';
+    done: `On <b>${here}</b>. Roll again.`,
+  }[s.phase] ?? '');
   // The pawn's light: whatever lights its cell (at the start, the van's headlights).
   const inHeadlights = s.pos >= 0 && grid.cells.some((c, j) => c.sub === 'start' && grid.startFront(j) === s.pos);
   const lightHere = s.pos >= 0 ? `Light <b>${Math.round(lightLevels[s.pos] * 100)}%</b>${inHeadlights ? ' (van headlights)' : ''} · ` : '';
-  $('#playStats').innerHTML = `${lightHere}Turn <b>${s.turn}</b> · White Dice <b>${s.white}</b> · Black Dice attuned <b>${s.black}</b>` +
-    (s.keys ? ` · Keys <b>${s.keys.toString(2).split('').filter((b) => b === '1').length}</b>` : '');
+  $('#playStats').innerHTML = `${lightHere}Turn <b>${s.turn}</b>` +
+    (s.keys ? ` · Keys found <b>${s.keys.toString(2).split('').filter((b) => b === '1').length}</b>` : '');
+  // Scoreboard: each player's cell and dice.
+  $('#playBoard').innerHTML = s.players.map((p, k) => {
+    const c = p.pos >= 0 ? grid.coords(p.pos) : null;
+    return `<div class="pl${k === s.cur ? ' cur' : ''}"><span class="chip" style="background:${p.colour}">${p.name}</span>` +
+      `<span>${c ? cellLabel(c.x, c.y) : '–'}</span><span>White ${p.white} · Black ${p.black}</span></div>`;
+  }).join('');
   $('#playLog').innerHTML = s.log.map((l) => `<li>${l}</li>`).join('');
   // Floating bar.
   [...$('#hudDie').children].forEach((el, n) => el.classList.toggle('on', !!face && PIPS[face].includes(n)));
   $('#hudRoll').disabled = roll.disabled;
-  $('#hudStatus').innerHTML = {
+  $('#hudStatus').innerHTML = chip + ({
     nostart: 'Paint a Start space first.',
-    idle: `On <b>${here}</b>${s.pos >= 0 ? ` · light ${Math.round(lightLevels[s.pos] * 100)}%` : ''}. ${s.turn ? 'Roll again.' : 'Roll to move.'}`,
+    idle: `On <b>${here}</b>${s.pos >= 0 ? ` · light ${Math.round(lightLevels[s.pos] * 100)}%` : ''}. Roll.`,
     rolling: 'Rolling…',
     moving: `Moving… <b>${s.steps}</b> left`,
     choosing: `${s.stopReason ? `<b>${s.stopReason}</b> · ` : ''}Tap an arrow · <b>${s.steps}</b> left`,
     done: `On <b>${here}</b>. Roll again.`,
-  }[s.phase] ?? '';
+  }[s.phase] ?? '');
   renderChoices();
 }
 
@@ -2015,6 +2023,10 @@ $('#playRoll').addEventListener('click', () => play.roll());
 $('#hudRoll').addEventListener('click', () => play.roll());
 $('#playStreets').addEventListener('change', (e) => { play.state.followStreets = e.target.checked; });
 $('#playReset').addEventListener('click', () => play.reset());
+document.querySelectorAll('[data-players]').forEach((b) => b.addEventListener('click', () => {
+  document.querySelectorAll('[data-players]').forEach((o) => o.classList.toggle('on', o === b));
+  play.setPlayers(Number(b.dataset.players));
+}));
 $('#playFollow').addEventListener('change', (e) => { play.state.follow = e.target.checked; });
 // Arrow keys choose a direction at a fork (before the camera can pan).
 window.addEventListener('keydown', (e) => {
