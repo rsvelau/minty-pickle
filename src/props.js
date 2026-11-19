@@ -6,6 +6,7 @@
 // per prop kind, and rebuilt from the grid after every change.
 import * as THREE from 'three';
 import { m } from './scale.js';
+import { terrainify } from './terrain.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 
@@ -156,6 +157,8 @@ function buildKinds() {
         g = g.toNonIndexed();
         g.deleteAttribute('uv');
         const pos = g.attributes.position;
+        // Light stops at the road: flatten anything below road level.
+        for (let i = 0; i < pos.count; i++) pos.setY(i, Math.max(pos.getY(i), m(0.04)));
         const col = new Float32Array(pos.count * 3);
         for (let i = 0; i < pos.count; i++) {
           const t = Math.min(1, Math.max(0, (pos.getX(i) - lampX) / L));
@@ -370,6 +373,15 @@ export function createProps(group, { firGeo, firMat }) {
     }),
     startFrame: new THREE.MeshBasicMaterial({ color: '#ffd23a', transparent: true, opacity: 0.95 }),
   };
+  // Headlight beams are lifted as a whole by the van's cell (not point by
+  // point), so they stay level with the road and bridge deck instead of
+  // dipping into a lowered river ahead.
+  terrainify(glow.vanCone, { centre: true });
+  terrainify(glow.vanBeam, { centre: true });
+  // The painted start box and glow follow the start cell only (their edges
+  // would otherwise be pulled down to a lowered river next door).
+  terrainify(glow.startFrame, { centre: true });
+  terrainify(glow.startFill, { centre: true });
   const meshes = {};
   const tmpM = new THREE.Matrix4();
   const tmpP = new THREE.Vector3();
