@@ -429,3 +429,7 @@ body.playing .help { display: none; }
 @media (min-width: 701px) {
   body.view-open .info { right: calc(196px + env(safe-area-inset-right, 0px)); top: calc(12px + env(safe-area-inset-top, 0px)); }
 }
+/* Phones: the panel stops short of the view button so its minimise button stays reachable. */
+@media (max-width: 700px) {
+  .panel { width: calc(100% - 24px - 68px); }
+}

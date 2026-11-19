@@ -2196,8 +2196,28 @@ function toast(msg) {
   toastTimer = setTimeout(() => { el.hidden = true; }, 3200);
 }
 
-$('#collapse').addEventListener('click', () => { $('#panel').hidden = true; $('#expand').hidden = false; });
+function minimizePanel() { $('#panel').hidden = true; $('#expand').hidden = false; }
+$('#collapse').addEventListener('click', minimizePanel);
 $('#expand').addEventListener('click', () => { $('#panel').hidden = false; $('#expand').hidden = true; });
+
+// Click or tap off an open window (the side panel or the view menu) to
+// minimise it. A press on the board that only closes a window is swallowed,
+// so it never paints a tile, places a wall or moves the camera.
+window.addEventListener('pointerdown', (ev) => {
+  const panelOpen = !$('#panel').hidden;
+  const viewOpen = !$('#viewList').hidden;
+  if (!panelOpen && !viewOpen) return;
+  const t = ev.target;
+  const inside = (sel) => t instanceof Element && !!t.closest(sel);
+  if (inside('#dialog') || inside('#playHud') || inside('#playChoices')) return;
+  let closed = false;
+  if (panelOpen && !inside('#panel') && !inside('#expand')) { minimizePanel(); closed = true; }
+  if (viewOpen && !inside('#viewMenu')) { setViewMenu(false); closed = true; }
+  if (closed && t === renderer.domElement) {
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+  }
+}, true);
 if (window.innerWidth < 700) { $('#panel').hidden = true; $('#expand').hidden = false; }
 
 window.addEventListener('keydown', (e) => {

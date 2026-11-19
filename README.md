@@ -304,7 +304,12 @@ The round **eye button** in the top-right corner opens a compact column of view 
 **Layer** (All / Area / Light / Move), **Camera** (Angled / Top / Orbit mode) and **Show** toggles (Labels,
 Atmosphere, Low walls, Markers). The button shows the current layer even when the menu is closed. Buttons
 are at least 40 px tall for fingers. The menu starts open on wide screens and closed on phones, and
-remembers how you left it. Elevation presets stay in the side panel (they're saved with the board).
+remembers how you left it.
+
+**Tap or click off an open window to minimise it**: with the side panel or the view menu open, a press
+anywhere outside it closes it. If that press lands on the board it only closes the window; it doesn't paint,
+draw a wall or move the camera. On phones the side panel stops short of the view button, so its minimise
+button is always reachable. Elevation presets stay in the side panel (they're saved with the board).
 
 ## Controls
 
