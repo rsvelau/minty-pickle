@@ -2604,6 +2604,12 @@ window.addEventListener('resize', () => {
 // clocktower's dials die, the rain comes down harder, the forest sways and
 // the night closes in a little. Eases in over a few seconds.
 let dread = 0;
+const TINT = {
+  sky: new THREE.Color('#56627a'), skyRed: new THREE.Color('#7c4650'),
+  ground: new THREE.Color('#181a18'), groundRed: new THREE.Color('#241516'),
+  moon: new THREE.Color('#a9bcff'), moonRed: new THREE.Color('#dc9196'),
+  bg: new THREE.Color('#070a10'), bgRed: new THREE.Color('#0e0709'),
+};
 let towerOut = 0; // 0..1 progress of the clock dials dying
 let dreadT = 0;
 function updateDread(dt) {
@@ -2619,8 +2625,13 @@ function updateDread(dt) {
   const p = towerOut;
   const sputter = p > 0 && p < 0.85 ? (Math.sin(p * Math.PI * 7) > 0.2 ? 1 : 0.35) : 1;
   clocktowers.setGlow(Math.max(0, 1 - p) * sputter);
-  // Darker, closer night.
+  // Darker, closer night, and the cold blue turns a muted, bloody red.
   hemi.intensity = 2.4 - 0.5 * dread;
+  hemi.color.copy(TINT.sky).lerp(TINT.skyRed, dread);
+  hemi.groundColor.copy(TINT.ground).lerp(TINT.groundRed, dread);
+  moon.color.copy(TINT.moon).lerp(TINT.moonRed, dread);
+  SKY.copy(TINT.bg).lerp(TINT.bgRed, dread);
+  FOG.color.copy(SKY);
   FOG.near = 38 - 10 * dread;
   FOG.far = 95 - 18 * dread;
   if (porchLight) porchLight.intensity = porchLight.userData.baseIntensity * flickerAt(0.71, dreadT, dread);
