@@ -157,6 +157,16 @@ markers** in View hides them. Marker art lives in `src/markers.js`; the list of 
 - Players **jog** from cell to cell at a human jogging pace (about 2.7 m/s, so roughly 2.6 s per 7 m
   cell), legs and arms swinging in step with the ground covered. **Press and hold anywhere on the board**
   (finger or mouse) to fast-forward a move (about 0.3 s per cell); let go to return to a jog.
+- **Dice and movement.** Everyone starts with **2 black dice**, which renew every turn. A turn starts by
+  rolling **all your black dice plus your white dice**; then a dice tray opens with your rolled dice and
+  **2 movement slots**. Tap dice to put them in slots (tap again to take one out) and press **Move N**: you
+  move the total of the slotted dice. Slots can be left empty (**Stay put** with none). If your cell is
+  **lit (light 50 % or more) at the start of your turn, a 3rd slot opens** (`LIT_THRESHOLD`, `LIT_SLOTS`
+  in `src/play.js`).
+- **Black dice are shared:** when anyone attunes a Black Dice marker, every player rolls one more black die
+  from then on (each marker works once).
+- **White dice are personal:** each player keeps the White Dice they collect. They're rolled with your
+  black dice every turn but only spent if you slot one; a slotted white die is gone after that move.
 - **Turns don't wait for running.** A move is worked out the moment the player gives their input. As soon
   as they've made their last choice (or none is needed), the turn passes and the camera pans to the next
   player while the last figure is still jogging into place. Several players can be running at once; marker

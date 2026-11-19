@@ -71,7 +71,7 @@
             <div class="play-row">
               <div class="die" id="playDie" aria-label="Black die"></div>
               <div class="play-main">
-                <button id="playRoll" class="on">Roll black die <kbd>Enter</kbd></button>
+                <button id="playRoll" class="on">Roll dice <kbd>Enter</kbd></button>
                 <p class="play-status" id="playStatus"></p>
               </div>
             </div>
@@ -189,6 +189,15 @@
       <div class="die die-sm" id="hudDie" aria-label="Black die"></div>
       <p class="hud-status" id="hudStatus"></p>
       <button id="hudRoll" class="hud-roll">Roll</button>
+    </div>
+    <!-- Dice tray: rolled dice and movement slots (shown after a roll). -->
+    <div id="playTray" class="play-tray" hidden>
+      <div class="tray-row"><span class="tray-label">Rolled</span><div class="tray-dice" id="trayPool"></div></div>
+      <div class="tray-row"><span class="tray-label">Move</span><div class="tray-dice" id="traySlots"></div><b class="tray-total" id="trayTotal">0</b></div>
+      <div class="tray-row tray-actions">
+        <span class="tray-hint" id="trayHint">Tap dice to slot them</span>
+        <button id="trayMove" class="hud-roll">Move</button>
+      </div>
     </div>
     <div id="playChoices" class="play-choices"></div>
 

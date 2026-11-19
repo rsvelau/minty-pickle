@@ -33,6 +33,11 @@ const STEP_TIME = (TILE_M) => TILE_M / JOG_SPEED;
 const FAST_STEP = 0.32;                       // seconds per cell when fast-forwarding
 const STRIDES_PER_M = 0.78;                   // running cadence: leg cycles per metre
 const ROLL_TIME = 0.7;    // die tumble before it lands
+// Dice rules.
+export const START_BLACK = 2;   // black dice everyone starts with (renew each turn)
+export const MOVE_SLOTS = 2;    // movement slots each turn...
+export const LIT_SLOTS = 3;     // ...or this many when starting the turn in a lit cell
+export const LIT_THRESHOLD = 0.5; // light level (0..1) that counts as a lit cell
 
 export function createPlay({
   grid, scene, camera, controls, cellToWorld, cellTop, terrainify, cellLabel, onChange,
@@ -335,11 +340,11 @@ export function createPlay({
     if (m === 'whiteDice') {
       st.white++;
       text = 'White Dice';
-      msg = `${who()} collected a single-use White Die at ${label(i)}.`;
+      msg = `${who()} collected a single-use White Die at ${label(i)} (now has ${st.white}).`;
     } else if (m === 'blackDice') {
-      st.black++;
+      st.blackCount++;
       text = 'Black Dice';
-      msg = `${who()} attuned a Black Die at ${label(i)}.`;
+      msg = `${who()} attuned a Black Die at ${label(i)}: every player now rolls ${st.blackCount} black dice.`;
     } else if (m === 'research') {
       text = 'Research';
       msg = `${who()} used Research at ${label(i)}: a piece of evidence uncovered for free.`;
@@ -387,6 +392,7 @@ export function createPlay({
     Object.assign(st, {
       cur: 0, steps: 0, roll: 0, phase: s >= 0 ? 'idle' : 'nostart', options: [],
       turn: 0, keys: 0, keyGroups: grid.keyGroups(), pan: true,
+      blackCount: START_BLACK, pool: [], slots: [], maxSlots: MOVE_SLOTS,
     });
     st.used = new Set();
     st.shownUsed = new Set();
@@ -408,7 +414,17 @@ export function createPlay({
     if (st.phase !== 'idle' && st.phase !== 'done') return;
     if (st.phase === 'done') nextPlayer();
     st.keyGroups = grid.keyGroups(); // pick up board edits since last turn
-    st.roll = 1 + Math.floor(Math.random() * 6);
+    const d6 = () => 1 + Math.floor(Math.random() * 6);
+    // Roll every black die (shared count, renews each turn) and the player's
+    // own single-use white dice. White dice are only spent if slotted.
+    st.pool = [
+      ...Array.from({ length: st.blackCount }, () => ({ kind: 'black', v: d6() })),
+      ...Array.from({ length: st.white }, () => ({ kind: 'white', v: d6() })),
+    ];
+    st.slots = [];
+    st.lit = lightAt(st.pos) >= LIT_THRESHOLD;
+    st.maxSlots = st.lit ? LIT_SLOTS : MOVE_SLOTS;
+    st.roll = 0;
     st.phase = 'rolling';
     st.rollT = 0;
     st.turn++;
@@ -449,6 +465,40 @@ export function createPlay({
 
   // Hand the turn to the next player: the camera pans to them straight away,
   // even if the last player is still running into place.
+  // Slotting: tap a rolled die to put it in the next empty movement slot, or
+  // tap a slotted die to take it back out.
+  function toggleSlot(n) {
+    if (st.phase !== 'slotting' || !st.pool[n]) return;
+    const at = st.slots.indexOf(n);
+    if (at >= 0) st.slots.splice(at, 1);
+    else if (st.slots.length < st.maxSlots) st.slots.push(n);
+    onChange();
+  }
+  const slotTotal = () => st.slots.reduce((a, n) => a + st.pool[n].v, 0);
+
+  // Lock in the slotted dice and move that many cells (0 = stay put).
+  function confirmMove() {
+    if (st.phase !== 'slotting') return;
+    const used = st.slots.map((n) => st.pool[n]);
+    const whites = used.filter((d) => d.kind === 'white').length;
+    st.white -= whites; // single-use: gone once slotted
+    st.roll = slotTotal();
+    st.steps = st.roll;
+    st.prev = -1;
+    st.pool = [];
+    st.slots = [];
+    if (!st.roll) {
+      log(`${who()} stays put.`);
+      nextPlayer();
+      onChange();
+      return;
+    }
+    log(`${who()} moves ${st.roll} (${used.map((d) => `${d.kind} ${d.v}`).join(' + ')})` +
+      `${whites ? `, spending ${whites} white ${whites === 1 ? 'die' : 'dice'}` : ''}.`);
+    st.phase = 'moving';
+    advance();
+  }
+
   function nextPlayer() {
     st.cur = (st.cur + 1) % st.players.length;
     st.pan = true;
@@ -529,12 +579,12 @@ export function createPlay({
       const face = 1 + Math.floor((st.rollT * 14) % 6);
       if (face !== st.rollFace) { st.rollFace = face; onChange(); }
       if (st.rollT >= ROLL_TIME) {
-        st.rollFace = st.roll;
-        st.steps = st.roll;
-        st.prev = -1;
-        st.phase = 'moving';
-        log(`${who()} rolled a ${st.roll}.`);
-        advance();
+        st.phase = 'slotting';
+        const b = st.pool.filter((d) => d.kind === 'black').map((d) => d.v);
+        const w = st.pool.filter((d) => d.kind === 'white').map((d) => d.v);
+        log(`${who()} rolled black ${b.join(', ')}${w.length ? ` and white ${w.join(', ')}` : ''}.` +
+          ` ${st.maxSlots} movement slots${st.lit ? ' (standing in light)' : ''}.`);
+        onChange();
       }
     }
     // Every player runs their own queued path (several can run at once).
@@ -628,6 +678,7 @@ export function createPlay({
   return {
     state: st, roll, reset, choose, chooseByKey, tick, setActive, boardChanged, setPlayers,
     setFast: (on) => { st.fast = !!on; },
+    toggleSlot, confirmMove, slotTotal,
     // Doors visibly unlocked by keys the runners have reached (edge keys).
     unlockedEdges: () => {
       const out = new Set();

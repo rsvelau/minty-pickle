@@ -1696,6 +1696,7 @@ function setTool(tool) {
   $('#markerTools').hidden = tool !== 'markers';
   $('#playTools').hidden = tool !== 'play';
   $('#playHud').hidden = tool !== 'play';
+  if (tool !== 'play') $('#playTray').hidden = true;
   document.body.classList.toggle('playing', tool === 'play');
   // Phones: fold the panel away so the board and the play bar are visible.
   if (tool === 'play' && window.innerWidth < 700) {
@@ -1956,6 +1957,7 @@ function renderPlay() {
     nostart: 'No Start space yet. Paint one (Spaces → Outdoor → Start space).',
     idle: `On <b>${here}</b>. Roll to move.`,
     rolling: 'Rolling…',
+    slotting: `Slot dice into up to <b>${s.maxSlots}</b> movement slots${s.lit ? ' (in light: 3rd slot open)' : ''}, then Move.`,
     moving: s.fast ? `Fast-forward ⏩ <b>${s.steps}</b> left` : `Running… <b>${s.steps}</b> left (press and hold the board to fast-forward)`,
     choosing: `${s.stopReason ? `Stopped at <b>${s.stopReason}</b>. ` : ''}Choose a direction: <b>${s.steps}</b> move${s.steps === 1 ? '' : 's'} left (${s.options.map((o) => o.name).join(', ')})`,
     done: `On <b>${here}</b>. Roll again.`,
@@ -1963,15 +1965,16 @@ function renderPlay() {
   // The pawn's light: whatever lights its cell (at the start, the van's headlights).
   const inHeadlights = s.pos >= 0 && grid.cells.some((c, j) => c.sub === 'start' && grid.startFront(j) === s.pos);
   const lightHere = s.pos >= 0 ? `Light <b>${Math.round(lightLevels[s.pos] * 100)}%</b>${inHeadlights ? ' (van headlights)' : ''} · ` : '';
-  $('#playStats').innerHTML = `${lightHere}Turn <b>${s.turn}</b>` +
+  $('#playStats').innerHTML = `${lightHere}Turn <b>${s.turn}</b> · Black dice <b>${s.blackCount}</b> (everyone)` +
     (s.keys ? ` · Keys found <b>${s.keys.toString(2).split('').filter((b) => b === '1').length}</b>` : '');
   // Scoreboard: each player's cell and dice.
   $('#playBoard').innerHTML = s.players.map((p, k) => {
     const c = p.pos >= 0 ? grid.coords(p.pos) : null;
     return `<div class="pl${k === s.cur ? ' cur' : ''}"><span class="chip" style="background:${p.colour}">${p.name}</span>` +
-      `<span>${c ? cellLabel(c.x, c.y) : '–'}</span><span>White ${p.white} · Black ${p.black}</span></div>`;
+      `<span>${c ? cellLabel(c.x, c.y) : '–'}</span><span>White dice ${p.white}</span></div>`;
   }).join('');
   $('#playLog').innerHTML = s.log.map((l) => `<li>${l}</li>`).join('');
+  renderTray();
   // Floating bar.
   [...$('#hudDie').children].forEach((el, n) => el.classList.toggle('on', !!face && PIPS[face].includes(n)));
   $('#hudRoll').disabled = roll.disabled;
@@ -1980,6 +1983,7 @@ function renderPlay() {
     idle: `On <b>${here}</b>${s.pos >= 0 ? ` · light ${Math.round(lightLevels[s.pos] * 100)}%` : ''}. Roll.` +
       (play.anyRunning() ? (s.fast ? ' · ⏩' : ' · <span class="muted">hold board to fast-forward</span>') : ''),
     rolling: 'Rolling…',
+    slotting: `Slot dice · move <b>${play.slotTotal()}</b>`,
     moving: s.fast ? `Fast-forward ⏩ <b>${s.steps}</b> left` : `Running… <b>${s.steps}</b> left · hold to fast-forward`,
     choosing: `${s.stopReason ? `<b>${s.stopReason}</b> · ` : ''}Tap an arrow · <b>${s.steps}</b> left`,
     done: `On <b>${here}</b>. Roll again.`,
@@ -2048,6 +2052,38 @@ const play = createPlay({
 });
 markerUsed = (i) => ui.tool === 'play' && play.state.shownUsed.has(i);
 $('#playRoll').addEventListener('click', () => play.roll());
+
+// Dice tray: tap rolled dice into movement slots, then Move.
+function dieHTML(d, extra = '') {
+  return `<button class="tdie ${d.kind} ${extra}" aria-label="${d.kind} ${d.v}">` +
+    Array.from({ length: 9 }, (_, n) => `<i class="${PIPS[d.v].includes(n) ? 'on' : ''}"></i>`).join('') + '</button>';
+}
+function renderTray() {
+  const s = play.state;
+  const show = ui.tool === 'play' && (s.phase === 'slotting' || s.phase === 'rolling');
+  $('#playTray').hidden = !show;
+  if (!show) return;
+  const rolling = s.phase === 'rolling';
+  // While rolling, every die tumbles.
+  $('#trayPool').innerHTML = s.pool.map((d, n) =>
+    dieHTML(rolling ? { ...d, v: 1 + ((s.rollFace + n * 2) % 6) } : d, s.slots.includes(n) ? 'used' : '')).join('');
+  [...$('#trayPool').children].forEach((b, n) => { b.onclick = () => play.toggleSlot(n); });
+  const slots = [];
+  for (let k = 0; k < LIT_SLOTS_UI; k++) {
+    const n = s.slots[k];
+    if (n !== undefined) slots.push(dieHTML(s.pool[n], 'in-slot'));
+    else if (k < s.maxSlots) slots.push(`<span class="tdie slot${k >= 2 ? ' lit' : ''}">${k >= 2 ? 'light' : ''}</span>`);
+    else slots.push('<span class="tdie slot" title="Third slot needs a lit cell at the start of the turn" style="opacity:.35">dark</span>');
+  }
+  $('#traySlots').innerHTML = slots.join('');
+  [...$('#traySlots').querySelectorAll('.in-slot')].forEach((b, k) => { b.onclick = () => play.toggleSlot(s.slots[k]); });
+  $('#trayTotal').textContent = rolling ? '…' : play.slotTotal();
+  $('#trayMove').disabled = rolling;
+  $('#trayMove').textContent = play.slotTotal() ? `Move ${play.slotTotal()}` : 'Stay put';
+  $('#trayHint').textContent = rolling ? 'Rolling…' : s.slots.length < s.maxSlots ? 'Tap dice to slot them' : 'Slots full';
+}
+const LIT_SLOTS_UI = 3;
+$('#trayMove').addEventListener('click', () => play.confirmMove());
 $('#hudRoll').addEventListener('click', () => play.roll());
 $('#playStreets').addEventListener('change', (e) => { play.state.followStreets = e.target.checked; });
 $('#playReset').addEventListener('click', () => play.reset());
@@ -2286,7 +2322,7 @@ window.addEventListener('pointerdown', (ev) => {
   if (!panelOpen && !viewOpen) return;
   const t = ev.target;
   const inside = (sel) => t instanceof Element && !!t.closest(sel);
-  if (inside('#dialog') || inside('#playHud') || inside('#playChoices')) return;
+  if (inside('#dialog') || inside('#playHud') || inside('#playChoices') || inside('#playTray')) return;
   let closed = false;
   if (panelOpen && !inside('#panel') && !inside('#expand')) { minimizePanel(); closed = true; }
   if (viewOpen && !inside('#viewMenu')) { setViewMenu(false); closed = true; }
@@ -2300,7 +2336,11 @@ if (window.innerWidth < 700) { $('#panel').hidden = true; $('#expand').hidden = 
 window.addEventListener('keydown', (e) => {
   if (!dlg.root.hidden) { if (e.key === 'Escape') closeDialog(); return; }
   if (e.key === 'Escape' && ui.tool === 'move') { clearMove(); return; }
-  if (ui.tool === 'play' && e.key === 'Enter') { e.preventDefault(); play.roll(); return; }
+  if (ui.tool === 'play' && e.key === 'Enter') {
+    e.preventDefault();
+    if (play.state.phase === 'slotting') play.confirmMove(); else play.roll();
+    return;
+  }
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
   const mod = e.ctrlKey || e.metaKey;
   if (mod && e.key.toLowerCase() === 'z') {

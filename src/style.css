@@ -445,3 +445,42 @@ body.playing .help { display: none; }
 .play-board .pl span:last-child { margin-left: auto; color: var(--muted); }
 .who-chip { display: inline-block; padding: 0 6px; border-radius: 5px; font-weight: 700; color: #fff; text-shadow: 0 1px 1px #000; }
 .hud-status .muted { color: var(--muted); }
+
+/* Dice tray ------------------------------------------------------------------- */
+.play-tray {
+  position: fixed;
+  left: 50%;
+  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 8;
+  width: min(460px, calc(100% - 24px));
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+  background: var(--panel);
+  border: 1px solid #58e0a0;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+.play-tray[hidden] { display: none; }
+.tray-row { display: flex; align-items: center; gap: 8px; }
+.tray-label { width: 52px; flex: none; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.tray-dice { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-height: 44px; }
+.tray-total { font-size: 22px; color: #58e0a0; min-width: 32px; text-align: right; font-variant-numeric: tabular-nums; }
+.tray-actions .tray-hint { flex: 1; font-size: 12px; color: var(--muted); }
+.tray-actions .hud-roll { min-width: 110px; }
+.tdie {
+  width: 44px; height: 44px; padding: 5px; border-radius: 8px;
+  display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr);
+  touch-action: manipulation; cursor: pointer;
+}
+.tdie i { width: 7px; height: 7px; border-radius: 50%; place-self: center; visibility: hidden; }
+.tdie i.on { visibility: visible; }
+.tdie.black { background: #141518; border: 2px solid #9aa0a8; }
+.tdie.black i { background: #f2f0ea; }
+.tdie.white { background: #f4f2ec; border: 2px solid #c9c4b4; }
+.tdie.white i { background: #1b1b1d; }
+.tdie.used { opacity: 0.25; }
+.tdie.slot { background: transparent; border: 2px dashed var(--line); cursor: default; display: grid; place-items: center; color: var(--muted); font-size: 10px; }
+.tdie.slot.lit { border-color: #f0c060; color: #f0c060; }
+#hudDie { display: none; }
