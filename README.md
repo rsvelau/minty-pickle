@@ -181,6 +181,13 @@ markers** in View hides them. Marker art lives in `src/markers.js`; the list of 
   `src/play.js`.
 - **Objectives are hidden until midnight:** in the play demo, Objective markers don't show and can't be
   touched until the clock strikes twelve (which ones appear will depend on the monster, coming later).
+- **Midnight turns menacing.** When the clock strikes twelve (play demo only), over a few seconds: every
+  light source flickers on its own uneasy rhythm, with its whole pool of light dipping together (lit cells,
+  street surface, lamp globes, van headlights, lit windows, the porch light). Dips are slow and partial,
+  never a strobe. The clocktower's dials sputter and go out, the rain doubles and drives in on the wind, the
+  firs sway, and the night closes in a little (dimmer sky light, nearer fog). Code: `src/dread.js`.
+- **Midnight demo.** The second play button starts the game at midnight: objectives out, the town already
+  menacing. **Play demo** (or `Y`) starts the standard 11 PM game.
 - **Turns don't wait for running.** A move is worked out the moment the player gives their input. As soon
   as they've made their last choice (or none is needed), the turn passes and the camera pans to the next
   player while the last figure is still jogging into place. Several players can be running at once; marker

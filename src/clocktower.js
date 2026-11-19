@@ -224,6 +224,15 @@ export function createClocktowers(parent) {
     }
   }
 
+  // Dial backlight, 1 = lit, 0 = out (it dies at midnight).
+  const DIAL_ON = new THREE.Color('#f2e2a8'), DIAL_OFF = new THREE.Color('#2a2720');
+  let glow = 1;
+  function setGlow(v) {
+    if (v === glow) return;
+    glow = v;
+    mats.dial.color.copy(DIAL_OFF).lerp(DIAL_ON, v);
+  }
+
   // Minutes since midnight (23 * 60 = 11 PM; 24 * 60 = midnight).
   function setTime(minutes) { target = minutes; }
 
@@ -238,5 +247,5 @@ export function createClocktowers(parent) {
 
   function clear() { parent.remove(root); }
 
-  return { update, setTime, tick, clear, materials: Object.values(mats) };
+  return { update, setTime, setGlow, tick, clear, materials: Object.values(mats) };
 }

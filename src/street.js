@@ -22,6 +22,7 @@
 //                late-1800s logging town kept historic); the globe glows when
 //                the cell's lamp is switched on ("Lit lamp"), else it's dark
 import * as THREE from 'three';
+import { flickerize } from './dread.js';
 import { METERS_PER_CELL, m, SIDEWALK_W } from './scale.js';
 import { streetMask } from './state.js';
 import { terrainify } from './terrain.js';
@@ -53,6 +54,7 @@ export function createStreets(group) {
     ? new THREE.MeshLambertMaterial({ map: atlas, emissiveMap: atlas, emissive: new THREE.Color(e) })
     : new THREE.MeshLambertMaterial({ map: atlas })));
   for (const mat of mats) terrainify(mat, { centre: true });
+  for (const mat of mats.slice(1)) flickerize(mat, { part: 'emissive' }); // lit street surfaces flicker at midnight
   const levelIndex = (level, lamp) => (lamp ? 4 : level >= 0.8 ? 3 : level >= 0.45 ? 2 : level > 0 ? 1 : 0);
   const geos = new Map();
   const meshes = new Map();
@@ -458,6 +460,8 @@ function createFurniture(group) {
       color: '#ffc370', transparent: true, opacity: 0.15, depthWrite: false, blending: THREE.AdditiveBlending,
     }),
   };
+  flickerize(mats.globeOn);
+  flickerize(mats.lampHalo);
   const meshes = {};
   const tmpM = new THREE.Matrix4();
   const tmpQ = new THREE.Quaternion();

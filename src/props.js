@@ -5,6 +5,7 @@
 // to real-world scale (metres -> cells via `m`), drawn with one InstancedMesh
 // per prop kind, and rebuilt from the grid after every change.
 import * as THREE from 'three';
+import { flickerize } from './dread.js';
 import { m } from './scale.js';
 import { terrainify } from './terrain.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -381,6 +382,7 @@ export function createProps(group, { firGeo, firMat }) {
   // Headlight beams are lifted as a whole by the van's cell (not point by
   // point), so they stay level with the road and bridge deck instead of
   // dipping into a lowered river ahead.
+  for (const k of ['vanLights', 'vanBeam', 'vanCone']) flickerize(glow[k]); // headlights flicker at midnight
   terrainify(glow.vanCone, { centre: true });
   terrainify(glow.vanBeam, { centre: true });
   // The painted start box and glow follow the start cell only (their edges

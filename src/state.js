@@ -488,12 +488,22 @@ export class GridState {
   // Light level per cell, 0..1, from every light source (lit cells and
   // switched-on street lamps). Overlapping lights add up like real light
   // (1 - (1-a)(1-b)), and walls block it.
-  lightLevels() {
+  // `src` (optional Int32Array, one per cell) receives the cell index of the
+  // strongest light source reaching each cell (-1 for none), so a light's
+  // whole pool can be animated together (the midnight flicker).
+  lightLevels(src = null) {
     const out = new Float32Array(this.cells.length);
-    const add = (j, v) => { out[j] = 1 - (1 - out[j]) * (1 - v); };
+    const best = src ? new Float32Array(this.cells.length) : null;
+    if (src) src.fill(-1);
+    let from = -1;
+    const add = (j, v) => {
+      out[j] = 1 - (1 - out[j]) * (1 - v);
+      if (src && v > best[j]) { best[j] = v; src[j] = from; }
+    };
     this.cells.forEach((c, i) => {
       const lamp = this.lampOn(i);
       if (!c.lit && !lamp) return;
+      from = i;
       const r = lamp ? Math.max(LAMP_SOURCE.radius, c.lit ? c.radius : 0) : c.radius;
       const bright = (d) => (lamp
         ? Math.max(LAMP_SOURCE.brightness * (d > LAMP_SOURCE.radius ? 0 : 1 - d / (LAMP_SOURCE.radius + 1)), c.lit ? lightAt(c.radius, d) : 0)
@@ -513,6 +523,7 @@ export class GridState {
     // Van headlights shine forward from each start space (walls block them).
     this.cells.forEach((c, i) => {
       if (c.sub !== 'start') return;
+      from = i;
       const [dx, dy] = FACINGS[this.startFacing(i)];
       const { x, y } = this.coords(i);
       HEADLIGHTS.forEach((v, k) => {

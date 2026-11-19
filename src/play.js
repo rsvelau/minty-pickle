@@ -60,6 +60,7 @@ export function createPlay({
   const st = {
     players: [],       // [{ name, colour, pos, prev, white, black, figure, tag }]
     count: 4,          // how many players (1-4)
+    startMode: 'standard', // 'standard' (11 PM) or 'midnight' (starts at midnight, objectives out)
     cur: 0,            // whose turn
     get pos() { return this.players[this.cur]?.pos ?? -1; },
     set pos(v) { if (this.players[this.cur]) this.players[this.cur].pos = v; },
@@ -406,7 +407,7 @@ export function createPlay({
     }));
     Object.assign(st, {
       cur: 0, steps: 0, roll: 0, phase: s >= 0 ? 'idle' : 'nostart', options: [],
-      turn: 0, round: 1, keys: 0, keyGroups: grid.keyGroups(), pan: true,
+      turn: 0, round: st.startMode === 'midnight' ? TURNS_TO_MIDNIGHT + 1 : 1, keys: 0, keyGroups: grid.keyGroups(), pan: true,
       blackCount: START_BLACK, pool: [], slots: [], maxSlots: MOVE_SLOTS,
     });
     st.used = new Set();
@@ -416,7 +417,7 @@ export function createPlay({
     st.stopReason = '';
     onUsed();
     st.log = s >= 0
-      ? [`${st.count} player${st.count === 1 ? '' : 's'} ready on the Start space (${label(s)}), in the van's headlights: starting light ${Math.round(lightAt(s) * 100)}%. ${who()} rolls first.`]
+      ? [(st.startMode === 'midnight' ? 'Midnight. The town is waiting, and the objectives are out. ' : '') + `${st.count} player${st.count === 1 ? '' : 's'} ready on the Start space (${label(s)}), in the van's headlights: starting light ${Math.round(lightAt(s) * 100)}%. ${who()} rolls first.`]
       : [];
     if (s >= 0) { placeAll(); enter(s)?.(); }
     applyVisibility();
@@ -697,6 +698,12 @@ export function createPlay({
     showOptions();
   }
 
+  // Standard game (11 PM) or the midnight demo (restarts the game).
+  function setStartMode(mode) {
+    st.startMode = mode === 'midnight' ? 'midnight' : 'standard';
+    reset();
+  }
+
   // Change the number of players (restarts the game).
   function setPlayers(n) {
     st.count = Math.max(1, Math.min(4, n));
@@ -710,7 +717,7 @@ export function createPlay({
   }
 
   return {
-    state: st, roll, reset, clockMinutes, midnight, choose, chooseByKey, tick, setActive, boardChanged, setPlayers,
+    state: st, roll, reset, clockMinutes, midnight, setStartMode, choose, chooseByKey, tick, setActive, boardChanged, setPlayers,
     setFast: (on) => { st.fast = !!on; },
     toggleSlot, confirmMove, slotTotal, rollWhite,
     // Doors visibly unlocked by keys the runners have reached (edge keys).

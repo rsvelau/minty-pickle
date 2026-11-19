@@ -11,6 +11,7 @@ import { METERS_PER_CELL, m } from './scale.js';
 import { createStreets } from './street.js';
 import { createBridges } from './bridge.js';
 import { createClocktowers } from './clocktower.js';
+import { dreadUniforms, swayUniforms, setLightSeeds, flickerize, flickerAt, swayFir } from './dread.js';
 import { createPlay, GAME_START_MIN, TURNS_TO_MIDNIGHT, formatClock } from './play.js';
 import { createMarkers, drawMarkerIcon } from './markers.js';
 import {
@@ -296,7 +297,8 @@ function setCamera(name, instant = false) {
 }
 
 // Lighting: dim cool moonlight + sky/ground fill.
-scene.add(new THREE.HemisphereLight('#56627a', '#181a18', 2.4));
+const hemi = new THREE.HemisphereLight('#56627a', '#181a18', 2.4);
+scene.add(hemi);
 const moon = new THREE.DirectionalLight('#a9bcff', 1.8);
 moon.castShadow = true;
 moon.shadow.mapSize.set(2048, 2048);
@@ -353,12 +355,16 @@ tileMat.onBeforeCompile = (shader) => {
 
 deckMat.onBeforeCompile = tileMat.onBeforeCompile;
 terrainify(deckMat, { bridge: true });
+// Lit cells flicker with their light source at midnight (src/dread.js).
+flickerize(tileMat, { part: 'emissive' });
+flickerize(deckMat, { part: 'emissive' });
 terrainify(railMat, { bridge: true });
 
 // Soft light pools that spill past lit cells onto their neighbours.
 const poolMat = new THREE.MeshBasicMaterial({
   map: makeRadialTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.2,
 });
+flickerize(poolMat);
 const poolGeo = new THREE.PlaneGeometry(2.6 * TILE, 2.6 * TILE).rotateX(-Math.PI / 2);
 
 // Unit box with its base at y = 0 (walls, door leaves).
@@ -370,6 +376,7 @@ const doorMat = new THREE.MeshLambertMaterial({ color: '#d08a40', emissive: '#5a
 const frameMat = new THREE.MeshLambertMaterial({ color: '#ffffff' });
 const glassDarkMat = new THREE.MeshLambertMaterial({ color: '#2b3c46', transparent: true, opacity: 0.6, depthWrite: false });
 const glassLitMat = new THREE.MeshBasicMaterial({ color: '#ffd9a0', transparent: true, opacity: 0.78, depthWrite: false });
+flickerize(glassLitMat);
 const FRAME_COLOURS = ['#1f3a2e', '#5a1f1c', '#1b1b1d', '#c8bfa6', '#2a3550']; // green, oxblood, black, cream, navy
 // Walls, doors, windows and foundations are placed at their final height on
 // the CPU (see edgeBase) and stand perfectly upright: the terrain doesn't
@@ -967,7 +974,9 @@ const ZERO = new THREE.Vector3(0, 0, 0);
 let lightLevels = new Float32Array(0);
 let lampsOn = new Uint8Array(0);
 function recomputeLight() {
-  lightLevels = grid.lightLevels();
+  const src = new Int32Array(grid.cells.length);
+  lightLevels = grid.lightLevels(src);
+  setLightSeeds(grid.cols, grid.rows, src); // which light each cell flickers with
   lampsOn = Uint8Array.from(grid.cells, (_, i) => (grid.lampOn(i) ? 1 : 0));
 }
 
@@ -1146,6 +1155,7 @@ const fadeUniforms = { uCamXZ: { value: new THREE.Vector2() }, uFadeD: { value: 
 const firMat = new THREE.MeshLambertMaterial({ vertexColors: true });
 firMat.onBeforeCompile = (shader) => {
   Object.assign(shader.uniforms, fadeUniforms);
+  swayFir(shader); // wind at midnight
   shader.vertexShader = shader.vertexShader
     .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
     .replace('#include <project_vertex>', `#include <project_vertex>
@@ -1203,6 +1213,7 @@ function makeHouse({ ghost = false } = {}) {
       new THREE.MeshBasicMaterial({ color: '#e9a85c' }),
     );
     win.userData.ownMaterial = true;
+    win.userData.flickerWindow = true;
     win.position.set(-w / 4, m(1.6), d / 2 + 0.005);
     g.add(win);
   }
@@ -1213,6 +1224,7 @@ const ghostHouse = makeHouse({ ghost: true });
 ghostHouse.visible = false;
 scene.add(ghostHouse);
 
+let porchLight = null, houseWindow = null;
 function buildSurroundings() {
   disposeChildren(surroundGroup);
   const rnd = rand32(90210);
@@ -1224,6 +1236,9 @@ function buildSurroundings() {
   house.position.set(halfW + 3, 0, halfD - 2);
   surroundGroup.add(house);
   const porch = new THREE.PointLight('#ffb866', 2.2, 4, 1.6);
+  porch.userData.baseIntensity = 2.2;
+  porchLight = porch;
+  houseWindow = house.children.find((o) => o.userData.flickerWindow) ?? null;
   porch.position.set(halfW + 3 - HOUSE_W / 4, m(2.6), halfD - 2 + HOUSE_D / 2 + m(1));
   surroundGroup.add(porch);
 
@@ -1282,7 +1297,9 @@ function buildRain() {
   if (rain) { atmos.remove(rain); rain.geometry.dispose(); }
   rainBox.x = board.w + 50;
   rainBox.z = board.d + 50;
-  const count = Math.min(6000, Math.round(rainBox.x * rainBox.z * 0.3));
+  // Twice the drops are kept ready: a drizzle draws half, the midnight
+  // downpour all of them.
+  const count = 2 * Math.min(6000, Math.round(rainBox.x * rainBox.z * 0.3));
   rainPos = new Float32Array(count * 6);
   rainSpeed = new Float32Array(count);
   for (let i = 0; i < count; i++) {
@@ -1291,6 +1308,7 @@ function buildRain() {
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3).setUsage(THREE.DynamicDrawUsage));
+  geo.setDrawRange(0, count); // half the drops (2 vertices each)
   rain = new THREE.LineSegments(geo, rainMat);
   rain.frustumCulled = false;
   atmos.add(rain);
@@ -1301,14 +1319,19 @@ function spawnDrop(i, y) {
   rainPos.set([x, y, z, x + 0.03, y - STREAK, z + 0.01], i * 6);
 }
 function updateRain(dt) {
-  const n = rainSpeed.length;
+  // At midnight: twice the drops, falling faster and driven by the wind.
+  const d = dread;
+  const n = Math.round(rainSpeed.length * (0.5 + 0.5 * d));
+  rain.geometry.setDrawRange(0, n * 2);
+  rainMat.opacity = 0.22 + 0.1 * d;
+  const fall = 1 + 0.8 * d, drift = 0.3 + 1.6 * d;
   for (let i = 0; i < n; i++) {
     const o = i * 6;
-    const dy = rainSpeed[i] * dt;
+    const dy = rainSpeed[i] * dt * fall;
     rainPos[o + 1] -= dy;
     rainPos[o + 4] -= dy;
-    rainPos[o] += dt * 0.3;
-    rainPos[o + 3] += dt * 0.3;
+    rainPos[o] += dt * drift;
+    rainPos[o + 3] += dt * drift;
     if (rainPos[o + 4] < -0.3) spawnDrop(i, RAIN_TOP);
   }
   rain.geometry.attributes.position.needsUpdate = true;
@@ -1719,9 +1742,12 @@ function setHover(cell) {
   if (prev !== hoverIndex) refreshKeyHighlight();
 }
 
-function setTool(tool) {
+// `start` (play only): 'standard' (11 PM) or 'midnight'; switching restarts.
+function setTool(tool, start) {
+  if (tool === 'play' && start && start !== play.state.startMode) play.setStartMode(start);
   ui.tool = tool;
-  $$('[data-tool]').forEach((b) => b.classList.toggle('on', b.dataset.tool === tool));
+  $$('[data-tool]').forEach((b) => b.classList.toggle('on', b.dataset.tool === tool
+    && (!b.dataset.start || b.dataset.start === play.state.startMode)));
   $('#cellTools').hidden = tool !== 'cells';
   $('#wallTools').hidden = tool !== 'walls';
   $('#moveTools').hidden = tool !== 'move';
@@ -1963,7 +1989,7 @@ function setOrbitMode(on) {
   }
 }
 $$('.brush[data-brush]').forEach((b) => b.addEventListener('click', () => setBrush(b.dataset.brush)));
-$$('[data-tool]').forEach((b) => b.addEventListener('click', () => setTool(b.dataset.tool)));
+$$('[data-tool]').forEach((b) => b.addEventListener('click', () => setTool(b.dataset.tool, b.dataset.start)));
 $('#moveRange').addEventListener('input', (e) => {
   move.range = Number(e.target.value);
   $('#moveRangeOut').textContent = move.range ? `${move.range}` : 'off';
@@ -2419,7 +2445,7 @@ window.addEventListener('keydown', (e) => {
   else if (key === 'm') setTool('move');
   else if (key === 'p') setTool('markers');
   else if (key === 'v') setViewMenu($('#viewList').hidden);
-  else if (key === 'y') setTool('play');
+  else if (key === 'y') setTool('play', 'standard');
   else if (['w', 'd', 'k', 'o', 'x', 'g'].includes(key)) {
     setTool('walls');
     setEdgeBrush({ w: 'wall', d: 'door', k: 'lockedDoor', o: 'oneWayDoor', x: 'erase', g: 'window' }[key]);
@@ -2572,6 +2598,33 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+// Midnight dread (play demo, from midnight on): lights flicker, the
+// clocktower's dials die, the rain comes down harder, the forest sways and
+// the night closes in a little. Eases in over a few seconds.
+let dread = 0;
+let towerOut = 0; // 0..1 progress of the clock dials dying
+let dreadT = 0;
+function updateDread(dt) {
+  const want = ui.tool === 'play' && play.midnight() ? 1 : 0;
+  dread += Math.sign(want - dread) * Math.min(Math.abs(want - dread), dt / 4);
+  towerOut += Math.sign(want - towerOut) * Math.min(Math.abs(want - towerOut), dt / 2.5);
+  dreadT += dt;
+  dreadUniforms.uDread.value = dread;
+  dreadUniforms.uDreadTime.value = dreadT;
+  swayUniforms.uSway.value = dread;
+  swayUniforms.uSwayTime.value = dreadT;
+  // The dials sputter two or three times as they die, then stay dark.
+  const p = towerOut;
+  const sputter = p > 0 && p < 0.85 ? (Math.sin(p * Math.PI * 7) > 0.2 ? 1 : 0.35) : 1;
+  clocktowers.setGlow(Math.max(0, 1 - p) * sputter);
+  // Darker, closer night.
+  hemi.intensity = 2.4 - 0.5 * dread;
+  FOG.near = 38 - 10 * dread;
+  FOG.far = 95 - 18 * dread;
+  if (porchLight) porchLight.intensity = porchLight.userData.baseIntensity * flickerAt(0.71, dreadT, dread);
+  if (houseWindow) houseWindow.material.color.set('#e9a85c').multiplyScalar(flickerAt(0.71, dreadT, dread));
+}
+
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
@@ -2628,6 +2681,7 @@ renderer.setAnimationLoop(() => {
   // Clocktower dials: the game time while playing, 11 PM (the start) otherwise.
   clocktowers.setTime(ui.tool === 'play' ? play.clockMinutes() : GAME_START_MIN);
   clocktowers.tick(dt);
+  updateDread(dt);
   try { positionChoices(); } catch (e) { console.error(e); }
   updateTreeFade();
   if (atmos.visible) updateRain(dt);
@@ -2635,4 +2689,4 @@ renderer.setAnimationLoop(() => {
 });
 
 // Handy for debugging / future tooling from the console.
-window.gridPlanner = { grid, scene, camera, controls, brushes: BRUSHES, terrainHeight, play };
+window.gridPlanner = { grid, scene, camera, controls, brushes: BRUSHES, terrainHeight, play, dread: () => dread };

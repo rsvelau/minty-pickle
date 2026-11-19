@@ -296,6 +296,8 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px
 
 /* Play demo ------------------------------------------------------------------- */
 .play-btn { border-color: #58e0a0; }
+.play-btn-midnight { border-color: #b0405a; color: #f0c8d0; }
+.play-btn-midnight.on { background: #3a1820; border-color: #e05a78; }
 .play-row { display: flex; gap: 10px; align-items: center; }
 .play-main { flex: 1; min-width: 0; }
 .play-main button { width: 100%; }
