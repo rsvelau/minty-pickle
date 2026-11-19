@@ -731,7 +731,11 @@ function refreshPropsAndWalls() {
     frames.setColorAt(nf++, tmpColor.set(colour));
   };
   const PLY = '#a08660', PLANK = '#6e5638';
-  for (const [k, type] of grid.allEdges()) {
+  // In the play demo, doors whose key has been collected are drawn unlocked.
+  const unlockedNow = ui.tool === 'play' && typeof play !== 'undefined' ? play.unlockedEdges() : new Set();
+  for (const [k, type0] of grid.allEdges()) {
+    const unlockedDoor = unlockedNow.has(k) && (type0 === 'lockedDoor' || type0.startsWith('oneWayDoor'));
+    const type = unlockedDoor ? 'door' : type0;
     const { o, x, y } = parseEdgeKey(k);
     const vertical = o === 'v';
     const cx = vertical ? x - grid.cols / 2 : x - grid.cols / 2 + 0.5;
@@ -812,7 +816,8 @@ function refreshPropsAndWalls() {
     // open to. Positive swing opens into the east/south cell.
     const oneWay = type.startsWith('oneWayDoor');
     const sign = type.endsWith('-') ? -1 : 1;
-    const swing = type === 'door' ? 1.2 : oneWay ? 0.5 * sign : 0;
+    // An unlocked door is thrown wide open (further than a plain door).
+    const swing = unlockedDoor ? 1.45 : type === 'door' ? 1.2 : oneWay ? 0.5 * sign : 0;
     const leafH = Math.min(DOOR_H, H) * 0.98;
     const hingeAlong = -DOOR_W / 2;
     const hx = vertical ? cx : cx + hingeAlong;
@@ -824,7 +829,13 @@ function refreshPropsAndWalls() {
       tmpQuat.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, angle),
       tmpScale.set(DOOR_W, leafH, 0.05),
     );
-    doorLeaves.setMatrixAt(nd++, tmpMatrix);
+    if (unlockedDoor) {
+      // Unlocked: the leaf is drawn in pale green (frames mesh takes a colour).
+      frames.setMatrixAt(nf, tmpMatrix);
+      frames.setColorAt(nf++, tmpColor.set('#7fcf8f'));
+    } else {
+      doorLeaves.setMatrixAt(nd++, tmpMatrix);
+    }
     // Rotated marker box into the frames mesh (instance colour).
     const mark = (px, py, pz, sx, sy, sz, rot, colour) => {
       tmpMatrix.compose(tmpPos.set(px, py + EY, pz), tmpQuat.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rot), tmpScale.set(sx, sy, sz));
@@ -832,7 +843,13 @@ function refreshPropsAndWalls() {
       frames.setColorAt(nf++, tmpColor.set(colour));
     };
     const edgeRot = vertical ? Math.PI / 2 : 0; // a box's x axis along the edge
-    if (type === 'lockedDoor') {
+    if (unlockedDoor) {
+      // Bright green threshold and an open padlock hanging on the jamb.
+      mark(cx, FLOOR_H, cz, DOOR_W, 0.018, 0.32, edgeRot, '#3fd06a');
+      const jx = vertical ? cx : cx + DOOR_W / 2, jz = vertical ? cz + DOOR_W / 2 : cz;
+      mark(jx, FLOOR_H + leafH * 0.45, jz, m(0.16), m(0.14), m(0.07), edgeRot, '#c9a23a');
+      mark(jx, FLOOR_H + leafH * 0.45 + m(0.14), jz + (vertical ? 0 : 0), m(0.04), m(0.12), m(0.04), edgeRot, '#c9a23a');
+    } else if (type === 'lockedDoor') {
       // Red lock plate through the leaf (shows on both faces), a brass lock,
       // and a red threshold.
       mark(cx, FLOOR_H + leafH * 0.4, cz, DOOR_W * 0.55, Math.max(leafH * 0.18, 0.01), 0.054, edgeRot, '#b8322a');
@@ -1695,6 +1712,7 @@ function setTool(tool) {
   }
   play.setActive(tool === 'play');
   refreshMarkers();
+  refreshPropsAndWalls();
   renderPlay();
   setHoverEdge(null);
   setHover(null);
@@ -2020,7 +2038,7 @@ const play = createPlay({
   grid, scene, camera, controls, cellToWorld, terrainify, cellLabel,
   cellTop: (i) => Math.max(visibleTop(i), WATER_Y) + 0.01,
   onChange: renderPlay,
-  onUsed: () => refreshMarkers(),
+  onUsed: () => { refreshMarkers(); refreshPropsAndWalls(); },
   onCollect: (i, type, text) => {
     const { x, y } = grid.coords(i);
     const p = cellToWorld(x, y);

@@ -334,34 +334,43 @@ export function createPlay({
     let text, msg;
     if (m === 'whiteDice') {
       st.white++;
-      text = `${who()} +1 White Die`;
+      text = 'White Dice';
       msg = `${who()} collected a single-use White Die at ${label(i)}.`;
     } else if (m === 'blackDice') {
       st.black++;
-      text = `${who()}: Black Die attuned`;
+      text = 'Black Dice';
       msg = `${who()} attuned a Black Die at ${label(i)}.`;
     } else if (m === 'research') {
-      text = 'Evidence uncovered';
+      text = 'Research';
       msg = `${who()} used Research at ${label(i)}: a piece of evidence uncovered for free.`;
     } else if (m === 'investigation') {
-      text = 'Investigate here';
+      text = 'Investigation';
       msg = `${who()} found an investigation spot at ${label(i)}.`;
     } else if (m === 'objective') {
-      text = 'Objective spot';
+      text = 'Objective';
       msg = `Objective marker at ${label(i)} (active once the monster reveals itself).`;
     } else if (m === 'key') {
       let n = 0;
+      var unlocks = -1;
       const gi = st.keyGroups?.cellGroup.get(i);
       if (gi !== undefined && !(st.keys & (1 << gi))) {
         st.keys |= 1 << gi;
+        unlocks = gi;
         n = st.keyGroups.groups[gi].doors.size;
       }
-      text = `Key: ${n} door${n === 1 ? '' : 's'} unlocked`;
+      text = 'Key';
       msg = `${who()} picked up a key at ${label(i)}: ${n} door${n === 1 ? '' : 's'} in its building unlocked for everyone.`;
     }
     st.stopReason = MARKERS[m].label;
     log(msg);
-    return () => { st.shownUsed.add(i); onCollect(i, m, text); onUsed(); };
+    const opened = m === 'key' ? unlocks : -1;
+    return () => {
+      st.shownUsed.add(i);
+      // The building's doors visibly unlock when the runner reaches the key.
+      if (opened >= 0) st.shownKeys |= 1 << opened;
+      onCollect(i, m, text);
+      onUsed();
+    };
   }
 
   // Landing at the end of a move.
@@ -381,6 +390,7 @@ export function createPlay({
     });
     st.used = new Set();
     st.shownUsed = new Set();
+    st.shownKeys = 0;
     st.stopAt = -1;
     st.stopReason = '';
     onUsed();
@@ -618,6 +628,13 @@ export function createPlay({
   return {
     state: st, roll, reset, choose, chooseByKey, tick, setActive, boardChanged, setPlayers,
     setFast: (on) => { st.fast = !!on; },
+    // Doors visibly unlocked by keys the runners have reached (edge keys).
+    unlockedEdges: () => {
+      const out = new Set();
+      if (!st.shownKeys || !st.keyGroups) return out;
+      st.keyGroups.groups.forEach((g, gi) => { if (st.shownKeys & (1 << gi)) for (const k of g.doors) out.add(k); });
+      return out;
+    },
     // Is anyone still running into place?
     anyRunning: () => st.players.some(running),
     isOption: (i) => st.phase === 'choosing' && st.options.some((o) => o.i === i),

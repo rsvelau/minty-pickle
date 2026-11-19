@@ -162,6 +162,10 @@ markers** in View hides them. Marker art lives in `src/markers.js`; the list of 
   player while the last figure is still jogging into place. Several players can be running at once; marker
   bursts and fading happen when a runner actually reaches the marker. Holding the board fast-forwards
   everyone who is still running.
+- **Unlocked doors look unlocked.** When a runner reaches a Key, every locked and one-way door in its
+  building changes to an unlocked door: thrown wide open in pale green, with a bright green threshold and
+  an open padlock on the jamb (and from then on they pass both ways). This only shows while playing;
+  Restart locks them again.
 - **Kit:** every figure carries a dim incandescent flashlight (a warm lens and a faint beam, swinging with
   the arm; it's for looks and doesn't change the lighting rules) and a backpack: P1 a navy 90s school pack,
   P2 a neon colour-block pack, P3 a canvas daypack with a rolled blanket, P4 an external-frame hiking pack
@@ -187,8 +191,8 @@ markers** in View hides them. Marker art lives in `src/markers.js`; the list of 
   (against their arrow) stop it; walking over a **Key** unlocks its building's locked and one-way doors for
   the rest of the game.
 - **Touching a marker** (passing over it or landing on it) collects it straight away: the badge pops with a
-  coloured flash and a label floats up (`+1 White Die`, `Black Die attuned`, `Evidence uncovered`,
-  `Key: 2 doors unlocked`, `Investigate here`, `Objective spot`). The pawn **stops on every marker** and asks
+  coloured flash and a label floats up with the marker's name (`White Dice`, `Black Dice`, `Research`,
+  `Key`, `Investigation`, `Objective`). The pawn **stops on every marker** and asks
   which way to go next, even if there's only one way on. Each marker works once; the panel counts White Dice
   collected and Black Dice attuned.
 - Collected markers turn into a smaller greyscale badge with a green check mark, and hover says
