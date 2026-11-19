@@ -2076,11 +2076,18 @@ function renderTray() {
     else slots.push('<span class="tdie slot" title="Third slot needs a lit cell at the start of the turn" style="opacity:.35">dark</span>');
   }
   $('#traySlots').innerHTML = slots.join('');
+  // Unrolled white dice in this player's reserve: tap one to roll it for this turn.
+  $('#trayReserveRow').hidden = !s.white;
+  $('#trayReserve').innerHTML = Array.from({ length: s.white }, () =>
+    `<button class="tdie white reserve" ${rolling ? 'disabled' : ''} title="Roll this white die (usable this turn only)">roll</button>`).join('');
+  [...$('#trayReserve').children].forEach((b) => { b.onclick = () => play.rollWhite(); });
   [...$('#traySlots').querySelectorAll('.in-slot')].forEach((b, k) => { b.onclick = () => play.toggleSlot(s.slots[k]); });
   $('#trayTotal').textContent = rolling ? '…' : play.slotTotal();
   $('#trayMove').disabled = rolling;
   $('#trayMove').textContent = play.slotTotal() ? `Move ${play.slotTotal()}` : 'Stay put';
-  $('#trayHint').textContent = rolling ? 'Rolling…' : s.slots.length < s.maxSlots ? 'Tap dice to slot them' : 'Slots full';
+  $('#trayHint').textContent = rolling ? 'Rolling…' : s.slots.length < s.maxSlots
+    ? (s.pool.some((d) => d.kind === 'white') ? 'Rolled white dice are discarded after this turn' : 'Tap dice to slot them')
+    : 'Slots full';
 }
 const LIT_SLOTS_UI = 3;
 $('#trayMove').addEventListener('click', () => play.confirmMove());

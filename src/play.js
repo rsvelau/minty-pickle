@@ -415,12 +415,9 @@ export function createPlay({
     if (st.phase === 'done') nextPlayer();
     st.keyGroups = grid.keyGroups(); // pick up board edits since last turn
     const d6 = () => 1 + Math.floor(Math.random() * 6);
-    // Roll every black die (shared count, renews each turn) and the player's
-    // own single-use white dice. White dice are only spent if slotted.
-    st.pool = [
-      ...Array.from({ length: st.blackCount }, () => ({ kind: 'black', v: d6() })),
-      ...Array.from({ length: st.white }, () => ({ kind: 'white', v: d6() })),
-    ];
+    // Roll every black die (shared count, renews each turn). White dice stay
+    // in the player's reserve, unrolled, until they choose to roll one.
+    st.pool = Array.from({ length: st.blackCount }, () => ({ kind: 'black', v: d6() }));
     st.slots = [];
     st.lit = lightAt(st.pos) >= LIT_THRESHOLD;
     st.maxSlots = st.lit ? LIT_SLOTS : MOVE_SLOTS;
@@ -474,27 +471,37 @@ export function createPlay({
     else if (st.slots.length < st.maxSlots) st.slots.push(n);
     onChange();
   }
+  // Take one white die out of reserve and roll it. It can only be used this
+  // turn: rolled white dice are discarded when the turn ends, slotted or not.
+  function rollWhite() {
+    if (st.phase !== 'slotting' || st.white <= 0) return;
+    st.white--;
+    const v = 1 + Math.floor(Math.random() * 6);
+    st.pool.push({ kind: 'white', v, fresh: true });
+    log(`${who()} rolled a white die from reserve: ${v} (${st.white} left in reserve).`);
+    onChange();
+  }
   const slotTotal = () => st.slots.reduce((a, n) => a + st.pool[n].v, 0);
 
   // Lock in the slotted dice and move that many cells (0 = stay put).
   function confirmMove() {
     if (st.phase !== 'slotting') return;
     const used = st.slots.map((n) => st.pool[n]);
-    const whites = used.filter((d) => d.kind === 'white').length;
-    st.white -= whites; // single-use: gone once slotted
+    const rolledWhite = st.pool.filter((d) => d.kind === 'white').length;
+    const discarded = rolledWhite - used.filter((d) => d.kind === 'white').length;
     st.roll = slotTotal();
     st.steps = st.roll;
     st.prev = -1;
     st.pool = [];
     st.slots = [];
+    if (discarded) log(`${who()} discards ${discarded} unused white ${discarded === 1 ? 'die' : 'dice'}.`);
     if (!st.roll) {
       log(`${who()} stays put.`);
       nextPlayer();
       onChange();
       return;
     }
-    log(`${who()} moves ${st.roll} (${used.map((d) => `${d.kind} ${d.v}`).join(' + ')})` +
-      `${whites ? `, spending ${whites} white ${whites === 1 ? 'die' : 'dice'}` : ''}.`);
+    log(`${who()} moves ${st.roll} (${used.map((d) => `${d.kind} ${d.v}`).join(' + ')}).`);
     st.phase = 'moving';
     advance();
   }
@@ -580,9 +587,8 @@ export function createPlay({
       if (face !== st.rollFace) { st.rollFace = face; onChange(); }
       if (st.rollT >= ROLL_TIME) {
         st.phase = 'slotting';
-        const b = st.pool.filter((d) => d.kind === 'black').map((d) => d.v);
-        const w = st.pool.filter((d) => d.kind === 'white').map((d) => d.v);
-        log(`${who()} rolled black ${b.join(', ')}${w.length ? ` and white ${w.join(', ')}` : ''}.` +
+        const b = st.pool.map((d) => d.v);
+        log(`${who()} rolled black ${b.join(', ')}.` +
           ` ${st.maxSlots} movement slots${st.lit ? ' (standing in light)' : ''}.`);
         onChange();
       }
@@ -678,7 +684,7 @@ export function createPlay({
   return {
     state: st, roll, reset, choose, chooseByKey, tick, setActive, boardChanged, setPlayers,
     setFast: (on) => { st.fast = !!on; },
-    toggleSlot, confirmMove, slotTotal,
+    toggleSlot, confirmMove, slotTotal, rollWhite,
     // Doors visibly unlocked by keys the runners have reached (edge keys).
     unlockedEdges: () => {
       const out = new Set();
