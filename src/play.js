@@ -39,6 +39,20 @@ export const MOVE_SLOTS = 2;    // movement slots each turn...
 export const LIT_SLOTS = 3;     // ...or this many when starting the turn in a lit cell
 export const LIT_THRESHOLD = 0.5; // light level (0..1) that counts as a lit cell
 
+// Game clock: the night starts at 11 PM and each turn (every player moving
+// once) is 5 minutes, so 12 turns run to midnight. Objective markers stay
+// hidden until midnight (they'll depend on which monster appears).
+export const GAME_START_MIN = 23 * 60;
+export const TURN_MINUTES = 5;
+export const TURNS_TO_MIDNIGHT = 12;
+export const MIDNIGHT_MIN = GAME_START_MIN + TURN_MINUTES * TURNS_TO_MIDNIGHT;
+// "11:05 PM", "12:00 AM".
+export function formatClock(min) {
+  const h24 = Math.floor(min / 60) % 24, mm = min % 60;
+  const h12 = h24 % 12 || 12;
+  return `${h12}:${String(mm).padStart(2, '0')} ${h24 < 12 ? 'AM' : 'PM'}`;
+}
+
 export function createPlay({
   grid, scene, camera, controls, cellToWorld, cellTop, terrainify, cellLabel, onChange,
   onUsed = () => {}, onCollect = () => {}, lightAt = () => 0,
@@ -330,6 +344,7 @@ export function createPlay({
     const c = grid.cells[i];
     const m = c.marker;
     if (!m || !MARKERS[m]) return null;
+    if (m === 'objective' && !midnight()) return null; // not there yet
     st.stopAt = i;
     if (st.used.has(i)) {
       st.stopReason = `${MARKERS[m].label} (already collected)`;
@@ -391,7 +406,7 @@ export function createPlay({
     }));
     Object.assign(st, {
       cur: 0, steps: 0, roll: 0, phase: s >= 0 ? 'idle' : 'nostart', options: [],
-      turn: 0, keys: 0, keyGroups: grid.keyGroups(), pan: true,
+      turn: 0, round: 1, keys: 0, keyGroups: grid.keyGroups(), pan: true,
       blackCount: START_BLACK, pool: [], slots: [], maxSlots: MOVE_SLOTS,
     });
     st.used = new Set();
@@ -506,8 +521,21 @@ export function createPlay({
     advance();
   }
 
+  // Game time: turn N starts at 11 PM + 5 (N - 1) minutes.
+  function clockMinutes() { return GAME_START_MIN + ((st.round ?? 1) - 1) * TURN_MINUTES; }
+  function midnight() { return clockMinutes() >= MIDNIGHT_MIN; }
+
   function nextPlayer() {
     st.cur = (st.cur + 1) % st.players.length;
+    if (st.cur === 0) {
+      // Everyone has moved: the clock moves on 5 minutes.
+      const wasMidnight = midnight();
+      st.round++;
+      if (midnight() && !wasMidnight) {
+        log('Midnight. The clocktower strikes twelve, and the objectives appear.');
+        onUsed(); // reveal objective markers
+      }
+    }
     st.pan = true;
     st.phase = 'idle';
     st.stopAt = -1;
@@ -682,7 +710,7 @@ export function createPlay({
   }
 
   return {
-    state: st, roll, reset, choose, chooseByKey, tick, setActive, boardChanged, setPlayers,
+    state: st, roll, reset, clockMinutes, midnight, choose, chooseByKey, tick, setActive, boardChanged, setPlayers,
     setFast: (on) => { st.fast = !!on; },
     toggleSlot, confirmMove, slotTotal, rollWhite,
     // Doors visibly unlocked by keys the runners have reached (edge keys).

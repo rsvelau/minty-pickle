@@ -16,7 +16,7 @@ the edges between cells.
 
 | Category | Subcategories |
 |----------|---------------|
-| Outdoor | Ground (default), Street, Start space, Path, Cemetery, Cemetery path, Forest cemetery\*, Forest\*, Brambles\* |
+| Outdoor | Ground (default), Street, Start space, Old Clocktower\*, Path, Cemetery, Cemetery path, Forest cemetery\*, Forest\*, Brambles\* |
 | Indoor | Hardwood (default), Carpet, Condemned\* |
 | Water | Lake, River (always start blocked) |
 
@@ -49,6 +49,14 @@ cells become Street when loaded. The street surface lives in `src/street.js`.
 - **An antique street lamp**: the town is a late-1800s logging town kept historic, so lamps are cast-iron posts
   in old dark-green paint (flared base, fluted shaft, ladder bar) with an acorn glass globe, cap and finial,
   about 4.4 m tall. At a T it stands on the sidewalk opposite the side street; at a crossing, on a corner.
+
+### Old Clocktower
+
+A **2×2** landmark: a late-1800s stone tower with a weathered clapboard clock stage, four backlit dials, an
+open belfry and a steep spire. The brush paints a whole 2×2 block with the cell you click as its north-west
+corner (Rectangle mode tiles towers 2×2 at a time). The ground under it is levelled like a building. Its
+dials show **11:00 PM** while planning and the **game time** in the play demo; the minute hand sweeps
+forward each turn. Model: `src/clocktower.js`.
 
 ### Start space
 
@@ -167,6 +175,12 @@ markers** in View hides them. Marker art lives in `src/markers.js`; the list of 
 - **White dice are personal and kept in reserve, unrolled.** Each player keeps the White Dice they collect.
   During slotting, tap a die in the tray's **Reserve** row to roll it. A rolled white die can only be used
   that turn: it's discarded when you move (or stay put), whether you slotted it or not.
+- **Game clock.** The night starts at **11:00 PM**; each turn (every player moving once) is
+  **5 minutes**, so 12 turns run to **midnight**. A small counter at the top of the screen shows the time
+  and turn (`11:05 PM · Turn 2/12`). Constants: `GAME_START_MIN`, `TURN_MINUTES`, `TURNS_TO_MIDNIGHT` in
+  `src/play.js`.
+- **Objectives are hidden until midnight:** in the play demo, Objective markers don't show and can't be
+  touched until the clock strikes twelve (which ones appear will depend on the monster, coming later).
 - **Turns don't wait for running.** A move is worked out the moment the player gives their input. As soon
   as they've made their last choice (or none is needed), the turn passes and the camera pans to the next
   player while the last figure is still jogging into place. Several players can be running at once; marker

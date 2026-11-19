@@ -487,3 +487,28 @@ body.playing .help { display: none; }
 
 .tray-row[hidden] { display: none; }
 .tdie.reserve { grid-template: none; font-size: 11px; font-weight: 600; letter-spacing: .05em; color: #555; text-transform: uppercase; display: grid; place-items: center; border-style: dashed; }
+
+/* Game clock: tiny and quiet, top centre (between the menu buttons). */
+.game-clock {
+  position: fixed;
+  top: calc(18px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 7;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(10, 12, 16, 0.45);
+  color: rgba(232, 226, 205, 0.8);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.game-clock[hidden] { display: none; }
+.game-clock .sep { opacity: 0.45; margin: 0 4px; }
+.game-clock.midnight { color: #f0c060; }
+@media (max-width: 520px) {
+  .game-clock { font-size: 11px; padding: 2px 7px; }
+  .game-clock .turn-word { display: none; }
+}

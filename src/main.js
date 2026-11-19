@@ -10,7 +10,8 @@ import { createProps } from './props.js';
 import { METERS_PER_CELL, m } from './scale.js';
 import { createStreets } from './street.js';
 import { createBridges } from './bridge.js';
-import { createPlay } from './play.js';
+import { createClocktowers } from './clocktower.js';
+import { createPlay, GAME_START_MIN, TURNS_TO_MIDNIGHT, formatClock } from './play.js';
 import { createMarkers, drawMarkerIcon } from './markers.js';
 import {
   installTerrain, setTerrain, terrainHeight, rayTerrain, isFlat, terrainId, TERRAIN_PRESETS,
@@ -60,6 +61,7 @@ const SUB_LOOK = {
   hardwood: { unlit: '#7a5338', lit: '#f0a85a', area: '#9a6a3e' },
   carpet: { unlit: '#58303a', lit: '#c4727c', area: '#8a3f52' },
   condemned: { unlit: '#3a3430', lit: '#8a7a68', area: '#6a4a3e' },
+  clocktower: { unlit: '#46443f', lit: '#a39d8e', area: '#b08850' }, // cobbled plaza
 };
 
 
@@ -379,6 +381,7 @@ const FRAME_COLOURS = ['#1f3a2e', '#5a1f1c', '#1b1b1d', '#c8bfa6', '#2a3550']; /
 // ---------------------------------------------------------------------------
 
 let N = 0;
+let clocktowers;
 let tiles, pools, glowAttr, slab, ground, decks, deckGlow, rails;
 let walls, doorLeaves, frames, glassDark, glassLit, foundations;
 const foundationMat = new THREE.MeshLambertMaterial({ color: '#615b51' });
@@ -503,6 +506,8 @@ function buildBoard() {
   bridges = createBridges(boardGroup);
   streets?.clear();
   streets = createStreets(boardGroup);
+  clocktowers?.clear();
+  clocktowers = createClocktowers(boardGroup);
 
   // Walls and doors on cell edges (a door = two short wall pieces, an
   // optional lintel, and an open door leaf).
@@ -631,10 +636,11 @@ function refreshWaterAndBridges() {
 const markers = createMarkers(scene);
 // Markers the play demo has collected or used (set once the demo exists).
 let markerUsed = () => false;
+let markerHidden = () => false; // objectives stay hidden in play until midnight
 function refreshMarkers() {
   const list = [];
   grid.cells.forEach((c, i) => {
-    if (!c.marker) return;
+    if (!c.marker || markerHidden(i)) return;
     const { x, y } = grid.coords(i);
     const p = cellToWorld(x, y);
     list.push({ type: c.marker, x: p.x, y: Math.max(visibleTop(i), WATER_Y) + terrainHeight(p.x, p.z, { bridge: c.bridge }), z: p.z, dim: !c.walkable, faded: markerUsed(i) });
@@ -675,6 +681,14 @@ function refreshKeyHighlight() {
 
 // Props on cells (main view only) and walls/doors on edges (every view).
 function refreshPropsAndWalls() {
+  clocktowers.update({
+    visible: ui.view === 'all',
+    anchors: grid.clocktowers().map((i) => {
+      const { x, y } = grid.coords(i);
+      const p = cellToWorld(x, y);
+      return { x: p.x + TILE / 2, y: targetHeights[i], z: p.z + TILE / 2 };
+    }),
+  });
   props.update(grid, {
     visible: ui.view === 'all',
     cellToWorld,
@@ -884,12 +898,14 @@ function refreshPropsAndWalls() {
   let nfd = 0;
   if (!isFlat()) {
     for (let i = 0; i < N; i++) {
-      if (grid.cells[i].area !== 'indoor') continue;
+      const kind = (c) => (c.area === 'indoor' ? 'indoor' : c.sub === 'clocktower' ? 'tower' : null);
+      const k0 = kind(grid.cells[i]);
+      if (!k0) continue;
       const { x, y } = grid.coords(i);
       const level = cellLevel(x, y);
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const nx = x + dx, ny = y + dy;
-        if (grid.inBounds(nx, ny) && grid.cells[grid.index(nx, ny)].area === 'indoor') continue;
+        if (grid.inBounds(nx, ny) && kind(grid.cells[grid.index(nx, ny)]) === k0) continue;
         const out = cellLevel(nx, ny);
         const diff = out - level;
         if (Math.abs(diff) < 0.004) continue;
@@ -1410,6 +1426,22 @@ function currentPatch() {
   };
 }
 
+// The Old Clocktower brush paints a whole 2x2 tower: the cell under the
+// pointer is its north-west corner (cells already part of a tower are left
+// alone, so dragging lays towers side by side instead of smearing them).
+const towerBrush = () => ui.tool !== 'markers' && ui.brush === 'outdoor:clocktower';
+function applyAt(x, y, patch, opts) {
+  if (!towerBrush()) return grid.apply(grid.index(x, y), patch, opts) ? [grid.index(x, y)] : [];
+  if (grid.cells[grid.index(x, y)].sub === 'clocktower') return [];
+  const out = [];
+  for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+    if (!grid.inBounds(x + dx, y + dy)) continue;
+    const i = grid.index(x + dx, y + dy);
+    if (grid.apply(i, patch, opts)) out.push(i);
+  }
+  return out;
+}
+
 function paintLine(a, b) {
   // Bresenham so quick drags don't skip cells.
   const patch = currentPatch();
@@ -1419,7 +1451,7 @@ function paintLine(a, b) {
   const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
   let err = dx + dy;
   for (;;) {
-    grid.apply(grid.index(x0, y0), patch);
+    applyAt(x0, y0, patch);
     if (x0 === x1 && y0 === y1) break;
     const e2 = 2 * err;
     if (e2 >= dy) { err += dy; x0 += sx; }
@@ -1431,10 +1463,10 @@ function paintRect(a, b) {
   grid.revertStroke();
   const patch = currentPatch();
   const touched = [];
-  for (let y = Math.min(a.y, b.y); y <= Math.max(a.y, b.y); y++) {
-    for (let x = Math.min(a.x, b.x); x <= Math.max(a.x, b.x); x++) {
-      const i = grid.index(x, y);
-      if (grid.apply(i, patch, { silent: true })) touched.push(i);
+  const step = towerBrush() ? 2 : 1; // towers tile the rectangle 2x2 at a time
+  for (let y = Math.min(a.y, b.y); y <= Math.max(a.y, b.y); y += step) {
+    for (let x = Math.min(a.x, b.x); x <= Math.max(a.x, b.x); x += step) {
+      touched.push(...applyAt(x, y, patch, { silent: true }));
     }
   }
   if (touched.length) grid.emit(touched);
@@ -1696,6 +1728,7 @@ function setTool(tool) {
   $('#markerTools').hidden = tool !== 'markers';
   $('#playTools').hidden = tool !== 'play';
   $('#playHud').hidden = tool !== 'play';
+  if (tool !== 'play') $('#gameClock').hidden = true;
   if (tool !== 'play') $('#playTray').hidden = true;
   document.body.classList.toggle('playing', tool === 'play');
   // Phones: fold the panel away so the board and the play bar are visible.
@@ -1978,6 +2011,7 @@ function renderPlay() {
   }).join('');
   $('#playLog').innerHTML = s.log.map((l) => `<li>${l}</li>`).join('');
   renderTray();
+  renderClock();
   // Floating bar.
   [...$('#hudDie').children].forEach((el, n) => el.classList.toggle('on', !!face && PIPS[face].includes(n)));
   $('#hudRoll').disabled = roll.disabled;
@@ -2054,7 +2088,21 @@ const play = createPlay({
   },
 });
 markerUsed = (i) => ui.tool === 'play' && play.state.shownUsed.has(i);
+markerHidden = (i) => ui.tool === 'play' && grid.cells[i].marker === 'objective' && !play.midnight();
 $('#playRoll').addEventListener('click', () => play.roll());
+
+// Game clock: "11:05 PM · Turn 2/12"; from midnight on, just the time.
+function renderClock() {
+  const el = $('#gameClock');
+  el.hidden = ui.tool !== 'play' || play.state.phase === 'nostart';
+  if (el.hidden) return;
+  const r = play.state.round;
+  const t = formatClock(play.clockMinutes());
+  el.classList.toggle('midnight', play.midnight());
+  el.innerHTML = r <= TURNS_TO_MIDNIGHT
+    ? `${t}<span class="sep">·</span><span class="turn-word">Turn </span>${r}/${TURNS_TO_MIDNIGHT}`
+    : `${t}<span class="sep">·</span>${r === TURNS_TO_MIDNIGHT + 1 ? 'Midnight' : `Turn ${r}`}`;
+}
 
 // Dice tray: tap rolled dice into movement slots, then Move.
 function dieHTML(d, extra = '') {
@@ -2412,7 +2460,7 @@ function updateHoverInfo() {
     (c.bridge ? `<span class="tag">Bridge (spans ${grid.bridgeAxis(x, y) === 'x' ? 'E–W' : 'N–S'})</span>` : '') +
     `<span class="tag">${lightLabel(c, hoverIndex)}</span>` +
     `<span class="tag">${c.walkable ? 'Walkable' : 'Blocked'}</span>` +
-    (c.marker ? `<span class="tag marker-tag">${markerLabel(c, hoverIndex)}</span>` : '');
+    (c.marker && !markerHidden(hoverIndex) ? `<span class="tag marker-tag">${markerLabel(c, hoverIndex)}</span>` : '');
 }
 
 function edgeLabel(o, x, y, type) {
@@ -2577,6 +2625,9 @@ renderer.setAnimationLoop(() => {
   // A bug in game code must never stop the render loop (the board would
   // freeze and stop taking input): log it and keep going.
   try { play.tick(dt, clock.elapsedTime); } catch (e) { console.error(e); }
+  // Clocktower dials: the game time while playing, 11 PM (the start) otherwise.
+  clocktowers.setTime(ui.tool === 'play' ? play.clockMinutes() : GAME_START_MIN);
+  clocktowers.tick(dt);
   try { positionChoices(); } catch (e) { console.error(e); }
   updateTreeFade();
   if (atmos.visible) updateRain(dt);

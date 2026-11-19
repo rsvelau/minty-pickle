@@ -25,6 +25,9 @@ export const AREAS = {
       // Two-cell start: the van sits on this cell facing along the road; the
       // players start on the cell in front of it, in the headlights.
       start: { label: 'Start space', walkable: false },
+      // Old Clocktower: a 2x2 landmark whose dials show the game time. The
+      // brush paints a 2x2 block; each complete 2x2 of these cells is a tower.
+      clocktower: { label: 'Old Clocktower', walkable: false },
       path: { label: 'Path' },
       cemetery: { label: 'Cemetery' },
       cemeteryPath: { label: 'Cemetery path' },
@@ -546,6 +549,24 @@ export class GridState {
     const [dx, dy] = FACINGS[this.startFacing(i)];
     const { x, y } = this.coords(i);
     return this.inBounds(x + dx, y + dy) ? this.index(x + dx, y + dy) : -1;
+  }
+
+  // --- clocktowers ------------------------------------------------------------
+  // North-west cells of each tower: clocktower cells grouped into 2x2 blocks,
+  // scanning row by row (leftover cells are just the tower's plaza).
+  clocktowers() {
+    const used = new Uint8Array(this.cells.length);
+    const is = (x, y) => this.inBounds(x, y) && !used[this.index(x, y)]
+      && this.cells[this.index(x, y)].sub === 'clocktower';
+    const out = [];
+    for (let y = 0; y < this.rows; y++) {
+      for (let x = 0; x < this.cols; x++) {
+        if (!(is(x, y) && is(x + 1, y) && is(x, y + 1) && is(x + 1, y + 1))) continue;
+        for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) used[this.index(x + dx, y + dy)] = 1;
+        out.push(this.index(x, y));
+      }
+    }
+    return out;
   }
 
   // --- markers ----------------------------------------------------------------

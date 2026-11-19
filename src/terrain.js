@@ -236,6 +236,7 @@ export function updateOverrides(grid) {
     const c = grid.cells[i];
     if (c.area === 'water') return c.sub === 'river' ? 'river' : 'lake';
     if (c.area === 'indoor') return 'indoor';
+    if (c.sub === 'clocktower') return 'tower'; // levelled like a building
     return null;
   };
   if (current !== 'flat') {
@@ -244,7 +245,7 @@ export function updateOverrides(grid) {
       if (!k || seen[i]) continue;
       const cells = flood(i, (m) => kind(m) === k);
       const hs = cells.map(centre);
-      const level = k === 'indoor' ? hs.reduce((a, b) => a + b, 0) / hs.length : Math.min(...hs);
+      const level = k === 'indoor' || k === 'tower' ? hs.reduce((a, b) => a + b, 0) / hs.length : Math.min(...hs);
       for (const j of cells) { data[j * 4] = 1; data[j * 4 + 1] = level; }
     }
     // Bridges: deck level from the land beyond each end of the span.
