@@ -59,6 +59,7 @@ const SUB_LOOK = {
   brambles: { unlit: '#2e2926', lit: '#7a6a5c', area: '#6b4a5e' },
   hardwood: { unlit: '#7a5338', lit: '#f0a85a', area: '#9a6a3e' },
   carpet: { unlit: '#58303a', lit: '#c4727c', area: '#8a3f52' },
+  condemned: { unlit: '#3a3430', lit: '#8a7a68', area: '#6a4a3e' },
 };
 
 
@@ -715,7 +716,22 @@ function refreshPropsAndWalls() {
     mesh.setMatrixAt(n, tmpMatrix);
     if (colour) mesh.setColorAt(n, tmpColor.set(colour));
   };
-  for (const [k, type] of grid.edges) {
+  // Boards nailed across an opening, as a box in the wall plane rotated by
+  // `tilt` (radians, about the wall's normal).
+  const board = (cx, cz, along, yMid, len, h, thick, vertical, tilt, colour) => {
+    const q = new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, vertical ? Math.PI / 2 : 0)
+      .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), tilt));
+    tmpMatrix.compose(
+      tmpPos.set(vertical ? cx : cx + along, yMid + EY - h / 2 * 0, vertical ? cz + along : cz),
+      q, tmpScale.set(len, h, thick),
+    );
+    // unitBoxGeo has its base at y = 0: shift so the board is centred.
+    tmpMatrix.multiply(new THREE.Matrix4().makeTranslation(0, -0.5, 0));
+    frames.setMatrixAt(nf, tmpMatrix);
+    frames.setColorAt(nf++, tmpColor.set(colour));
+  };
+  const PLY = '#a08660', PLANK = '#6e5638';
+  for (const [k, type] of grid.allEdges()) {
     const { o, x, y } = parseEdgeKey(k);
     const vertical = o === 'v';
     const cx = vertical ? x - grid.cols / 2 : x - grid.cols / 2 + 0.5;
@@ -763,6 +779,27 @@ function refreshPropsAndWalls() {
           for (let i = 1; i < 3; i++) strip(frames, nf++, cx, cz, -inner / 2 + (inner * i) / 3, bar, FLOOR_H + transom, FLOOR_H + top, WALL_T * 0.8, vertical, colour);
         }
       }
+      continue;
+    }
+    if (type === 'boardedWindow' || type === 'boardedDoor') {
+      // Condemned: the opening is sheeted with weathered plywood and nailed
+      // across with planks.
+      const door = type === 'boardedDoor';
+      const open = door ? DOOR_W : TILE - 2 * m(0.35);
+      const side = (TILE - open) / 2;
+      const y0 = door ? 0 : (ui.lowWalls ? m(0.3) : m(0.6));
+      const y1 = Math.min(door ? DOOR_H : m(2.8), H);
+      piece(cx, cz, -(open / 2 + side / 2), side + WALL_T, FLOOR_H, H, vertical);
+      piece(cx, cz, open / 2 + side / 2, side + WALL_T, FLOOR_H, H, vertical);
+      if (y0 > 0) piece(cx, cz, 0, open, FLOOR_H, y0, vertical);
+      if (H > y1) piece(cx, cz, 0, open, FLOOR_H + y1, H - y1, vertical);
+      strip(frames, nf++, cx, cz, 0, open, FLOOR_H + y0, FLOOR_H + y1, WALL_T * 0.9, vertical, PLY);
+      const hgt = y1 - y0, mid = FLOOR_H + (y0 + y1) / 2;
+      const diag = Math.hypot(open, hgt) * 0.86;
+      const ang = Math.atan2(hgt, open);
+      board(cx, cz, 0, mid, diag, m(0.16), WALL_T * 1.25, vertical, ang, PLANK);
+      board(cx, cz, 0, mid, diag, m(0.16), WALL_T * 1.25, vertical, -ang, PLANK);
+      board(cx, cz, 0, FLOOR_H + y0 + hgt * 0.78, open * 0.96, m(0.16), WALL_T * 1.3, vertical, 0.04, PLANK);
       continue;
     }
     // Door: wall either side of a centred opening.
@@ -2268,7 +2305,7 @@ function updateHoverInfo() {
   const el = $('#hover');
   if (hoverEdge && hoverIndex < 0) {
     const { o, x, y } = hoverEdge;
-    const type = grid.edges.get(`${o}${x},${y}`);
+    const type = grid.edgeAt(`${o}${x},${y}`);
     const names = grid.edgeCells(o, x, y).map((c) => (grid.inBounds(c.x, c.y) ? cellLabel(c.x, c.y) : 'edge'));
     el.innerHTML = `<span class="id">${names.join(' | ')}</span>` +
       `<span class="tag">${edgeLabel(o, x, y, type)}</span>` +
@@ -2293,7 +2330,11 @@ function edgeLabel(o, x, y, type) {
     const [a, b] = grid.edgeCellsLabels(o, x, y).map((l) => l ?? 'edge');
     return type.endsWith('+') ? `One-way door ${a} → ${b}` : `One-way door ${b} → ${a}`;
   }
-  return { door: 'Unlocked door', lockedDoor: 'Locked door', wall: 'Wall', window: 'Window' }[type] ?? 'Open';
+  const auto = type && !grid.edges.has(`${o}${x},${y}`) ? ' (condemned)' : '';
+  return ({
+    door: 'Unlocked door', lockedDoor: 'Locked door', wall: 'Wall', window: 'Window',
+    boardedDoor: 'Boarded-up door', boardedWindow: 'Boarded-up window',
+  }[type] ?? 'Open') + auto;
 }
 
 function markerLabel(c, i) {
@@ -2328,6 +2369,7 @@ function updateCounts() {
     `<span class="sub-counts">${subs.join(' · ')}</span><br>` +
     `Bridges <b>${n.bridge}</b> · Walls <b>${n.wall}</b> · Windows <b>${n.window}</b> · Lit lamps <b>${n.lamp}</b><br>` +
     `Doors: unlocked <b>${n.door}</b> · locked <b>${n.lockedDoor}</b> · one-way <b>${n.oneWayDoor}</b><br>` +
+    (n.boardedDoor + n.boardedWindow ? `Boarded up: doors <b>${n.boardedDoor}</b> · windows <b>${n.boardedWindow}</b><br>` : '') +
     `Light sources <b>${n.lit}</b> · Lit cells <b>${lightLevels.reduce((k, v) => k + (v > 0), 0)}</b><br>` +
     (Object.keys(n.markers).length
       ? `Markers: ${Object.keys(MARKERS).filter((t) => n.markers[t]).map((t) => `${MARKERS[t].label} <b>${n.markers[t]}</b>`).join(' · ')}<br>`

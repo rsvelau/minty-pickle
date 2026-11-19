@@ -17,7 +17,7 @@ the edges between cells.
 | Category | Subcategories |
 |----------|---------------|
 | Outdoor | Ground (default), Street, Start space, Path, Cemetery, Cemetery path, Forest cemetery\*, Forest\*, Brambles\* |
-| Indoor | Hardwood (default), Carpet |
+| Indoor | Hardwood (default), Carpet, Condemned\* |
 | Water | Lake, River (always start blocked) |
 
 \* Starts out **blocked** when painted. Painting an ordinary subcategory over a default-blocked cell unblocks
@@ -196,6 +196,22 @@ it's shorter; the info box says where (`Picks up a key at M10`) and the key gets
 uses the same rule. Keys whose buildings unlock the same doors count as one; up to 8 distinct keys are
 tracked at once (`MAX_KEY_GROUPS`). The rules live in `src/state.js` (`canCross`, `canStep`, `keyGroups`, `moveField`, `route`) so game code can
 reuse them.
+
+### Condemned buildings
+
+**Condemned** (an Indoor subcategory, blocked by default) builds itself: paint any shape and walls go up
+automatically round its outside edge. Edges that face a street, start space or bridge become the frontage:
+**boarded-up windows**, with one **boarded-up door** in the middle of each straight run of frontage (so a
+corner building gets one on each street). Sides that don't face a street are plain walls. The openings are
+sheeted with weathered plywood and nailed across with planks, and the inside is full of rubble and junk.
+
+- The walls follow the shape as you paint or erase, so you never draw them by hand. They aren't stored;
+  they're rebuilt from the cells (`autoEdges` in `src/state.js`).
+- Boarded doors and windows block movement and light, like walls.
+- A wall, door or window you draw yourself on the same edge replaces the automatic piece (for example, a
+  door to make one way in). The Erase tool can't remove automatic pieces; change the cells instead.
+- Hover says `Boarded-up door (condemned)`; the info box counts boarded doors and windows; exported edges
+  include the automatic ones with `"auto": true`.
 
 ### Walls and doors
 

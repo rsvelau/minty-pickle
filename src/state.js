@@ -35,7 +35,13 @@ export const AREAS = {
   },
   indoor: {
     label: 'Indoor',
-    subs: { hardwood: { label: 'Hardwood' }, carpet: { label: 'Carpet' } },
+    subs: {
+      hardwood: { label: 'Hardwood' },
+      carpet: { label: 'Carpet' },
+      // Condemned building: walls go up automatically round the outside of
+      // the shape, with boarded-up doors and windows on the street side.
+      condemned: { label: 'Condemned', walkable: false },
+    },
   },
   water: {
     label: 'Water',
@@ -140,9 +146,12 @@ export function hasStreetLamp(grid, x, y) {
 //                  west/north cell to the east/south cell) or - (the other
 //                  way); blocks light
 //   window         storefront glass: blocks movement, lets light through
-export const EDGE_TYPES = ['wall', 'door', 'lockedDoor', 'oneWayDoor+', 'oneWayDoor-', 'window'];
+//   boardedDoor    boarded-up door / window (condemned buildings, placed
+//   boardedWindow  automatically): block movement and light
+export const EDGE_TYPES = ['wall', 'door', 'lockedDoor', 'oneWayDoor+', 'oneWayDoor-', 'window', 'boardedDoor', 'boardedWindow'];
 export const isDoor = (t) => t === 'door' || t === 'lockedDoor' || t?.startsWith('oneWayDoor');
-export const blocksLight = (t) => t === 'wall' || t === 'lockedDoor' || !!t?.startsWith('oneWayDoor');
+export const blocksLight = (t) => t === 'wall' || t === 'lockedDoor' || t === 'boardedDoor' || t === 'boardedWindow'
+  || !!t?.startsWith('oneWayDoor');
 // Which kind of piece a type is, for counts and export.
 export const edgeKind = (t) => (t?.startsWith('oneWayDoor') ? 'oneWayDoor' : t);
 export const edgeKey = (o, x, y) => `${o}${x},${y}`;
@@ -222,7 +231,64 @@ export class GridState {
 
   onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
   // `resized` tells listeners the board dimensions changed (rebuild needed).
-  emit(indices, resized = false) { for (const fn of this.listeners) fn(indices, resized); }
+  emit(indices, resized = false) {
+    this._auto = null;
+    for (const fn of this.listeners) fn(indices, resized);
+  }
+
+  // --- condemned buildings -----------------------------------------------------
+  // Walls placed automatically round every condemned shape (not stored; they
+  // follow the shape as you paint). Edges facing a street, start space or
+  // bridge are the frontage: boarded-up windows, with one boarded-up door in
+  // the middle of each straight run. Walls, doors and windows you draw
+  // yourself on the same edge win.
+  autoEdges() {
+    if (this._auto) return this._auto;
+    const out = new Map();
+    const cond = (x, y) => this.inBounds(x, y) && this.cells[this.index(x, y)].sub === 'condemned';
+    const road = (x, y) => {
+      if (!this.inBounds(x, y)) return false;
+      const c = this.cells[this.index(x, y)];
+      return c.sub === 'street' || c.sub === 'start' || c.bridge;
+    };
+    const runs = new Map(); // frontage line -> [{ pos, k }]
+    for (let y = 0; y < this.rows; y++) {
+      for (let x = 0; x < this.cols; x++) {
+        if (!cond(x, y)) continue;
+        for (const [dx, dy, o, ex, ey, side] of [
+          [0, -1, 'h', x, y, 'N'], [0, 1, 'h', x, y + 1, 'S'], [-1, 0, 'v', x, y, 'W'], [1, 0, 'v', x + 1, y, 'E']]) {
+          if (cond(x + dx, y + dy)) continue;
+          const k = edgeKey(o, ex, ey);
+          if (road(x + dx, y + dy)) {
+            const line = `${side}${o === 'h' ? ey : ex}`;
+            if (!runs.has(line)) runs.set(line, []);
+            runs.get(line).push({ pos: o === 'h' ? ex : ey, k });
+          } else {
+            out.set(k, 'wall');
+          }
+        }
+      }
+    }
+    for (const list of runs.values()) {
+      list.sort((a, b) => a.pos - b.pos);
+      let start = 0;
+      for (let n = 1; n <= list.length; n++) {
+        if (n < list.length && list[n].pos === list[n - 1].pos + 1) continue;
+        const run = list.slice(start, n);
+        const door = Math.floor((run.length - 1) / 2);
+        run.forEach((e, j) => out.set(e.k, j === door ? 'boardedDoor' : 'boardedWindow'));
+        start = n;
+      }
+    }
+    this._auto = out;
+    return out;
+  }
+
+  // The piece on an edge: one you drew, else an automatic condemned wall.
+  edgeAt(k) { return this.edges.get(k) ?? this.autoEdges().get(k); }
+
+  // Every edge piece (drawn ones win over automatic ones).
+  allEdges() { return new Map([...this.autoEdges(), ...this.edges]); }
 
   // --- strokes -------------------------------------------------------------
 
@@ -262,6 +328,7 @@ export class GridState {
   apply(i, patch, { silent = false } = {}) {
     const cell = this.cells[i];
     if (typeof patch === 'function') patch = patch(cell, i, this);
+    this._auto = null;
     if (!patch) return false;
     let changed = false;
     for (const k in patch) if (cell[k] !== patch[k]) { changed = true; break; }
@@ -398,6 +465,9 @@ export class GridState {
     n.lockedDoor = 0;
     n.oneWayDoor = 0;
     for (const t of this.edges.values()) n[edgeKind(t)]++;
+    n.boardedDoor = 0;
+    n.boardedWindow = 0;
+    for (const [k, t] of this.autoEdges()) if (!this.edges.has(k) && t !== 'wall') n[t]++;
     this.cells.forEach((_, i) => { if (this.lampOn(i)) n.lamp++; });
     return n;
   }
@@ -535,7 +605,7 @@ export class GridState {
   canCross(x, y, dx, dy, unlocked) {
     const [o, ex, ey] = dx ? ['v', dx > 0 ? x + 1 : x, y] : ['h', x, dy > 0 ? y + 1 : y];
     const k = edgeKey(o, ex, ey);
-    const t = this.edges.get(k);
+    const t = this.edgeAt(k);
     if (!t || t === 'door') return true;
     if ((t === 'lockedDoor' || t.startsWith('oneWayDoor')) && unlocked?.(k)) return true;
     if (t === 'oneWayDoor+') return dx > 0 || dy > 0;
@@ -663,7 +733,7 @@ export class GridState {
   // each edge it crosses: a wall blocks; doors and windows don't. Passing
   // exactly through a grid corner is clear if either way round is clear.
   lightReaches(ax, ay, bx, by) {
-    const blocks = (o, x, y) => blocksLight(this.edges.get(edgeKey(o, x, y)));
+    const blocks = (o, x, y) => blocksLight(this.edgeAt(edgeKey(o, x, y)));
     let x = ax, y = ay;
     const dx = bx - ax, dy = by - ay;
     const stepX = Math.sign(dx), stepY = Math.sign(dy);
@@ -830,10 +900,12 @@ export class GridState {
       // Walls and doors on cell edges. "v" = west side of cell (x, y);
       // "h" = north side of cell (x, y). `between` names the two cells
       // (an off-board cell is null). Doors sit centred on their edge.
-      edges: [...this.edges].map(([k, type]) => {
+      // Automatic condemned-building pieces are included with "auto": true
+      // (they're rebuilt from the cells on import).
+      edges: [...this.allEdges()].map(([k, type]) => {
         const { o, x, y } = parseEdgeKey(k);
         const between = this.edgeCells(o, x, y).map((c) => (this.inBounds(c.x, c.y) ? cellLabel(c.x, c.y) : null));
-        const out = { edge: o, x, y, type: edgeKind(type), between };
+        const out = { edge: o, x, y, type: edgeKind(type), between, ...(this.edges.has(k) ? {} : { auto: true }) };
         // One-way doors: you can go from `passFrom` to `passTo` only.
         if (type.startsWith('oneWayDoor')) {
           const [a, b] = type.endsWith('+') ? between : [...between].reverse();
@@ -867,6 +939,7 @@ export class GridState {
         const [, b] = this.edgeCellsLabels(e.edge, e.x, e.y, cols, rows);
         type = e.passTo && e.passTo === b ? 'oneWayDoor+' : e.passFrom === b ? 'oneWayDoor-' : 'oneWayDoor+';
       }
+      if (e.auto) continue;
       if (!['v', 'h'].includes(e.edge) || !EDGE_TYPES.includes(type)) continue;
       const fits = e.edge === 'v' ? e.x >= 0 && e.x <= cols && e.y >= 0 && e.y < rows : e.x >= 0 && e.x < cols && e.y >= 0 && e.y <= rows;
       if (Number.isInteger(e.x) && Number.isInteger(e.y) && fits) edges.set(edgeKey(e.edge, e.x, e.y), type);

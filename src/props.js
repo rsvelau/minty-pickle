@@ -315,6 +315,11 @@ const VARIANTS = {
       ['crate', 0.25, 0.34, jit(rnd, 0.4), 1.0],
     ],
   },
+  // Condemned: rubble, junk and fallen boards inside.
+  condemned: {
+    blocked: ({ rnd }) => scatter(rnd, 2, 0.5, (k) => (k % 2 ? ['crate', 0.7 + rnd() * 0.3] : ['boulder', 0.5 + rnd() * 0.3])),
+    walkable: ({ rnd }) => [['crate', jit(rnd, 0.4), jit(rnd, 0.4), rnd() * 6, 0.6]],
+  },
   carpet: {
     // A cluttered living room: two sofas facing over a coffee table, armchairs.
     blocked: ({ along }) => [
