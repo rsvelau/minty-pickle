@@ -129,7 +129,8 @@ function buildKinds() {
     // Glowing bits (separate unlit materials): headlights + tail lights,
     // blinking hazards, headlight beams on the road, painted start box.
     vanLights: merge(
-      box(0.04, 0.2, 0.32, '#fff3d0', 2.47, 0.68, 0.62), box(0.04, 0.2, 0.32, '#fff3d0', 2.47, -0.68, 0.62),
+      // 80s-90s sealed-beam / early halogen lamps: warm yellowish white (~3200 K).
+      box(0.04, 0.2, 0.32, '#ffe1ae', 2.47, 0.68, 0.62), box(0.04, 0.2, 0.32, '#ffe1ae', 2.47, -0.68, 0.62),
       box(0.04, 0.28, 0.16, '#ff3020', -2.47, 0.86, 0.8), box(0.04, 0.28, 0.16, '#ff3020', -2.47, -0.86, 0.8),
     ),
     vanHazard: merge(
@@ -141,7 +142,30 @@ function buildKinds() {
       // Out across the start cell in front and into the next one (~15 m).
       sh.moveTo(m(2.5), -m(0.9)); sh.lineTo(m(15), -m(3.0)); sh.lineTo(m(15), m(3.0)); sh.lineTo(m(2.5), m(0.9));
       sh.closePath();
-      return part(new THREE.ShapeGeometry(sh).rotateX(Math.PI / 2).translate(0, 0.03, 0), '#ffe6b0');
+      return part(new THREE.ShapeGeometry(sh).rotateX(Math.PI / 2).translate(0, 0.03, 0), '#ffc480');
+    })(),
+    // Soft beams of light in the air from each headlamp: narrow at the lamp,
+    // ~1.9 m wide after 13 m, brightest at the lamp and fading out.
+    vanCone: (() => {
+      const L = m(13), lampX = m(2.47), lampY = m(0.62);
+      const warm = new THREE.Color('#ffbf78');
+      const cone = (z) => {
+        let g = new THREE.CylinderGeometry(m(1.9), m(0.12), L, 18, 8, true) // top (wide) -> far end
+          .rotateZ(-Math.PI / 2)                                             // axis along +x
+          .translate(lampX + L / 2, lampY, m(z));
+        g = g.toNonIndexed();
+        g.deleteAttribute('uv');
+        const pos = g.attributes.position;
+        const col = new Float32Array(pos.count * 3);
+        for (let i = 0; i < pos.count; i++) {
+          const t = Math.min(1, Math.max(0, (pos.getX(i) - lampX) / L));
+          const k = Math.pow(1 - t, 1.6);
+          col.set([warm.r * k, warm.g * k, warm.b * k], i * 3);
+        }
+        g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+        return g;
+      };
+      return merge(cone(0.68), cone(-0.68));
     })(),
     // Painted box around the cell edge (cell units) plus corner chevrons.
     startFrame: (() => {
@@ -309,6 +333,7 @@ function startSpace(fx, fz) {
   return [
     ['van', -fx * 0.04, -fz * 0.04, rot], ['vanLights', -fx * 0.04, -fz * 0.04, rot],
     ['vanHazard', -fx * 0.04, -fz * 0.04, rot], ['vanBeam', -fx * 0.04, -fz * 0.04, rot],
+    ['vanCone', -fx * 0.04, -fz * 0.04, rot],
     ['startFrame', fx, fz, 0], ['startFill', fx, fz, 0],
   ];
 }
@@ -332,7 +357,11 @@ export function createProps(group, { firGeo, firMat }) {
     vanLights: new THREE.MeshBasicMaterial({ vertexColors: true }),
     vanHazard: new THREE.MeshBasicMaterial({ color: '#ffa424' }),
     vanBeam: new THREE.MeshBasicMaterial({
-      vertexColors: true, transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending,
+      vertexColors: true, transparent: true, opacity: 0.58, depthWrite: false, blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+    }),
+    vanCone: new THREE.MeshBasicMaterial({
+      vertexColors: true, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
     }),
     startFill: new THREE.MeshBasicMaterial({

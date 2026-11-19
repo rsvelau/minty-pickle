@@ -16,7 +16,7 @@ const ROLL_TIME = 0.7;    // die tumble before it lands
 
 export function createPlay({
   grid, scene, camera, controls, cellToWorld, cellTop, terrainify, cellLabel, onChange,
-  onUsed = () => {}, onCollect = () => {},
+  onUsed = () => {}, onCollect = () => {}, lightAt = () => 0,
 }) {
   const st = {
     pos: -1,           // cell index of the pawn
@@ -197,7 +197,9 @@ export function createPlay({
     st.stopAt = -1;
     st.stopReason = '';
     onUsed();
-    st.log = s >= 0 ? [`Ready on the Start space (${label(s)}). Roll the black die.`] : [];
+    st.log = s >= 0
+      ? [`Ready on the Start space (${label(s)}), in the van's headlights: starting light ${Math.round(lightAt(s) * 100)}%. Roll the black die.`]
+      : [];
     if (s >= 0) { placePawn(s); enter(s); }
     showOptions();
     onChange();

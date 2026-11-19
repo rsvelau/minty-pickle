@@ -63,7 +63,10 @@ a pulsing yellow painted box and amber glow, and lit by the headlights.
 - The van's cell is blocked; the player start cell keeps its own surface (normally street).
 - **The headlights are a real light source**: 35 % on the van's cell, 90 % on the player start cell and 50 %
   on the cell beyond (`HEADLIGHTS` in `src/state.js`). Walls block them, like any light.
-- The play demo starts the pawn on the player start cell. Exported start cells carry `facing`, `faces` and
+- The headlights are warm sealed-beam / early-halogen white (about 3,200 K, as on 80s–90s cars), with soft
+  beams in the air that fade out over about 13 m as well as the glow on the road.
+- The play demo starts the pawn on the player start cell, and the headlights are its starting light (the
+  panel and play bar show the light on the pawn's cell, `Light 90% (van headlights)`). Exported start cells carry `facing`, `faces` and
   `playerStart` (the start cell's label).
 
 ### Light

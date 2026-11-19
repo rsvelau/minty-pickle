@@ -1893,7 +1893,10 @@ function renderPlay() {
     choosing: `${s.stopReason ? `Stopped at <b>${s.stopReason}</b>. ` : ''}Choose a direction: <b>${s.steps}</b> move${s.steps === 1 ? '' : 's'} left (${s.options.map((o) => o.name).join(', ')})`,
     done: `On <b>${here}</b>. Turn ${s.turn} done; roll again.`,
   }[s.phase] ?? '';
-  $('#playStats').innerHTML = `Turn <b>${s.turn}</b> · White Dice <b>${s.white}</b> · Black Dice attuned <b>${s.black}</b>` +
+  // The pawn's light: whatever lights its cell (at the start, the van's headlights).
+  const inHeadlights = s.pos >= 0 && grid.cells.some((c, j) => c.sub === 'start' && grid.startFront(j) === s.pos);
+  const lightHere = s.pos >= 0 ? `Light <b>${Math.round(lightLevels[s.pos] * 100)}%</b>${inHeadlights ? ' (van headlights)' : ''} · ` : '';
+  $('#playStats').innerHTML = `${lightHere}Turn <b>${s.turn}</b> · White Dice <b>${s.white}</b> · Black Dice attuned <b>${s.black}</b>` +
     (s.keys ? ` · Keys <b>${s.keys.toString(2).split('').filter((b) => b === '1').length}</b>` : '');
   $('#playLog').innerHTML = s.log.map((l) => `<li>${l}</li>`).join('');
   // Floating bar.
@@ -1901,7 +1904,7 @@ function renderPlay() {
   $('#hudRoll').disabled = roll.disabled;
   $('#hudStatus').innerHTML = {
     nostart: 'Paint a Start space first.',
-    idle: s.turn ? `On <b>${here}</b>. Roll again.` : `On <b>${here}</b>. Roll to move.`,
+    idle: `On <b>${here}</b>${s.pos >= 0 ? ` · light ${Math.round(lightLevels[s.pos] * 100)}%` : ''}. ${s.turn ? 'Roll again.' : 'Roll to move.'}`,
     rolling: 'Rolling…',
     moving: `Moving… <b>${s.steps}</b> left`,
     choosing: `${s.stopReason ? `<b>${s.stopReason}</b> · ` : ''}Tap an arrow · <b>${s.steps}</b> left`,
@@ -1957,6 +1960,7 @@ function positionChoices() {
   }
 }
 const play = createPlay({
+  lightAt: (i) => lightLevels[i] ?? 0,
   grid, scene, camera, controls, cellToWorld, terrainify, cellLabel,
   cellTop: (i) => Math.max(visibleTop(i), WATER_Y) + 0.01,
   onChange: renderPlay,
