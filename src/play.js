@@ -608,7 +608,7 @@ export function createPlay({
         pl.anim = null;
         pl.vis = a.to;
         pl.at = standAt(k, a.to);
-        a.fx?.(); // marker burst when they actually get there
+        try { a.fx?.(); } catch (e) { console.error(e); } // marker burst when they actually get there
         if (!running(pl)) onChange(); // arrived: refresh the status
       }
     });

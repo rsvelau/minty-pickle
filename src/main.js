@@ -1946,7 +1946,10 @@ $('#hudDie').innerHTML = '<i></i>'.repeat(9);
 function renderPlay() {
   if (ui.tool !== 'play') return;
   const s = play.state;
-  const face = s.phase === 'rolling' ? s.rollFace : s.roll;
+  // One-die face for the legacy die widgets: only while rolling, or for a
+  // total a single die can show (moves can add up to 7+ with several dice).
+  const f0 = s.phase === 'rolling' ? s.rollFace : s.roll;
+  const face = PIPS[f0] ? f0 : 0;
   [...$('#playDie').children].forEach((el, n) => el.classList.toggle('on', !!face && PIPS[face].includes(n)));
   const roll = $('#playRoll');
   roll.disabled = !['idle', 'done'].includes(s.phase);
@@ -2571,8 +2574,10 @@ renderer.setAnimationLoop(() => {
   water.tick(clock.elapsedTime);
   props?.tick(clock.elapsedTime);
   markers.tick(clock.elapsedTime, camera);
-  play.tick(dt, clock.elapsedTime);
-  positionChoices();
+  // A bug in game code must never stop the render loop (the board would
+  // freeze and stop taking input): log it and keep going.
+  try { play.tick(dt, clock.elapsedTime); } catch (e) { console.error(e); }
+  try { positionChoices(); } catch (e) { console.error(e); }
   updateTreeFade();
   if (atmos.visible) updateRain(dt);
   renderer.render(scene, camera);
