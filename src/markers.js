@@ -104,6 +104,66 @@ function roundRect(g, x, y, w, h, r) {
   g.closePath();
 }
 
+// Greyscale, darkened version of a marker's badge with a green check.
+function drawCollectedIcon(type) {
+  const c = drawMarkerIcon(type);
+  const g = c.getContext('2d');
+  const img = g.getImageData(0, 0, c.width, c.height);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const v = (d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11) * 0.55;
+    d[i] = d[i + 1] = d[i + 2] = v;
+  }
+  g.putImageData(img, 0, 0);
+  g.beginPath();
+  g.arc(190, 190, 50, 0, Math.PI * 2);
+  g.fillStyle = '#2fae5f';
+  g.fill();
+  g.lineWidth = 8;
+  g.strokeStyle = '#0d1a12';
+  g.stroke();
+  g.beginPath();
+  g.moveTo(166, 190); g.lineTo(184, 210); g.lineTo(216, 170);
+  g.lineWidth = 14;
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+  g.strokeStyle = '#ffffff';
+  g.stroke();
+  return c;
+}
+
+// Floating text label (e.g. "+1 White Die").
+function drawLabel(text, colour) {
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 128;
+  const g = c.getContext('2d');
+  g.font = '700 58px system-ui, -apple-system, "Segoe UI", sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.lineWidth = 12;
+  g.strokeStyle = 'rgba(0,0,0,0.85)';
+  g.strokeText(text, 256, 66);
+  g.fillStyle = colour;
+  g.fillText(text, 256, 66);
+  return c;
+}
+
+function radialTexture(colour) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(64, 64, 20, 64, 64, 64);
+  grad.addColorStop(0, 'rgba(255,255,255,0)');
+  grad.addColorStop(0.7, colour);
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 export function createMarkers(group) {
   const spriteMats = {};
   const ringMats = {};
@@ -117,9 +177,11 @@ export function createMarkers(group) {
     ringMats[type] = new THREE.MeshBasicMaterial({
       color: MARKER_STYLE[type].ring, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide,
     });
-    // Collected / used markers: greyed-out, mostly transparent.
+    // Collected / used markers: greyscale with a green check mark.
+    const doneTex = new THREE.CanvasTexture(drawCollectedIcon(type));
+    doneTex.colorSpace = THREE.SRGBColorSpace;
     fadedSpriteMats[type] = new THREE.SpriteMaterial({
-      map: tex, depthTest: true, fog: false, transparent: true, opacity: 0.3, color: '#8a8a8a',
+      map: doneTex, depthTest: true, fog: false, transparent: true, opacity: 0.7,
     });
     fadedRingMats[type] = new THREE.MeshBasicMaterial({
       color: MARKER_STYLE[type].ring, transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide,
@@ -173,11 +235,59 @@ export function createMarkers(group) {
     });
   }
 
+  // Collect effect: the badge pops outward, a coloured ring flashes and a
+  // label floats up. (x, y, z) is the marker's floor point (already lifted).
+  const bursts = [];
+  const ringTex = {};
+  function burst(type, x, y, z, text) {
+    ringTex[type] ??= radialTexture(MARKER_STYLE[type].ring);
+    const pop = new THREE.Sprite(new THREE.SpriteMaterial({ map: spriteMats[type].map, transparent: true, depthTest: false, fog: false }));
+    const flash = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: ringTex[type], transparent: true, depthTest: false, fog: false, blending: THREE.AdditiveBlending,
+    }));
+    const labelTex = new THREE.CanvasTexture(drawLabel(text, MARKER_STYLE[type].fg === '#1b1b1d' ? '#ffffff' : MARKER_STYLE[type].fg));
+    labelTex.colorSpace = THREE.SRGBColorSpace;
+    const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTex, transparent: true, depthTest: false, fog: false }));
+    for (const s of [pop, flash, label]) { s.renderOrder = 30; s.raycast = () => {}; root.add(s); }
+    bursts.push({ pop, flash, label, x, y, z, age: 0 });
+  }
+  let lastT = null;
+  function tickBursts(t, camera) {
+    const dt = lastT === null ? 0 : Math.min(0.1, t - lastT);
+    lastT = t;
+    for (let k = bursts.length - 1; k >= 0; k--) {
+      const b = bursts[k];
+      b.age += dt;
+      const d = camera ? camera.position.distanceTo(tmp.set(b.x, b.y, b.z)) : 10;
+      const f = Math.max(1, (d * 0.03) / SIZE); // same minimum size as badges
+      const a1 = Math.min(1, b.age / 0.8);
+      b.pop.position.set(b.x, b.y + LIFT * f + a1 * 0.3 * f, b.z);
+      b.pop.scale.setScalar(SIZE * f * (1 + a1 * 1.6));
+      b.pop.material.opacity = 1 - a1;
+      b.flash.position.set(b.x, b.y + LIFT * f, b.z);
+      b.flash.scale.setScalar(SIZE * f * (0.8 + a1 * 3));
+      b.flash.material.opacity = 1 - a1;
+      const a2 = Math.min(1, b.age / 2.2);
+      b.label.position.set(b.x, b.y + (LIFT + 0.45 + a2 * 0.9) * f, b.z);
+      b.label.scale.set(1.8 * f, 0.45 * f, 1);
+      b.label.material.opacity = a2 < 0.6 ? 1 : 1 - (a2 - 0.6) / 0.4;
+      if (b.age >= 2.2) {
+        for (const s of [b.pop, b.flash, b.label]) {
+          root.remove(s);
+          if (s === b.label) s.material.map.dispose();
+          s.material.dispose();
+        }
+        bursts.splice(k, 1);
+      }
+    }
+  }
+
   // Gentle bob so markers read as tokens, not scenery. Badges never get
   // smaller on screen than about 3% of the camera distance, so they stay
   // easy to spot when zoomed out; up close they're 0.62 cells across.
   const tmp = new THREE.Vector3();
   function tick(t, camera) {
+    tickBursts(t, camera);
     for (const it of items) {
       it.sprite.position.y = it.baseY + LIFT + Math.sin(t * 1.6 + it.phase) * 0.025;
       if (camera) {
@@ -192,5 +302,5 @@ export function createMarkers(group) {
 
   function setVisible(v) { root.visible = v; }
 
-  return { update, tick, setVisible };
+  return { update, tick, setVisible, burst };
 }

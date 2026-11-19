@@ -14,7 +14,10 @@ const DIRS = [[0, -1, 'north', 1], [1, 0, 'east', 2], [0, 1, 'south', 4], [-1, 0
 const STEP_TIME = 0.32;   // seconds per hop
 const ROLL_TIME = 0.7;    // die tumble before it lands
 
-export function createPlay({ grid, scene, camera, controls, cellToWorld, cellTop, terrainify, cellLabel, onChange, onUsed = () => {} }) {
+export function createPlay({
+  grid, scene, camera, controls, cellToWorld, cellTop, terrainify, cellLabel, onChange,
+  onUsed = () => {}, onCollect = () => {},
+}) {
   const st = {
     pos: -1,           // cell index of the pawn
     prev: -1,          // cell it came from this move (no doubling back)
@@ -127,44 +130,56 @@ export function createPlay({ grid, scene, camera, controls, cellToWorld, cellTop
     st.log.length = Math.min(st.log.length, 6);
   }
 
-  // Entering a cell: pick up keys on the way.
+  // Entering a cell: touching a marker collects / uses it straight away (a
+  // burst and a floating label on the board), and the pawn stops there to
+  // ask which way to go next.
   function enter(i) {
     const c = grid.cells[i];
-    if (c.marker === 'key' && st.keyGroups) {
-      const gi = st.keyGroups.cellGroup.get(i);
+    const m = c.marker;
+    if (!m || !MARKERS[m]) return;
+    st.stopAt = i;
+    if (st.used.has(i)) {
+      st.stopReason = `${MARKERS[m].label} (already collected)`;
+      return;
+    }
+    st.used.add(i);
+    let text, msg;
+    if (m === 'whiteDice') {
+      st.white++;
+      text = '+1 White Die';
+      msg = `Collected a single-use White Die at ${label(i)}.`;
+    } else if (m === 'blackDice') {
+      st.black++;
+      text = 'Black Die attuned';
+      msg = `Attuned a Black Die at ${label(i)}.`;
+    } else if (m === 'research') {
+      text = 'Evidence uncovered';
+      msg = `Research at ${label(i)}: a piece of evidence uncovered for free.`;
+    } else if (m === 'investigation') {
+      text = 'Investigate here';
+      msg = `Investigation spot at ${label(i)}: you can investigate here for clues.`;
+    } else if (m === 'objective') {
+      text = 'Objective spot';
+      msg = `Objective marker at ${label(i)} (active once the monster reveals itself).`;
+    } else if (m === 'key') {
+      let n = 0;
+      const gi = st.keyGroups?.cellGroup.get(i);
       if (gi !== undefined && !(st.keys & (1 << gi))) {
         st.keys |= 1 << gi;
-        const n = st.keyGroups.groups[gi].doors.size;
-        log(`Picked up a key at ${label(i)}: ${n} door${n === 1 ? '' : 's'} in its building unlocked.`);
+        n = st.keyGroups.groups[gi].doors.size;
       }
+      text = `Key: ${n} door${n === 1 ? '' : 's'} unlocked`;
+      msg = `Picked up a key at ${label(i)}: ${n} door${n === 1 ? '' : 's'} in its building unlocked.`;
     }
+    st.stopReason = MARKERS[m].label;
+    log(msg);
+    onCollect(i, m, text);
+    onUsed();
   }
 
-  // Landing at the end of a move: report the marker here.
+  // Landing at the end of a move.
   function land(i) {
-    const c = grid.cells[i];
-    const m = c.marker;
-    let msg = `Landed on ${label(i)}.`;
-    if (m && MARKERS[m]) {
-      const once = !st.used.has(i);
-      if (m === 'whiteDice') {
-        msg += once ? ' Collected a single-use White Die.' : ' White Die already collected here.';
-        if (once) { st.white++; st.used.add(i); onUsed(); }
-      } else if (m === 'blackDice') {
-        msg += once ? ' Attuned a Black Die.' : ' Black Die already attuned here.';
-        if (once) { st.black++; st.used.add(i); onUsed(); }
-      } else if (m === 'research') {
-        msg += once ? ' Research: a piece of evidence uncovered for free.' : ' Research already used.';
-        if (once) { st.used.add(i); onUsed(); }
-      } else if (m === 'investigation') {
-        msg += ' You can investigate here for clues.';
-      } else if (m === 'objective') {
-        msg += ' An objective marker (active once the monster reveals itself).';
-      } else if (m === 'key') {
-        msg += ' Key marker.';
-      }
-    }
-    log(msg);
+    log(`Turn ${st.turn} ends on ${label(i)}.`);
   }
 
   // --- turn flow ------------------------------------------------------------
@@ -175,6 +190,8 @@ export function createPlay({ grid, scene, camera, controls, cellToWorld, cellTop
       turn: 0, keys: 0, keyGroups: grid.keyGroups(), white: 0, black: 0, anim: null,
     });
     st.used = new Set();
+    st.stopAt = -1;
+    st.stopReason = '';
     onUsed();
     st.log = s >= 0 ? [`Ready on the Start space (${label(s)}). Roll the black die.`] : [];
     if (s >= 0) { placePawn(s); enter(s); }
@@ -196,6 +213,8 @@ export function createPlay({ grid, scene, camera, controls, cellToWorld, cellTop
   // Decide the next step: move on, ask, or finish.
   function advance() {
     if (st.steps <= 0) {
+      st.stopAt = -1;
+      st.stopReason = '';
       st.phase = 'done';
       land(st.pos);
       showOptions();
@@ -209,11 +228,14 @@ export function createPlay({ grid, scene, camera, controls, cellToWorld, cellTop
       advance();
       return;
     }
-    const firstStep = st.prev < 0;
-    if (opts.length === 1 && !(firstStep && opts.length > 1)) {
+    // Stop on every marker the pawn steps onto: always ask, even with one way on.
+    const markerStop = st.stopAt === st.pos;
+    st.stopAt = -1;
+    if (opts.length === 1 && !markerStop) {
       step(opts[0]);
       return;
     }
+    if (!markerStop) st.stopReason = '';
     st.phase = 'choosing';
     st.options = opts;
     showOptions();

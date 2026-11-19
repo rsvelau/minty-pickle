@@ -154,10 +154,13 @@ markers** in View hides them. Marker art lives in `src/markers.js`; the list of 
 - Movement follows the board rules: walkable cells only; walls, windows, locked doors and one-way doors
   (against their arrow) stop it; walking over a **Key** unlocks its building's locked and one-way doors for
   the rest of the game.
-- Landing on a marker reports it: White Dice are collected and Black Dice attuned (once per marker; the
-  panel keeps count), Research is used once, Investigation and Objective spots are announced.
-- Collected and used markers (White Dice, Black Dice, Research) fade to a small grey, see-through badge and
-  hover says `(collected)` / `(attuned)` / `(used)`. This only shows while playing; the board itself is unchanged.
+- **Touching a marker** (passing over it or landing on it) collects it straight away: the badge pops with a
+  coloured flash and a label floats up (`+1 White Die`, `Black Die attuned`, `Evidence uncovered`,
+  `Key: 2 doors unlocked`, `Investigate here`, `Objective spot`). The pawn **stops on every marker** and asks
+  which way to go next, even if there's only one way on. Each marker works once; the panel counts White Dice
+  collected and Black Dice attuned.
+- Collected markers turn into a smaller greyscale badge with a green check mark, and hover says
+  `(collected)` / `(attuned)` / `(picked up)` / `(visited)` / `(used)`. This only shows while playing; the board itself is unchanged.
 - **Follow** keeps the camera on the pawn; **Restart** puts it back on the Start space and brings faded markers back.
 
 The demo never changes the board. Its logic is in `src/play.js`.

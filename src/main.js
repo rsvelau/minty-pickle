@@ -1874,7 +1874,7 @@ function renderPlay() {
     idle: s.turn ? `On <b>${here}</b>. Roll again.` : `On <b>${here}</b>. Roll to move.`,
     rolling: 'Rolling…',
     moving: `Moving… <b>${s.steps}</b> left`,
-    choosing: `Choose a direction: <b>${s.steps}</b> move${s.steps === 1 ? '' : 's'} left (${s.options.map((o) => o.name).join(', ')})`,
+    choosing: `${s.stopReason ? `Stopped at <b>${s.stopReason}</b>. ` : ''}Choose a direction: <b>${s.steps}</b> move${s.steps === 1 ? '' : 's'} left (${s.options.map((o) => o.name).join(', ')})`,
     done: `On <b>${here}</b>. Turn ${s.turn} done; roll again.`,
   }[s.phase] ?? '';
   $('#playStats').innerHTML = `Turn <b>${s.turn}</b> · White Dice <b>${s.white}</b> · Black Dice attuned <b>${s.black}</b>` +
@@ -1888,7 +1888,7 @@ function renderPlay() {
     idle: s.turn ? `On <b>${here}</b>. Roll again.` : `On <b>${here}</b>. Roll to move.`,
     rolling: 'Rolling…',
     moving: `Moving… <b>${s.steps}</b> left`,
-    choosing: `Tap an arrow · <b>${s.steps}</b> left`,
+    choosing: `${s.stopReason ? `<b>${s.stopReason}</b> · ` : ''}Tap an arrow · <b>${s.steps}</b> left`,
     done: `On <b>${here}</b>. Roll again.`,
   }[s.phase] ?? '';
   renderChoices();
@@ -1945,6 +1945,12 @@ const play = createPlay({
   cellTop: (i) => Math.max(visibleTop(i), WATER_Y) + 0.01,
   onChange: renderPlay,
   onUsed: () => refreshMarkers(),
+  onCollect: (i, type, text) => {
+    const { x, y } = grid.coords(i);
+    const p = cellToWorld(x, y);
+    const fy = Math.max(visibleTop(i), WATER_Y) + terrainHeight(p.x, p.z, { bridge: grid.cells[i].bridge });
+    markers.burst(type, p.x, fy, p.z, text);
+  },
 });
 markerUsed = (i) => ui.tool === 'play' && play.state.used.has(i);
 $('#playRoll').addEventListener('click', () => play.roll());
@@ -2236,7 +2242,7 @@ function edgeLabel(o, x, y, type) {
 function markerLabel(c, i) {
   const label = `${MARKERS[c.marker].label} marker`;
   if (!c.walkable) return `${label} (cell is blocked)`;
-  if (markerUsed(i)) return `${label} (${c.marker === 'whiteDice' ? 'collected' : c.marker === 'blackDice' ? 'attuned' : 'used'})`;
+  if (markerUsed(i)) return `${label} (${{ whiteDice: 'collected', blackDice: 'attuned', key: 'picked up', investigation: 'visited', objective: 'visited' }[c.marker] ?? 'used'})`;
   if (c.marker === 'key') {
     const n = grid.keyDoors(i).length;
     return `${label}: unlocks ${n} door${n === 1 ? '' : 's'}`;
