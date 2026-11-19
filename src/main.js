@@ -820,9 +820,6 @@ function refreshPropsAndWalls() {
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const nx = x + dx, ny = y + dy;
         if (grid.inBounds(nx, ny) && grid.cells[grid.index(nx, ny)].area === 'indoor') continue;
-        // A wall, door or window on this edge already reaches down to the ground.
-        const ek = dx ? `v${dx > 0 ? x + 1 : x},${y}` : `h${x},${dy > 0 ? y + 1 : y}`;
-        if (grid.edges.has(ek)) continue;
         const out = cellLevel(nx, ny);
         const diff = out - level;
         if (Math.abs(diff) < 0.004) continue;
@@ -831,7 +828,9 @@ function refreshPropsAndWalls() {
         const ex = c.x + dx * 0.5, ez = c.z + dy * 0.5;
         const y0 = level + Math.min(diff, 0) - 0.03, y1 = level + Math.max(diff, 0) + FLOOR_H;
         tmpMatrix.compose(tmpPos.set(ex, y0, ez), tmpQuat.identity(),
-          vertical ? tmpScale.set(WALL_T, y1 - y0, TILE + WALL_T) : tmpScale.set(TILE + WALL_T, y1 - y0, WALL_T));
+          // A little thicker than walls, so where both meet the stone wraps the
+          // wall's base instead of flickering in the same plane.
+          vertical ? tmpScale.set(WALL_T * 1.5, y1 - y0, TILE + WALL_T * 1.5) : tmpScale.set(TILE + WALL_T * 1.5, y1 - y0, WALL_T * 1.5));
         foundations.setMatrixAt(nfd++, tmpMatrix);
       }
     }

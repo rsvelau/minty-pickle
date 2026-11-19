@@ -77,6 +77,17 @@ vec4 mvPosition = vec4( transformed, 1.0 );
 #ifdef USE_INSTANCING
 	mvPosition = instanceMatrix * mvPosition;
 #endif
+#ifdef TERRAIN_CENTRE
+// Whole-cell surfaces take their override from their own cell (the instance
+// centre), never from a levelled neighbour across the edge.
+{
+	vec4 tc = vec4( 0.0, 0.0, 0.0, 1.0 );
+	#ifdef USE_INSTANCING
+	tc = instanceMatrix * tc;
+	#endif
+	terrainHint = ( modelMatrix * tc ).xz;
+}
+#endif
 vec4 terrainWorld = modelMatrix * mvPosition;
 terrainWorld.y += terrainHeight( terrainWorld.xyz );
 mvPosition = viewMatrix * terrainWorld;
@@ -98,6 +109,7 @@ float terrainSmooth( vec2 p ) {
 #ifdef TERRAIN_TEX
 uniform sampler2D terrainTex;
 uniform vec2 terrainBoard;
+vec2 terrainHint = vec2( 0.0 );
 vec4 terrainCell( vec2 g ) {
 	ivec2 c = ivec2( floor( g ) );
 	if ( c.x < 0 || c.y < 0 || float( c.x ) >= terrainBoard.x || float( c.y ) >= terrainBoard.y ) return vec4( 0.0 );
@@ -125,7 +137,11 @@ float terrainHeight( vec3 w ) {
 #endif
 	float h = terrainSmooth( w.xz );
 #ifdef TERRAIN_TEX
+	#ifdef TERRAIN_CENTRE
+	vec4 o = terrainCell( terrainHint + terrainBoard * 0.5 );
+	#else
 	vec4 o = terrainOverride( w.xz );
+	#endif
 	if ( o.r > 0.5 ) h = o.g;
 	#ifdef TERRAIN_BRIDGE
 	// Bridge parts: deck and trusses at bank level; piers stretch from the
@@ -284,7 +300,9 @@ export function updateOverrides(grid) {
 // onBeforeCompile). `bridge` materials keep bridge decks at bank level.
 // `none` materials aren't lifted at all: their geometry is already placed at
 // its final height (walls, doors and windows stand upright on the floor).
-export function terrainify(material, { bridge = false, none = false } = {}) {
+// `centre` materials are whole-cell surfaces (streets): they follow their own
+// cell only, so a levelled building or lowered river next door can't kink them.
+export function terrainify(material, { bridge = false, none = false, centre = false } = {}) {
   if (!material || material.userData.terrainified || material.isSpriteMaterial) return;
   material.userData.terrainified = true;
   if (material.isShaderMaterial) return; // handled by the shader itself
@@ -293,9 +311,9 @@ export function terrainify(material, { bridge = false, none = false } = {}) {
   material.onBeforeCompile = function terrainOBC(shader, renderer) {
     original.call(this, shader, renderer);
     Object.assign(shader.uniforms, terrainUniforms);
-    shader.vertexShader = `#define TERRAIN_TEX\n${bridge ? '#define TERRAIN_BRIDGE\n' : ''}${none ? '#define TERRAIN_NONE\n' : ''}${shader.vertexShader}`;
+    shader.vertexShader = `#define TERRAIN_TEX\n${bridge ? '#define TERRAIN_BRIDGE\n' : ''}${none ? '#define TERRAIN_NONE\n' : ''}${centre ? '#define TERRAIN_CENTRE\n' : ''}${shader.vertexShader}`;
   };
-  material.customProgramCacheKey = () => `${originalKey}|tt${bridge ? 'b' : ''}${none ? 'n' : ''}|terrain:${current}`;
+  material.customProgramCacheKey = () => `${originalKey}|tt${bridge ? 'b' : ''}${none ? 'n' : ''}${centre ? 'c' : ''}|terrain:${current}`;
   material.needsUpdate = true;
 }
 

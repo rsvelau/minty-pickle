@@ -24,6 +24,7 @@
 import * as THREE from 'three';
 import { METERS_PER_CELL, m, SIDEWALK_W } from './scale.js';
 import { streetMask } from './state.js';
+import { terrainify } from './terrain.js';
 export { streetMask };
 
 const N = 1, E = 2, S = 4, W = 8;
@@ -51,6 +52,7 @@ export function createStreets(group) {
   const mats = LEVELS.map(({ e }) => (e
     ? new THREE.MeshLambertMaterial({ map: atlas, emissiveMap: atlas, emissive: new THREE.Color(e) })
     : new THREE.MeshLambertMaterial({ map: atlas })));
+  for (const mat of mats) terrainify(mat, { centre: true });
   const levelIndex = (level, lamp) => (lamp ? 4 : level >= 0.8 ? 3 : level >= 0.45 ? 2 : level > 0 ? 1 : 0);
   const geos = new Map();
   const meshes = new Map();
