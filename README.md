@@ -52,13 +52,19 @@ cells become Street when loaded. The street surface lives in `src/street.js`.
 
 ### Start space
 
-**Start space** (an Outdoor subcategory) marks where all players start. It is drawn as a street cell, and
-joins the street network like one, with the players' used early-80s van parked diagonally across it:
-two-tone cream and brown with an orange stripe, rust spots, chrome bumpers, a roof rack and a spare tyre on
-the back. To make it easy to find without a floating badge, the van has its headlights and tail lights on,
-headlight beams on the road and blinking amber hazards, and the cell has a pulsing yellow painted box with
-corner marks and a soft amber glow. It counts as walkable. The van is built in `src/props.js` (`van`,
-`startSpace`).
+The **Start space** takes two cells. Paint it on the cell where the players' van parks: a used early-80s van
+(two-tone cream and brown, orange stripe, rust, chrome bumpers, roof rack, spare tyre) that sits facing
+along the road with its hazards blinking. **Players start on the road cell in front of the van**, marked by
+a pulsing yellow painted box and amber glow, and lit by the headlights.
+
+- The van faces the road automatically (toward a street or bridge, preferring one where the road carries
+  on). Use the Start space brush on the van again to turn it to face the next way. Hover shows
+  `van facing west` and the front cell shows `Player start`.
+- The van's cell is blocked; the player start cell keeps its own surface (normally street).
+- **The headlights are a real light source**: 35 % on the van's cell, 90 % on the player start cell and 50 %
+  on the cell beyond (`HEADLIGHTS` in `src/state.js`). Walls block them, like any light.
+- The play demo starts the pawn on the player start cell. Exported start cells carry `facing`, `faces` and
+  `playerStart` (the start cell's label).
 
 ### Light
 

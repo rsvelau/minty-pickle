@@ -22,7 +22,9 @@ export const AREAS = {
       // Two-lane street with sidewalks; lines and curbs follow its neighbours.
       street: { label: 'Street' },
       // Where every player starts: a street cell with the players' van.
-      start: { label: 'Start space' },
+      // Two-cell start: the van sits on this cell facing along the road; the
+      // players start on the cell in front of it, in the headlights.
+      start: { label: 'Start space', walkable: false },
       path: { label: 'Path' },
       cemetery: { label: 'Cemetery' },
       cemeteryPath: { label: 'Cemetery path' },
@@ -41,7 +43,14 @@ export const AREAS = {
     subs: { lake: { label: 'Lake' }, river: { label: 'River' } },
   },
 };
-export const CELL_KEYS = ['area', 'sub', 'lit', 'radius', 'walkable', 'bridge', 'lamp', 'marker'];
+export const CELL_KEYS = ['area', 'sub', 'lit', 'radius', 'walkable', 'bridge', 'lamp', 'marker', 'facing'];
+
+// Directions as [dx, dy], indexed 0..3 = north, east, south, west.
+export const FACINGS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+export const FACING_NAMES = ['north', 'east', 'south', 'west'];
+// Van headlights: light on the van's own cell, the player start cell in
+// front of it, and the cell beyond.
+export const HEADLIGHTS = [0.35, 0.9, 0.5];
 
 // Whether a freshly painted area/subcategory is walkable.
 export const defaultWalkable = (area, sub) =>
@@ -56,6 +65,7 @@ export const defaultWalkable = (area, sub) =>
 //         sits on top of the cell and never changes the cell itself.
 export const defaultCell = () => ({
   area: 'outdoor', sub: 'ground', lit: false, radius: 0, walkable: true, bridge: false, lamp: false, marker: null,
+  facing: null, // start space only: which way the van faces (index into FACINGS); null = automatic
 });
 
 // Gameplay markers, placed on walkable cells.
@@ -157,10 +167,12 @@ export function normalizeCell(c = {}) {
     lit: !!c.lit,
     // Older saves had lit cells with no radius: they become small bulbs.
     radius: c.lit ? clampRadius(c.radius ?? 0.5) : 0,
-    walkable: c.walkable === undefined ? defaultWalkable(area, sub) || (water && !!c.bridge) : !!c.walkable,
+    walkable: sub === 'start' ? false
+      : c.walkable === undefined ? defaultWalkable(area, sub) || (water && !!c.bridge) : !!c.walkable,
     bridge: water && !!c.bridge,
     lamp: !!c.lamp,
     marker: MARKERS[c.marker] ? c.marker : null,
+    facing: sub === 'start' && Number.isInteger(c.facing) && c.facing >= 0 && c.facing < 4 ? c.facing : null,
   };
 }
 
@@ -425,7 +437,45 @@ export class GridState {
         }
       }
     });
+    // Van headlights shine forward from each start space (walls block them).
+    this.cells.forEach((c, i) => {
+      if (c.sub !== 'start') return;
+      const [dx, dy] = FACINGS[this.startFacing(i)];
+      const { x, y } = this.coords(i);
+      HEADLIGHTS.forEach((v, k) => {
+        const nx = x + dx * k, ny = y + dy * k;
+        if (!this.inBounds(nx, ny) || !this.lightReaches(x, y, nx, ny)) return;
+        add(this.index(nx, ny), v);
+      });
+    });
     return out;
+  }
+
+  // --- start space ----------------------------------------------------------------
+
+  // Which way a start space's van faces: its stored facing, or automatically
+  // toward the road (a neighbouring street or bridge, preferring one where
+  // the road carries on).
+  startFacing(i) {
+    const c = this.cells[i];
+    const { x, y } = this.coords(i);
+    if (Number.isInteger(c.facing) && this.inBounds(x + FACINGS[c.facing][0], y + FACINGS[c.facing][1])) return c.facing;
+    const road = (nx, ny) => this.inBounds(nx, ny) && (this.cells[this.index(nx, ny)].sub === 'street' || this.cells[this.index(nx, ny)].bridge);
+    let best = -1, score = -1;
+    FACINGS.forEach(([dx, dy], f) => {
+      if (!this.inBounds(x + dx, y + dy)) return;
+      const s = (road(x + dx, y + dy) ? 2 : 0) + (road(x + 2 * dx, y + 2 * dy) ? 1 : 0)
+        + (this.cells[this.index(x + dx, y + dy)].walkable ? 0.5 : 0);
+      if (s > score) { score = s; best = f; }
+    });
+    return best < 0 ? 1 : best;
+  }
+
+  // The cell in front of the van, where players start (-1 off the board).
+  startFront(i) {
+    const [dx, dy] = FACINGS[this.startFacing(i)];
+    const { x, y } = this.coords(i);
+    return this.inBounds(x + dx, y + dy) ? this.index(x + dx, y + dy) : -1;
   }
 
   // --- markers ----------------------------------------------------------------
@@ -760,6 +810,12 @@ export class GridState {
           ...(c.lit ? { radius: c.radius } : {}),
           lamp: this.lampOn(i),
           marker: c.marker,
+          ...(c.sub === 'start' ? (() => {
+            const f = this.startFacing(i);
+            const front = this.startFront(i);
+            const fc = front >= 0 ? this.coords(front) : null;
+            return { facing: f, faces: FACING_NAMES[f], playerStart: fc ? cellLabel(fc.x, fc.y) : null };
+          })() : {}),
           ...(this.elevationAt && this.terrain !== 'flat' ? { elevation: Math.round(this.elevationAt(x, y) * 10) / 10 } : {}),
           ...(c.marker === 'key' ? {
             unlocks: this.keyDoors(i).map((k) => {

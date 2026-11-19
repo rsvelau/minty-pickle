@@ -138,7 +138,8 @@ function buildKinds() {
     ),
     vanBeam: (() => {
       const sh = new THREE.Shape();
-      sh.moveTo(m(2.5), -m(0.9)); sh.lineTo(m(7.5), -m(2.4)); sh.lineTo(m(7.5), m(2.4)); sh.lineTo(m(2.5), m(0.9));
+      // Out across the start cell in front and into the next one (~15 m).
+      sh.moveTo(m(2.5), -m(0.9)); sh.lineTo(m(15), -m(3.0)); sh.lineTo(m(15), m(3.0)); sh.lineTo(m(2.5), m(0.9));
       sh.closePath();
       return part(new THREE.ShapeGeometry(sh).rotateX(Math.PI / 2).translate(0, 0.03, 0), '#ffe6b0');
     })(),
@@ -187,12 +188,6 @@ const VARIANTS = {
   ground: {
     // Overgrown: boulders in a thicket of shrubs.
     blocked: ({ rnd }) => scatter(rnd, 3, 0.3, (k) => (k % 3 === 1 ? ['boulder', 1.2 + rnd() * 0.6] : ['shrub', 1.1 + rnd() * 0.6])),
-  },
-  // Start space: the players' van parked diagonally across the street with
-  // its lights on and hazards blinking, inside a glowing painted box.
-  start: {
-    walkable: ({ along }) => startSpace(along),
-    blocked: ({ along }) => startSpace(along),
   },
   street: {
     // Two sawhorse barricades across both lanes, cones on the sidewalk edge.
@@ -308,11 +303,13 @@ const VARIANTS = {
   river: { walkable: (ctx) => ford(ctx) },
 };
 
-function startSpace(along) {
-  const rot = along + Math.PI / 4;
+// The van faces (fx, fz); the painted start box sits on the cell in front.
+function startSpace(fx, fz) {
+  const rot = Math.atan2(-fz, fx) + 0.08; // parked, very slightly askew
   return [
-    ['van', 0, 0, rot], ['vanLights', 0, 0, rot], ['vanHazard', 0, 0, rot], ['vanBeam', 0, 0, rot],
-    ['startFrame', 0, 0, 0], ['startFill', 0, 0, 0],
+    ['van', -fx * 0.04, -fz * 0.04, rot], ['vanLights', -fx * 0.04, -fz * 0.04, rot],
+    ['vanHazard', -fx * 0.04, -fz * 0.04, rot], ['vanBeam', -fx * 0.04, -fz * 0.04, rot],
+    ['startFrame', fx, fz, 0], ['startFill', fx, fz, 0],
   ];
 }
 
@@ -378,8 +375,11 @@ export function createProps(group, { firGeo, firMat }) {
         const variant = VARIANTS[c.sub]?.[c.walkable ? 'walkable' : 'blocked'];
         const { x, y } = grid.coords(i);
         let list = variant ? null : [];
-        // Blocked bridges get a barricade on the deck.
-        if (c.bridge) {
+        // Start space: the van, facing along the road.
+        if (c.sub === 'start') {
+          const [fx, fz] = [[0, -1], [1, 0], [0, 1], [-1, 0]][grid.startFacing(i)];
+          list = startSpace(fx, fz);
+        } else if (c.bridge) {
           list = c.walkable ? [] : [['barricade', 0, 0, grid.bridgeAxis(x, y) === 'x' ? Math.PI / 2 : 0]];
         } else if (variant) {
           let seed = (i * 2654435761) % 2147483647 || 1;

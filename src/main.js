@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {
   GridState, COLS, ROWS, MIN_SIZE, MAX_SIZE, AREAS, colLabel, cellLabel, defaultCell, defaultWalkable, areaLabel, parseEdgeKey,
-  hasStreetLamp, lightKind, centreBrightness, MAX_RADIUS, blocksLight, MARKERS,
+  hasStreetLamp, lightKind, centreBrightness, MAX_RADIUS, blocksLight, MARKERS, FACINGS, FACING_NAMES,
 } from './state.js';
 import { createWaterSurface } from './water.js';
 import { createProps } from './props.js';
@@ -120,6 +120,20 @@ const BRUSHES = {
 for (const area in AREAS) {
   for (const sub in AREAS[area].subs) BRUSHES[`${area}:${sub}`] = paintArea(area, sub);
 }
+// Start space: paints the van's cell (facing chosen automatically). Using the
+// brush on an existing start space turns the van to face the next way.
+BRUSHES['outdoor:start'] = (c, i, g) => {
+  if (c.sub === 'start') {
+    const { x, y } = g.coords(i);
+    const cur = g.startFacing(i);
+    for (let k = 1; k <= 4; k++) {
+      const f = (cur + k) % 4;
+      if (g.inBounds(x + FACINGS[f][0], y + FACINGS[f][1])) return { facing: f };
+    }
+    return null;
+  }
+  return { area: 'outdoor', sub: 'start', bridge: false, walkable: false, facing: null };
+};
 const BRUSH_KEYS = {
   1: 'outdoor:ground', 2: 'indoor:hardwood', 3: 'unlit', 4: 'lit', 5: 'walkable', 6: 'blocked',
   7: 'water:lake', 8: 'water:river', 9: 'bridge', 0: 'reset', l: 'lamp', L: 'lamp',
@@ -325,7 +339,9 @@ const railMat = new THREE.MeshLambertMaterial({ color: '#8a8e92' });
 tileMat.onBeforeCompile = (shader) => {
   shader.vertexShader = shader.vertexShader
     .replace('#include <common>', '#include <common>\nattribute float aGlow;\nvarying float vGlow;')
-    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGlow = aGlow;');
+    // Glow only on top faces, so a lit tile's sides don't shine through the
+    // gaps between cells.
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGlow = aGlow * step(0.5, normal.y);');
   // Lit cells emit their own colour so they stay bright regardless of moonlight.
   shader.fragmentShader = shader.fragmentShader
     .replace('#include <common>', '#include <common>\nvarying float vGlow;')
@@ -2224,7 +2240,8 @@ function updateHoverInfo() {
   const c = grid.cells[hoverIndex];
   el.innerHTML =
     `<span class="id">${cellLabel(x, y)}</span>` +
-    `<span class="tag">${AREAS[c.area].label} · ${areaLabel(c)}</span>` +
+    `<span class="tag">${AREAS[c.area].label} · ${areaLabel(c)}${c.sub === 'start' ? ` (van facing ${FACING_NAMES[grid.startFacing(hoverIndex)]})` : ''}</span>` +
+    (grid.cells.some((s, j) => s.sub === 'start' && grid.startFront(j) === hoverIndex) ? '<span class="tag marker-tag">Player start</span>' : '') +
     (c.bridge ? `<span class="tag">Bridge (spans ${grid.bridgeAxis(x, y) === 'x' ? 'E–W' : 'N–S'})</span>` : '') +
     `<span class="tag">${lightLabel(c, hoverIndex)}</span>` +
     `<span class="tag">${c.walkable ? 'Walkable' : 'Blocked'}</span>` +

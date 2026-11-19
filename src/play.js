@@ -81,7 +81,11 @@ export function createPlay({
 
   // --- helpers --------------------------------------------------------------
   const label = (i) => { const c = grid.coords(i); return cellLabel(c.x, c.y); };
-  const startCell = () => grid.cells.findIndex((c) => c.sub === 'start');
+  // Players start on the cell in front of the van.
+  const startCell = () => {
+    const s = grid.cells.findIndex((c) => c.sub === 'start');
+    return s < 0 ? -1 : grid.startFront(s);
+  };
 
   function unlocked() {
     if (!st.keys || !st.keyGroups) return undefined;
