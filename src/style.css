@@ -444,3 +444,4 @@ body.playing .help { display: none; }
 .play-board .chip { width: 22px; padding: 1px 0; border-radius: 5px; text-align: center; font-weight: 700; color: #fff; font-size: 11px; text-shadow: 0 1px 1px #000; }
 .play-board .pl span:last-child { margin-left: auto; color: var(--muted); }
 .who-chip { display: inline-block; padding: 0 6px; border-radius: 5px; font-weight: 700; color: #fff; text-shadow: 0 1px 1px #000; }
+.hud-status .muted { color: var(--muted); }

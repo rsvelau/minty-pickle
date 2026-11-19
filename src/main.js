@@ -1581,16 +1581,9 @@ canvas.addEventListener('pointerdown', (ev) => {
   if (ui.tool === 'walls') { startEdgeStroke(ev); return; }
   if (ui.tool === 'move') { moveClick(pickCell(ev)); return; }
   if (ui.tool === 'play') {
-    // Press and hold to fast-forward a move in progress.
-    if (play.state.phase === 'moving' || play.state.phase === 'rolling') {
-      play.setFast(true);
-      canvas.setPointerCapture?.(ev.pointerId);
-      renderPlay();
-      return;
-    }
+    // A tap on (or near) a direction choice picks it...
     const cell = pickCell(ev);
     if (cell && play.choose(grid.index(cell.x, cell.y))) return;
-    // Not exactly on an option: take the nearest one within a cell.
     const pt = gridPoint(ev);
     if (pt && play.state.phase === 'choosing') {
       let best = null, bestD = 1.0;
@@ -1599,7 +1592,13 @@ canvas.addEventListener('pointerdown', (ev) => {
         const d = Math.hypot(pt.gx - (c.x + 0.5), pt.gy - (c.y + 0.5));
         if (d < bestD) { bestD = d; best = o; }
       }
-      if (best) play.choose(best.i);
+      if (best) { play.choose(best.i); return; }
+    }
+    // ...otherwise press and hold to fast-forward anyone still running.
+    if (play.anyRunning() || play.state.phase === 'rolling') {
+      play.setFast(true);
+      canvas.setPointerCapture?.(ev.pointerId);
+      renderPlay();
     }
     return;
   }
@@ -1960,7 +1959,8 @@ function renderPlay() {
   $('#hudRoll').disabled = roll.disabled;
   $('#hudStatus').innerHTML = chip + ({
     nostart: 'Paint a Start space first.',
-    idle: `On <b>${here}</b>${s.pos >= 0 ? ` · light ${Math.round(lightLevels[s.pos] * 100)}%` : ''}. Roll.`,
+    idle: `On <b>${here}</b>${s.pos >= 0 ? ` · light ${Math.round(lightLevels[s.pos] * 100)}%` : ''}. Roll.` +
+      (play.anyRunning() ? (s.fast ? ' · ⏩' : ' · <span class="muted">hold board to fast-forward</span>') : ''),
     rolling: 'Rolling…',
     moving: s.fast ? `Fast-forward ⏩ <b>${s.steps}</b> left` : `Running… <b>${s.steps}</b> left · hold to fast-forward`,
     choosing: `${s.stopReason ? `<b>${s.stopReason}</b> · ` : ''}Tap an arrow · <b>${s.steps}</b> left`,
@@ -2028,7 +2028,7 @@ const play = createPlay({
     markers.burst(type, p.x, fy, p.z, text);
   },
 });
-markerUsed = (i) => ui.tool === 'play' && play.state.used.has(i);
+markerUsed = (i) => ui.tool === 'play' && play.state.shownUsed.has(i);
 $('#playRoll').addEventListener('click', () => play.roll());
 $('#hudRoll').addEventListener('click', () => play.roll());
 $('#playStreets').addEventListener('change', (e) => { play.state.followStreets = e.target.checked; });

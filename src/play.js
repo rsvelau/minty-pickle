@@ -17,10 +17,10 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 
 // The four players: name tag colour (also their jacket), hair, extras.
 export const PLAYERS = [
-  { name: 'P1', colour: '#18b7a6', accent: '#f2e9d0', hair: '#2a1a10', cap: false },
-  { name: 'P2', colour: '#e0407e', accent: '#2b2b6e', hair: '#d9b25a', cap: false },
-  { name: 'P3', colour: '#f0b52a', accent: '#5a2a8a', hair: '#1a1410', cap: true },
-  { name: 'P4', colour: '#7a54e8', accent: '#2fd0c0', hair: '#7a3a1c', cap: false },
+  { name: 'P1', colour: '#18b7a6', accent: '#f2e9d0', hair: '#2a1a10', cap: false, pack: 'schoolbag', torch: '#1c1c1e' },
+  { name: 'P2', colour: '#e0407e', accent: '#2b2b6e', hair: '#d9b25a', cap: false, pack: 'neon', torch: '#e8c22a' },
+  { name: 'P3', colour: '#f0b52a', accent: '#5a2a8a', hair: '#1a1410', cap: true, pack: 'daypack', torch: '#b8252a' },
+  { name: 'P4', colour: '#7a54e8', accent: '#2fd0c0', hair: '#7a3a1c', cap: false, pack: 'hiker', torch: '#5a5f66' },
 ];
 // Where each player stands inside a cell (cell units from its centre).
 const SLOTS = [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]];
@@ -57,7 +57,8 @@ export function createPlay({
     turn: 0,           // turns taken (all players)
     keys: 0,           // key groups picked up by anyone: their doors are unlocked for all
     keyGroups: null,
-    used: new Set(),   // marker cells already collected / used
+    used: new Set(),   // marker cells already collected / used (game logic)
+    shownUsed: new Set(), // ...and those a runner has visibly reached
     log: [],
     follow: true,
     fast: false,       // fast-forward held
@@ -73,6 +74,17 @@ export function createPlay({
   scene.add(group);
   const figureMat = new THREE.MeshLambertMaterial({ vertexColors: true });
   terrainify(figureMat, { bridge: true });
+  // Dim, warm 90s incandescent flashlight: a glowing lens and a faint cone.
+  const lensMat = new THREE.MeshBasicMaterial({ color: '#ffe2a8' });
+  const beamMat = new THREE.MeshBasicMaterial({
+    color: '#ffcf8a', transparent: true, opacity: 0.12, depthWrite: false,
+    blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+  });
+  terrainify(lensMat, { bridge: true });
+  terrainify(beamMat, { bridge: true });
+  // Cone along +z from the lens: ~3 m long, ~1.2 m wide at the far end.
+  const beamGeo = new THREE.CylinderGeometry(m(0.6), m(0.04), m(3), 16, 1, true)
+    .translate(0, m(1.5), 0).rotateX(Math.PI / 2);
 
   function makeFigure(p) {
     // Built in metres, base at y = 0, facing +z, ~1.75 m tall. Legs hinge at
@@ -111,6 +123,40 @@ export function createPlay({
       add('body', new THREE.CylinderGeometry(m(0.14), m(0.14), m(0.07), 14).translate(0, m(1.72), 0), p.accent);
       box('body', 0.18, 0.02, 0.14, 0, 1.69, -0.17, p.accent);    // backwards brim
     }
+    // Backpack (on the back, -z), a different kind for each player.
+    const strap = (hex) => { box('body', 0.05, 0.46, 0.03, -0.12, 0.92, 0.135, hex); box('body', 0.05, 0.46, 0.03, 0.12, 0.92, 0.135, hex); };
+    if (p.pack === 'schoolbag') {          // classic 90s school pack: navy, front pocket, leather patch
+      box('body', 0.36, 0.42, 0.16, 0, 0.92, -0.21, '#2b3a6a');
+      add('body', new THREE.CylinderGeometry(m(0.18), m(0.18), m(0.16), 12, 1, false, 0, Math.PI)
+        .rotateZ(Math.PI / 2).rotateY(Math.PI / 2).translate(0, m(1.34), m(-0.21)), '#2b3a6a');
+      box('body', 0.28, 0.18, 0.06, 0, 0.95, -0.31, '#2b3a6a');
+      box('body', 0.06, 0.06, 0.02, 0, 1.06, -0.345, '#7a4a26');
+      strap('#1d2748');
+    } else if (p.pack === 'neon') {        // neon colour-block pack
+      box('body', 0.34, 0.2, 0.15, 0, 0.92, -0.2, '#2fd0c0');
+      box('body', 0.34, 0.22, 0.15, 0, 1.12, -0.2, '#f04fa0');
+      box('body', 0.35, 0.04, 0.16, 0, 1.11, -0.2, '#f2e830');
+      box('body', 0.26, 0.14, 0.05, 0, 0.96, -0.29, '#2b2b6e');
+      strap('#222');
+    } else if (p.pack === 'daypack') {     // small canvas daypack with a rolled blanket
+      box('body', 0.3, 0.32, 0.13, 0, 0.98, -0.2, '#6f6a3e');
+      box('body', 0.31, 0.06, 0.14, 0, 1.24, -0.2, '#4a4528');
+      add('body', new THREE.CylinderGeometry(m(0.07), m(0.07), m(0.4), 10).rotateZ(Math.PI / 2)
+        .translate(0, m(0.92), m(-0.22)), '#8a3a2a');
+      strap('#3a3720');
+    } else {                               // tall external-frame hiking pack + bedroll
+      box('body', 0.34, 0.6, 0.18, 0, 0.84, -0.22, '#a24a2a');
+      box('body', 0.03, 0.78, 0.03, -0.19, 0.78, -0.15, '#9a9ca0');
+      box('body', 0.03, 0.78, 0.03, 0.19, 0.78, -0.15, '#9a9ca0');
+      add('body', new THREE.CylinderGeometry(m(0.09), m(0.09), m(0.44), 10).rotateZ(Math.PI / 2)
+        .translate(0, m(1.52), m(-0.22)), '#2f5a3a');
+      strap('#4a2a1a');
+    }
+    // Flashlight in the right hand, pointing forward.
+    add('armR', new THREE.CylinderGeometry(m(0.028), m(0.024), m(0.24), 10).rotateX(Math.PI / 2)
+      .translate(m(0.28), m(0.82 - SHOULDER), m(0.12)), p.torch);
+    add('armR', new THREE.CylinderGeometry(m(0.04), m(0.03), m(0.05), 10).rotateX(Math.PI / 2)
+      .translate(m(0.28), m(0.82 - SHOULDER), m(0.26)), p.torch);
     const root = new THREE.Group();   // placed on the ground, turned to face travel
     const torso = new THREE.Group();  // bobs and leans while running
     root.add(torso);
@@ -129,6 +175,15 @@ export function createPlay({
       (part.startsWith('leg') ? root : torso).add(g);
       limbs[part] = g;
     }
+    // The flashlight's lens and dim beam (unlit, warm, faint), on the arm.
+    const lens = new THREE.Mesh(new THREE.CircleGeometry(m(0.035), 12).translate(0, 0, 0), lensMat);
+    lens.position.set(m(0.28), m(0.82 - SHOULDER), m(0.29));
+    const beam = new THREE.Mesh(beamGeo, beamMat);
+    beam.position.copy(lens.position);
+    beam.rotation.x = 0.28; // aimed a little down at the ground ahead
+    beam.renderOrder = 4;
+    lens.raycast = beam.raycast = () => {};
+    limbs.armR.add(lens, beam);
     root.userData = { torso, limbs, phase: 0, run: 0 };
     return root;
   }
@@ -249,10 +304,12 @@ export function createPlay({
   function placeAll() {
     st.players.forEach((pl, k) => {
       if (pl.pos < 0 || pl.pos >= grid.cells.length) return;
-      if (st.anim && k === st.cur) return;
+      if (pl.anim || pl.queue.length) return; // still running there
       pl.at = standAt(k, pl.pos);
+      pl.vis = pl.pos;
     });
   }
+  const running = (pl) => !!(pl.anim || pl.queue.length);
 
   const who = () => st.players[st.cur]?.name ?? '';
   function log(msg) {
@@ -263,14 +320,15 @@ export function createPlay({
   // Entering a cell: touching a marker collects / uses it straight away (a
   // burst and a floating label on the board), and the pawn stops there to
   // ask which way to go next.
+  // Returns the visual effect to play when the runner reaches the cell.
   function enter(i) {
     const c = grid.cells[i];
     const m = c.marker;
-    if (!m || !MARKERS[m]) return;
+    if (!m || !MARKERS[m]) return null;
     st.stopAt = i;
     if (st.used.has(i)) {
       st.stopReason = `${MARKERS[m].label} (already collected)`;
-      return;
+      return null;
     }
     st.used.add(i);
     let text, msg;
@@ -303,8 +361,7 @@ export function createPlay({
     }
     st.stopReason = MARKERS[m].label;
     log(msg);
-    onCollect(i, m, text);
-    onUsed();
+    return () => { st.shownUsed.add(i); onCollect(i, m, text); onUsed(); };
   }
 
   // Landing at the end of a move.
@@ -315,19 +372,22 @@ export function createPlay({
   // --- turn flow ------------------------------------------------------------
   function reset() {
     const s = startCell();
-    st.players = PLAYERS.slice(0, st.count).map((p) => ({ ...p, pos: s, prev: -1, white: 0, black: 0, at: null, face: 0 }));
+    st.players = PLAYERS.slice(0, st.count).map((p) => ({
+      ...p, pos: s, prev: -1, white: 0, black: 0, at: null, face: 0, vis: s, queue: [], anim: null,
+    }));
     Object.assign(st, {
       cur: 0, steps: 0, roll: 0, phase: s >= 0 ? 'idle' : 'nostart', options: [],
-      turn: 0, keys: 0, keyGroups: grid.keyGroups(), anim: null,
+      turn: 0, keys: 0, keyGroups: grid.keyGroups(), pan: true,
     });
     st.used = new Set();
+    st.shownUsed = new Set();
     st.stopAt = -1;
     st.stopReason = '';
     onUsed();
     st.log = s >= 0
       ? [`${st.count} player${st.count === 1 ? '' : 's'} ready on the Start space (${label(s)}), in the van's headlights: starting light ${Math.round(lightAt(s) * 100)}%. ${who()} rolls first.`]
       : [];
-    if (s >= 0) { placeAll(); enter(s); }
+    if (s >= 0) { placeAll(); enter(s)?.(); }
     applyVisibility();
     showOptions();
     onChange();
@@ -377,21 +437,29 @@ export function createPlay({
     onChange();
   }
 
-  // Hand the turn to the next player.
+  // Hand the turn to the next player: the camera pans to them straight away,
+  // even if the last player is still running into place.
   function nextPlayer() {
     st.cur = (st.cur + 1) % st.players.length;
+    st.pan = true;
     st.phase = 'idle';
     st.stopAt = -1;
     st.stopReason = '';
     if (st.players.length > 1) log(`${who()}'s turn.`);
   }
 
+  // Take one step in the game straight away; the figure runs it afterwards.
   function step(o) {
     st.options = [];
     showOptions();
-    st.phase = 'moving';
-    st.anim = { from: st.pos, to: o.i, t: 0 };
-    onChange();
+    const pl = st.players[st.cur];
+    const from = pl.pos;
+    pl.prev = from;
+    pl.pos = o.i;
+    st.steps--;
+    const fx = enter(o.i);
+    pl.queue.push({ from, to: o.i, fx });
+    advance();
   }
 
   function choose(i) {
@@ -454,34 +522,30 @@ export function createPlay({
         st.rollFace = st.roll;
         st.steps = st.roll;
         st.prev = -1;
+        st.phase = 'moving';
         log(`${who()} rolled a ${st.roll}.`);
         advance();
       }
     }
-    if (st.anim) {
-      const a = st.anim;
-      const stepTime = st.fast ? FAST_STEP : STEP_TIME(METERS_PER_CELL);
+    // Every player runs their own queued path (several can run at once).
+    const stepTime = st.fast ? FAST_STEP : STEP_TIME(METERS_PER_CELL);
+    st.players.forEach((pl, k) => {
+      if (!pl.anim && pl.queue.length) pl.anim = { ...pl.queue.shift(), t: 0 };
+      const a = pl.anim;
+      if (!a) return;
       a.t = Math.min(1, a.t + dt / stepTime);
-      const k = a.t; // steady jog across the cell (no stop between cells)
-      const wa = standAt(st.cur, a.from), wb = standAt(st.cur, a.to);
-      const pl = st.players[st.cur];
-      pl.at = wa.lerp(wb, k);
-      // Jogging animation: legs cycle with the distance covered.
-      const fig = figures[st.cur].fig.userData;
-      fig.phase += (METERS_PER_CELL * dt / stepTime) * STRIDES_PER_M * Math.PI * 2;
-      fig.moving = true;
+      pl.at = standAt(k, a.from).lerp(standAt(k, a.to), a.t); // steady jog, no stop between cells
+      figures[k].fig.userData.phase += (METERS_PER_CELL * dt / stepTime) * STRIDES_PER_M * Math.PI * 2;
       const da = grid.coords(a.from), db = grid.coords(a.to);
       pl.face = Math.atan2(db.x - da.x, db.y - da.y);
       if (a.t >= 1) {
-        st.anim = null;
-        st.prev = a.from;
-        st.pos = a.to;
-        st.players[st.cur].at = standAt(st.cur, a.to);
-        st.steps--;
-        enter(st.pos);
-        advance();
+        pl.anim = null;
+        pl.vis = a.to;
+        pl.at = standAt(k, a.to);
+        a.fx?.(); // marker burst when they actually get there
+        if (!running(pl)) onChange(); // arrived: refresh the status
       }
-    }
+    });
     // Figures, the turn ring and name tags.
     figures.forEach(({ fig, tag }, k) => {
       const pl = st.players[k];
@@ -491,7 +555,7 @@ export function createPlay({
       fig.position.copy(pl.at);
       // Run pose: blend in while moving, out when stopped.
       const u = fig.userData;
-      const target = st.anim && k === st.cur ? 1 : 0;
+      const target = pl.anim ? 1 : 0;
       u.run += (target - u.run) * Math.min(1, dt * 8);
       const sw = Math.sin(u.phase) * u.run;
       u.limbs.legL.rotation.x = sw * 0.75;
@@ -506,7 +570,7 @@ export function createPlay({
       const d = camera.position.distanceTo(pl.at);
       const size = Math.max(0.14, d * 0.035);
       // Players sharing a cell stack their tags so they don't cover each other.
-      const sameCell = st.players.filter((q, j) => j < k && q.pos === pl.pos && !(st.anim && j === st.cur)).length;
+      const sameCell = pl.anim ? 0 : st.players.filter((q, j) => j < k && !q.anim && q.vis === pl.vis).length;
       const fade = THREE.MathUtils.smoothstep(d, 2.5, 7);
       // (Only stack when zoomed out; up close each tag sits over its own figure.)
       tag.position.set(pl.at.x, pl.at.y + m(2.1) + sameCell * size * 0.8 * fade, pl.at.z);
@@ -518,10 +582,12 @@ export function createPlay({
     if (curPl?.at) halo.position.copy(curPl.at);
     halo.visible = !!curPl?.at;
 
-    // Camera follows the current player gently (keeps the same viewing angle).
-    if (st.follow && (st.anim || st.phase === 'rolling') && curPl?.at) {
+    // Camera follows the current player gently (keeps the same viewing
+    // angle): while they run, and to pan over when the turn changes.
+    if (st.follow && (running(curPl ?? {}) || st.pan) && curPl?.at) {
       tmp.set(curPl.at.x, 0, curPl.at.z).sub(controls.target);
       tmp.y = 0;
+      if (!running(curPl) && tmp.length() < 0.05) st.pan = false;
       tmp.multiplyScalar(Math.min(1, dt * 3));
       controls.target.add(tmp);
       camera.position.add(tmp);
@@ -552,6 +618,8 @@ export function createPlay({
   return {
     state: st, roll, reset, choose, chooseByKey, tick, setActive, boardChanged, setPlayers,
     setFast: (on) => { st.fast = !!on; },
+    // Is anyone still running into place?
+    anyRunning: () => st.players.some(running),
     isOption: (i) => st.phase === 'choosing' && st.options.some((o) => o.i === i),
   };
 }

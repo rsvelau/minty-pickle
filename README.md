@@ -157,6 +157,15 @@ markers** in View hides them. Marker art lives in `src/markers.js`; the list of 
 - Players **jog** from cell to cell at a human jogging pace (about 2.7 m/s, so roughly 2.6 s per 7 m
   cell), legs and arms swinging in step with the ground covered. **Press and hold anywhere on the board**
   (finger or mouse) to fast-forward a move (about 0.3 s per cell); let go to return to a jog.
+- **Turns don't wait for running.** A move is worked out the moment the player gives their input. As soon
+  as they've made their last choice (or none is needed), the turn passes and the camera pans to the next
+  player while the last figure is still jogging into place. Several players can be running at once; marker
+  bursts and fading happen when a runner actually reaches the marker. Holding the board fast-forwards
+  everyone who is still running.
+- **Kit:** every figure carries a dim incandescent flashlight (a warm lens and a faint beam, swinging with
+  the arm; it's for looks and doesn't change the lighting rules) and a backpack: P1 a navy 90s school pack,
+  P2 a neon colour-block pack, P3 a canvas daypack with a rolled blanket, P4 an external-frame hiking pack
+  with a bedroll.
 - **Name tags** (P1–P4, in the player's colour) float over each figure and show through buildings so you
   can always find everyone; they stay readable when zoomed out (stacking when players share a cell) and
   fade to nearly transparent when you zoom in close. The current player's tag pulses and a ring in their
