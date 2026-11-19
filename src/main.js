@@ -1833,6 +1833,7 @@ function setShape(name) {
 function setView(name) {
   ui.view = name;
   $$('[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === name));
+  $('#viewCurrent').textContent = { all: 'All', area: 'Area', light: 'Light', walk: 'Move' }[name];
   refreshAll();
 }
 function setOrbitMode(on) {
@@ -1988,6 +1989,20 @@ $$('[data-shape]').forEach((b) => b.addEventListener('click', () => setShape(b.d
 $$('[data-view]').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
 $$('[data-cam]').forEach((b) => b.addEventListener('click', () => setCamera(b.dataset.cam)));
 $('#camMode').addEventListener('click', () => setOrbitMode(!ui.orbitMode));
+
+// View menu: open/closed is remembered per browser.
+function setViewMenu(open) {
+  $('#viewList').hidden = !open;
+  $('#viewToggle').setAttribute('aria-expanded', String(open));
+  document.body.classList.toggle('view-open', open);
+  try { localStorage.setItem('minty-pickle.viewMenu', open ? '1' : '0'); } catch { /* ignore */ }
+}
+$('#viewToggle').addEventListener('click', () => setViewMenu($('#viewList').hidden));
+{
+  let open = window.innerWidth >= 700;
+  try { const v = localStorage.getItem('minty-pickle.viewMenu'); if (v !== null) open = v === '1'; } catch { /* ignore */ }
+  setViewMenu(open);
+}
 
 $('#optLabels').addEventListener('change', (e) => { ui.labels = e.target.checked; labelGroup.visible = ui.labels; });
 $('#optAtmos').addEventListener('change', (e) => { ui.atmosphere = e.target.checked; applyAtmosphere(); });
@@ -2208,6 +2223,7 @@ window.addEventListener('keydown', (e) => {
   if (BRUSH_KEYS[e.key]) { setTool('cells'); setBrush(BRUSH_KEYS[e.key]); }
   else if (key === 'm') setTool('move');
   else if (key === 'p') setTool('markers');
+  else if (key === 'v') setViewMenu($('#viewList').hidden);
   else if (key === 'y') setTool('play');
   else if (['w', 'd', 'k', 'o', 'x', 'g'].includes(key)) {
     setTool('walls');

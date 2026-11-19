@@ -142,23 +142,7 @@
         </section>
 
         <section>
-          <h2>View</h2>
-          <div class="seg" role="group" aria-label="Layer view">
-            <button data-view="all" class="on">All</button>
-            <button data-view="area">Area</button>
-            <button data-view="light">Light</button>
-            <button data-view="walk">Move</button>
-          </div>
-          <div class="seg" role="group" aria-label="Camera">
-            <button data-cam="angled">Angled</button>
-            <button data-cam="top">Top-down <kbd>T</kbd></button>
-            <button id="camMode" title="Left-drag orbits instead of paints (or hold Space)">Orbit mode</button>
-          </div>
-          <label class="check"><input type="checkbox" id="optLabels" checked /> Coordinate labels</label>
-          <label class="check"><input type="checkbox" id="optAtmos" checked /> Atmosphere (rain, trees, fog)</label>
-          <label class="check"><input type="checkbox" id="optLowWalls" checked /> Low walls (cutaway view)</label>
-          <label class="check"><input type="checkbox" id="optMarkers" checked /> Show markers</label>
-          <h2 class="sub-h">Elevation</h2>
+          <h2>Elevation</h2>
           <div class="seg" role="group" aria-label="Elevation preset" id="terrainPresets"></div>
           <p class="note" id="terrainNote"></p>
         </section>
@@ -201,6 +185,36 @@
     <div id="playChoices" class="play-choices"></div>
 
     <button id="expand" class="panel-tab" hidden>Grid Planner ☰</button>
+
+    <!-- View menu: a small button top-right that opens a column of view controls. -->
+    <nav id="viewMenu" class="view-menu" aria-label="View">
+      <button id="viewToggle" class="view-toggle" aria-expanded="false" aria-controls="viewList" title="View options (V)">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3.2" fill="currentColor"/></svg>
+        <span class="view-current" id="viewCurrent">All</span>
+      </button>
+      <div id="viewList" class="view-list" hidden>
+        <span class="vm-label">Layer</span>
+        <div class="vm-grid">
+          <button data-view="all" class="on">All</button>
+          <button data-view="area">Area</button>
+          <button data-view="light">Light</button>
+          <button data-view="walk">Move</button>
+        </div>
+        <span class="vm-label">Camera</span>
+        <div class="vm-grid">
+          <button data-cam="angled">Angled</button>
+          <button data-cam="top">Top</button>
+          <button id="camMode" class="vm-wide" title="One-finger / left-drag orbits instead of paints (or hold Space)">Orbit mode</button>
+        </div>
+        <span class="vm-label">Show</span>
+        <div class="vm-col">
+          <label class="vm-chip"><input type="checkbox" id="optLabels" checked />Labels</label>
+          <label class="vm-chip"><input type="checkbox" id="optAtmos" checked />Atmosphere</label>
+          <label class="vm-chip"><input type="checkbox" id="optLowWalls" checked />Low walls</label>
+          <label class="vm-chip"><input type="checkbox" id="optMarkers" checked />Markers</label>
+        </div>
+      </div>
+    </nav>
 
     <div id="info" class="info">
       <div id="hover" class="hover">Hover a cell</div>

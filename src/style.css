@@ -362,3 +362,70 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px
   body.playing .info { display: none; }
 }
 body.playing .help { display: none; }
+
+/* View menu (top right) ------------------------------------------------------- */
+.view-menu {
+  position: fixed;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  right: calc(12px + env(safe-area-inset-right, 0px));
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+.view-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 10px;
+  border-radius: 22px;
+  background: var(--panel);
+  backdrop-filter: blur(6px);
+  touch-action: manipulation;
+}
+.view-toggle[aria-expanded="true"] { border-color: var(--accent); }
+.view-current { font-size: 12px; color: var(--muted); }
+.view-list {
+  width: 172px;
+  max-height: calc(100vh - 80px);
+  overflow: auto;
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+.view-list[hidden] { display: none; }
+.vm-label { display: block; margin: 6px 2px 4px; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.vm-label:first-child { margin-top: 0; }
+.vm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.vm-grid button, .vm-chip { min-height: 40px; touch-action: manipulation; }
+.vm-wide { grid-column: 1 / 3; }
+.vm-col { display: grid; gap: 4px; }
+.vm-chip {
+  display: flex; align-items: center; gap: 8px; padding: 0 10px;
+  border: 1px solid var(--line); border-radius: 6px; background: rgba(255, 255, 255, 0.04);
+  cursor: pointer; font-size: 13px; user-select: none;
+}
+.vm-chip input { position: absolute; opacity: 0; pointer-events: none; }
+.vm-chip::before {
+  content: ''; width: 14px; height: 14px; border-radius: 4px; flex: none;
+  border: 1.5px solid var(--muted);
+}
+.vm-chip:has(input:checked) { border-color: var(--accent); background: rgba(217, 164, 106, 0.16); color: #f3e3cf; }
+.vm-chip:has(input:checked)::before { background: var(--accent); border-color: var(--accent); }
+.vm-chip:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* The info box sits under the view button. */
+.info { top: calc(64px + env(safe-area-inset-top, 0px)); }
+@media (max-width: 700px) {
+  .info { top: auto; }
+  .view-list { width: 160px; }
+}
+/* With the view menu open, the info box moves left of it. */
+@media (min-width: 701px) {
+  body.view-open .info { right: calc(196px + env(safe-area-inset-right, 0px)); top: calc(12px + env(safe-area-inset-top, 0px)); }
+}

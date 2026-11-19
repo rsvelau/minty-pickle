@@ -298,6 +298,14 @@ npm run dev        # http://localhost:5173
 npm run build      # static site in dist/ (works from any sub-path, e.g. GitHub Pages)
 ```
 
+## View menu
+
+The round **eye button** in the top-right corner opens a compact column of view controls (`V` toggles it):
+**Layer** (All / Area / Light / Move), **Camera** (Angled / Top / Orbit mode) and **Show** toggles (Labels,
+Atmosphere, Low walls, Markers). The button shows the current layer even when the menu is closed. Buttons
+are at least 40 px tall for fingers. The menu starts open on wide screens and closed on phones, and
+remembers how you left it. Elevation presets stay in the side panel (they're saved with the board).
+
 ## Controls
 
 | Action | Input |
