@@ -12,7 +12,7 @@
 // each move.
 import * as THREE from 'three';
 import { MARKERS, streetMask, edgeKey } from './state.js';
-import { m } from './scale.js';
+import { m, METERS_PER_CELL } from './scale.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 // The four players: name tag colour (also their jacket), hair, extras.
@@ -26,7 +26,12 @@ export const PLAYERS = [
 const SLOTS = [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]];
 
 const DIRS = [[0, -1, 'north', 1], [1, 0, 'east', 2], [0, 1, 'south', 4], [-1, 0, 'west', 8]];
-const STEP_TIME = 0.32;   // seconds per hop
+// Players jog: ~2.7 m/s, so one 7 m cell takes about 2.6 s. Holding the
+// screen fast-forwards to FAST_STEP per cell.
+const JOG_SPEED = 2.7;                        // metres per second
+const STEP_TIME = (TILE_M) => TILE_M / JOG_SPEED;
+const FAST_STEP = 0.32;                       // seconds per cell when fast-forwarding
+const STRIDES_PER_M = 0.78;                   // running cadence: leg cycles per metre
 const ROLL_TIME = 0.7;    // die tumble before it lands
 
 export function createPlay({
@@ -55,6 +60,7 @@ export function createPlay({
     used: new Set(),   // marker cells already collected / used
     log: [],
     follow: true,
+    fast: false,       // fast-forward held
     followStreets: true, // on roads, only move where the road goes (or through a door)
     anim: null,        // { from, to, t }
     rollT: 0,
@@ -69,39 +75,62 @@ export function createPlay({
   terrainify(figureMat, { bridge: true });
 
   function makeFigure(p) {
-    // Built in metres, base at y = 0, facing +z. ~1.75 m tall.
-    const parts = [];
-    const add = (geo, hex) => {
+    // Built in metres, base at y = 0, facing +z, ~1.75 m tall. Legs hinge at
+    // the hips and arms at the shoulders so the figure can jog.
+    const HIP = 0.86, SHOULDER = 1.38;
+    const groups = { body: [], legL: [], legR: [], armL: [], armR: [] };
+    const add = (part, geo, hex) => {
       geo = geo.index ? geo.toNonIndexed() : geo;
       geo.deleteAttribute('uv');
       const c = new THREE.Color(hex);
       const col = new Float32Array(geo.attributes.position.count * 3);
       for (let i = 0; i < col.length; i += 3) col.set([c.r, c.g, c.b], i);
       geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-      parts.push(geo);
+      groups[part].push(geo);
     };
-    const box = (w, h, d, x, y, z, hex) => add(new THREE.BoxGeometry(m(w), m(h), m(d)).translate(m(x), m(y + h / 2), m(z)), hex);
+    // Box at (x, y..y+h, z) in metres, relative to a pivot height.
+    const box = (part, w, h, d, x, y, z, hex, pivot = 0) =>
+      add(part, new THREE.BoxGeometry(m(w), m(h), m(d)).translate(m(x), m(y + h / 2 - pivot), m(z)), hex);
     const skin = '#d8a27c';
-    box(0.13, 0.1, 0.27, -0.09, 0, 0.03, '#f4f2ec'); box(0.13, 0.1, 0.27, 0.09, 0, 0.03, '#f4f2ec'); // sneakers
-    box(0.14, 0.78, 0.16, -0.09, 0.08, 0, '#4f6f9e'); box(0.14, 0.78, 0.16, 0.09, 0.08, 0, '#4f6f9e'); // stonewashed jeans
-    box(0.44, 0.58, 0.26, 0, 0.84, 0, p.colour);          // windbreaker
-    box(0.45, 0.12, 0.27, 0, 1.08, 0, p.accent);          // colour-block stripe
-    box(0.46, 0.06, 0.28, 0, 0.84, 0, p.accent);          // hem
-    box(0.11, 0.56, 0.13, -0.28, 0.86, 0, p.colour);      // sleeves
-    box(0.11, 0.56, 0.13, 0.28, 0.86, 0, p.colour);
-    box(0.09, 0.1, 0.1, -0.28, 0.77, 0, skin); box(0.09, 0.1, 0.1, 0.28, 0.77, 0, skin); // hands
-    box(0.1, 0.08, 0.1, 0, 1.42, 0, skin);                // neck
-    add(new THREE.SphereGeometry(m(0.13), 12, 9).scale(1, 1.12, 1).translate(0, m(1.6), 0), skin); // head
-    add(new THREE.SphereGeometry(m(0.135), 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55).scale(1.04, 1.1, 1.06)
-      .translate(0, m(1.615), m(-0.01)), p.hair);       // hair
-    if (p.cap) {
-      add(new THREE.CylinderGeometry(m(0.14), m(0.14), m(0.07), 14).translate(0, m(1.72), 0), p.accent);
-      box(0.18, 0.02, 0.14, 0, 1.69, -0.17, p.accent);   // backwards brim
+    for (const [part, x] of [['legL', -0.09], ['legR', 0.09]]) {
+      box(part, 0.13, 0.1, 0.27, x, 0, 0.03, '#f4f2ec', HIP);  // sneaker
+      box(part, 0.14, 0.78, 0.16, x, 0.08, 0, '#4f6f9e', HIP); // stonewashed jeans
     }
-    const mesh = new THREE.Mesh(mergeGeometries(parts), figureMat);
-    mesh.castShadow = true;
-    mesh.raycast = () => {};
-    return mesh;
+    for (const [part, x] of [['armL', -0.28], ['armR', 0.28]]) {
+      box(part, 0.11, 0.56, 0.13, x, 0.86, 0, p.colour, SHOULDER); // sleeve
+      box(part, 0.09, 0.1, 0.1, x, 0.77, 0, skin, SHOULDER);       // hand
+    }
+    box('body', 0.44, 0.58, 0.26, 0, 0.84, 0, p.colour);          // windbreaker
+    box('body', 0.45, 0.12, 0.27, 0, 1.08, 0, p.accent);          // colour-block stripe
+    box('body', 0.46, 0.06, 0.28, 0, 0.84, 0, p.accent);          // hem
+    box('body', 0.1, 0.08, 0.1, 0, 1.42, 0, skin);                // neck
+    add('body', new THREE.SphereGeometry(m(0.13), 12, 9).scale(1, 1.12, 1).translate(0, m(1.6), 0), skin); // head
+    add('body', new THREE.SphereGeometry(m(0.135), 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55).scale(1.04, 1.1, 1.06)
+      .translate(0, m(1.615), m(-0.01)), p.hair);                 // hair
+    if (p.cap) {
+      add('body', new THREE.CylinderGeometry(m(0.14), m(0.14), m(0.07), 14).translate(0, m(1.72), 0), p.accent);
+      box('body', 0.18, 0.02, 0.14, 0, 1.69, -0.17, p.accent);    // backwards brim
+    }
+    const root = new THREE.Group();   // placed on the ground, turned to face travel
+    const torso = new THREE.Group();  // bobs and leans while running
+    root.add(torso);
+    const mesh = (geos) => {
+      const o = new THREE.Mesh(mergeGeometries(geos), figureMat);
+      o.castShadow = true;
+      o.raycast = () => {};
+      return o;
+    };
+    torso.add(mesh(groups.body));
+    const limbs = {};
+    for (const [part, pivot] of [['legL', HIP], ['legR', HIP], ['armL', SHOULDER], ['armR', SHOULDER]]) {
+      const g = new THREE.Group();
+      g.position.y = m(pivot);
+      g.add(mesh(groups[part]));
+      (part.startsWith('leg') ? root : torso).add(g);
+      limbs[part] = g;
+    }
+    root.userData = { torso, limbs, phase: 0, run: 0 };
+    return root;
   }
 
   // Name tag: a rounded label in the player's colour with a pointer.
@@ -431,12 +460,16 @@ export function createPlay({
     }
     if (st.anim) {
       const a = st.anim;
-      a.t = Math.min(1, a.t + dt / STEP_TIME);
-      const k = a.t * a.t * (3 - 2 * a.t);
+      const stepTime = st.fast ? FAST_STEP : STEP_TIME(METERS_PER_CELL);
+      a.t = Math.min(1, a.t + dt / stepTime);
+      const k = a.t; // steady jog across the cell (no stop between cells)
       const wa = standAt(st.cur, a.from), wb = standAt(st.cur, a.to);
       const pl = st.players[st.cur];
       pl.at = wa.lerp(wb, k);
-      pl.at.y += Math.sin(Math.PI * a.t) * 0.08; // a little hop
+      // Jogging animation: legs cycle with the distance covered.
+      const fig = figures[st.cur].fig.userData;
+      fig.phase += (METERS_PER_CELL * dt / stepTime) * STRIDES_PER_M * Math.PI * 2;
+      fig.moving = true;
       const da = grid.coords(a.from), db = grid.coords(a.to);
       pl.face = Math.atan2(db.x - da.x, db.y - da.y);
       if (a.t >= 1) {
@@ -456,6 +489,17 @@ export function createPlay({
       fig.visible = tag.visible = !!on;
       if (!on) return;
       fig.position.copy(pl.at);
+      // Run pose: blend in while moving, out when stopped.
+      const u = fig.userData;
+      const target = st.anim && k === st.cur ? 1 : 0;
+      u.run += (target - u.run) * Math.min(1, dt * 8);
+      const sw = Math.sin(u.phase) * u.run;
+      u.limbs.legL.rotation.x = sw * 0.75;
+      u.limbs.legR.rotation.x = -sw * 0.75;
+      u.limbs.armL.rotation.x = -sw * 0.7;
+      u.limbs.armR.rotation.x = sw * 0.7;
+      u.torso.position.y = Math.abs(Math.cos(u.phase)) * m(0.06) * u.run;
+      u.torso.rotation.x = 0.12 * u.run; // lean into the run
       fig.rotation.y += (((pl.face - fig.rotation.y + Math.PI * 3) % (Math.PI * 2)) - Math.PI) * Math.min(1, dt * 10);
       // Tag: stays a readable size on screen, and fades out when zoomed in
       // close (where the figures themselves are easy to see).
@@ -507,6 +551,7 @@ export function createPlay({
 
   return {
     state: st, roll, reset, choose, chooseByKey, tick, setActive, boardChanged, setPlayers,
+    setFast: (on) => { st.fast = !!on; },
     isOption: (i) => st.phase === 'choosing' && st.options.some((o) => o.i === i),
   };
 }

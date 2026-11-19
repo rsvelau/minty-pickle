@@ -154,6 +154,9 @@ markers** in View hides them. Marker art lives in `src/markers.js`; the list of 
   real scale (about 1.75 m): a colour-blocked windbreaker in their colour, stonewashed jeans and white
   sneakers, with different hair (P3 wears a backwards cap). Each stands in its own quarter of a cell, so all
   four fit on one tile, and turns to face the way it walks.
+- Players **jog** from cell to cell at a human jogging pace (about 2.7 m/s, so roughly 2.6 s per 7 m
+  cell), legs and arms swinging in step with the ground covered. **Press and hold anywhere on the board**
+  (finger or mouse) to fast-forward a move (about 0.3 s per cell); let go to return to a jog.
 - **Name tags** (P1–P4, in the player's colour) float over each figure and show through buildings so you
   can always find everyone; they stay readable when zoomed out (stacking when players share a cell) and
   fade to nearly transparent when you zoom in close. The current player's tag pulses and a ring in their

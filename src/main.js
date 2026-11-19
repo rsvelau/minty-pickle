@@ -1581,6 +1581,13 @@ canvas.addEventListener('pointerdown', (ev) => {
   if (ui.tool === 'walls') { startEdgeStroke(ev); return; }
   if (ui.tool === 'move') { moveClick(pickCell(ev)); return; }
   if (ui.tool === 'play') {
+    // Press and hold to fast-forward a move in progress.
+    if (play.state.phase === 'moving' || play.state.phase === 'rolling') {
+      play.setFast(true);
+      canvas.setPointerCapture?.(ev.pointerId);
+      renderPlay();
+      return;
+    }
     const cell = pickCell(ev);
     if (cell && play.choose(grid.index(cell.x, cell.y))) return;
     // Not exactly on an option: take the nearest one within a cell.
@@ -1647,6 +1654,9 @@ function cancelPainting() {
   painting = null;
 }
 canvas.addEventListener('pointerup', finishPainting);
+for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+  canvas.addEventListener(type, () => { if (play.state.fast) { play.setFast(false); renderPlay(); } });
+}
 canvas.addEventListener('pointercancel', (ev) => {
   activeTouches.delete(ev.pointerId);
   if (painting && ev.pointerId === painting.pointerId) cancelPainting();
@@ -1929,7 +1939,7 @@ function renderPlay() {
     nostart: 'No Start space yet. Paint one (Spaces → Outdoor → Start space).',
     idle: `On <b>${here}</b>. Roll to move.`,
     rolling: 'Rolling…',
-    moving: `Moving… <b>${s.steps}</b> left`,
+    moving: s.fast ? `Fast-forward ⏩ <b>${s.steps}</b> left` : `Running… <b>${s.steps}</b> left (press and hold the board to fast-forward)`,
     choosing: `${s.stopReason ? `Stopped at <b>${s.stopReason}</b>. ` : ''}Choose a direction: <b>${s.steps}</b> move${s.steps === 1 ? '' : 's'} left (${s.options.map((o) => o.name).join(', ')})`,
     done: `On <b>${here}</b>. Roll again.`,
   }[s.phase] ?? '');
@@ -1952,7 +1962,7 @@ function renderPlay() {
     nostart: 'Paint a Start space first.',
     idle: `On <b>${here}</b>${s.pos >= 0 ? ` · light ${Math.round(lightLevels[s.pos] * 100)}%` : ''}. Roll.`,
     rolling: 'Rolling…',
-    moving: `Moving… <b>${s.steps}</b> left`,
+    moving: s.fast ? `Fast-forward ⏩ <b>${s.steps}</b> left` : `Running… <b>${s.steps}</b> left · hold to fast-forward`,
     choosing: `${s.stopReason ? `<b>${s.stopReason}</b> · ` : ''}Tap an arrow · <b>${s.steps}</b> left`,
     done: `On <b>${here}</b>. Roll again.`,
   }[s.phase] ?? '');
