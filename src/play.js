@@ -13,6 +13,7 @@
 import * as THREE from 'three';
 import { MARKERS, streetMask, edgeKey } from './state.js';
 import { m, METERS_PER_CELL } from './scale.js';
+import { dreadUniforms, flickerAt } from './dread.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 // The four players: name tag colour (also their jacket), hair, extras.
@@ -95,13 +96,19 @@ export function createPlay({
   const figureMat = new THREE.MeshLambertMaterial({ vertexColors: true });
   terrainify(figureMat, { bridge: true });
   // Dim, warm 90s incandescent flashlight: a glowing lens and a faint cone.
-  const lensMat = new THREE.MeshBasicMaterial({ color: '#ffe2a8' });
-  const beamMat = new THREE.MeshBasicMaterial({
-    color: '#ffcf8a', transparent: true, opacity: 0.12, depthWrite: false,
-    blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
-  });
-  terrainify(lensMat, { bridge: true });
-  terrainify(beamMat, { bridge: true });
+  // Each figure gets its own pair so its flashlight can flicker on its own
+  // at midnight.
+  const LENS_COLOUR = new THREE.Color('#ffe2a8'), BEAM_OPACITY = 0.12;
+  function flashlightMats() {
+    const lensMat = new THREE.MeshBasicMaterial({ color: LENS_COLOUR.clone() });
+    const beamMat = new THREE.MeshBasicMaterial({
+      color: '#ffcf8a', transparent: true, opacity: BEAM_OPACITY, depthWrite: false,
+      blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    });
+    terrainify(lensMat, { bridge: true });
+    terrainify(beamMat, { bridge: true });
+    return { lensMat, beamMat };
+  }
   // Cone along +z from the lens: ~3 m long, ~1.2 m wide at the far end.
   const beamGeo = new THREE.CylinderGeometry(m(0.6), m(0.04), m(3), 16, 1, true)
     .translate(0, m(1.5), 0).rotateX(Math.PI / 2);
@@ -196,6 +203,7 @@ export function createPlay({
       limbs[part] = g;
     }
     // The flashlight's lens and dim beam (unlit, warm, faint), on the arm.
+    const { lensMat, beamMat } = flashlightMats();
     const lens = new THREE.Mesh(new THREE.CircleGeometry(m(0.035), 12).translate(0, 0, 0), lensMat);
     lens.position.set(m(0.28), m(0.82 - SHOULDER), m(0.29));
     const beam = new THREE.Mesh(beamGeo, beamMat);
@@ -204,7 +212,7 @@ export function createPlay({
     beam.renderOrder = 4;
     lens.raycast = beam.raycast = () => {};
     limbs.armR.add(lens, beam);
-    root.userData = { torso, limbs, phase: 0, run: 0 };
+    root.userData = { torso, limbs, phase: 0, run: 0, lensMat, beamMat };
     return root;
   }
 
@@ -648,6 +656,10 @@ export function createPlay({
       fig.visible = tag.visible = !!on;
       if (!on) return;
       fig.position.copy(pl.at);
+      // Midnight: the flashlight flickers too, each on its own rhythm.
+      const fl = flickerAt(0.13 + 0.21 * k, dreadUniforms.uDreadTime.value, dreadUniforms.uDread.value);
+      fig.userData.lensMat.color.copy(LENS_COLOUR).multiplyScalar(fl);
+      fig.userData.beamMat.opacity = BEAM_OPACITY * fl;
       // Run pose: blend in while moving, out when stopped.
       const u = fig.userData;
       const target = pl.anim ? 1 : 0;

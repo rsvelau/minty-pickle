@@ -1291,6 +1291,7 @@ let rainSpeed = new Float32Array(0);
 const RAIN_TOP = m(80);
 const STREAK = m(1.5);
 const rainBox = { x: 0, z: 0 };
+const RAIN_GREY = new THREE.Color('#8aa0b8'), RAIN_RED = new THREE.Color('#c41e2a');
 const rainMat = new THREE.LineBasicMaterial({ color: '#8aa0b8', transparent: true, opacity: 0.22, depthWrite: false });
 
 function buildRain() {
@@ -1323,7 +1324,8 @@ function updateRain(dt) {
   const d = dread;
   const n = Math.round(rainSpeed.length * (0.5 + 0.5 * d));
   rain.geometry.setDrawRange(0, n * 2);
-  rainMat.opacity = 0.22 + 0.1 * d;
+  rainMat.opacity = 0.22 + 0.16 * d;
+  rainMat.color.copy(RAIN_GREY).lerp(RAIN_RED, d); // blood-red at midnight
   const fall = 1 + 0.8 * d, drift = 0.3 + 1.6 * d;
   for (let i = 0; i < n; i++) {
     const o = i * 6;

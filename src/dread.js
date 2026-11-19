@@ -43,7 +43,7 @@ export function setLightSeeds(cols, rows, src) {
   dreadUniforms.uSeedBoard.value.set(cols, rows);
 }
 
-// Brightness multiplier (0.15..1) for a light with seed h (0..1) at time t.
+// Brightness multiplier (0.08..1) for a light with seed h (0..1) at time t.
 const FLICKER_GLSL = /* glsl */ `
 uniform float uDread;
 uniform float uDreadTime;
@@ -57,17 +57,17 @@ float dreadFlicker(vec3 wp) {
   if (h <= 0.0) h = 0.37; // not tied to a source (e.g. off the board)
   float t = uDreadTime;
   // A sickly waver that never settles.
-  float slow = 0.07 * sin(t * 5.3 + h * 40.0) + 0.05 * sin(t * 8.9 + h * 17.0);
+  float slow = 0.11 * sin(t * 5.3 + h * 40.0) + 0.08 * sin(t * 8.9 + h * 17.0);
   // Dropouts: the light sags, sometimes nearly out, for a fraction of a second.
-  float k = t * (0.55 + 0.35 * fract(h * 7.3)) + fract(h * 13.7) * 10.0;
+  float k = t * (0.85 + 0.55 * fract(h * 7.3)) + fract(h * 13.7) * 10.0;
   float slot = floor(k), ph = fract(k);
   float r = dreadHash(slot * 12.9898 + h * 78.233);
   float st = 0.15 + 0.5 * fract(r * 9.1);
-  float len = 0.07 + 0.12 * fract(r * 3.7);
+  float len = 0.1 + 0.16 * fract(r * 3.7);
   float dip = smoothstep(st, st + 0.04, ph) * (1.0 - smoothstep(st + len, st + len + 0.06, ph));
-  dip *= step(0.45, r);
-  float depth = 0.45 + 0.3 * fract(r * 5.3);
-  return clamp(1.0 - uDread * (depth * dip + 0.06 + slow), 0.15, 1.0);
+  dip *= step(0.22, r);
+  float depth = 0.6 + 0.3 * fract(r * 5.3);
+  return clamp(1.0 - uDread * (depth * dip + 0.12 + slow), 0.08, 1.0);
 }
 `;
 
@@ -76,17 +76,17 @@ export function flickerAt(h, t, dread) {
   if (dread <= 0) return 1;
   const hash = (n) => { const v = Math.sin(n) * 43758.5453; return v - Math.floor(v); };
   const fr = (v) => v - Math.floor(v);
-  const slow = 0.07 * Math.sin(t * 5.3 + h * 40) + 0.05 * Math.sin(t * 8.9 + h * 17);
-  const k = t * (0.55 + 0.35 * fr(h * 7.3)) + fr(h * 13.7) * 10;
+  const slow = 0.11 * Math.sin(t * 5.3 + h * 40) + 0.08 * Math.sin(t * 8.9 + h * 17);
+  const k = t * (0.85 + 0.55 * fr(h * 7.3)) + fr(h * 13.7) * 10;
   const slot = Math.floor(k), ph = fr(k);
   const r = hash(slot * 12.9898 + h * 78.233);
   const st = 0.15 + 0.5 * fr(r * 9.1);
-  const len = 0.07 + 0.12 * fr(r * 3.7);
+  const len = 0.1 + 0.16 * fr(r * 3.7);
   const ss = (a, b, x) => { const u = Math.min(1, Math.max(0, (x - a) / (b - a))); return u * u * (3 - 2 * u); };
   let dip = ss(st, st + 0.04, ph) * (1 - ss(st + len, st + len + 0.06, ph));
-  if (r < 0.45) dip = 0;
-  const depth = 0.45 + 0.3 * fr(r * 5.3);
-  return Math.min(1, Math.max(0.15, 1 - dread * (depth * dip + 0.06 + slow)));
+  if (r < 0.22) dip = 0;
+  const depth = 0.6 + 0.3 * fr(r * 5.3);
+  return Math.min(1, Math.max(0.08, 1 - dread * (depth * dip + 0.12 + slow)));
 }
 
 // Make a glowing material flicker with its light source. `part`: 'emissive'
