@@ -120,6 +120,9 @@ vec4 terrainOverride( vec2 p ) {
 #endif
 // World position (cells) -> how far to lift it.
 float terrainHeight( vec3 w ) {
+#ifdef TERRAIN_NONE
+	return 0.0; // placed at its final height on the CPU (walls, doors...)
+#endif
 	float h = terrainSmooth( w.xz );
 #ifdef TERRAIN_TEX
 	vec4 o = terrainOverride( w.xz );
@@ -279,7 +282,9 @@ export function updateOverrides(grid) {
 
 // Give a material the override map (built-in materials get it through
 // onBeforeCompile). `bridge` materials keep bridge decks at bank level.
-export function terrainify(material, { bridge = false } = {}) {
+// `none` materials aren't lifted at all: their geometry is already placed at
+// its final height (walls, doors and windows stand upright on the floor).
+export function terrainify(material, { bridge = false, none = false } = {}) {
   if (!material || material.userData.terrainified || material.isSpriteMaterial) return;
   material.userData.terrainified = true;
   if (material.isShaderMaterial) return; // handled by the shader itself
@@ -288,9 +293,9 @@ export function terrainify(material, { bridge = false } = {}) {
   material.onBeforeCompile = function terrainOBC(shader, renderer) {
     original.call(this, shader, renderer);
     Object.assign(shader.uniforms, terrainUniforms);
-    shader.vertexShader = `#define TERRAIN_TEX\n${bridge ? '#define TERRAIN_BRIDGE\n' : ''}${shader.vertexShader}`;
+    shader.vertexShader = `#define TERRAIN_TEX\n${bridge ? '#define TERRAIN_BRIDGE\n' : ''}${none ? '#define TERRAIN_NONE\n' : ''}${shader.vertexShader}`;
   };
-  material.customProgramCacheKey = () => `${originalKey}|tt${bridge ? 'b' : ''}|terrain:${current}`;
+  material.customProgramCacheKey = () => `${originalKey}|tt${bridge ? 'b' : ''}${none ? 'n' : ''}|terrain:${current}`;
   material.needsUpdate = true;
 }
 

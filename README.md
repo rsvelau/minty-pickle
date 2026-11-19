@@ -256,6 +256,10 @@ Some cells level the ground instead of following it (each connected group is han
 - **Rivers** are flattened and lowered to their lowest point, wherever they run.
 - **Buildings** (connected indoor cells) are levelled at their average ground height. A stone foundation
   shows where the ground outside falls away, and a retaining wall where the building is dug into the slope.
+- **Walls, doors and windows** always stand upright. On the edge of a building they stand on its level
+  floor and reach straight down to the ground outside; a wall across open sloping ground steps down the
+  slope in upright sections. (They're placed at their final height in `refreshPropsAndWalls`, not bent by
+  the terrain shader.)
 - **Bridges** keep the height of the road on their banks; their piers stretch down to the lowered riverbed.
 
 These levels are per-cell overrides (`updateOverrides` in `src/terrain.js`) read by every shader through a

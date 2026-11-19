@@ -14,7 +14,7 @@ import { createPlay } from './play.js';
 import { createMarkers, drawMarkerIcon } from './markers.js';
 import {
   installTerrain, setTerrain, terrainHeight, rayTerrain, isFlat, terrainId, TERRAIN_PRESETS,
-  updateOverrides, terrainify, cellLevel, BRIDGE_SPAN,
+  updateOverrides, terrainify, cellLevel, BRIDGE_SPAN, terrainSmoothAt,
 } from './terrain.js';
 
 // Elevation is applied to every material on the GPU; patch three's shader
@@ -352,6 +352,9 @@ const frameMat = new THREE.MeshLambertMaterial({ color: '#ffffff' });
 const glassDarkMat = new THREE.MeshLambertMaterial({ color: '#2b3c46', transparent: true, opacity: 0.6, depthWrite: false });
 const glassLitMat = new THREE.MeshBasicMaterial({ color: '#ffd9a0', transparent: true, opacity: 0.78, depthWrite: false });
 const FRAME_COLOURS = ['#1f3a2e', '#5a1f1c', '#1b1b1d', '#c8bfa6', '#2a3550']; // green, oxblood, black, cream, navy
+// Walls, doors, windows and foundations are placed at their final height on
+// the CPU (see edgeBase) and stand perfectly upright: the terrain doesn't
+// bend them.
 
 
 // ---------------------------------------------------------------------------
@@ -362,6 +365,29 @@ let N = 0;
 let tiles, pools, glowAttr, slab, ground, decks, deckGlow, rails;
 let walls, doorLeaves, frames, glassDark, glassLit, foundations;
 const foundationMat = new THREE.MeshLambertMaterial({ color: '#615b51' });
+for (const mat of [wallMat, doorMat, frameMat, glassDarkMat, glassLitMat, foundationMat]) terrainify(mat, { none: true });
+
+// Where an edge piece stands. On the edge of an indoor floor it stands on
+// that (level) floor; elsewhere on the average ground of the two cells.
+// `drop` is how far below that the ground falls anywhere along the edge, so
+// walls can reach down to it with no gap.
+function edgeBase(o, x, y) {
+  const sides = grid.edgeCells(o, x, y).filter((c) => grid.inBounds(c.x, c.y)).map((c) => ({
+    level: cellLevel(c.x, c.y),
+    indoor: grid.cells[grid.index(c.x, c.y)].area === 'indoor',
+  }));
+  if (!sides.length) return { base: 0, drop: 0 };
+  const indoor = sides.filter((s) => s.indoor);
+  const base = indoor.length
+    ? Math.max(...indoor.map((s) => s.level))
+    : sides.reduce((a, s) => a + s.level, 0) / sides.length;
+  const ends = o === 'v' ? [[x, y], [x, y + 1]] : [[x, y], [x + 1, y]];
+  const lows = [
+    ...sides.map((s) => s.level),
+    ...ends.map(([gx, gy]) => terrainSmoothAt(gx - grid.cols / 2, gy - grid.rows / 2)),
+  ];
+  return { base, drop: Math.max(0, base - Math.min(...lows)) };
+}
 let props = null; // walkable/blocked variants of every surface (src/props.js)
 let bridges = null; // steel truss bridge structures (src/bridge.js)
 let streets = null; // street surfaces: lanes, lines, sidewalks (src/street.js)
@@ -608,6 +634,7 @@ const keyHighlight = new THREE.InstancedMesh(
   256,
 );
 keyHighlight.renderOrder = 13;
+terrainify(keyHighlight.material, { none: true });
 keyHighlight.raycast = () => {};
 keyHighlight.count = 0;
 scene.add(keyHighlight);
@@ -620,7 +647,7 @@ function refreshKeyHighlight() {
       const vertical = o === 'v';
       const cx = vertical ? x - grid.cols / 2 : x - grid.cols / 2 + 0.5;
       const cz = vertical ? y - grid.rows / 2 + 0.5 : y - grid.rows / 2;
-      tmpMatrix.compose(tmpPos.set(cx, FLOOR_H, cz), tmpQuat.identity(),
+      tmpMatrix.compose(tmpPos.set(cx, FLOOR_H + edgeBase(o, x, y).base, cz), tmpQuat.identity(),
         vertical ? tmpScale.set(0.2, h, 0.6) : tmpScale.set(0.6, h, 0.2));
       keyHighlight.setMatrixAt(n++, tmpMatrix);
     }
@@ -646,14 +673,17 @@ function refreshPropsAndWalls() {
   // Walls and doors.
   const H = ui.lowWalls ? WALL_LOW : WALL_FULL;
   let nw = 0, nd = 0;
+  let EY = 0, DROP = 0; // current edge: floor level, and how far the ground falls below it
   const piece = (cx, cz, along, len, base, height, vertical) => {
-    // `along` is the offset along the edge from its centre.
+    // `along` is the offset along the edge from its centre. Pieces standing
+    // on the floor reach down to the lowest ground under the edge.
     const px = vertical ? cx : cx + along;
     const pz = vertical ? cz + along : cz;
+    const extra = base <= FLOOR_H + 1e-6 ? DROP : 0;
     tmpMatrix.compose(
-      tmpPos.set(px, base, pz),
+      tmpPos.set(px, base + EY - extra, pz),
       tmpQuat.identity(),
-      vertical ? tmpScale.set(WALL_T, height, len) : tmpScale.set(len, height, WALL_T),
+      vertical ? tmpScale.set(WALL_T, height + extra, len) : tmpScale.set(len, height + extra, WALL_T),
     );
     walls.setMatrixAt(nw++, tmpMatrix);
   };
@@ -663,7 +693,7 @@ function refreshPropsAndWalls() {
     const px = vertical ? cx : cx + along;
     const pz = vertical ? cz + along : cz;
     tmpMatrix.compose(
-      tmpPos.set(px, y0, pz), tmpQuat.identity(),
+      tmpPos.set(px, y0 + EY, pz), tmpQuat.identity(),
       vertical ? tmpScale.set(thick, y1 - y0, len) : tmpScale.set(len, y1 - y0, thick),
     );
     mesh.setMatrixAt(n, tmpMatrix);
@@ -674,6 +704,7 @@ function refreshPropsAndWalls() {
     const vertical = o === 'v';
     const cx = vertical ? x - grid.cols / 2 : x - grid.cols / 2 + 0.5;
     const cz = vertical ? y - grid.rows / 2 + 0.5 : y - grid.rows / 2;
+    ({ base: EY, drop: DROP } = edgeBase(o, x, y));
     if (type === 'wall') {
       piece(cx, cz, 0, TILE + WALL_T, FLOOR_H, H, vertical);
       continue;
@@ -736,14 +767,14 @@ function refreshPropsAndWalls() {
     const angle = vertical ? -Math.PI / 2 + swing : -swing;
     const dir = new THREE.Vector3(Math.cos(angle), 0, -Math.sin(angle));
     tmpMatrix.compose(
-      tmpPos.set(hx + dir.x * DOOR_W / 2, FLOOR_H, hz + dir.z * DOOR_W / 2),
+      tmpPos.set(hx + dir.x * DOOR_W / 2, FLOOR_H + EY, hz + dir.z * DOOR_W / 2),
       tmpQuat.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, angle),
       tmpScale.set(DOOR_W, leafH, 0.05),
     );
     doorLeaves.setMatrixAt(nd++, tmpMatrix);
     // Rotated marker box into the frames mesh (instance colour).
     const mark = (px, py, pz, sx, sy, sz, rot, colour) => {
-      tmpMatrix.compose(tmpPos.set(px, py, pz), tmpQuat.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rot), tmpScale.set(sx, sy, sz));
+      tmpMatrix.compose(tmpPos.set(px, py + EY, pz), tmpQuat.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rot), tmpScale.set(sx, sy, sz));
       frames.setMatrixAt(nf, tmpMatrix);
       frames.setColorAt(nf++, tmpColor.set(colour));
     };
@@ -771,7 +802,7 @@ function refreshPropsAndWalls() {
     } else {
       // Threshold plate across the opening so doors read from any angle.
       tmpMatrix.compose(
-        tmpPos.set(cx, FLOOR_H, cz),
+        tmpPos.set(cx, FLOOR_H + EY, cz),
         tmpQuat.identity(),
         vertical ? tmpScale.set(0.3, 0.015, DOOR_W) : tmpScale.set(DOOR_W, 0.015, 0.3),
       );
@@ -789,13 +820,16 @@ function refreshPropsAndWalls() {
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const nx = x + dx, ny = y + dy;
         if (grid.inBounds(nx, ny) && grid.cells[grid.index(nx, ny)].area === 'indoor') continue;
+        // A wall, door or window on this edge already reaches down to the ground.
+        const ek = dx ? `v${dx > 0 ? x + 1 : x},${y}` : `h${x},${dy > 0 ? y + 1 : y}`;
+        if (grid.edges.has(ek)) continue;
         const out = cellLevel(nx, ny);
         const diff = out - level;
         if (Math.abs(diff) < 0.004) continue;
         const vertical = dx !== 0;
         const c = cellToWorld(x, y);
         const ex = c.x + dx * 0.5, ez = c.z + dy * 0.5;
-        const y0 = Math.min(diff, 0) - 0.03, y1 = Math.max(diff, 0) + FLOOR_H;
+        const y0 = level + Math.min(diff, 0) - 0.03, y1 = level + Math.max(diff, 0) + FLOOR_H;
         tmpMatrix.compose(tmpPos.set(ex, y0, ez), tmpQuat.identity(),
           vertical ? tmpScale.set(WALL_T, y1 - y0, TILE + WALL_T) : tmpScale.set(TILE + WALL_T, y1 - y0, WALL_T));
         foundations.setMatrixAt(nfd++, tmpMatrix);
@@ -1418,6 +1452,7 @@ const edgeMarker = new THREE.Mesh(
   new THREE.MeshBasicMaterial({ color: '#f1d9a8', transparent: true, opacity: 0.85, depthTest: false }),
 );
 edgeMarker.renderOrder = 11;
+terrainify(edgeMarker.material, { none: true });
 edgeMarker.visible = false;
 scene.add(edgeMarker);
 let hoverEdge = null;
@@ -1429,7 +1464,7 @@ function setHoverEdge(e) {
   const vertical = e.o === 'v';
   const cx = vertical ? e.x - grid.cols / 2 : e.x - grid.cols / 2 + 0.5;
   const cz = vertical ? e.y - grid.rows / 2 + 0.5 : e.y - grid.rows / 2;
-  edgeMarker.position.set(cx, FLOOR_H, cz);
+  edgeMarker.position.set(cx, FLOOR_H + edgeBase(e.o, e.x, e.y).base, cz);
   const h = (ui.lowWalls ? WALL_LOW : WALL_FULL) + 0.02;
   edgeMarker.scale.set(vertical ? 0.1 : 1, h, vertical ? 1 : 0.1);
   edgeMarker.material.color.set({
