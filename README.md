@@ -144,8 +144,13 @@ markers** in View hides them. Marker art lives in `src/markers.js`; the list of 
 - The pawn starts on the **Start space** (paint one first).
 - **Roll black die** (or `Enter`) rolls a d6; the pawn then moves one cell per pip with a little hop.
 - It keeps going while there's only one way forward, and never doubles back unless it hits a dead end.
-  At a fork, and at the start of every move, it stops and puts green arrows on the cells it can go to:
-  click one or use the **arrow keys** (relative to the camera).
+  At a fork, and at the start of every move, it stops and puts big round arrow buttons on the cells it can
+  go to: tap or click one (a tap near one on the board works too), or use the **arrow keys** (relative to
+  the camera).
+- **Follow streets** (on by default): on a street, the start space or a bridge, the pawn only goes where the
+  road goes (two ways on a straight street, three at a T, and so on), plus through any door beside it.
+- **Phones:** a floating bar at the bottom holds the die, the status and a big **Roll** button, so the panel
+  can stay folded away; starting the demo on a phone folds the panel and zooms in on the pawn.
 - Movement follows the board rules: walkable cells only; walls, windows, locked doors and one-way doors
   (against their arrow) stop it; walking over a **Key** unlocks its building's locked and one-way doors for
   the rest of the game.

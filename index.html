@@ -72,9 +72,12 @@
             <ol class="play-log" id="playLog"></ol>
             <div class="file-row">
               <button id="playReset">Restart</button>
-              <label class="check play-follow"><input type="checkbox" id="playFollow" checked /> Follow</label>
+              <label class="check play-follow"><input type="checkbox" id="playFollow" checked /> Follow camera</label>
             </div>
-            <p class="note">The pawn starts on the Start space and moves one cell per pip. It keeps going while there's one way forward and stops at forks: click a green arrow or use the arrow keys. Walls, windows, locked and one-way doors and blocked cells stop it; walking over a Key unlocks its building.</p>
+            <div class="file-row">
+              <label class="check play-follow" title="On streets, the start space and bridges, only move where the road goes (or through a door)"><input type="checkbox" id="playStreets" checked /> Follow streets</label>
+            </div>
+            <p class="note">The pawn starts on the Start space and moves one cell per pip. It keeps going while there's one way forward and stops at forks: tap or click a round arrow button (or use the arrow keys). With Follow streets on, roads only go where they lead. Walls, windows, locked and one-way doors and blocked cells stop it; walking over a Key unlocks its building.</p>
           </div>
 
           <div id="markerTools" hidden>
@@ -188,6 +191,14 @@
       </div>
     </div>
     <div id="toast" class="toast" role="status" hidden></div>
+
+    <!-- Play demo: floating controls (work with the panel folded away). -->
+    <div id="playHud" class="play-hud" hidden>
+      <div class="die die-sm" id="hudDie" aria-label="Black die"></div>
+      <p class="hud-status" id="hudStatus"></p>
+      <button id="hudRoll" class="hud-roll">Roll</button>
+    </div>
+    <div id="playChoices" class="play-choices"></div>
 
     <button id="expand" class="panel-tab" hidden>Grid Planner ☰</button>
 

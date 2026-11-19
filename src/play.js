@@ -8,9 +8,9 @@
 // unless it hits a dead end) and stops to ask at forks and at the start of
 // each move.
 import * as THREE from 'three';
-import { MARKERS } from './state.js';
+import { MARKERS, streetMask, edgeKey } from './state.js';
 
-const DIRS = [[0, -1, 'north'], [1, 0, 'east'], [0, 1, 'south'], [-1, 0, 'west']];
+const DIRS = [[0, -1, 'north', 1], [1, 0, 'east', 2], [0, 1, 'south', 4], [-1, 0, 'west', 8]];
 const STEP_TIME = 0.32;   // seconds per hop
 const ROLL_TIME = 0.7;    // die tumble before it lands
 
@@ -30,6 +30,7 @@ export function createPlay({ grid, scene, camera, controls, cellToWorld, cellTop
     black: 0,
     log: [],
     follow: true,
+    followStreets: true, // on roads, only move where the road goes (or through a door)
     anim: null,        // { from, to, t }
     rollT: 0,
     rollFace: 1,
@@ -87,10 +88,27 @@ export function createPlay({ grid, scene, camera, controls, cellToWorld, cellTop
 
   // Cells the pawn can step to next (not back where it came from, unless
   // that's the only way).
+  // On a street, start space or bridge (with Follow streets on), the pawn
+  // keeps to the road: only the sides the road continues on, plus any side
+  // with a door in it (stepping off the road into a building).
+  function roadSides(x, y) {
+    const c = grid.cells[grid.index(x, y)];
+    if (!st.followStreets || !(c.sub === 'street' || c.sub === 'start' || c.bridge)) return null;
+    let mask = streetMask(grid, x, y);
+    for (const [dx, dy, , bit] of DIRS) {
+      const k = dx ? edgeKey('v', dx > 0 ? x + 1 : x, y) : edgeKey('h', x, dy > 0 ? y + 1 : y);
+      const t = grid.edges.get(k);
+      if (t === 'door' || t === 'lockedDoor' || t?.startsWith('oneWayDoor')) mask |= bit;
+    }
+    return mask || null; // a lone road cell with no connections: move freely
+  }
+
   function nextOptions() {
     const { x, y } = grid.coords(st.pos);
+    const sides = roadSides(x, y);
     const all = [];
-    for (const [dx, dy, name] of DIRS) {
+    for (const [dx, dy, name, bit] of DIRS) {
+      if (sides !== null && !(sides & bit)) continue;
       if (!grid.canStep(x, y, dx, dy, unlocked())) continue;
       all.push({ i: grid.index(x + dx, y + dy), dx, dy, name });
     }

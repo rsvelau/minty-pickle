@@ -1495,7 +1495,18 @@ canvas.addEventListener('pointerdown', (ev) => {
   if (ui.tool === 'move') { moveClick(pickCell(ev)); return; }
   if (ui.tool === 'play') {
     const cell = pickCell(ev);
-    if (cell) play.choose(grid.index(cell.x, cell.y));
+    if (cell && play.choose(grid.index(cell.x, cell.y))) return;
+    // Not exactly on an option: take the nearest one within a cell.
+    const pt = gridPoint(ev);
+    if (pt && play.state.phase === 'choosing') {
+      let best = null, bestD = 1.0;
+      for (const o of play.state.options) {
+        const c = grid.coords(o.i);
+        const d = Math.hypot(pt.gx - (c.x + 0.5), pt.gy - (c.y + 0.5));
+        if (d < bestD) { bestD = d; best = o; }
+      }
+      if (best) play.choose(best.i);
+    }
     return;
   }
   const cell = pickCell(ev);
@@ -1571,6 +1582,21 @@ function setTool(tool) {
   $('#moveTools').hidden = tool !== 'move';
   $('#markerTools').hidden = tool !== 'markers';
   $('#playTools').hidden = tool !== 'play';
+  $('#playHud').hidden = tool !== 'play';
+  document.body.classList.toggle('playing', tool === 'play');
+  // Phones: fold the panel away so the board and the play bar are visible.
+  if (tool === 'play' && window.innerWidth < 700) {
+    $('#panel').hidden = true;
+    $('#expand').hidden = false;
+    // ...and move in close to the pawn so cells are big enough to tap.
+    play.setActive(true); // places the pawn on the Start space if needed
+    if (play.state.pos >= 0) {
+      const { x, y } = grid.coords(play.state.pos);
+      const p = cellToWorld(x, y);
+      const offset = camera.position.clone().sub(controls.target).setLength(11);
+      camTween = { t: 0, fromPos: camera.position.clone(), fromTarget: controls.target.clone(), toPos: p.clone().add(offset), toTarget: p };
+    }
+  }
   play.setActive(tool === 'play');
   refreshMarkers();
   renderPlay();
@@ -1800,6 +1826,7 @@ $('#moveKeys').addEventListener('change', (e) => { move.keys = e.target.checked;
 // --- Play demo -------------------------------------------------------------------
 const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
 $('#playDie').innerHTML = '<i></i>'.repeat(9);
+$('#hudDie').innerHTML = '<i></i>'.repeat(9);
 function renderPlay() {
   if (ui.tool !== 'play') return;
   const s = play.state;
@@ -1819,6 +1846,65 @@ function renderPlay() {
   $('#playStats').innerHTML = `Turn <b>${s.turn}</b> · White Dice <b>${s.white}</b> · Black Dice attuned <b>${s.black}</b>` +
     (s.keys ? ` · Keys <b>${s.keys.toString(2).split('').filter((b) => b === '1').length}</b>` : '');
   $('#playLog').innerHTML = s.log.map((l) => `<li>${l}</li>`).join('');
+  // Floating bar.
+  [...$('#hudDie').children].forEach((el, n) => el.classList.toggle('on', !!face && PIPS[face].includes(n)));
+  $('#hudRoll').disabled = roll.disabled;
+  $('#hudStatus').innerHTML = {
+    nostart: 'Paint a Start space first.',
+    idle: s.turn ? `On <b>${here}</b>. Roll again.` : `On <b>${here}</b>. Roll to move.`,
+    rolling: 'Rolling…',
+    moving: `Moving… <b>${s.steps}</b> left`,
+    choosing: `Tap an arrow · <b>${s.steps}</b> left`,
+    done: `On <b>${here}</b>. Roll again.`,
+  }[s.phase] ?? '';
+  renderChoices();
+}
+
+// Round tap targets over each option, pointing the way you'd go.
+let choiceButtons = [];
+function renderChoices() {
+  const host = $('#playChoices');
+  const s = play.state;
+  const opts = ui.tool === 'play' && s.phase === 'choosing' ? s.options : [];
+  const key = opts.map((o) => o.i).join(',');
+  if (host.dataset.key === key) return;
+  host.dataset.key = key;
+  host.replaceChildren();
+  choiceButtons = opts.map((o) => {
+    const b = document.createElement('button');
+    b.className = 'choice-btn';
+    b.setAttribute('aria-label', `Move ${o.name}`);
+    b.innerHTML = '<span>↑</span>';
+    b.addEventListener('click', (e) => { e.stopPropagation(); play.choose(o.i); });
+    host.appendChild(b);
+    return { b, o };
+  });
+  positionChoices();
+}
+const projTmp = new THREE.Vector3();
+function screenOf(i) {
+  const { x, y } = grid.coords(i);
+  const p = cellToWorld(x, y);
+  const c = grid.cells[i];
+  projTmp.set(p.x, Math.max(visibleTop(i), WATER_Y) + terrainHeight(p.x, p.z, { bridge: c.bridge }) + 0.05, p.z).project(camera);
+  return { x: (projTmp.x + 1) / 2 * window.innerWidth, y: (1 - projTmp.y) / 2 * window.innerHeight, behind: projTmp.z > 1 };
+}
+function positionChoices() {
+  if (!choiceButtons.length) return;
+  const from = screenOf(play.state.pos);
+  for (const { b, o } of choiceButtons) {
+    const to = screenOf(o.i);
+    // Sit on the option cell, but at least 72 px out from the pawn so the
+    // buttons never overlap when zoomed out.
+    const dx = to.x - from.x, dy = to.y - from.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const r = Math.max(len, 72);
+    b.style.left = `${from.x + (dx / len) * r}px`;
+    b.style.top = `${from.y + (dy / len) * r}px`;
+    b.style.visibility = to.behind ? 'hidden' : 'visible';
+    const ang = Math.atan2(dx, -dy);
+    b.firstChild.style.transform = `rotate(${ang}rad)`;
+  }
 }
 const play = createPlay({
   grid, scene, camera, controls, cellToWorld, terrainify, cellLabel,
@@ -1828,6 +1914,8 @@ const play = createPlay({
 });
 markerUsed = (i) => ui.tool === 'play' && play.state.used.has(i);
 $('#playRoll').addEventListener('click', () => play.roll());
+$('#hudRoll').addEventListener('click', () => play.roll());
+$('#playStreets').addEventListener('change', (e) => { play.state.followStreets = e.target.checked; });
 $('#playReset').addEventListener('click', () => play.reset());
 $('#playFollow').addEventListener('change', (e) => { play.state.follow = e.target.checked; });
 // Arrow keys choose a direction at a fork (before the camera can pan).
@@ -2258,6 +2346,7 @@ renderer.setAnimationLoop(() => {
   props?.tick(clock.elapsedTime);
   markers.tick(clock.elapsedTime, camera);
   play.tick(dt, clock.elapsedTime);
+  positionChoices();
   updateTreeFade();
   if (atmos.visible) updateRain(dt);
   renderer.render(scene, camera);
