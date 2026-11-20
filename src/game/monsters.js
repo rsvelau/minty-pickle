@@ -27,6 +27,7 @@
 // Helpers for writing AI are exported below: distances and paths over the
 // board's movement rules, the nearest player, light levels.
 import { cellLabel } from '../state.js';
+import { MONSTER_BY_ID } from './cards/monsters.js';
 
 // --- AI helpers ---------------------------------------------------------------
 
@@ -102,6 +103,17 @@ export const MONSTERS = {
   },
 };
 
+// The rules for a monster kind: a MONSTERS entry, or (for the card monsters,
+// until their own abilities are written) the stalker's hunting behaviour under
+// the card's name, appearing at the mystery's spawn cell.
+export function monsterDef(kind) {
+  if (MONSTERS[kind]) return MONSTERS[kind];
+  const card = MONSTER_BY_ID[kind];
+  if (!card) return null;
+  return { ...MONSTERS.stalker, label: card.name, note: card.note, look: 'shade',
+    spawn: (ctx) => (ctx.state.mystery?.spawnCell >= 0 ? ctx.state.mystery.spawnCell : farthestFromPlayers(ctx)) };
+}
+
 // --- called by the rules -----------------------------------------------------------
 
 function context(state, board, random) {
@@ -111,12 +123,13 @@ const label = (board, i) => { const { x, y } = board.grid.coords(i); return cell
 
 // Bring in the configured monster at midnight (once).
 export function spawnMonsters(state, board, events, random, log) {
-  const def = MONSTERS[state.config.monster];
+  const kind = state.config.monster === 'mystery' ? state.mystery?.monster : state.config.monster;
+  const def = monsterDef(kind);
   if (!def || state.monsters.length) return;
   const ctx = context(state, board, random);
   const cell = def.spawn(ctx);
   if (cell < 0) return;
-  const monster = { id: `m${state.monsters.length + 1}`, kind: state.config.monster, pos: cell, prev: -1, revealed: true };
+  const monster = { id: `m${state.monsters.length + 1}`, kind, pos: cell, prev: -1, revealed: true };
   state.monsters.push(monster);
   log(state, `Something stirs at ${label(board, cell)}.`);
   events.push({ type: 'monsterSpawn', id: monster.id, kind: monster.kind, cell });
@@ -126,7 +139,7 @@ export function spawnMonsters(state, board, events, random, log) {
 export function monstersAct(state, board, events, random, log) {
   const ctx = context(state, board, random);
   for (const monster of state.monsters) {
-    const def = MONSTERS[monster.kind];
+    const def = monsterDef(monster.kind);
     if (!def) continue;
     const plan = def.act(ctx, monster) ?? {};
     // Walk the planned path, checking every step against the board.

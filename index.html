@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Board Grid Planner</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Special+Elite&display=swap" />
     <link rel="stylesheet" href="./src/style.css" />
   </head>
   <body>
@@ -200,6 +202,31 @@
         <button id="askYes" type="button" class="on">Yes</button>
       </div>
     </div>
+    <!-- Evidence Obol: choose one of the face-down Evidence cards. -->
+    <div id="revealSheet" class="reveal-sheet" hidden role="dialog" aria-labelledby="revealTitle">
+      <b id="revealTitle">Evidence found</b>
+      <p class="reveal-sub" id="revealSub">Choose a card to turn over</p>
+      <div class="reveal-cards" id="revealCards"></div>
+    </div>
+    <!-- A card turning over (evidence, an attack, naming, the midnight reveal). Tap to dismiss. -->
+    <div id="cardPop" class="card-pop" hidden role="status">
+      <div class="paper-card" id="cardPopCard"></div>
+      <p class="card-pop-hint" id="cardPopHint">Tap to continue</p>
+    </div>
+    <!-- Casebook and Field Guide. -->
+    <div id="casebook" class="dialog" hidden role="dialog" aria-modal="true" aria-labelledby="caseTitle">
+      <div class="dialog-card journal">
+        <div class="inv-head">
+          <h3 id="caseTitle" class="journal-title">Casebook</h3>
+          <button id="caseClose" type="button" class="inv-close" aria-label="Close">✕</button>
+        </div>
+        <div class="inv-tabs" id="caseTabs" role="tablist">
+          <button type="button" role="tab" data-ctab="case" class="on">Casebook</button>
+          <button type="button" role="tab" data-ctab="guide">Field Guide</button>
+        </div>
+        <div class="journal-body" id="caseBody"></div>
+      </div>
+    </div>
     <!-- Play demo: the Obol a player just drew. Tap to dismiss. -->
     <div id="obolReveal" class="obol-reveal" hidden role="status">
       <span id="obolCoin"></span>
@@ -224,6 +251,10 @@
     <div id="playHud" class="play-hud" hidden>
       <div class="die die-sm" id="hudDie" aria-label="Black die"></div>
       <p class="hud-status" id="hudStatus"></p>
+      <button id="hudCase" class="hud-inv" type="button" aria-label="Casebook and Field Guide" title="Casebook and Field Guide (C)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h10.5a3 3 0 0 1 3 3V20H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h10.5"/><circle cx="11.5" cy="8.6" r="2"/><path d="M13 10.1l1.8 1.8"/></svg>
+        <span class="hud-badge" id="caseBadge" hidden></span>
+      </button>
       <button id="hudInv" class="hud-inv" type="button" aria-label="Inventory" title="Inventory (I)">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7V5.5a4 4 0 0 1 8 0V7"/><rect x="4.5" y="7" width="15" height="13.5" rx="3"/><path d="M8.5 13h7M10 13v2.5"/></svg>
       </button>

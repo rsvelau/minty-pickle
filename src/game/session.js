@@ -26,26 +26,31 @@
 //   The host also needs the board: send the saved board JSON with the game
 //   (GridState.parse), and wrap it with createBoard.
 import { newGame, applyAction } from './rules.js';
+import { publicState } from './mystery.js';
+// Secrets (the mystery monster, face-down evidence, the dice generator) never
+// leave the place that applies the rules: everyone else gets publicState().
 
 // One device, hot-seat: every action is applied straight away.
 export function createLocalSession({ board, onUpdate = () => {} }) {
-  let state = null;
+  let full = null;     // the real state (secrets included): the rules use this
+  let view = null;     // what the players may see: the screen uses this
+  const publish = (events) => { view = publicState(full); onUpdate(view, events); };
   return {
-    get state() { return state; },
+    get state() { return view; },
     start(setup) {
       const r = newGame(board, setup);
-      state = r.state;
-      onUpdate(state, r.events);
-      return state;
+      full = r.state;
+      publish(r.events);
+      return view;
     },
     dispatch(action) {
-      if (!state) return { ok: false, error: 'no game' };
-      const r = applyAction(state, board, action);
-      if (r.ok) onUpdate(state, r.events);
+      if (!full) return { ok: false, error: 'no game' };
+      const r = applyAction(full, board, action);
+      if (r.ok) publish(r.events);
       return r;
     },
-    // Load a saved game (or one sent by a host).
-    load(saved) { state = saved; onUpdate(state, [{ type: 'start' }]); },
+    // Load a saved game (secrets included).
+    load(saved) { full = saved; publish([{ type: 'start' }]); },
   };
 }
 
@@ -57,13 +62,13 @@ export function createHost({ board, transport, onUpdate = () => {} }) {
   const seats = {};
   const broadcast = (events) => {
     seq++;
-    transport.send({ kind: 'update', seq, state, events, seats });
+    transport.send({ kind: 'update', seq, state: publicState(state), events, seats });
     onUpdate(state, events);
   };
   transport.onMessage((msg) => {
     if (!msg || typeof msg !== 'object') return;
     if (msg.kind === 'join') {
-      if (state) transport.send({ kind: 'update', seq, state, events: [{ type: 'start' }], seats });
+      if (state) transport.send({ kind: 'update', seq, state: publicState(state), events: [{ type: 'start' }], seats });
     } else if (msg.kind === 'claim') {
       const taken = seats[msg.seat];
       if (taken && taken !== msg.clientId) transport.send({ kind: 'reject', clientId: msg.clientId, error: 'seat taken' });

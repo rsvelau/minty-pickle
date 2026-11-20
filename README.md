@@ -526,6 +526,31 @@ The game is split so the same rules can run on one phone today and on a server f
   round-trips, rejected moves, Obols, midnight, monsters stalking and attacking, the board travelling as
   JSON, and a host with two phones staying in sync with seats enforced.
 
+### The mystery (evidence, Casebook, Field Guide)
+
+Each game secretly draws one monster from the chosen **monster pool** (Game settings → Monster: Mystery,
+pools: all, flesh and blood, spirits and shadows, old-world folklore). Its 13 cards live in
+`src/game/cards/monsters.js` (transcribed from the physical cards), the evidence names and board looks in
+`src/game/cards/evidence.js`, and the rules in `src/game/mystery.js`.
+
+- **Evidence Obol:** the investigator chooses one of the remaining face-down Evidence cards (3 Observations +
+  1 Lair). It flips for everyone, and the cell they're standing on changes to show it (frost, claw marks,
+  blood, howl rings...). A **Lair** transforms its cell for good: an opened grave, a cave mouth, a scorched
+  transformation site, a ritual circle, a ruin, a wrecked room, a pit of darkness, each with its own glow
+  (`src/discoveries.js`).
+- **Attack Obol:** the monster strikes for one die of damage of its type; the first time, its **Attack card**
+  (Physical / Mental / Spiritual) is revealed. Damage is tallied per type until injuries arrive.
+- **Casebook** (book button on the play bar, or `C`): the five evidence slots, who found each and where (tap
+  to fly there), and how many monsters still fit.
+- **Field Guide**: every monster in the pool, narrowed automatically by the evidence (ruled-out entries fold
+  away), with health, toughness, weaknesses, immunities, objective and abilities. The team may **name the
+  monster once before midnight**; a correct name earns **Initiative**: its spawn point is marked ☠ on the map
+  and the objective markers show early.
+- **Midnight**: the monster is revealed (its full entry) and appears at its spawn point. Until each monster's
+  own abilities are written it hunts like the test stalker.
+- **Secrets stay secret**: the monster, the face-down cards, the spawn point and the dice generator are
+  stripped by `publicState()` before anything reaches the screen or another phone.
+
 ### Adding a monster
 
 Add an entry to `MONSTERS` in `src/game/monsters.js`:

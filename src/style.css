@@ -685,3 +685,138 @@ body.playing .help { display: none; }
 body.playing .fps { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
 
 .play-board .monster-row { cursor: default; color: #f0b0b0; }
+
+/* --- Mystery: Casebook, Field Guide, evidence cards ---------------------------- */
+:root {
+  --paper: #e6d8b8;
+  --paper-dark: #cbb88f;
+  --ink: #2a2118;
+  --ink-soft: #5a4a38;
+  --hand: 'Caveat', 'Segoe Print', 'Bradley Hand', cursive;
+  --type: 'Special Elite', 'Courier New', monospace;
+}
+.hud-inv { position: relative; }
+.hud-badge {
+  position: absolute; top: 4px; right: 4px; width: 10px; height: 10px; border-radius: 50%;
+  background: #e05a3a; box-shadow: 0 0 0 2px var(--panel);
+}
+.hud-badge[hidden] { display: none; }
+
+/* Aged paper: stains, worn edges (used by evidence cards and the journal). */
+.paper {
+  background:
+    radial-gradient(ellipse at 18% 22%, rgba(120, 80, 30, 0.18), transparent 40%),
+    radial-gradient(ellipse at 82% 76%, rgba(110, 70, 30, 0.22), transparent 45%),
+    radial-gradient(circle at 60% 30%, rgba(90, 60, 20, 0.1), transparent 25%),
+    linear-gradient(160deg, #eadfc2, #d8c79f);
+  color: var(--ink);
+}
+.paper-card {
+  width: min(300px, 82vw); padding: 18px 18px 16px; border-radius: 4px;
+  clip-path: polygon(0 2%, 3% 0, 30% 1%, 55% 0, 80% 1.5%, 100% 0, 99% 30%, 100% 62%, 98.5% 100%, 70% 99%, 40% 100%, 12% 98.5%, 0 100%, 1% 60%);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  text-align: center;
+}
+.paper-card .pc-kind { font: 13px var(--type); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-soft); }
+.paper-card .pc-title { font: 700 36px/1.05 var(--hand); margin: 8px 0 6px; }
+.paper-card .pc-sub { font: 13px var(--type); color: var(--ink-soft); }
+.paper-card .pc-glyph { font-size: 44px; line-height: 1; margin: 6px 0 2px; }
+.paper-card.lair { box-shadow: 0 0 0 3px #7a1a10 inset, 0 20px 60px rgba(120, 10, 10, 0.5); }
+.paper-card.attack { box-shadow: 0 0 0 3px var(--atk, #7a1a10) inset, 0 20px 60px rgba(0, 0, 0, 0.6); }
+.paper-card.monster { width: min(360px, 90vw); text-align: left; }
+.paper-card.monster .pc-title { font-size: 42px; text-align: center; }
+
+.card-pop {
+  position: fixed; inset: 0; z-index: 13; display: grid; place-items: center; align-content: center; gap: 10px;
+  background: rgba(3, 5, 8, 0.55); cursor: pointer; padding: 16px;
+}
+.card-pop[hidden] { display: none; }
+.card-pop .paper-card { animation: card-flip 0.55s ease-out; }
+.card-pop-hint { color: #cdbfa0; font: 12px var(--type); margin: 0; }
+@keyframes card-flip {
+  0% { transform: perspective(700px) rotateY(90deg) scale(0.85); opacity: 0; }
+  60% { transform: perspective(700px) rotateY(-8deg) scale(1.02); opacity: 1; }
+  100% { transform: perspective(700px) rotateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { .card-pop .paper-card { animation: none; } }
+
+/* Choose a face-down card. */
+.reveal-sheet {
+  position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  z-index: 9; width: min(440px, calc(100% - 24px)); padding: 12px; display: grid; gap: 6px; text-align: center;
+  background: var(--panel); border: 1px solid #c9a24a; border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+}
+.reveal-sheet[hidden] { display: none; }
+.reveal-sheet b { font-size: 17px; color: #f3e3cf; }
+.reveal-sub { margin: 0; font-size: 12px; color: var(--muted); }
+.reveal-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 6px; }
+.card-back {
+  aspect-ratio: 5 / 7; border-radius: 6px; border: 1px solid #6a5a3a; cursor: pointer; padding: 0;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(200, 160, 90, 0.25) 0 18%, transparent 19%),
+    repeating-linear-gradient(45deg, rgba(200, 160, 90, 0.08) 0 4px, transparent 4px 9px),
+    linear-gradient(160deg, #2a2016, #120d08);
+  box-shadow: inset 0 0 0 4px #1a130c, inset 0 0 0 5px #6a5a3a, 0 4px 10px rgba(0, 0, 0, 0.5);
+  color: #c9a24a; font: 700 26px var(--hand);
+  transition: transform 0.12s;
+}
+.card-back:active { transform: scale(0.96); }
+.card-back.gone { visibility: hidden; }
+
+/* The journal (Casebook + Field Guide). */
+.journal { width: min(520px, 100%); padding: 14px; display: grid; gap: 10px;
+  background:
+    radial-gradient(ellipse at 15% 10%, rgba(120, 80, 30, 0.2), transparent 40%),
+    radial-gradient(ellipse at 90% 90%, rgba(100, 60, 20, 0.25), transparent 45%),
+    linear-gradient(170deg, #e8dcbc, #d3c094);
+  color: var(--ink); border: 0;
+}
+.journal .inv-close { background: rgba(0, 0, 0, 0.08); border-color: rgba(0, 0, 0, 0.25); color: var(--ink); }
+.journal-title { font: 700 30px var(--hand) !important; color: var(--ink) !important; }
+.journal .inv-tabs { border-bottom-color: rgba(42, 33, 24, 0.3); }
+.journal .inv-tabs button { color: var(--ink-soft); font: 15px var(--type); }
+.journal .inv-tabs button.on { color: var(--ink); border-bottom-color: #7a1a10; }
+.journal-body { max-height: 62vh; overflow: auto; padding-right: 2px; }
+.case-slots { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.case-slot {
+  min-height: 74px; padding: 8px 10px; border: 1.5px dashed rgba(42, 33, 24, 0.35); border-radius: 6px;
+  display: grid; align-content: center; gap: 2px; text-align: left; background: rgba(255, 255, 255, 0.12); color: var(--ink);
+}
+.case-slot.filled { border-style: solid; border-color: rgba(42, 33, 24, 0.55); background: rgba(255, 250, 235, 0.45); cursor: pointer; }
+.case-slot.wide { grid-column: span 2; }
+.case-slot .cs-kind { font: 11px var(--type); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); }
+.case-slot .cs-name { font: 700 24px/1.05 var(--hand); }
+.case-slot .cs-where { font: 11px var(--type); color: var(--ink-soft); }
+.case-slot.empty .cs-name { color: rgba(42, 33, 24, 0.35); }
+.case-note { font: 13px var(--type); color: var(--ink-soft); margin: 10px 2px 0; }
+.case-note b { color: var(--ink); }
+.case-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.journal button.ink { background: #3a2a1a; color: #f0e2c0; border-color: #3a2a1a; min-height: 40px; }
+.journal button.ink:disabled { opacity: 0.4; }
+.guide-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; font: 13px var(--type); color: var(--ink-soft); }
+.guide-top label { display: flex; align-items: center; gap: 6px; }
+.guide-entry { border-top: 1px solid rgba(42, 33, 24, 0.25); padding: 8px 2px; }
+.guide-entry summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: 8px; }
+.guide-entry summary::-webkit-details-marker { display: none; }
+.guide-entry .ge-name { font: 700 27px/1.1 var(--hand); }
+.guide-entry .ge-traits { font: 11px var(--type); color: var(--ink-soft); }
+.guide-entry .ge-fit { margin-left: auto; font: 12px var(--type); color: #2f6a2a; white-space: nowrap; }
+.guide-entry.out .ge-name { text-decoration: line-through; text-decoration-color: #7a1a10; color: rgba(42, 33, 24, 0.5); }
+.guide-entry.out .ge-fit { color: #7a1a10; }
+.ge-body { font: 13px/1.45 var(--type); color: var(--ink); display: grid; gap: 6px; margin-top: 6px; }
+.ge-body p { margin: 0; }
+.ge-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.ge-chip { font: 12px var(--type); padding: 2px 7px; border-radius: 999px; border: 1px solid rgba(42, 33, 24, 0.35); }
+.ge-chip.hit { background: #2f5a2a; color: #f0e8d0; border-color: #2f5a2a; }
+.ge-chip.lair { border-color: #7a1a10; }
+.ge-chip.weak { border-color: #8a2a10; color: #8a2a10; }
+.ge-chip.imm { border-color: #2a4a7a; color: #2a4a7a; }
+.ge-abil { padding-left: 10px; border-left: 3px solid rgba(42, 33, 24, 0.25); }
+.ge-abil.physical { border-left-color: #a01818; }
+.ge-abil.mental { border-left-color: #2a5ab0; }
+.ge-abil.spiritual { border-left-color: #2a8a40; }
+.ge-out-head { font: 13px var(--type); color: var(--ink-soft); margin: 12px 2px 4px; cursor: pointer; }
+.monster-row .chip { color: #fff; font-weight: 700; }
+.journal p, .journal .case-note, .journal .ge-body p { color: var(--ink); }
+.journal .case-note { color: var(--ink-soft); }
+.card-pop .paper-card p, .paper-card .ge-body p { color: var(--ink); }

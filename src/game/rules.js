@@ -16,7 +16,8 @@
 // The board is read through a small adapter (see board.js) over GridState,
 // which is plain data too, so a server can rebuild it from the saved board.
 import { MARKERS, streetMask, edgeKey, cellLabel } from '../state.js';
-import { MONSTERS, spawnMonsters, monstersAct } from './monsters.js';
+import { MONSTERS, spawnMonsters, monstersAct, farthestFromPlayers } from './monsters.js';
+import { setupMystery, evidenceObol, revealEvidence, attackObol, nameMonster, revealMonster } from './mystery.js';
 
 export const RULES_VERSION = 1;
 
@@ -39,7 +40,9 @@ export const SEATS = [
 // - Markers: `stopAtMarkers` stops the runner on every marker to choose a
 //   way on; `askInvestigate` asks "Investigate?" on Investigation spaces.
 // - Obols: the bag investigators draw from, by type.
-// - monster: which monster appears at midnight ('none' or a MONSTERS id).
+// - monster: 'mystery' (a secret monster from `monsterPool`, found out through
+//   evidence; see mystery.js), 'stalker' (the test monster) or 'none'.
+// - monsterPool: which premade set the mystery monster is drawn from.
 export const DEFAULT_CONFIG = Object.freeze({
   players: 4,
   startBlack: 2,
@@ -51,7 +54,8 @@ export const DEFAULT_CONFIG = Object.freeze({
   stopAtMarkers: true,
   askInvestigate: true,
   obols: Object.freeze({ attack: 7, event: 7, equipment: 7, evidence: 7 }),
-  monster: 'stalker',
+  monster: 'mystery',
+  monsterPool: 'all',
 });
 export const defaultConfig = () => ({ ...DEFAULT_CONFIG, obols: { ...DEFAULT_CONFIG.obols } });
 
@@ -129,11 +133,18 @@ export function newGame(board, setup = {}) {
     stopAt: -1,
     stopReason: '',
     monsters: [],
+    mystery: null,          // the secret monster and its evidence (mystery.js)
     log: [],
   };
   if (state.startMode === 'midnight') state.round = config.turnsToMidnight + 1;
   const events = [{ type: 'start' }];
   if (start >= 0) {
+    if (config.monster === 'mystery') {
+      setupMystery(state, board, {
+        random, randInt,
+        farthestCell: () => farthestFromPlayers({ state, board, random: () => random(state) }),
+      });
+    }
     log(state, (state.startMode === 'midnight' ? 'Midnight. The town is waiting, and the objectives are out. ' : '') +
       `${config.players === 1 ? 'Playing solo: P1 is' : `${config.players} players`} ready on the Start space ` +
       `(${label(board, start)}), in the van's headlights: starting light ${Math.round(board.light[start] * 100)}%. ` +
@@ -141,14 +152,17 @@ export function newGame(board, setup = {}) {
     enter(state, board, start, events);
     state.ask = null;
     state.stopAt = -1;
-    if (isMidnight(state)) spawnMonsters(state, board, events, random, log);
+    if (isMidnight(state)) {
+      revealMonster(state, mysteryCtx(state), events);
+      spawnMonsters(state, board, events, random, log);
+    }
   }
   return { state, events };
 }
 
 // --- actions ------------------------------------------------------------------------
 // Every action: { type, seat? }. Returns { ok, error?, events }.
-export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'choose', 'investigate'];
+export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'choose', 'investigate', 'reveal', 'name'];
 
 export function applyAction(state, board, action) {
   const events = [];
@@ -235,6 +249,23 @@ export function applyAction(state, board, action) {
       advance(state, board, events);
       break;
     }
+    case 'reveal': {
+      // Choose which face-down Evidence card to turn over.
+      const m = state.mystery;
+      if (state.phase !== 'revealing' || !m?.pendingReveal) return fail('nothing to reveal');
+      const n = action.card | 0;
+      if (!m.deck[n] || m.flipped.includes(n)) return fail('choose a face-down card');
+      revealEvidence(state, board, n, mysteryCtx(state), events);
+      state.phase = 'moving';
+      advance(state, board, events);
+      break;
+    }
+    case 'name': {
+      // Name the monster (Field Guide): any time on your turn before midnight.
+      const err = nameMonster(state, action.monster, mysteryCtx(state), events);
+      if (err) return fail(err);
+      break;
+    }
     default:
       return fail('unknown action');
   }
@@ -243,6 +274,7 @@ export function applyAction(state, board, action) {
 
 // --- helpers -------------------------------------------------------------------------
 export const curPlayer = (state) => state.players[state.cur];
+const mysteryCtx = (state) => ({ log, randInt, random, cellLabel, time: () => formatClock(clockMinutes(state)) });
 const who = (state) => curPlayer(state)?.name ?? '';
 const label = (board, i) => { const { x, y } = board.grid.coords(i); return cellLabel(x, y); };
 export function log(state, msg) {
@@ -354,6 +386,9 @@ function investigate(state, board, i, events) {
   }
   state.stopReason = 'Investigation';
   events.push({ type: 'obol', seat: state.cur, cell: i, obol: type, left: state.bag.length });
+  // The mystery: evidence to choose, or the monster strikes.
+  if (type === 'evidence') evidenceObol(state, board, i, mysteryCtx(state));
+  if (type === 'attack') attackObol(state, board, i, mysteryCtx(state), events);
   events.push({ type: 'collect', seat: state.cur, cell: i, marker: 'investigation', text: type ? `${OBOLS[type].label} Obol` : 'Investigation', keyGroup: -1 });
 }
 
@@ -361,6 +396,7 @@ function investigate(state, board, i, events) {
 function advance(state, board, events) {
   for (;;) {
     if (state.ask) { state.phase = 'asking'; state.options = []; return; }
+    if (state.mystery?.pendingReveal) { state.phase = 'revealing'; state.options = []; return; }
     if (state.steps <= 0) {
       state.stopAt = -1;
       state.stopReason = '';
@@ -412,6 +448,7 @@ function nextPlayer(state, board, events) {
     if (isMidnight(state) && !was) {
       log(state, 'Midnight. The clocktower strikes twelve, and the objectives appear.');
       events.push({ type: 'midnight' });
+      revealMonster(state, mysteryCtx(state), events);
       spawnMonsters(state, board, events, random, log);
     }
     if (isMidnight(state) && state.monsters.length) monstersAct(state, board, events, random, log);

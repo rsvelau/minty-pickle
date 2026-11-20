@@ -7,6 +7,7 @@ import { GridState } from '../src/state.js';
 import { createBoard, boardFromJSON } from '../src/game/board.js';
 import { newGame, applyAction, defaultConfig, isMidnight } from '../src/game/rules.js';
 import { createLocalSession, createHost, createClient, loopback } from '../src/game/session.js';
+import { publicState } from '../src/game/mystery.js';
 
 // A small town: an east-west street with the Start space at the east end,
 // a north-south street crossing it, and a few markers.
@@ -168,8 +169,10 @@ test('multiplayer shape: a host and two phones stay in sync; seats are enforced'
     else phoneA.dispatch({ type: 'investigate', yes: true });
   }
   assert.equal(host.state.cur, 1);
-  assert.deepEqual(phoneA.state, host.state);
-  assert.deepEqual(phoneB.state, host.state);
+  assert.deepEqual(phoneA.state, publicState(host.state));
+  assert.deepEqual(phoneB.state, publicState(host.state));
+  // ...and the phones never see the secret monster.
+  assert.equal(phoneA.state.mystery.monster, null);
 });
 
 test('the local session used by the app wraps the same rules', () => {

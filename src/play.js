@@ -21,12 +21,14 @@ import {
 } from './game/rules.js';
 import { createBoard } from './game/board.js';
 import { createLocalSession } from './game/session.js';
+import { createDiscoveries } from './discoveries.js';
+import { evidenceVisual } from './game/cards/evidence.js';
 
 export {
   DEFAULT_CONFIG, defaultConfig, OBOLS, OBOL_TYPES, obolCounts, INVENTORY_TABS, formatClock, MIDNIGHT,
 } from './game/rules.js';
-import { MONSTERS } from './game/monsters.js';
-export { MONSTERS };
+import { MONSTERS, monsterDef } from './game/monsters.js';
+export { MONSTERS, monsterDef };
 
 // The four players' looks: jacket colour (also the name tag), hair, extras.
 export const PLAYERS = [
@@ -51,6 +53,7 @@ const LUNGE_TIME = 0.7;   // a monster's attack lunge
 export function createPlay({
   grid, scene, camera, controls, cellToWorld, cellTop, terrainify, cellLabel, onChange,
   onUsed = () => {}, onCollect = () => {}, onObol = () => {}, onAttack = () => {}, onMonster = () => {},
+  onEvidence = () => {}, onAttacked = () => {}, onNamed = () => {}, onMonsterRevealed = () => {},
   config = defaultConfig(),
 }) {
   const cfg = config; // live: Game settings edits this object; used at the next new game
@@ -69,6 +72,7 @@ export function createPlay({
     actors: [],              // per seat: { at, face, vis, queue, anim }
     monsters: new Map(),     // id -> { fig, at, face, vis, queue, anim, lunge }
     watch: null,             // { id, until }: the camera visits a monster (when it appears or moves)
+    shownFinds: 0,           // how many evidence finds have visibly happened (runner got there)
   };
   const session = createLocalSession({ board, onUpdate: (state, events) => handleEvents(state, events) });
   const g = () => session.state;
@@ -341,7 +345,7 @@ export function createPlay({
     },
   };
 
-  const MONSTER_LOOK = (kind) => MONSTERS[kind]?.look ?? 'shade';
+  const MONSTER_LOOK = (kind) => monsterDef(kind)?.look ?? 'shade';
 
   // --- placing figures -----------------------------------------------------------
   // Where player k stands in cell i (its own quarter of the cell).
@@ -388,6 +392,18 @@ export function createPlay({
     }
   }
 
+  // --- evidence on the board ----------------------------------------------------------
+  const discoveries = createDiscoveries(group, { cellToWorld, cellTop, terrainify });
+  discoveries.setGrid(grid);
+  function refreshDiscoveries() {
+    const my = g()?.mystery;
+    const list = (my?.found ?? []).slice(0, view.shownFinds).map((f) => ({
+      cell: f.cell, visual: evidenceVisual(f.kind, f.code), lair: f.kind === 'lair',
+    }));
+    if (my && my.spawnCell >= 0 && !my.revealed) list.push({ cell: my.spawnCell, visual: 'spawn', lair: false });
+    discoveries.update(list);
+  }
+
   // --- events from the rules → animation -------------------------------------------
   function attachToArrival(a, cell, fx) {
     // Play `fx` when the runner reaches `cell` (or now, if already there).
@@ -406,6 +422,7 @@ export function createPlay({
           view.pan = true;
           for (const [, mv] of view.monsters) group.remove(mv.fig);
           view.monsters.clear();
+          view.shownFinds = state.mystery?.found.length ?? 0;
           view.actors = [];
           placeAll(true);
           onUsed();
@@ -435,6 +452,30 @@ export function createPlay({
         case 'midnight':
           onUsed(); // objectives appear
           break;
+        case 'evidence':
+          attachToArrival(view.actors[e.seat], e.cell, () => {
+            view.shownFinds = Math.max(view.shownFinds, (g()?.mystery?.found.findIndex((f) => f.cell === e.cell && f.code === e.code) ?? -1) + 1);
+            refreshDiscoveries();
+            onEvidence({ ...e, player: g()?.players[e.seat] });
+          });
+          break;
+        case 'attacked':
+          attachToArrival(view.actors[e.seat], e.cell, () => {
+            view.shownFinds = Math.max(view.shownFinds, g()?.mystery?.found.length ?? 0);
+            refreshDiscoveries();
+            onAttack({ seat: e.seat, cell: e.cell });
+            onAttacked({ ...e, player: g()?.players[e.seat] });
+          });
+          break;
+        case 'named':
+          onNamed(e);
+          refreshDiscoveries();
+          onUsed();
+          break;
+        case 'monsterRevealed':
+          onMonsterRevealed(e);
+          refreshDiscoveries();
+          break;
         case 'monsterSpawn':
           syncMonsters(true);
           view.watch = { id: e.id, until: performance.now() + 3200 };
@@ -456,6 +497,7 @@ export function createPlay({
         default:
       }
     }
+    refreshDiscoveries();
     applyVisibility();
     showOptions();
     onChange();
@@ -474,6 +516,8 @@ export function createPlay({
   function confirmMove() { if (!rolling()) act({ type: 'move' }); }
   function answerInvestigate(yes) { act({ type: 'investigate', yes: !!yes }); }
   function choose(i) { return g()?.phase === 'choosing' && act({ type: 'choose', cell: i }); }
+  function revealCard(n) { return act({ type: 'reveal', card: n }); }
+  function nameMonster(id) { return act({ type: 'name', monster: id }); }
   const slotTotal = () => { const s = g(); return s ? s.slots.reduce((a, n) => a + (s.pool[n]?.v ?? 0), 0) : 0; };
 
   // Arrow keys: pick the option closest to the camera-relative direction.
@@ -543,6 +587,7 @@ export function createPlay({
     last = now;
     if (!group.visible) return;
     const s = g();
+    discoveries.tick(t);
     halo.material.opacity = 0.55 + 0.3 * Math.sin(t * 3);
     halo.material.color.set(s.players[s.cur]?.colour ?? '#fff');
     for (const mo of optionMeshes) if (mo.g.visible) mo.arrow.position.y = 0.01 + 0.02 * (1 + Math.sin(t * 5));
@@ -713,6 +758,7 @@ export function createPlay({
     get log() { return g()?.log ?? []; },
     get blackCount() { return g()?.blackCount ?? 0; },
     get monsters() { return g()?.monsters ?? []; },
+    get mystery() { return g()?.mystery ?? null; },
     get cfg() { return g()?.config ?? cfg; },
     get count() { return g()?.players.length ?? cfg.players; },
     get startMode() { return view.startMode; },
@@ -729,7 +775,7 @@ export function createPlay({
     // Game settings changed outside a game: the next game starts fresh with them.
     invalidate: () => { stale = true; },
     state, session, board, roll, reset, setStartMode, answerInvestigate, choose, chooseByKey, tick, setActive,
-    boardChanged, setPlayers, toggleSlot, confirmMove, slotTotal, rollWhite, busy,
+    boardChanged, setPlayers, toggleSlot, confirmMove, slotTotal, rollWhite, busy, revealCard, nameMonster,
     clockMinutes: () => (g() ? rulesClockMinutes(g()) : rulesStartMinutesFor(cfg)),
     startMinutes: () => (g() ? rulesStartMinutes(g()) : rulesStartMinutesFor(cfg)),
     midnight: () => (g() ? isMidnight(g()) : false),

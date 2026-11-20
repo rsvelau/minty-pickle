@@ -12,7 +12,10 @@ import { createStreets } from './street.js';
 import { createBridges } from './bridge.js';
 import { createClocktowers } from './clocktower.js';
 import { dreadUniforms, swayUniforms, setLightSeeds, flickerize, flickerAt, swayFir } from './dread.js';
-import { createPlay, defaultConfig, OBOLS, OBOL_TYPES, formatClock, obolCounts, INVENTORY_TABS, MONSTERS } from './play.js';
+import { createPlay, defaultConfig, OBOLS, OBOL_TYPES, formatClock, obolCounts, INVENTORY_TABS, MONSTERS, monsterDef } from './play.js';
+import { MONSTER_CARDS, MONSTER_BY_ID, MONSTER_POOLS, DAMAGE_KINDS } from './game/cards/monsters.js';
+import { OBSERVATIONS, LAIRS, ATTACK_TYPES, evidenceLabel } from './game/cards/evidence.js';
+import { matchesEvidence } from './game/mystery.js';
 import { createMarkers, drawMarkerIcon } from './markers.js';
 import {
   installTerrain, setTerrain, terrainHeight, rayTerrain, isFlat, terrainId, TERRAIN_PRESETS,
@@ -2026,6 +2029,7 @@ function setTool(tool, start) {
   if (tool !== 'play') $('#gameClock').hidden = true;
   if (tool !== 'play') {
     $('#playTray').hidden = true; $('#askCard').hidden = true; $('#obolReveal').hidden = true; $('#inventory').hidden = true;
+    $('#revealSheet').hidden = true; $('#cardPop').hidden = true; $('#casebook').hidden = true;
   }
   document.body.classList.toggle('playing', tool === 'play');
   // Phones: fold the panel away so the board and the play bar are visible.
@@ -2292,6 +2296,7 @@ function renderPlay() {
     rolling: 'Rolling…',
     slotting: `Slot dice into up to <b>${s.maxSlots}</b> movement slots${s.lit ? ' (in light: extra slot open)' : ''}, then Move.`,
     asking: `Investigation spot. Investigate? <b>${s.steps}</b> move${s.steps === 1 ? '' : 's'} left.`,
+    revealing: 'Evidence! Choose a face-down card to turn over.',
     moving: s.fast ? `Fast-forward ⏩ <b>${s.steps}</b> left` : `Running… <b>${s.steps}</b> left (press and hold the board to fast-forward)`,
     choosing: `${s.stopReason ? `Stopped at <b>${s.stopReason}</b>. ` : ''}Choose a direction: <b>${s.steps}</b> move${s.steps === 1 ? '' : 's'} left (${s.options.map((o) => o.name).join(', ')})`,
     done: `On <b>${here}</b>. Roll again.`,
@@ -2308,17 +2313,22 @@ function renderPlay() {
     const counts = obolCounts(p);
     return `<div class="pl${k === s.cur ? ' cur' : ''}" data-inv="${k}" title="Open ${p.name}'s inventory"><span class="chip" style="background:${p.colour}">${p.name}</span>` +
       `<span>${c ? cellLabel(c.x, c.y) : '–'}</span><span>White dice ${p.white}</span>` +
+      (p.damage && (p.damage.P || p.damage.M || p.damage.S)
+        ? `<span class="obol-row" title="Damage taken (injuries come in Phase B)">Hurt: ${['P', 'M', 'S'].filter((t) => p.damage[t]).map((t) => `${ATTACK_TYPES[t].label} ${p.damage[t]}`).join(' · ')}</span>`
+        : '') +
       `<span class="obol-row">${OBOL_TYPES.map((t) => `<span class="obol-count${counts[t] ? '' : ' zero'}" title="${OBOLS[t].label} Obols">${obolHTML(t)}${counts[t]}</span>`).join('')}</span></div>`;
   }).join('');
   $('#playBoard').innerHTML += s.monsters.map((mo) => {
     const c = grid.coords(mo.pos);
     return `<div class="pl monster-row"><span class="chip" style="background:#6a0a12">!</span>` +
-      `<span>${MONSTERS[mo.kind]?.label ?? mo.kind}</span><span>${cellLabel(c.x, c.y)}</span></div>`;
+      `<span>${monsterDef(mo.kind)?.label ?? mo.kind}</span><span>${cellLabel(c.x, c.y)}</span></div>`;
   }).join('');
   $('#playLog').innerHTML = s.log.map((l) => `<li>${l}</li>`).join('');
   renderTray();
   renderClock();
   renderAsk();
+  renderRevealSheet();
+  if (!$('#casebook').hidden) renderCasebook();
   if (!$('#inventory').hidden) renderInventory();
   // Floating bar.
   [...$('#hudDie').children].forEach((el, n) => el.classList.toggle('on', !!face && PIPS[face].includes(n)));
@@ -2332,6 +2342,7 @@ function renderPlay() {
     moving: s.fast ? `Fast-forward ⏩ <b>${s.steps}</b> left` : `Running… <b>${s.steps}</b> left · hold to fast-forward`,
     choosing: `${s.stopReason ? `<b>${s.stopReason}</b> · ` : ''}Tap an arrow · <b>${s.steps}</b> left`,
     asking: `Investigate? · <b>${s.steps}</b> left`,
+    revealing: 'Evidence! Choose a card',
     done: `On <b>${here}</b>. Roll again.`,
   }[s.phase] ?? '');
   renderChoices();
@@ -2393,7 +2404,7 @@ function loadConfig() {
       for (const k of Object.keys(cfg)) {
         if (k === 'obols') {
           for (const t of OBOL_TYPES) if (Number.isFinite(saved.obols?.[t])) cfg.obols[t] = saved.obols[t];
-        } else if (k === 'monster' && (saved.configVersion ?? 1) < 2) {
+        } else if (k === 'monster' && (saved.configVersion ?? 1) < 3) {
           // Saved before the monster setting mattered: use today's default.
         } else if (typeof saved[k] === typeof cfg[k]) cfg[k] = saved[k];
       }
@@ -2403,7 +2414,7 @@ function loadConfig() {
 }
 const gameConfig = loadConfig();
 function saveConfig() {
-  try { localStorage.setItem(CONFIG_KEY, JSON.stringify({ ...gameConfig, configVersion: 2 })); } catch { /* ignore */ }
+  try { localStorage.setItem(CONFIG_KEY, JSON.stringify({ ...gameConfig, configVersion: 3 })); } catch { /* ignore */ }
 }
 
 const play = createPlay({
@@ -2412,8 +2423,18 @@ const play = createPlay({
   // A monster appears: say so (the camera goes to look at it).
   onMonster: ({ kind, cell }) => {
     const { x, y } = grid.coords(cell);
-    toast(`${MONSTERS[kind]?.label ?? 'A monster'} has appeared at ${cellLabel(x, y)}.`);
+    toast(`The ${monsterDef(kind)?.label ?? 'monster'} has appeared at ${cellLabel(x, y)}.`);
   },
+  onEvidence: (e) => {
+    showCard({ kind: e.kind, code: e.code, sub: `Found by ${e.player?.name ?? ''} · added to the Casebook` });
+    markCaseNew();
+  },
+  onAttacked: (e) => {
+    showCard({ kind: 'attack', code: e.attack, amount: e.amount, first: e.first, sub: `${e.player?.name ?? ''} takes ${e.amount} ${ATTACK_TYPES[e.attack].label} damage` });
+    if (e.first) markCaseNew();
+  },
+  onNamed: (e) => showCard({ kind: 'named', monster: e.monster, correct: e.correct }),
+  onMonsterRevealed: (e) => showCard({ kind: 'monster', monster: e.monster, correct: e.correct }),
   // A monster lunges: a brief, soft red flash at the edges of the screen.
   onAttack: () => {
     const el = $('#attackFlash');
@@ -2433,7 +2454,7 @@ const play = createPlay({
   },
 });
 markerUsed = (i) => ui.tool === 'play' && play.state.shownUsed.has(i);
-markerHidden = (i) => ui.tool === 'play' && grid.cells[i].marker === 'objective' && !play.midnight();
+markerHidden = (i) => ui.tool === 'play' && grid.cells[i].marker === 'objective' && !play.midnight() && !play.state.mystery?.initiative;
 $('#playRoll').addEventListener('click', () => play.roll());
 
 // Game clock: "11:05 PM · Turn 2/12"; from midnight on, just the time.
@@ -2526,6 +2547,204 @@ function showObol({ player, type, left }) {
 }
 $('#obolReveal').addEventListener('click', () => { $('#obolReveal').hidden = true; });
 
+// --- The mystery: choosing evidence, cards turning over, Casebook, Field Guide -------
+const ATTACK_GLYPH = { P: '🩸', M: '🌀', S: '👻' };
+const OBS_GLYPH = '👁', LAIR_GLYPH = '⚰';
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const placeLabel = (cell) => { const { x, y } = grid.coords(cell); return cellLabel(x, y); };
+
+// Evidence Obol: the remaining face-down cards, to tap.
+function renderRevealSheet() {
+  const s = play.state;
+  const deck = s.mystery?.deck ?? [];
+  const show = ui.tool === 'play' && s.phase === 'revealing';
+  $('#revealSheet').hidden = !show;
+  if (!show) return;
+  const cur = s.players[s.cur];
+  const left = deck.filter((c) => !c).length;
+  $('#revealTitle').textContent = 'Evidence found';
+  $('#revealSub').innerHTML = `<b style="color:${cur.colour}">${cur.name}</b>: choose 1 of ${left} face-down cards to turn over`;
+  const host = $('#revealCards');
+  const key = deck.map((c) => (c ? 1 : 0)).join('');
+  if (host.dataset.key === key) return;
+  host.dataset.key = key;
+  let n = 0;
+  host.innerHTML = deck.map((c, i) => (c ? '<span class="card-back gone"></span>'
+    : `<button type="button" class="card-back" data-card="${i}" aria-label="Face-down evidence card ${++n}">?</button>`)).join('');
+  host.querySelectorAll('[data-card]').forEach((b) => b.addEventListener('click', () => play.revealCard(Number(b.dataset.card))));
+}
+
+// A card turning over, big and centred (tap to dismiss).
+let cardTimer = 0;
+function showCard(c) {
+  const card = $('#cardPopCard');
+  card.className = 'paper-card paper';
+  let html = '';
+  let stay = false;
+  if (c.kind === 'observation' || c.kind === 'lair') {
+    const lair = c.kind === 'lair';
+    if (lair) card.classList.add('lair');
+    html = `<div class="pc-kind">${lair ? 'Evidence · the Lair' : 'Evidence · Observation'}</div>` +
+      `<div class="pc-glyph">${lair ? LAIR_GLYPH : OBS_GLYPH}</div>` +
+      `<div class="pc-title">${esc(evidenceLabel(c.kind, c.code))}</div><div class="pc-sub">${esc(c.sub)}</div>`;
+  } else if (c.kind === 'attack') {
+    card.classList.add('attack');
+    card.style.setProperty('--atk', ATTACK_TYPES[c.code].colour);
+    html = `<div class="pc-kind">${c.first ? 'Attacked! The Attack card' : 'Attacked again'}</div>` +
+      `<div class="pc-glyph">${ATTACK_GLYPH[c.code]}</div>` +
+      `<div class="pc-title">${ATTACK_TYPES[c.code].label}</div><div class="pc-sub">${esc(c.sub)}</div>`;
+  } else if (c.kind === 'named') {
+    const name = MONSTER_BY_ID[c.monster]?.name ?? '';
+    html = c.correct
+      ? `<div class="pc-kind">Initiative!</div><div class="pc-glyph">☠</div><div class="pc-title">The ${esc(name)}</div>` +
+        `<div class="pc-sub">The signs fit. Where it will rise is marked on the map, and the objectives are showing.</div>`
+      : `<div class="pc-kind">Named: the ${esc(name)}</div><div class="pc-glyph">✗</div><div class="pc-title">The signs don't fit</div>` +
+        `<div class="pc-sub">No Initiative this time. Keep gathering evidence: you'll know at midnight.</div>`;
+    stay = true;
+  } else if (c.kind === 'monster') {
+    const m = MONSTER_BY_ID[c.monster];
+    card.classList.add('monster');
+    html = `<div class="pc-kind" style="text-align:center">Midnight · it's here</div><div class="pc-title">The ${esc(m.name)}</div>` +
+      `<div class="pc-sub" style="text-align:center">${esc(m.traits.join(', '))}${c.correct ? ' · you named it right' : ''}</div>` +
+      guideDetails(m, currentFound(), true);
+    stay = true;
+  }
+  card.innerHTML = html;
+  $('#cardPop').hidden = false;
+  clearTimeout(cardTimer);
+  if (!stay) cardTimer = setTimeout(hideCard, 4200);
+  $('#cardPopHint').textContent = stay ? 'Tap to continue' : 'Tap to continue · added to the Casebook';
+}
+function hideCard() { $('#cardPop').hidden = true; clearTimeout(cardTimer); }
+$('#cardPop').addEventListener('click', hideCard);
+
+// What's been found, in the shape matchesEvidence wants.
+function currentFound() {
+  const my = play.state.mystery;
+  return { attack: my?.attack?.code ?? null, cards: (my?.found ?? []).filter((f) => f.kind !== 'attack') };
+}
+const caseUI = { tab: 'case', showAll: false, seen: 0 };
+function markCaseNew() { $('#caseBadge').hidden = !$('#casebook').hidden ? true : false; }
+function openCasebook(tab) {
+  if (tab) caseUI.tab = tab;
+  $('#caseBadge').hidden = true;
+  renderCasebook();
+  $('#casebook').hidden = false;
+}
+function closeCasebook() { $('#casebook').hidden = true; }
+$('#hudCase').addEventListener('click', () => openCasebook());
+$('#caseClose').addEventListener('click', closeCasebook);
+$('#casebook').addEventListener('click', (e) => { if (e.target === $('#casebook')) closeCasebook(); });
+document.querySelectorAll('[data-ctab]').forEach((b) => b.addEventListener('click', () => { caseUI.tab = b.dataset.ctab; renderCasebook(); }));
+
+function renderCasebook() {
+  document.querySelectorAll('[data-ctab]').forEach((b) => b.classList.toggle('on', b.dataset.ctab === caseUI.tab));
+  $('#caseTitle').textContent = caseUI.tab === 'case' ? 'Casebook' : 'Field Guide';
+  const body = $('#caseBody');
+  const my = play.state.mystery;
+  if (!my) {
+    body.innerHTML = '<p class="case-note">No mystery in this game. Choose <b>Mystery</b> under Game settings → Monster.</p>';
+    return;
+  }
+  const scroll = body.scrollTop;
+  body.innerHTML = caseUI.tab === 'case' ? casebookHTML(my) : fieldGuideHTML(my);
+  body.scrollTop = scroll;
+  body.querySelectorAll('[data-goto]').forEach((el) => el.addEventListener('click', () => {
+    closeCasebook();
+    const i = Number(el.dataset.goto);
+    const { x, y } = grid.coords(i);
+    const p = cellToWorld(x, y);
+    const offset = camera.position.clone().sub(controls.target);
+    play.state.follow = false;
+    $('#playFollow').checked = false;
+    camTween = { t: 0, fromPos: camera.position.clone(), fromTarget: controls.target.clone(), toPos: p.clone().add(offset), toTarget: p };
+  }));
+  body.querySelector('#openGuide')?.addEventListener('click', () => { caseUI.tab = 'guide'; renderCasebook(); });
+  body.querySelector('#guideAll')?.addEventListener('change', (e) => { caseUI.showAll = e.target.checked; renderCasebook(); });
+  body.querySelectorAll('[data-name]').forEach((b) => b.addEventListener('click', (e) => {
+    e.preventDefault();
+    const id = b.dataset.name;
+    if (!confirmName(id)) return;
+    if (play.nameMonster(id)) closeCasebook();
+  }));
+}
+function confirmName(id) {
+  return window.confirm(`Name the ${MONSTER_BY_ID[id].name}?\n\nThe team gets one try before midnight. If you're right, you earn Initiative.`);
+}
+
+function casebookHTML(my) {
+  const slot = (kind, f, label, wide = false) => (f
+    ? `<button type="button" class="case-slot filled${wide ? ' wide' : ''}" data-goto="${f.cell}" title="Show where it was found">` +
+      `<span class="cs-kind">${label}</span><span class="cs-name">${esc(evidenceLabel(kind, f.code))}</span>` +
+      `<span class="cs-where">${esc(play.state.players[f.seat]?.name ?? '')} · ${placeLabel(f.cell)} · ${esc(f.time)}</span></button>`
+    : `<div class="case-slot empty${wide ? ' wide' : ''}"><span class="cs-kind">${label}</span><span class="cs-name">?</span>` +
+      `<span class="cs-where">${kind === 'attack' ? 'Revealed when it attacks someone' : 'Turn over an Evidence card'}</span></div>`);
+  const obs = my.found.filter((f) => f.kind === 'observation');
+  const lair = my.found.find((f) => f.kind === 'lair');
+  const pool = my.pool.map((id) => MONSTER_BY_ID[id]);
+  const fits = pool.filter((c) => matchesEvidence(c, currentFound()));
+  const guess = my.guess ? MONSTER_BY_ID[my.guess.id]?.name : null;
+  const status = my.revealed
+    ? `It's the <b>${esc(MONSTER_BY_ID[my.monster]?.name ?? '')}</b>.${guess ? ` You named the ${esc(guess)}${my.guess.correct ? ', and you were right.' : '.'}` : ''}`
+    : guess
+      ? (my.guess.correct ? `You named the <b>${esc(guess)}</b>. <b>Initiative:</b> its spawn point is marked ☠.` : `You named the <b>${esc(guess)}</b>, but the signs didn't fit.`)
+      : 'Name the monster from the Field Guide before midnight to earn <b>Initiative</b> (one try).';
+  return `<div class="case-slots">` +
+    slot('attack', my.attack, 'Attack', true) +
+    [0, 1, 2].map((k) => slot('observation', obs[k], `Observation ${k + 1}`)).join('') +
+    slot('lair', lair, 'Lair') +
+    `</div>` +
+    `<p class="case-note">${fits.length === 1 ? 'Only <b>one</b> monster fits' : `<b>${fits.length}</b> of ${pool.length} monsters fit`} the evidence so far.</p>` +
+    `<p class="case-note">${status}</p>` +
+    `<div class="case-actions"><button type="button" class="ink" id="openGuide">Open the Field Guide</button></div>`;
+}
+
+function guideDetails(c, found, open) {
+  const hitObs = new Set(found.cards.filter((f) => f.kind === 'observation').map((f) => f.code));
+  const hitLair = found.cards.find((f) => f.kind === 'lair')?.code;
+  const chip = (text, cls) => `<span class="ge-chip ${cls}">${esc(text)}</span>`;
+  const ev = c.evidence;
+  const evChips = [
+    chip(`Attack: ${ATTACK_TYPES[ev.attack].label}`, found.attack === ev.attack ? 'hit' : ''),
+    ...ev.observations.map((o) => chip(OBSERVATIONS[o].label, hitObs.has(o) ? 'hit' : '')),
+    chip(`Lair: ${LAIRS[ev.lair].label}`, `lair${hitLair === ev.lair ? ' hit' : ''}`),
+  ].join('');
+  const stat = (v) => (v === null ? '∞' : v);
+  const dmg = (list, cls, word) => (list.length ? `<div class="ge-chips">${list.map((k) => chip(`${word} ${DAMAGE_KINDS[k].icon} ${DAMAGE_KINDS[k].label}`, cls)).join('')}</div>` : '');
+  return `<div class="ge-body"${open ? '' : ''}>` +
+    `<p><b>Evidence:</b></p><div class="ge-chips">${evChips}</div>` +
+    `<p>Health <b>${stat(c.hp)}</b> · Toughness <b>${stat(c.toughness)}</b></p>` +
+    dmg(c.weakness, 'weak', 'Weak to') + dmg(c.immune, 'imm', 'Immune to') +
+    `<p>${esc(c.note)}</p><p><b>Objective:</b> ${esc(c.objective)}</p>` +
+    c.abilities.map((a) => `<p class="ge-abil ${a.kind}"><b>${esc(a.name)}</b> <i>[${esc(a.roll)}]</i> ${esc(a.text)}</p>`).join('') +
+    (c.wounds.length ? `<p><b>When wounded:</b> ${c.wounds.map((w) => `${w.at === null ? '∞' : w.at}: ${esc(w.text)}`).join(' · ')}</p>` : '') +
+    `</div>`;
+}
+
+function fieldGuideHTML(my) {
+  const found = currentFound();
+  const pool = my.pool.map((id) => MONSTER_BY_ID[id]).sort((a, b) => a.name.localeCompare(b.name));
+  const fits = pool.filter((c) => matchesEvidence(c, found));
+  const out = pool.filter((c) => !fits.includes(c));
+  const canName = !my.guess && !my.revealed && play.state.phase !== 'nostart';
+  const nFound = found.cards.length + (found.attack ? 1 : 0);
+  const entry = (c, ruledOut) => {
+    const hits = (found.attack && c.evidence.attack === found.attack ? 1 : 0)
+      + found.cards.filter((f) => (f.kind === 'lair' ? f.code === c.evidence.lair : c.evidence.observations.includes(f.code))).length;
+    return `<details class="guide-entry${ruledOut ? ' out' : ''}"${fits.length <= 2 && !ruledOut ? ' open' : ''}>` +
+      `<summary><span class="ge-name">${esc(c.name)}</span><span class="ge-traits">${esc(c.traits.join(', '))}</span>` +
+      `<span class="ge-fit">${ruledOut ? 'ruled out' : nFound ? `fits ${hits}/${nFound}` : ''}</span></summary>` +
+      guideDetails(c, found) +
+      (!ruledOut && canName ? `<div class="case-actions"><button type="button" class="ink" data-name="${c.id}">Name the ${esc(c.name)}</button></div>` : '') +
+      `</details>`;
+  };
+  return `<div class="guide-top"><span>${nFound ? `${fits.length} of ${pool.length} fit the evidence` : `${pool.length} monsters could be out there`}</span>` +
+    `<label><input type="checkbox" id="guideAll"${caseUI.showAll ? ' checked' : ''} />Show ruled out</label></div>` +
+    fits.map((c) => entry(c, false)).join('') +
+    (out.length ? (caseUI.showAll ? `<p class="ge-out-head">Ruled out</p>${out.map((c) => entry(c, true)).join('')}`
+      : `<p class="ge-out-head">${out.length} ruled out (tick “Show ruled out” to see them)</p>`) : '');
+}
+
 // --- Inventory -----------------------------------------------------------------------
 // Each player's own inventory, in tabs. Opens on the current player (the bag
 // button on the play bar, or I), or on whoever you tap in the scoreboard.
@@ -2592,8 +2811,10 @@ const SETTINGS = [
   { key: 'stopAtMarkers', label: 'Stop on every marker', note: 'Choose a way on at each marker', bool: true },
   { key: 'askInvestigate', label: 'Ask before investigating', note: '"Investigate?" on Investigation spaces', bool: true },
   { section: 'Monster' },
-  { key: 'monster', label: 'Monster at midnight', note: 'Monsters are a work in progress; the test stalker is on by default',
-    choice: [['none', 'None'], ...Object.entries(MONSTERS).map(([id, d]) => [id, d.label])] },
+  { key: 'monster', label: 'Monster', note: 'Mystery: a secret monster from the pool, found out through evidence',
+    choice: [['mystery', 'Mystery'], ...Object.entries(MONSTERS).map(([id, d]) => [id, d.label]), ['none', 'None']] },
+  { key: 'monsterPool', label: 'Monster pool', note: 'Which monsters the mystery can be',
+    choice: Object.entries(MONSTER_POOLS).map(([id, p]) => [id, `${p.label} (${p.ids.length})`]) },
   { section: 'Obol bag' },
   ...OBOL_TYPES.map((t) => ({ obol: t, label: `${OBOLS[t].label} Obols`, note: OBOLS[t].note, min: 0, max: 20 })),
 ];
@@ -2939,7 +3160,7 @@ window.addEventListener('pointerdown', (ev) => {
   const t = ev.target;
   const inside = (sel) => t instanceof Element && !!t.closest(sel);
   if (inside('#dialog') || inside('#settings') || inside('#inventory') || inside('#playHud') || inside('#playChoices') || inside('#playTray')
-    || inside('#askCard') || inside('#obolReveal')) return;
+    || inside('#askCard') || inside('#obolReveal') || inside('#revealSheet') || inside('#cardPop') || inside('#casebook')) return;
   let closed = false;
   if (panelOpen && !inside('#panel') && !inside('#expand')) { minimizePanel(); closed = true; }
   if (viewOpen && !inside('#viewMenu')) { setViewMenu(false); closed = true; }
@@ -2954,6 +3175,16 @@ window.addEventListener('keydown', (e) => {
   if (!dlg.root.hidden) { if (e.key === 'Escape') closeDialog(); return; }
   if (!$('#settings').hidden) { if (e.key === 'Escape') closeSettings(); return; }
   if (!$('#inventory').hidden) { if (e.key === 'Escape' || e.key.toLowerCase() === 'i') closeInventory(); return; }
+  if (!$('#casebook').hidden) { if (e.key === 'Escape' || e.key.toLowerCase() === 'c') closeCasebook(); return; }
+  if (!$('#cardPop').hidden && (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); hideCard(); return; }
+  if (ui.tool === 'play' && play.state.phase === 'revealing' && /^[1-4]$/.test(e.key)) {
+    const faceDown = (play.state.mystery?.deck ?? []).map((c, i) => (c ? -1 : i)).filter((i) => i >= 0);
+    const n = faceDown[Number(e.key) - 1];
+    if (n !== undefined) play.revealCard(n);
+    return;
+  }
+  if (ui.tool === 'play' && e.key.toLowerCase() === 'c' && !e.ctrlKey && !e.metaKey
+    && !(e.target instanceof HTMLInputElement)) { openCasebook(); return; }
   if (ui.tool === 'play' && e.key.toLowerCase() === 'i' && !e.ctrlKey && !e.metaKey
     && !(e.target instanceof HTMLInputElement)) { openInventory(); return; }
   // "Investigate?": Enter or Y = yes, Escape or N = no.
