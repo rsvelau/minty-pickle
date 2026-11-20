@@ -2665,6 +2665,8 @@ function closeSettings() {
   if (settingsDirty && ui.tool === 'play') {
     play.reset();
     toast('Game restarted with the new settings.');
+  } else if (settingsDirty) {
+    play.invalidate(); // the next Play / Midnight demo starts fresh with them
   }
   settingsDirty = false;
 }

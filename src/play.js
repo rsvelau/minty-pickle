@@ -267,8 +267,27 @@ export function createPlay({
   // monsters add a look (or reuse one). Figures face +z, base at y = 0.
   const monsterMat = new THREE.MeshLambertMaterial({ vertexColors: true });
   terrainify(monsterMat, { bridge: true });
-  const eyeMat = new THREE.MeshBasicMaterial({ color: '#ff3a2a' });
+  const eyeMat = new THREE.MeshBasicMaterial({ color: '#ff5a3a', fog: false });
   terrainify(eyeMat, { bridge: true });
+  const glowTex = (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const x = c.getContext('2d');
+    const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, 'rgba(255,255,255,1)');
+    gr.addColorStop(0.35, 'rgba(255,255,255,0.45)');
+    gr.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = gr;
+    x.fillRect(0, 0, 64, 64);
+    return new THREE.CanvasTexture(c);
+  })();
+  const eyeGlowMat = new THREE.SpriteMaterial({
+    map: glowTex, color: '#ff3a1a', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+  });
+  const groundGlowMat = new THREE.MeshBasicMaterial({
+    map: glowTex, color: '#8a0a10', transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending,
+  });
+  terrainify(groundGlowMat, { bridge: true });
   const monsterLooks = {
     // A gaunt, stooped shape about 2.4 m tall with long arms and ember eyes.
     shade() {
@@ -298,11 +317,24 @@ export function createPlay({
       mesh.raycast = () => {};
       body.add(mesh);
       for (const s of [-1, 1]) {
-        const eye = new THREE.Mesh(new THREE.SphereGeometry(m(0.035), 8, 6), eyeMat);
-        eye.position.set(s * m(0.07), m(2.38), m(0.39));
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(m(0.05), 8, 6), eyeMat);
+        eye.position.set(s * m(0.08), m(2.38), m(0.39));
         eye.raycast = () => {};
         body.add(eye);
+        // A soft ember halo round each eye, visible from any side and far off.
+        const halo = new THREE.Sprite(eyeGlowMat);
+        halo.position.copy(eye.position);
+        halo.scale.setScalar(m(0.55));
+        halo.renderOrder = 8;
+        halo.raycast = () => {};
+        body.add(halo);
       }
+      // A faint blood-red stain of light on the ground where it stands.
+      const pool = new THREE.Mesh(new THREE.CircleGeometry(m(2.4), 24).rotateX(-Math.PI / 2), groundGlowMat);
+      pool.position.y = m(0.06);
+      pool.renderOrder = 3;
+      pool.raycast = () => {};
+      root.add(pool);
       root.userData = { body };
       return root;
     },
@@ -616,11 +648,12 @@ export function createPlay({
   }
 
   let active = false;
+  let stale = false; // settings changed since this game started: start afresh next time
   function applyVisibility() { group.visible = active && inBoard(g()?.players[g().cur]?.pos ?? -1); }
   function setActive(on) {
     active = on;
     const s = g();
-    if (on && (!s || !inBoard(s.players[s.cur]?.pos ?? -1) || s.phase === 'nostart')) reset();
+    if (on && (stale || !s || !inBoard(s.players[s.cur]?.pos ?? -1) || s.phase === 'nostart')) { stale = false; reset(); }
     applyVisibility();
     showOptions();
   }
@@ -673,6 +706,8 @@ export function createPlay({
   };
 
   return {
+    // Game settings changed outside a game: the next game starts fresh with them.
+    invalidate: () => { stale = true; },
     state, session, board, roll, reset, setStartMode, answerInvestigate, choose, chooseByKey, tick, setActive,
     boardChanged, setPlayers, toggleSlot, confirmMove, slotTotal, rollWhite, busy,
     clockMinutes: () => (g() ? rulesClockMinutes(g()) : rulesStartMinutesFor(cfg)),

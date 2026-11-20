@@ -545,7 +545,9 @@ Helpers for AI: `reach` (walking distances and paths over the real movement rule
 `playersInReach`, `lightAt`, `farthestFromPlayers`. Use `ctx.random()` for any randomness so a server makes
 the same choices. Monsters act once at the end of every turn from midnight on. The **Test stalker** shows the
 pattern: it appears as far from the players as it can, hunts the nearest one through the dark, won't step
-into a well-lit cell, and lunges (with a soft red flash at the screen edges) when it reaches them.
+into a well-lit cell, and lunges (with a soft red flash at the screen edges) when it reaches them. It is off
+by default (Game settings → Monster at midnight → Test stalker); its ember eyes and a faint red glow on the
+ground make it easy to spot in the dark. Changing Game settings outside a game makes the next game start fresh.
 
 ### Multiplayer (planned: a hosted realtime service)
 
