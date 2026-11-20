@@ -2029,6 +2029,7 @@ function setTool(tool, start) {
   $('#playHud').hidden = tool !== 'play';
   if (tool !== 'play') $('#gameClock').hidden = true;
   if (tool !== 'play') {
+    $('#endConfirm').hidden = true;
     $('#playTray').hidden = true; $('#askCard').hidden = true; $('#obolReveal').hidden = true; $('#inventory').hidden = true;
     $('#revealSheet').hidden = true; $('#cardPop').hidden = true; $('#casebook').hidden = true; $('#intentBanner').hidden = true;
   }
@@ -2340,7 +2341,7 @@ function renderPlay() {
     idle: `On <b>${here}</b>${s.pos >= 0 ? ` · light ${Math.round(lightLevels[s.pos] * 100)}%` : ''}. Roll.` +
       (play.anyRunning() ? (s.fast ? ' · ⏩' : ' · <span class="muted">hold board to fast-forward</span>') : ''),
     rolling: 'Rolling…',
-    slotting: `Slot dice · move <b>${play.slotTotal()}</b>`,
+    slotting: s.pool.some((d) => d.spent) ? 'Slot more, adjust defense, or end turn' : `Slot dice · move <b>${play.slotTotal()}</b>`,
     moving: s.fast ? `Fast-forward ⏩ <b>${s.steps}</b> left` : `Running… <b>${s.steps}</b> left · hold to fast-forward`,
     choosing: `${s.stopReason ? `<b>${s.stopReason}</b> · ` : ''}Tap an arrow · <b>${s.steps}</b> left`,
     asking: `Investigate? · <b>${s.steps}</b> left`,
@@ -2486,12 +2487,15 @@ function renderTray() {
   const s = play.state;
   const show = ui.tool === 'play' && (s.phase === 'slotting' || s.phase === 'rolling');
   $('#playTray').hidden = !show;
+  if (s.phase !== 'slotting') $('#endConfirm').hidden = true;
   if (!show) return;
   const rolling = s.phase === 'rolling';
   // While rolling, every die tumbles.
   $('#trayPool').innerHTML = s.pool.map((d, n) =>
-    dieHTML(rolling ? { ...d, v: 1 + ((s.rollFace + n * 2) % 6) } : d, s.slots.includes(n) || s.defSlots.includes(n) ? 'used' : '')).join('');
-  [...$('#trayPool').children].forEach((b, n) => { b.onclick = () => play.toggleSlot(n, trayTarget); });
+    dieHTML(rolling ? { ...d, v: 1 + ((s.rollFace + n * 2) % 6) } : d, s.slots.includes(n) || s.defSlots.includes(n) ? 'used' : '')).join('') +
+    // Sprained: a black die sits out, disabled.
+    Array.from({ length: rolling ? 0 : s.disabledDice }, () => '<span class="tdie disabled" title="Sprained: one black die is disabled">✕</span>').join('');
+  [...$('#trayPool').querySelectorAll('button.tdie')].forEach((b, n) => { b.onclick = () => play.toggleSlot(n, trayTarget); });
   document.querySelectorAll('#trayTarget [data-to]').forEach((b) => b.classList.toggle('on', b.dataset.to === trayTarget));
   // Defense slots (Defense ⬜ +💡⬜), after injuries.
   const defs = [];
@@ -2509,7 +2513,7 @@ function renderTray() {
   const base = s.cfg.moveSlots, most = Math.max(base, s.cfg.litSlots);
   for (let k = 0; k < most; k++) {
     const n = s.slots[k];
-    if (n !== undefined) slots.push(dieHTML(s.pool[n], 'in-slot'));
+    if (n !== undefined) slots.push(dieHTML(s.pool[n], s.pool[n].spent ? 'in-slot spent' : 'in-slot'));
     else if (k < s.maxSlots) slots.push(`<span class="tdie slot${k >= base ? ' lit' : ''}">${k >= base ? 'light' : ''}</span>`);
     else slots.push('<span class="tdie slot" title="Extra slots need a lit cell at the start of the turn" style="opacity:.35">dark</span>');
   }
@@ -2520,11 +2524,16 @@ function renderTray() {
     `<button class="tdie white reserve" ${rolling ? 'disabled' : ''} title="Roll this white die (usable this turn only)">roll</button>`).join('');
   [...$('#trayReserve').children].forEach((b) => { b.onclick = () => play.rollWhite(); });
   [...$('#traySlots').querySelectorAll('.in-slot')].forEach((b, k) => { b.onclick = () => play.toggleSlot(s.slots[k], 'move'); });
+  const moved = s.pool.some((d) => d.spent);
   $('#trayTotal').textContent = rolling ? '…' : play.slotTotal();
   $('#trayMove').disabled = rolling;
-  $('#trayMove').textContent = play.slotTotal() ? `Move ${play.slotTotal()}` : 'Stay put';
+  $('#trayMove').hidden = !play.slotTotal();
+  $('#trayMove').textContent = `Move ${play.slotTotal()}`;
+  $('#trayEnd').disabled = rolling;
+  $('#trayEnd').textContent = moved || s.defSlots.length ? 'End turn' : 'Stay put & end turn';
   $('#trayHint').textContent = rolling ? 'Rolling…' : s.deathsDoor ? "Death's Door: one die only"
     : trayTarget === 'defense' ? 'Defense lasts until your next turn'
+      : moved ? 'Slot more dice, adjust defense, or end your turn'
       : (s.pool.some((d) => d.kind === 'white') ? 'Rolled white dice are discarded after this turn' : 'Tap dice to slot them');
 }
 let trayTarget = 'move';
@@ -3003,6 +3012,16 @@ $('#setDefaults').addEventListener('click', () => {
   renderSettings();
 });
 $('#trayMove').addEventListener('click', () => play.confirmMove());
+// Ending the turn with rolled dice unused asks first.
+function requestEndTurn() {
+  const n = play.unusedCount();
+  if (!n) { play.endTurn(); return; }
+  $('#endSub').textContent = `You have ${n} rolled ${n === 1 ? 'die' : 'dice'} not slotted into Movement or Defense. Unused dice are lost.`;
+  $('#endConfirm').hidden = false;
+}
+$('#trayEnd').addEventListener('click', requestEndTurn);
+$('#endNo').addEventListener('click', () => { $('#endConfirm').hidden = true; });
+$('#endYes').addEventListener('click', () => { $('#endConfirm').hidden = true; play.endTurn(); });
 $('#hudRoll').addEventListener('click', () => play.roll());
 $('#playStreets').addEventListener('change', (e) => { play.state.followStreets = e.target.checked; });
 $('#playReset').addEventListener('click', () => play.reset());
@@ -3248,7 +3267,7 @@ window.addEventListener('pointerdown', (ev) => {
   const t = ev.target;
   const inside = (sel) => t instanceof Element && !!t.closest(sel);
   if (inside('#dialog') || inside('#settings') || inside('#inventory') || inside('#playHud') || inside('#playChoices') || inside('#playTray')
-    || inside('#askCard') || inside('#obolReveal') || inside('#revealSheet') || inside('#cardPop') || inside('#casebook') || inside('#intentBanner')) return;
+    || inside('#askCard') || inside('#obolReveal') || inside('#revealSheet') || inside('#cardPop') || inside('#casebook') || inside('#intentBanner') || inside('#endConfirm')) return;
   let closed = false;
   if (panelOpen && !inside('#panel') && !inside('#expand')) { minimizePanel(); closed = true; }
   if (viewOpen && !inside('#viewMenu')) { setViewMenu(false); closed = true; }
@@ -3284,7 +3303,8 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && ui.tool === 'move') { clearMove(); return; }
   if (ui.tool === 'play' && e.key === 'Enter') {
     e.preventDefault();
-    if (play.state.phase === 'slotting') play.confirmMove(); else play.roll();
+    if (!$('#endConfirm').hidden) { $('#endConfirm').hidden = true; play.endTurn(); return; }
+    if (play.state.phase === 'slotting') { if (play.slotTotal()) play.confirmMove(); else requestEndTurn(); } else play.roll();
     return;
   }
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;

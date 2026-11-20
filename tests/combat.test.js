@@ -105,3 +105,36 @@ test('a card monster declares its action, shows who is in danger, then carries i
   assert.ok(r.events.some((e) => e.type === 'damage'), 'it struck');
   assert.ok(r.events.some((e) => e.type === 'monsterIntent'), 'and declared its next move');
 });
+
+test('a turn carries on after moving: slot more, adjust defense, move again, then end', async () => {
+  const { unusedDice } = await import('../src/game/rules.js');
+  const board = createBoard(street());
+  const { state } = newGame(board, { seed: 2, config: { players: 1, startBlack: 3 } });
+  const act = (a) => applyAction(state, board, { ...a, seat: 0 });
+  act({ type: 'roll' });
+  state.pool = [{ kind: 'black', v: 1 }, { kind: 'black', v: 1 }, { kind: 'black', v: 5 }];
+  act({ type: 'slot', die: 0, to: 'move' });
+  assert.ok(act({ type: 'move' }).ok);
+  if (state.phase === 'choosing') act({ type: 'choose', cell: state.options[0].i });
+  assert.equal(state.phase, 'slotting', 'turn carries on');
+  assert.equal(act({ type: 'slot', die: 0, to: 'defense' }).ok, false, 'spent dice stay spent');
+  act({ type: 'slot', die: 2, to: 'defense' });
+  assert.equal(state.players[0].defense[0].v, 5, 'defense is live');
+  act({ type: 'slot', die: 1, to: 'move' });
+  act({ type: 'move' });
+  if (state.phase === 'choosing') act({ type: 'choose', cell: state.options[0].i });
+  // All dice used now: the turn ends by itself; defense stays up.
+  assert.equal(state.phase, 'idle');
+  assert.equal(state.players[0].defense[0].v, 5);
+  assert.equal(unusedDice(state).length, 0);
+});
+
+test('Close range includes diagonals; Adze abilities cover every roll', async () => {
+  const { cellRange, rangeBand } = await import('../src/game/cards/injuries.js');
+  const g = street();
+  assert.equal(rangeBand(cellRange(g, g.index(5, 5), g.index(6, 6))), 'close');
+  assert.equal(rangeBand(cellRange(g, g.index(5, 5), g.index(7, 6))), 'mid');
+  assert.equal(rangeBand(cellRange(g, g.index(5, 5), g.index(8, 5))), 'long');
+  const adze = MONSTER_CARDS.find((c) => c.id === 'adze');
+  assert.deepEqual(adze.abilities.map((a) => a.roll), ['1-2', '3-4', '5-6']);
+});

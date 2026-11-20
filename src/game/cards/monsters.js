@@ -190,8 +190,8 @@ export const MONSTER_CARDS = [
     wounds: [{ at: 1, text: '−1 toughness' }, { at: 3, text: '−1 toughness' }, { at: 5, text: '−1 die' }],
     abilities: [
       A('spiritual', 'Hotel Victim', '1-2', 'Attack ({1}, die) and Exhaust (defensive die)'),
-      A('spiritual', 'Bar Victim', '1-2', 'Attack ({5}, die) and Exhaust (defensive die)'),
-      A('spiritual', 'Infirmary Victim', '1-2', 'Attack ({13}, die) and Exhaust (defensive die)'),
+      A('spiritual', 'Bar Victim', '3-4', 'Attack ({5}, die) and Exhaust (defensive die)'),
+      A('spiritual', 'Infirmary Victim', '5-6', 'Attack ({13}, die) and Exhaust (defensive die)'),
     ],
     evidence: { attack: 'S', observations: ['UI', 'FW', 'SL'], lair: 'TS' },
   },

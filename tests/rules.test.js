@@ -33,6 +33,7 @@ function playTurn(state, act) {
   for (let guard = 0; guard < 50 && state.phase !== 'idle'; guard++) {
     if (state.phase === 'choosing') assert.ok(act({ type: 'choose', cell: state.options[0].i }).ok);
     else if (state.phase === 'asking') assert.ok(act({ type: 'investigate', yes: true }).ok);
+    else if (state.phase === 'slotting') assert.ok(act({ type: 'end' }).ok);
     else assert.fail(`unexpected phase ${state.phase}`);
   }
   assert.equal(state.phase, 'idle');
@@ -166,6 +167,7 @@ test('multiplayer shape: a host and two phones stay in sync; seats are enforced'
   phoneA.dispatch({ type: 'move' });
   for (let guard = 0; guard < 50 && st().phase !== 'idle'; guard++) {
     if (st().phase === 'choosing') phoneA.dispatch({ type: 'choose', cell: st().options[0].i });
+    else if (st().phase === 'slotting') phoneA.dispatch({ type: 'end' });
     else phoneA.dispatch({ type: 'investigate', yes: true });
   }
   assert.equal(host.state.cur, 1);

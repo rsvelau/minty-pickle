@@ -546,11 +546,15 @@ export function createPlay({
   function toggleSlot(n, to = 'move') { if (!rolling()) act({ type: 'slot', die: n, to }); }
   function rollWhite() { if (!rolling()) act({ type: 'rollWhite' }); }
   function confirmMove() { if (!rolling()) act({ type: 'move' }); }
+  function endTurn() { if (!rolling()) act({ type: 'end' }); }
   function answerInvestigate(yes) { act({ type: 'investigate', yes: !!yes }); }
   function choose(i) { return g()?.phase === 'choosing' && act({ type: 'choose', cell: i }); }
   function revealCard(n) { return act({ type: 'reveal', card: n }); }
   function nameMonster(id) { return act({ type: 'name', monster: id }); }
-  const slotTotal = () => { const s = g(); return s ? s.slots.reduce((a, n) => a + (s.pool[n]?.v ?? 0), 0) : 0; };
+  // Pips on dice slotted into Movement but not yet moved.
+  const slotTotal = () => { const s = g(); return s ? s.slots.reduce((a, n) => a + (s.pool[n] && !s.pool[n].spent ? s.pool[n].v : 0), 0) : 0; };
+  // Rolled dice not used for movement or defense (ending the turn wastes them).
+  const unusedCount = () => { const s = g(); return s ? s.pool.filter((d, n) => !d.spent && !s.defSlots.includes(n)).length : 0; };
 
   // Arrow keys: pick the option closest to the camera-relative direction.
   function chooseByKey(key) {
@@ -793,6 +797,7 @@ export function createPlay({
     get defSlots() { return g()?.defSlots ?? []; },
     get maxDefense() { return g()?.maxDefense ?? 0; },
     get deathsDoor() { return !!g()?.deathsDoor; },
+    get disabledDice() { return g()?.disabledDice ?? 0; },
     get lit() { return !!g()?.lit; },
     get bag() { return g()?.bag ?? []; },
     get ask() { return g()?.ask ?? null; },
@@ -820,7 +825,7 @@ export function createPlay({
     // Game settings changed outside a game: the next game starts fresh with them.
     invalidate: () => { stale = true; },
     state, session, board, roll, reset, setStartMode, answerInvestigate, choose, chooseByKey, tick, setActive,
-    boardChanged, setPlayers, toggleSlot, confirmMove, slotTotal, rollWhite, busy, revealCard, nameMonster,
+    boardChanged, setPlayers, toggleSlot, confirmMove, endTurn, unusedCount, slotTotal, rollWhite, busy, revealCard, nameMonster,
     clockMinutes: () => (g() ? rulesClockMinutes(g()) : rulesStartMinutesFor(cfg)),
     startMinutes: () => (g() ? rulesStartMinutes(g()) : rulesStartMinutesFor(cfg)),
     midnight: () => (g() ? isMidnight(g()) : false),

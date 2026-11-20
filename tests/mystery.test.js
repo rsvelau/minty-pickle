@@ -23,6 +23,7 @@ const setup = (extra = {}) => {
 };
 // Move one cell west onto the next Investigation space and say yes.
 function investigateNext(state, act, obol, board = null) {
+  if (state.phase === 'slotting') act({ type: 'end' });
   state.bag = [obol];
   act({ type: 'roll' });
   state.pool = [{ kind: 'black', v: 1 }];

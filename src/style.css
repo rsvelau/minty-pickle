@@ -864,3 +864,10 @@ body.playing .fps { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
 .inj-tier.has .sw { opacity: 1; }
 .paper-card.hurt { box-shadow: 0 0 0 3px var(--atk, #7a1a10) inset, 0 20px 60px rgba(0, 0, 0, 0.6); }
 #invTabs { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 1fr; }
+
+.tray-actions .tray-end { min-height: 44px; padding: 0 12px; }
+.tray-actions .hud-roll[hidden] { display: none; }
+.tdie.spent { opacity: 0.4; cursor: default; }
+.tdie.disabled { display: grid; place-items: center; color: #e07060; border-style: dashed; opacity: 0.6; font-size: 16px; }
+#endConfirm { z-index: 10; }
+#endConfirm { background: #0d1117; box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.55), 0 10px 30px rgba(0, 0, 0, 0.6); }

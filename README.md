@@ -555,14 +555,18 @@ pools: all, flesh and blood, spirits and shadows, old-world folklore). Its 13 ca
 
 From the Player Mat and Monster Ref Sheet (`Monsters_and_Injuries` spreadsheet):
 
-- **Defense slots.** The dice tray has a **Slot to Move / Slot to Defense** switch. Defense has 1 slot, +1 when
-  the turn starts in light. Defense dice stay committed until that player's next turn, so they protect against
-  the monster's action at the end of the round and against Attack Obols mid-turn.
+- **Slotting through the turn.** The dice tray has a **Slot to Move / Slot to Defense** switch. Defense has 1
+  slot, +1 when the turn starts in light. Slot dice whenever the tray is open: move, come back, slot more dice
+  or change your defense, move again, then **End turn**. Dice used to move are spent; defense counts the moment
+  it's slotted and stays up until your next turn (so it covers Attack Obols mid-turn and the monster's action).
+  Ending a turn with rolled dice unused asks first. A turn ends by itself once every rolled die is used.
+- **Ranges** count diagonals: **Close** = adjacent cells, **Mid** = up to 2 cells, **Long** = 3 or more. A
+  monster's melee Attack reaches Close range.
 - **Damage.** An attack's damage is compared with the total of the slotted defense dice: at least the damage is
   **blocked**; less gives **one tier** on that attack's track (Physical, Mental, Spiritual).
 - **Injuries** (tiers add up; tracks are separate; scoreboard pips and an Injuries tab in the inventory):
-  Physical: Sprained (one die in reserve), Hobbled (−1 movement slot). Mental: Paranoid (−1 defense slot),
-  Terrified (teammates within Mid range, 3 cells, lose a defense slot). Spiritual: Doomed (defense 6s count as
+  Physical: Sprained (one black die disabled, shown crossed out in the tray), Hobbled (−1 movement slot). Mental: Paranoid (−1 defense slot),
+  Terrified (teammates within Mid range lose a defense slot). Spiritual: Doomed (defense 6s count as
   1), Hexed (shown; applies once items exist). Tier 3 on any track is **Death's Door**: one die per turn, and any
   unblocked damage **kills**. Dead players leave the board and are skipped; if everyone dies the night wins.
 - **The monster's turn.** At the start of each round the monster rolls its action die; the matching ability on

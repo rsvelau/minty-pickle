@@ -15,7 +15,8 @@
 // logged but not played yet; those come with each monster's own rules.
 import { MONSTER_BY_ID } from './cards/monsters.js';
 import { cellLabel } from '../state.js';
-import { applyDamage, alive, walkDistance } from './combat.js';
+import { applyDamage, alive } from './combat.js';
+import { RANGE, cellRange } from './cards/injuries.js';
 
 const KIND_TO_TYPE = { physical: 'P', mental: 'M', spiritual: 'S' };
 
@@ -131,7 +132,17 @@ function nearestLight(state, board, from) {
   });
   return best;
 }
-const gridDist = (board, a, b) => { const p = board.grid.coords(a), q = board.grid.coords(b); return Math.abs(p.x - q.x) + Math.abs(p.y - q.y); };
+const gridDist = (board, a, b) => cellRange(board.grid, a, b);
+// Players a melee Attack can reach: Close range (adjacent, diagonals too).
+const inClose = (state, board, pos) => alive(state).filter((pl) => cellRange(board.grid, pos, pl.pos) <= RANGE.close);
+
+// The player a melee Attack goes for: in Close range, nearest first.
+function closeTarget(state, board, pos) {
+  const near = inClose(state, board, pos);
+  if (!near.length) return null;
+  const t = nearestTarget(state, board, pos);
+  return near.find((pl) => pl === t?.pl) ?? near[0];
+}
 
 // Who the intent would hit if the round ended now.
 function predictVictims(state, board, monster, intent) {
@@ -139,8 +150,8 @@ function predictVictims(state, board, monster, intent) {
   const seats = new Set();
   for (const o of intent.ops) {
     if (o.op === 'attack') {
-      const t = nearestTarget(state, board, pos);
-      if (t && t.d <= 1) seats.add(t.pl.seat);
+      const t = closeTarget(state, board, pos);
+      if (t) seats.add(t.seat);
     } else if (o.op === 'area') {
       for (const pl of alive(state)) if (gridDist(board, pos, pl.pos) <= o.radius) seats.add(pl.seat);
     } else if (o.op === 'global') {
@@ -200,10 +211,10 @@ export function executeIntent(state, board, monster, ctx, events) {
   // Then attacks, rolling damage.
   for (const o of intent.ops) {
     if (o.op === 'attack') {
-      const t = nearestTarget(state, board, monster.pos);
-      if (!t || t.d > 1) { ctx.log(state, `${source} finds no one in reach.`); continue; }
-      events.push({ type: 'monsterAttack', id: monster.id, seat: t.pl.seat, cell: t.pl.pos });
-      applyDamage(state, board, t.pl, type, rollDamage(ctx, o.dmg), { log: ctx.log, source }, events);
+      const t = closeTarget(state, board, monster.pos);
+      if (!t) { ctx.log(state, `${source} finds no one in reach.`); continue; }
+      events.push({ type: 'monsterAttack', id: monster.id, seat: t.seat, cell: t.pos });
+      applyDamage(state, board, t, type, rollDamage(ctx, o.dmg), { log: ctx.log, source }, events);
     } else if (o.op === 'area' || o.op === 'global') {
       const hit = alive(state).filter((pl) => o.op === 'global' || gridDist(board, monster.pos, pl.pos) <= o.radius);
       if (!hit.length) { ctx.log(state, `${source} strikes at nothing.`); continue; }

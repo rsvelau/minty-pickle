@@ -245,6 +245,14 @@
       </div>
     </div>
 
+    <!-- Ending a turn with dice still unused. -->
+    <div id="endConfirm" class="ask-card" hidden role="dialog" aria-labelledby="endTitle">
+      <div class="ask-top"><div><b id="endTitle">End your turn?</b><p class="ask-sub" id="endSub"></p></div></div>
+      <div class="ask-actions">
+        <button id="endNo" type="button" class="on">Keep playing</button>
+        <button id="endYes" type="button">End turn</button>
+      </div>
+    </div>
     <!-- The monster's declared action for this round, and who's in danger. -->
     <div id="intentBanner" class="intent-banner" hidden role="status"></div>
     <!-- Play demo: small game clock (time and turn), top centre. -->
@@ -286,6 +294,7 @@
       <div class="tray-row"><span class="tray-label">Defense</span><div class="tray-dice" id="trayDefense"></div><b class="tray-total def" id="trayDefTotal">0</b></div>
       <div class="tray-row tray-actions">
         <span class="tray-hint" id="trayHint">Tap dice to slot them</span>
+        <button id="trayEnd" type="button" class="tray-end">End turn</button>
         <button id="trayMove" class="hud-roll">Move</button>
       </div>
     </div>

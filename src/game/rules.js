@@ -171,7 +171,7 @@ export function newGame(board, setup = {}) {
 
 // --- actions ------------------------------------------------------------------------
 // Every action: { type, seat? }. Returns { ok, error?, events }.
-export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'choose', 'investigate', 'reveal', 'name'];
+export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name'];
 
 export function applyAction(state, board, action) {
   const events = [];
@@ -191,6 +191,7 @@ export function applyAction(state, board, action) {
       state.maxSlots = lim.move;
       state.maxDefense = lim.defense;
       state.deathsDoor = lim.deathsDoor;
+      state.disabledDice = Math.max(0, state.blackCount - lim.dice);
       state.roll = 0;
       state.phase = 'slotting';
       state.turn++;
@@ -204,16 +205,20 @@ export function applyAction(state, board, action) {
       // Put a rolled die (index into pool) into a Movement or Defense slot,
       // or take it out again (tap it where it is).
       const n = action.die | 0;
-      if (state.phase !== 'slotting' || !state.pool[n]) return fail('no such die');
       const to = action.to === 'defense' ? 'defSlots' : 'slots';
+      const turnPhases = ['slotting', 'choosing', 'asking', 'revealing'];
+      if (!state.pool[n] || !turnPhases.includes(state.phase)) return fail('no such die');
+      if (to === 'slots' && state.phase !== 'slotting') return fail('finish moving first');
+      if (state.pool[n].spent) return fail('that die has been used to move');
       const other = to === 'slots' ? 'defSlots' : 'slots';
       const at = state[to].indexOf(n);
-      if (at >= 0) { state[to].splice(at, 1); break; }
+      if (at >= 0) { state[to].splice(at, 1); syncDefense(state); break; }
       const max = to === 'slots' ? state.maxSlots : state.maxDefense;
       if (state[to].length >= max) return fail('slots full');
       const o = state[other].indexOf(n);
       if (o >= 0) state[other].splice(o, 1);
       state[to].push(n);
+      syncDefense(state);
       break;
     }
     case 'rollWhite': {
@@ -229,29 +234,24 @@ export function applyAction(state, board, action) {
       break;
     }
     case 'move': {
-      // Lock in the slotted dice and move that many cells (0 = stay put).
+      // Move by the dice newly slotted into Movement (they're spent). The
+      // turn carries on afterwards: slot more dice, adjust defense, move
+      // again, or end it. With nothing new slotted, this ends the turn.
       if (state.phase !== 'slotting') return fail('not slotting');
-      const used = state.slots.map((n) => state.pool[n]);
-      const guard = state.defSlots.map((n) => state.pool[n]);
-      curPlayer(state).defense = guard.map((d) => ({ ...d }));
-      const rolledWhite = state.pool.filter((d) => d.kind === 'white').length;
-      const discarded = rolledWhite - [...used, ...guard].filter((d) => d.kind === 'white').length;
-      if (guard.length) log(state, `${who(state)} braces: defense ${guard.reduce((a, d) => a + d.v, 0)} (${guard.map((d) => `${d.kind} ${d.v}`).join(' + ')}).`);
-      state.roll = used.reduce((a, d) => a + d.v, 0);
+      const fresh = state.slots.filter((n) => !state.pool[n].spent).map((n) => state.pool[n]);
+      if (!fresh.length) { endTurn(state, board, events); break; }
+      for (const d of fresh) d.spent = true;
+      state.roll = fresh.reduce((a, d) => a + d.v, 0);
       state.steps = state.roll;
       curPlayer(state).prev = -1;
-      state.pool = [];
-      state.slots = [];
-      state.defSlots = [];
-      if (discarded) log(state, `${who(state)} discards ${discarded} unused white ${discarded === 1 ? 'die' : 'dice'}.`);
-      if (!state.roll) {
-        log(state, `${who(state)} stays put.`);
-        nextPlayer(state, board, events);
-        break;
-      }
-      log(state, `${who(state)} moves ${state.roll} (${used.map((d) => `${d.kind} ${d.v}`).join(' + ')}).`);
+      log(state, `${who(state)} moves ${state.roll} (${fresh.map((d) => `${d.kind} ${d.v}`).join(' + ')}).`);
       state.phase = 'moving';
       advance(state, board, events);
+      break;
+    }
+    case 'end': {
+      if (state.phase !== 'slotting') return fail('finish moving first');
+      endTurn(state, board, events);
       break;
     }
     case 'choose': {
@@ -435,8 +435,10 @@ function advance(state, board, events) {
     if (state.steps <= 0) {
       state.stopAt = -1;
       state.stopReason = '';
-      log(state, `${who(state)} ends on ${label(board, curPlayer(state).pos)}.`);
-      nextPlayer(state, board, events);
+      log(state, `${who(state)} stops on ${label(board, curPlayer(state).pos)}.`);
+      // Dice left to use (or white dice to roll)? The turn carries on.
+      if (unusedDice(state).length || curPlayer(state).white > 0) { state.phase = 'slotting'; state.options = []; return; }
+      endTurn(state, board, events);
       return;
     }
     const opts = nextOptions(state, board);
@@ -494,6 +496,30 @@ function nextPlayer(state, board, events) {
   state.phase = 'idle';
   if (state.players.length > 1) log(state, `${who(state)}'s turn.`);
   events.push({ type: 'turn', cur: state.cur });
+}
+
+// Defense is live: whatever sits in the Defense slots protects right now.
+function syncDefense(state) {
+  curPlayer(state).defense = state.defSlots.map((n) => ({ ...state.pool[n] }));
+}
+// Rolled dice not used for movement or defense this turn.
+export function unusedDice(state) {
+  return state.pool.map((d, n) => ({ ...d, n })).filter((d) => !d.spent && !state.defSlots.includes(d.n));
+}
+// End the current player's turn (their defense stays up until their next one).
+function endTurn(state, board, events) {
+  const pl = curPlayer(state);
+  syncDefense(state);
+  const left = unusedDice(state);
+  const whites = left.filter((d) => d.kind === 'white').length;
+  if (whites) log(state, `${who(state)} discards ${whites} unused white ${whites === 1 ? 'die' : 'dice'}.`);
+  if (pl.defense.length) log(state, `${who(state)} braces: defense ${pl.defense.reduce((a, d) => a + d.v, 0)}.`);
+  if (!state.pool.some((d) => d.spent)) log(state, `${who(state)} stays put.`);
+  state.pool = [];
+  state.slots = [];
+  state.defSlots = [];
+  state.disabledDice = 0;
+  nextPlayer(state, board, events);
 }
 
 // Everyone has moved: the clock moves on; monsters act.

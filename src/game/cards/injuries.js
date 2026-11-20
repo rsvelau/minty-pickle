@@ -31,5 +31,12 @@ export const INJURY_TRACKS = {
   },
 };
 export const DEATHS_DOOR = 3;
-// Range bands in cells (walking distance). Close is the same or a next cell.
-export const RANGE = { close: 1, mid: 3, long: 6 };
+// Range bands, counted in cells including diagonals (the larger of the
+// column and row differences): Close = adjacent (1), Mid = up to 2 cells,
+// Long = 3 or more.
+export const RANGE = { close: 1, mid: 2 };
+export const cellRange = (grid, a, b) => {
+  const p = grid.coords(a), q = grid.coords(b);
+  return Math.max(Math.abs(p.x - q.x), Math.abs(p.y - q.y));
+};
+export const rangeBand = (d) => (d <= RANGE.close ? 'close' : d <= RANGE.mid ? 'mid' : 'long');

@@ -9,7 +9,7 @@
 //   less → one tier of injury on that damage type's track.
 // - Tiers are additive; tracks are independent. Tier 3 on any track is
 //   Death's Door: one die per turn, and unblocked damage kills.
-import { INJURY_TRACKS, DEATHS_DOOR, RANGE } from './cards/injuries.js';
+import { INJURY_TRACKS, DEATHS_DOOR, RANGE, cellRange } from './cards/injuries.js';
 import { cellLabel } from '../state.js';
 
 export const injuries = (pl) => (pl.injuries ??= { P: 0, M: 0, S: 0 });
@@ -35,7 +35,7 @@ export function turnLimits(state, board, pl) {
   if (inj.M >= 1) defense--;                                // Paranoid
   // Terrified teammates nearby cost one defense slot.
   const terrifiedNear = state.players.some((o) => o !== pl && !o.dead && injuries(o).M >= 2
-    && walkDistance(board, o.pos, pl.pos, RANGE.mid) <= RANGE.mid);
+    && cellRange(board.grid, o.pos, pl.pos) <= RANGE.mid);
   if (terrifiedNear) defense--;
   let dice = state.blackCount;
   if (inj.P >= 1) dice--;                                   // Sprained: one die in reserve
