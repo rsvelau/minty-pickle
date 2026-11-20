@@ -460,6 +460,7 @@ function createFurniture(group) {
       color: '#ffc370', transparent: true, opacity: 0.15, depthWrite: false, blending: THREE.AdditiveBlending,
     }),
   };
+  terrainify(vcMat, { instance: true }); // posts stand upright on slopes
   flickerize(mats.globeOn);
   flickerize(mats.lampHalo);
   const meshes = {};

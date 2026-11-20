@@ -424,6 +424,43 @@ function churchFacing(grid, i) {
   return [-fx, -fz];
 }
 
+// Which sides of an outdoor cell must stay clear: a neighbour that is
+// indoors, a clocktower, or an edge piece (wall, door, window) between them.
+function guardedSides(grid, x, y) {
+  const g = { e: false, w: false, n: false, s: false };
+  const wallish = (o, ex, ey) => !!grid.edgeAt(`${o}${ex},${ey}`);
+  const solid = (nx, ny) => {
+    if (!grid.inBounds(nx, ny)) return false;
+    const n = grid.cells[grid.index(nx, ny)];
+    return n.area === 'indoor' || n.sub === 'clocktower';
+  };
+  g.e = solid(x + 1, y) || wallish('v', x + 1, y);
+  g.w = solid(x - 1, y) || wallish('v', x, y);
+  g.s = solid(x, y + 1) || wallish('h', x, y + 1);
+  g.n = solid(x, y - 1) || wallish('h', x, y);
+  return g;
+}
+const EDGE_PAD = 0.04; // cells kept clear of a guarded edge (walls are ~0.05 thick)
+function keepInside(grid, x, y, list, reach) {
+  const g = guardedSides(grid, x, y);
+  if (!g.e && !g.w && !g.n && !g.s) return list;
+  return list.map((p) => {
+    let [kind, dx, dz, rot = 0, scale = 1, dy = 0] = p;
+    let r = (reach[kind] ?? 0.2) * scale;
+    // Largest reach that still fits: between two guarded edges it must fit
+    // in half the cell; against one it may overhang the open side, but its
+    // centre stays inside its own cell.
+    const limit = (a, b) => (a && b ? 0.5 - EDGE_PAD : a || b ? 1 - EDGE_PAD : Infinity);
+    const most = Math.min(limit(g.e, g.w), limit(g.n, g.s));
+    if (r > most) { scale *= most / r; r = most; }
+    if (g.e) dx = Math.max(-0.5, Math.min(dx, 0.5 - EDGE_PAD - r));
+    if (g.w) dx = Math.min(0.5, Math.max(dx, -0.5 + EDGE_PAD + r));
+    if (g.s) dz = Math.max(-0.5, Math.min(dz, 0.5 - EDGE_PAD - r));
+    if (g.n) dz = Math.min(0.5, Math.max(dz, -0.5 + EDGE_PAD + r));
+    return [kind, dx, dz, rot, scale, dy];
+  });
+}
+
 // The van faces (fx, fz); the painted start box sits on the cell in front.
 function startSpace(fx, fz) {
   const rot = Math.atan2(-fz, fx) + 0.08; // parked, very slightly askew
@@ -471,6 +508,18 @@ export function createProps(group, { firGeo, firMat }) {
   // point), so they stay level with the road and bridge deck instead of
   // dipping into a lowered river ahead.
   for (const k of ['vanLights', 'vanBeam', 'vanCone']) flickerize(glow[k]); // headlights flicker at midnight
+  // Upright props rise as one piece with the ground at their base.
+  terrainify(material, { instance: true });
+  terrainify(firMat, { instance: true });
+  // How far each prop reaches from its centre (cells, at scale 1), for
+  // keeping it clear of neighbouring walls. Firs are scaled specially.
+  const reach = {};
+  for (const [kind, geo] of Object.entries(kinds)) {
+    geo.computeBoundingBox();
+    const b = geo.boundingBox;
+    reach[kind] = Math.hypot(Math.max(-b.min.x, b.max.x), Math.max(-b.min.z, b.max.z));
+  }
+  reach.fir = m(7) * 0.3;
   terrainify(glow.vanCone, { centre: true });
   terrainify(glow.vanBeam, { centre: true });
   // The painted start box and glow follow the start cell only (their edges
@@ -529,6 +578,10 @@ export function createProps(group, { firGeo, firMat }) {
           list = variant({ rnd, along: axis === 'x' ? 0 : Math.PI / 2, across: axis === 'x' ? Math.PI / 2 : 0 });
         }
         if (!list.length) return;
+        // Outdoors, next to a building, a wall or the clocktower, props stay
+        // inside their own cell on that side so trees and thickets never
+        // poke through the neighbour's walls (big props shrink to fit).
+        if (c.area === 'outdoor' && c.sub !== 'start' && !c.bridge) list = keepInside(grid, x, y, list, reach);
         const centre = ctx.cellToWorld(x, y);
         const base = ctx.baseY(i);
         for (const [kind, dx, dz, rot = 0, scale = 1, dy = 0] of list) {

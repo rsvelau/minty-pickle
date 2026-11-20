@@ -340,7 +340,12 @@ on the **edges between cells**, not in cells:
   with a transom, three panes, one big pane with transom lights, four narrow panes), in old painted-frame
   colours (dark green, oxblood, black, cream, navy). Glass glows warm when light reaches either side.
 - **Light:** walls, locked doors and one-way doors block light; unlocked doors and windows let it through.
-- **Low walls (cutaway view)** in View keeps walls short so you can see into rooms; untick for full 2.6 m walls.
+- Walls are **full height (2.6 m)** by default. Tick **Low walls (cutaway view)** in the View menu to cut them
+  down so you can see into rooms.
+- Props never poke through walls: outdoors, next to a building, a wall or the clocktower, trees and other props
+  stay inside their own cell on that side (big ones shrink to fit), and every upright prop (trees, headstones,
+  posts, furniture) rises with the ground as one rigid piece, so on hills it can't stretch or lean into a
+  levelled building next door.
 
 ### Water and bridges
 

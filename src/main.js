@@ -153,7 +153,7 @@ const ui = {
   brush: 'indoor:hardwood',
   tool: 'cells',       // 'cells' | 'walls'
   edgeBrush: 'wall',   // 'wall' | 'door' | 'erase'
-  lowWalls: true,
+  lowWalls: false,  // full-height walls by default; Low walls in the view menu cuts them away
   lightRadius: 1,      // radius for the Light source brush (cells)
   markerBrush: 'investigation', // marker the Markers tool places ('erase' removes)
   showMarkers: true,
