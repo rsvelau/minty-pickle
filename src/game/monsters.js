@@ -28,7 +28,7 @@
 // board's movement rules, the nearest player, light levels.
 import { cellLabel } from '../state.js';
 import { MONSTER_BY_ID } from './cards/monsters.js';
-import { declareIntent, executeIntent } from './monsterTurn.js';
+import { declareIntent, executeIntent, setupVictims } from './monsterTurn.js';
 import { alive } from './combat.js';
 
 // --- AI helpers ---------------------------------------------------------------
@@ -136,6 +136,7 @@ export function spawnMonsters(state, board, events, random, log) {
   log(state, `Something stirs at ${label(board, cell)}.`);
   events.push({ type: 'monsterSpawn', id: monster.id, kind: monster.kind, cell });
   // Card monsters declare their first action straight away.
+  if (MONSTER_BY_ID[kind]?.actsBy === 'swarm') setupVictims(state, board, monster, context(state, board, random, log), events);
   if (MONSTER_BY_ID[kind]) declareIntent(state, board, monster, context(state, board, random, log), events);
 }
 

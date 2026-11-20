@@ -143,6 +143,7 @@ export function newGame(board, setup = {}) {
     stopReason: '',
     monsters: [],
     mystery: null,          // the secret monster and its evidence (mystery.js)
+    npcs: [],               // townspeople a monster preys on (the Adze's victims)
     log: [],
   };
   if (state.startMode === 'midnight') state.round = config.turnsToMidnight + 1;
@@ -512,6 +513,7 @@ function endTurn(state, board, events) {
   const pl = curPlayer(state);
   syncDefense(state);
   const left = unusedDice(state);
+  pl.lastMove = state.pool.filter((d) => d.spent).map((d) => ({ ...d })); // for Exhaust (Movement die)
   const whites = left.filter((d) => d.kind === 'white').length;
   if (whites) log(state, `${who(state)} discards ${whites} unused white ${whites === 1 ? 'die' : 'dice'}.`);
   if (pl.defense.length) log(state, `${who(state)} braces: defense ${pl.defense.reduce((a, d) => a + d.v, 0)}.`);

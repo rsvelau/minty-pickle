@@ -56,7 +56,7 @@ export function createPlay({
   grid, scene, camera, controls, cellToWorld, cellTop, terrainify, cellLabel, onChange,
   onUsed = () => {}, onCollect = () => {}, onObol = () => {}, onAttack = () => {}, onMonster = () => {},
   onEvidence = () => {}, onAttacked = () => {}, onNamed = () => {}, onMonsterRevealed = () => {},
-  onDamage = () => {}, onIntent = () => {}, onGameOver = () => {},
+  onDamage = () => {}, onIntent = () => {}, onGameOver = () => {}, onNpc = () => {}, onExhaust = () => {},
   config = defaultConfig(),
 }) {
   const cfg = config; // live: Game settings edits this object; used at the next new game
@@ -420,6 +420,46 @@ export function createPlay({
     }
   }
 
+  // --- townspeople (the Adze's victims) ------------------------------------------------------
+  view.npcs = new Map();
+  function syncNpcs(reset = false) {
+    if (reset) { for (const [, n] of view.npcs) group.remove(n.fig); view.npcs.clear(); }
+    for (const v of g()?.npcs ?? []) {
+      let n = view.npcs.get(v.id);
+      if (!n) {
+        n = { fig: models.makeCivilian(v.name) };
+        group.add(n.fig);
+        view.npcs.set(v.id, n);
+      }
+      const p = centreOf(v.cell);
+      n.fig.position.set(p.x - 0.18, p.y, p.z + 0.18);
+      n.fig.userData.setDead(!v.alive);
+    }
+  }
+  // Red rings under victims targeted this round.
+  const victimRings = [0, 1, 2].map(() => {
+    const r = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.22, 28).rotateX(-Math.PI / 2).translate(0, 0.014, 0), dangerMat);
+    r.raycast = () => {};
+    r.renderOrder = 6;
+    r.visible = false;
+    group.add(r);
+    return r;
+  });
+  function tickNpcs(t, s) {
+    const targeted = new Set((s.monsters ?? []).flatMap((mo) => (mo.intents ?? []).flatMap((i) => i.ops.filter((o) => o.target !== undefined).map((o) => o.target))));
+    const living = (s.npcs ?? []).filter((v) => v.alive);
+    let k = 0;
+    for (const v of s.npcs ?? []) {
+      const n = view.npcs.get(v.id);
+      if (!n) continue;
+      n.fig.userData.tick(t);
+      // A dead victim's target falls to the next living one.
+      const aimed = v.alive && (targeted.has(v.target) || (living.length && [...targeted].some((tg) => !living.some((x) => x.target === tg)) && v === living[0]));
+      if (aimed && k < victimRings.length) { victimRings[k].position.copy(n.fig.position); victimRings[k++].visible = true; }
+    }
+    for (; k < victimRings.length; k++) victimRings[k].visible = false;
+  }
+
   // --- strikes that aren't a lunge: swarms and shadow grabs ---------------------------------
   const SWARM_STEP = 0.16; // seconds per cell for an Adze swarm
   function runStrike(strike) {
@@ -511,6 +551,7 @@ export function createPlay({
           for (const [, mv] of view.monsters) group.remove(mv.fig);
           view.monsters.clear();
           view.shownFinds = state.mystery?.found.length ?? 0;
+          syncNpcs(true);
           view.actors = [];
           placeAll(true);
           onUsed();
@@ -590,6 +631,23 @@ export function createPlay({
           view.lastStrike = strike;
           if (mv) mv.queue.push(strike);
           view.watch = { id: e.id, until: performance.now() + 1500 };
+          break;
+        }
+        case 'npcs':
+          syncNpcs();
+          break;
+        case 'npcAttacked': {
+          const fx = () => {
+            const n = view.npcs.get(e.npc);
+            if (n && e.outcome === 'killed') n.fig.userData.setDead(true);
+            onNpc({ ...e, npc: g()?.npcs?.find((v) => v.id === e.npc), defenderPlayer: e.defender === null ? null : g()?.players[e.defender] });
+          };
+          if (view.lastStrike && !view.lastStrike.done) view.lastStrike.fx.push(fx); else fx();
+          break;
+        }
+        case 'exhausted': {
+          const fx = () => onExhaust({ ...e, player: g()?.players[e.seat] });
+          if (view.lastStrike && !view.lastStrike.done) view.lastStrike.fx.push(fx); else fx();
           break;
         }
         case 'monsterSwarm': {
@@ -747,6 +805,7 @@ export function createPlay({
     const mStep = view.fast ? FAST_STEP : MONSTER_STEP;
     tickGrabs(dt);
     tickDarkness(t, s);
+    tickNpcs(t, s);
     for (const [, mv] of view.monsters) {
       if (!mv.anim && mv.queue.length) mv.anim = Object.assign(mv.queue.shift(), { t: 0 });
       const an = mv.anim;
@@ -917,6 +976,7 @@ export function createPlay({
     get blackCount() { return g()?.blackCount ?? 0; },
     get monsters() { return g()?.monsters ?? []; },
     get mystery() { return g()?.mystery ?? null; },
+    get npcs() { return g()?.npcs ?? []; },
     get cfg() { return g()?.config ?? cfg; },
     get count() { return g()?.players.length ?? cfg.players; },
     get startMode() { return view.startMode; },

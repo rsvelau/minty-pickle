@@ -572,6 +572,9 @@ From the Player Mat and Monster Ref Sheet (`Monsters_and_Injuries` spreadsheet):
   Terrified (teammates within Mid range lose a defense slot). Spiritual: Doomed (defense 6s count as
   1), Hexed (shown; applies once items exist). Tier 3 on any track is **Death's Door**: one die per turn, and any
   unblocked damage **kills**. Dead players leave the board and are skipped; if everyone dies the night wins.
+- **Exhaust** (e.g. "Exhaust (Defensive die)"): a slotted die of that type — the one the attack was aimed at, or
+  the defender's — disappears for the rest of the game. A black die exhausted this way means that player rolls
+  one fewer from then on.
 - **The monster's turn.** At the start of each round the monster rolls its **action dice** (the number in the
   top right of its card: Hellhounds 4, Werewolf 3, Shadow People 0...); each die picks an ability, and they
   play **in order** at the end of the round. The banner lists them compactly (tap for the card text and to look
@@ -591,7 +594,13 @@ Redcap with its red cap, iron boots and pikestaff; the Poltergeist as furniture 
 haze; the glowing, veiled White Lady; and a hunched, bald Strigoi in a burial shroud.
 
 - **Adze**: a pulsing cocoon fixed in its Lair, mid-transformation. Its attacks are carried out by **fly swarms**
-  that fly out to the nearest player over any terrain (walls, windows and locked doors stop them).
+  that cross any terrain (walls, windows and locked doors stop them). At midnight its three targets ({1}, {5},
+  {13}: Hotel, Bar and Infirmary Victim) become **townspeople** placed at Objective markers, each in a different
+  building where the map has them. Each Victim action sends a swarm at its townsperson: a player in Close range
+  can **defend** them with their slotted defense (at least the damage saves them); otherwise the victim **dies**,
+  and every player suffers a Global Attack of one die per dead victim. A dead victim's attacks fall on the next
+  living one; with none left, the swarms attack **every player**. The banner lists each victim as guarded or
+  unguarded, and targeted victims get red rings.
 - **Shadow People**: no body on the board. The darkness around each player standing in an unlit cell ripples
   unnaturally; when a player steps into a lit space, **Umbral Stab** strikes (one die, Physical) and a ring of
   human silhouettes rises around them, reaching for their shadow, then sinks away.

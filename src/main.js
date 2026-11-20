@@ -2441,6 +2441,8 @@ const play = createPlay({
   onDamage: (e) => showCard({ kind: 'hurt', code: e.attack, e }),
   onIntent: () => renderIntent(),
   onGameOver: () => showCard({ kind: 'over' }),
+  onNpc: (e) => showCard({ kind: 'npc', e }),
+  onExhaust: (e) => showCard({ kind: 'exhaust', e }),
   onMonsterRevealed: (e) => showCard({ kind: 'monster', monster: e.monster, correct: e.correct }),
   // A monster lunges: a brief, soft red flash at the edges of the screen.
   onAttack: () => {
@@ -2606,7 +2608,14 @@ function renderRevealSheet() {
 
 // A card turning over, big and centred (tap to dismiss).
 let cardTimer = 0;
+// Cards queue up: a new one waits until the one showing is dismissed (or
+// times out), so nothing is missed when several things happen at once.
+const cardQueue = [];
 function showCard(c) {
+  if (!$('#cardPop').hidden) { cardQueue.push(c); return; }
+  showCardNow(c);
+}
+function showCardNow(c) {
   const card = $('#cardPopCard');
   card.className = 'paper-card paper';
   let html = '';
@@ -2630,6 +2639,21 @@ function showCard(c) {
     html = `<div class="pc-kind">${esc(e.source)}</div><div class="pc-glyph">${ATTACK_GLYPH[e.attack]}</div>` +
       `<div class="pc-title">${e.outcome === 'blocked' ? 'Blocked!' : e.outcome === 'killed' ? `${esc(e.player?.name ?? '')} is dead` : esc(INJURY_TRACKS[e.attack].tiers[e.tier - 1].name)}</div>` +
       `<div class="pc-sub">${esc(hitText(e))}</div>`;
+  } else if (c.kind === 'npc') {
+    const e = c.e;
+    const saved = e.outcome === 'saved';
+    card.classList.add('hurt');
+    card.style.setProperty('--atk', saved ? '#3fae5a' : '#7a1a10');
+    html = `<div class="pc-kind">The swarm falls on a townsperson</div><div class="pc-glyph">${saved ? '🛡' : '☠'}</div>` +
+      `<div class="pc-title">${esc(e.npc?.name ?? 'A victim')} ${saved ? 'is saved' : 'dies'}</div>` +
+      `<div class="pc-sub">${saved ? `${esc(e.defenderPlayer?.name ?? '')}'s defense ${e.defense} holds against ${e.amount}.`
+        : `${e.amount} damage${e.defenderPlayer ? ` against ${esc(e.defenderPlayer.name)}'s defense ${e.defense}` : ', and no one was close enough to defend them'}. Every player suffers its rage.`}</div>`;
+  } else if (c.kind === 'exhaust') {
+    const e = c.e;
+    html = `<div class="pc-kind">Exhausted</div><div class="pc-glyph">🎲</div>` +
+      `<div class="pc-title">${esc(e.player?.name ?? '')} loses ${e.dice.length === 1 ? 'a die' : `${e.dice.length} dice`}</div>` +
+      `<div class="pc-sub">${e.dice.map((d) => `${d.kind} ${d.v}`).join(', ')}: gone for the rest of the game` +
+      `${e.dice.some((d) => d.kind === 'black') ? '. One fewer black die from now on.' : '.'}</div>`;
   } else if (c.kind === 'over') {
     html = '<div class="pc-kind">The night wins</div><div class="pc-glyph">☠</div><div class="pc-title">Everyone is dead</div>' +
       '<div class="pc-sub">Restart to try again.</div>';
@@ -2653,11 +2677,16 @@ function showCard(c) {
   card.innerHTML = html;
   $('#cardPop').hidden = false;
   clearTimeout(cardTimer);
-  if (!stay) cardTimer = setTimeout(hideCard, 4200);
+  if (!stay) cardTimer = setTimeout(hideCard, cardQueue.length ? 2600 : 4200);
   const casebook = c.kind === 'observation' || c.kind === 'lair' || (c.kind === 'attack' && c.first);
-  $('#cardPopHint').textContent = casebook && !stay ? 'Tap to continue · added to the Casebook' : 'Tap to continue';
+  $('#cardPopHint').textContent = (casebook && !stay ? 'Tap to continue · added to the Casebook' : 'Tap to continue') +
+    (cardQueue.length ? ` · ${cardQueue.length} more` : '');
 }
-function hideCard() { $('#cardPop').hidden = true; clearTimeout(cardTimer); }
+function hideCard() {
+  $('#cardPop').hidden = true;
+  clearTimeout(cardTimer);
+  if (cardQueue.length) setTimeout(() => showCardNow(cardQueue.shift()), 120);
+}
 $('#cardPop').addEventListener('click', hideCard);
 
 // What's been found, in the shape matchesEvidence wants.
@@ -2821,7 +2850,14 @@ function renderIntent() {
     el.innerHTML = `<b>${esc(name)}</b> takes no actions; it is always at work.<br>${constant}`;
     return;
   }
-  el.innerHTML = `<b>${esc(name)}</b> rolled ${mo.intents.length === 1 ? '1 die' : `${mo.intents.length} dice`}:${acts}<br>` +
+  // The Adze: who its swarms are after, and whether anyone stands guard.
+  const victims = (s.npcs ?? []).map((v) => {
+    const { x, y } = grid.coords(v.cell);
+    const guarded = s.players.some((p) => !p.dead && (() => { const c = grid.coords(p.pos); return Math.max(Math.abs(c.x - x), Math.abs(c.y - y)) <= 1; })());
+    return `${v.alive ? '' : '☠ '}${esc(v.name)} (${cellLabel(x, y)}${v.alive ? (guarded ? ', guarded' : ', <span class="danger">unguarded</span>') : ''})`;
+  });
+  const victimLine = victims.length ? `<br><span class="muted">Victims:</span> ${victims.join(' · ')}` : '';
+  el.innerHTML = `<b>${esc(name)}</b> rolled ${mo.intents.length === 1 ? '1 die' : `${mo.intents.length} dice`}:${acts}${victimLine}<br>` +
     (danger.length ? `<span class="danger">⚠ In danger: ${danger.join(', ')}</span>` : '<span class="muted">No one in reach, for now</span>') +
     ` <span class="muted">· acts at the end of the round · tap for ${intentOpen ? 'less' : 'details'}</span>`;
 }

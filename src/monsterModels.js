@@ -471,8 +471,57 @@ export function createMonsterModels(terrainify) {
     return g;
   }
 
+  // A townsperson the Adze preys on: sickly, slumped, in a drab coat; a
+  // label names them. setDead() lays them down.
+  function makeCivilian(name) {
+    const p = parts();
+    const coat = '#5a5a52', skin = '#b8b49a', pants = '#3a3c40';
+    for (const s of [-1, 1]) {
+      p.limb([s * 0.09, 0.85, 0], [s * 0.1, 0.05, 0.02], 0.065, 0.055, pants);
+      p.limb([s * 0.22, 1.35, 0.02], [s * 0.2, 0.85, 0.12], 0.05, 0.045, coat);
+    }
+    p.ball(0.22, [0, 1.18, 0.02], coat, [1, 1.35, 0.75], [0.25, 0, 0]);      // slumped body
+    p.ball(0.11, [0, 1.58, 0.12], skin);                                     // head, hanging forward
+    const g = new THREE.Group();
+    const body = new THREE.Group();
+    body.add(p.mesh());
+    // A sickly green glow about them: the Adze's mark.
+    const aura = noRay(new THREE.Sprite(spriteMat('#b8ff60', 0.45)));
+    aura.position.y = m(1.1);
+    aura.scale.setScalar(m(2.4));
+    body.add(aura);
+    body.scale.setScalar(1.15);
+    g.add(body);
+    // Name tag.
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 64;
+    const x = c.getContext('2d');
+    x.fillStyle = 'rgba(20,24,20,0.85)';
+    x.beginPath(); x.roundRect(4, 6, 248, 52, 14); x.fill();
+    x.fillStyle = '#e8f0c0'; x.font = '700 28px system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText(name, 128, 33);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const tag = noRay(new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, fog: false })));
+    tag.position.y = m(2.3);
+    tag.scale.set(m(2.8), m(0.7), 1);
+    tag.renderOrder = 24;
+    g.add(tag);
+    g.userData = {
+      body, tag,
+      setDead(dead) {
+        body.rotation.x = dead ? -Math.PI / 2 : 0;
+        body.position.set(0, dead ? m(0.15) : 0, dead ? m(-0.7) : 0);
+        tag.material.opacity = dead ? 0.45 : 1;
+        aura.visible = !dead;
+      },
+      tick(t) { if (body.rotation.x === 0) body.rotation.z = 0.04 * Math.sin(t * 1.3); },
+    };
+    return g;
+  }
+
   function buildMonster(kind, opts = {}) {
     return B[kind]?.(opts) ?? null;
   }
-  return { buildMonster, makeSwarm, makeShadowGrab, kinds: Object.keys(B) };
+  return { buildMonster, makeSwarm, makeShadowGrab, makeCivilian, kinds: Object.keys(B) };
 }

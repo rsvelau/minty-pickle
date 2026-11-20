@@ -37,7 +37,7 @@ export function turnLimits(state, board, pl) {
   const terrifiedNear = state.players.some((o) => o !== pl && !o.dead && injuries(o).M >= 2
     && cellRange(board.grid, o.pos, pl.pos) <= RANGE.mid);
   if (terrifiedNear) defense--;
-  let dice = state.blackCount;
+  let dice = state.blackCount - (pl.lostBlack ?? 0);           // black dice exhausted for good
   if (inj.P >= 1) dice--;                                   // Sprained: one die in reserve
   const deathsDoor = atDeathsDoor(pl);
   if (deathsDoor) dice = 1;                                 // one die per turn

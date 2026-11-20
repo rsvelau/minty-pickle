@@ -197,3 +197,80 @@ test('Adze attacks name a target spot and a damage die', () => {
   assert.equal(p.ops[0].op, 'attack');
   assert.deepEqual(p.ops[0].dmg, { dice: 1 });
 });
+
+// Three buildings along the street, each with an Objective marker.
+function townWithBuildings() {
+  const g = street();
+  for (const x0 of [2, 7, 12]) {
+    for (let x = x0; x < x0 + 3; x++) for (let y = 9; y < 12; y++) g.apply(g.index(x, y), { area: 'indoor', sub: 'hardwood' }, { silent: true });
+    g.apply(g.index(x0 + 1, 10), { marker: 'objective' }, { silent: true });
+  }
+  return g;
+}
+const adzeGame = (seed = 4) => {
+  const g = townWithBuildings();
+  const board = createBoard(g);
+  const { state } = newGame(board, { seed, startMode: 'midnight', config: { players: 1, monsterPick: 'adze' } });
+  return { g, board, state, act: (a) => applyAction(state, board, { ...a, seat: 0 }) };
+};
+const victimAction = (n, ops) => ({ roll: n, ability: 0, name: 'Hotel Victim', kind: 'spiritual', text: '', ops, unknown: [] });
+
+test('the Adze picks three victims at Objective markers in three different buildings', () => {
+  const { g, state } = adzeGame();
+  assert.equal(state.npcs.length, 3);
+  assert.deepEqual(state.npcs.map((v) => v.target).sort((a, b) => a - b), [1, 5, 13]);
+  const xs = state.npcs.map((v) => g.coords(v.cell).x).sort((a, b) => a - b);
+  assert.deepEqual(xs, [3, 8, 13], 'one per building');
+  for (const v of state.npcs) assert.equal(g.cells[v.cell].marker, 'objective');
+});
+
+test('an undefended victim dies and every player suffers a Global Attack', () => {
+  const { state, act } = adzeGame();
+  state.monsters[0].intents = [victimAction(1, [{ op: 'attack', dmg: { fixed: 4 }, target: 1 }])];
+  act({ type: 'roll' });
+  const r = act({ type: 'end' });
+  const hit = r.events.find((e) => e.type === 'npcAttacked');
+  assert.equal(hit.outcome, 'killed');
+  assert.equal(state.npcs.find((v) => v.target === 1).alive, false);
+  assert.ok(r.events.some((e) => e.type === 'damage' && e.seat === 0), 'global attack on the players');
+});
+
+test('a player in Close range with enough defense saves the victim; Exhaust then takes that die for good', () => {
+  const { g, state, act } = adzeGame();
+  const v = state.npcs.find((x) => x.target === 1);
+  const pl = state.players[0];
+  state.monsters[0].intents = [victimAction(1, [{ op: 'attack', dmg: { fixed: 3 }, target: 1 }, { op: 'exhaust', what: 'defense' }])];
+  act({ type: 'roll' });
+  const { x, y } = g.coords(v.cell);
+  pl.pos = g.index(x + 1, y + 1);              // diagonal: Close range
+  state.pool = [{ kind: 'black', v: 5 }];
+  state.maxDefense = 1;
+  act({ type: 'slot', die: 0, to: 'defense' });
+  const r = act({ type: 'end' });
+  assert.equal(r.events.find((e) => e.type === 'npcAttacked').outcome, 'saved');
+  assert.ok(v.alive);
+  assert.ok(r.events.some((e) => e.type === 'exhausted'));
+  assert.equal(pl.lostBlack, 1, 'one black die gone for the rest of the game');
+  act({ type: 'roll' });
+  assert.equal(state.pool.length, state.blackCount - 1);
+});
+
+test('with every victim dead, the Adze attacks everyone', () => {
+  const { state, act } = adzeGame();
+  for (const v of state.npcs) v.alive = false;
+  state.monsters[0].intents = [victimAction(1, [{ op: 'attack', dmg: { fixed: 9 }, target: 1 }])];
+  act({ type: 'roll' });
+  const r = act({ type: 'end' });
+  assert.ok(r.events.some((e) => e.type === 'damage' && e.seat === 0));
+});
+
+test('Exhaust (Movement die) takes a die the player moved with', async () => {
+  const { exhaust } = await import('../src/game/monsterTurn.js');
+  const pl = { name: 'P1', seat: 0, lastMove: [{ kind: 'black', v: 2 }, { kind: 'white', v: 6 }], defense: [] };
+  const ev = [];
+  exhaust({}, pl, 'movement', { log: () => {} }, ev);
+  assert.equal(pl.lastMove.length, 1);
+  assert.equal(ev[0].dice[0].kind, 'white');
+  assert.equal(pl.lostBlack ?? 0, 0, 'a white die is simply gone');
+  assert.deepEqual(parseAbility('Exhaust (Defensive die) and Attack (die)').ops.map((o) => o.op), ['exhaust', 'attack']);
+});
