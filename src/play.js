@@ -21,7 +21,7 @@ import {
 } from './game/rules.js';
 import { createBoard } from './game/board.js';
 import { createLocalSession } from './game/session.js';
-import { createDiscoveries } from './discoveries.js';
+import { createDiscoveries, PAINT } from './discoveries.js';
 import { createMonsterModels } from './monsterModels.js';
 import { MONSTER_BY_ID } from './game/cards/monsters.js';
 import { evidenceVisual } from './game/cards/evidence.js';
@@ -367,6 +367,7 @@ export function createPlay({
     const card = MONSTER_BY_ID[kind];
     const fig = card ? models.buildMonster(kind, { count: card.badge }) : null;
     if (!fig) return (monsterLooks[MONSTER_LOOK(kind)] ?? monsterLooks.shade)();
+    if (card.body === 'none') return fig; // nothing stands on the board
     const pool = new THREE.Mesh(new THREE.CircleGeometry(m(2.4), 24).rotateX(-Math.PI / 2), groundGlowMat);
     pool.position.y = m(0.06);
     pool.renderOrder = 3;
@@ -417,6 +418,66 @@ export function createPlay({
       }
       if (inBoard(mo.pos) && (force || !running(mv))) { mv.at = centreOf(mo.pos); mv.vis = mo.pos; if (force) { mv.queue = []; mv.anim = null; } }
     }
+  }
+
+  // --- strikes that aren't a lunge: swarms and shadow grabs ---------------------------------
+  const SWARM_STEP = 0.16; // seconds per cell for an Adze swarm
+  function runStrike(strike) {
+    if (strike.done) return;
+    strike.done = true;
+    for (const f of strike.fx ?? []) { try { f(); } catch (err) { console.error(err); } }
+  }
+  const grabs = [];
+  function startGrab(seat, strike) {
+    const a = view.actors[seat];
+    const fig = models.makeShadowGrab();
+    fig.position.copy(a?.at ?? centreOf(g().players[seat].pos));
+    fig.userData.grow(0.01);
+    group.add(fig);
+    grabs.push({ fig, t: 0, strike });
+    onAttack({ seat, cell: g().players[seat].pos });
+  }
+  function tickGrabs(dt) {
+    for (let k = grabs.length - 1; k >= 0; k--) {
+      const gb = grabs[k];
+      gb.t += dt;
+      gb.fig.userData.grow(gb.t < 0.5 ? gb.t / 0.5 : gb.t > 1.5 ? Math.max(0, 1 - (gb.t - 1.5) / 0.5) : 1);
+      if (gb.t > 0.6) runStrike(gb.strike);
+      if (gb.t > 2) { group.remove(gb.fig); grabs.splice(k, 1); }
+    }
+  }
+  // Shadow People: the darkness around each player standing in an unlit cell
+  // ripples and reaches unnaturally.
+  const darkTex = (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 256;
+    let seed = 7;
+    PAINT.shadow(c.getContext('2d'), () => ((seed = (seed * 16807) % 2147483647) / 2147483647));
+    return new THREE.CanvasTexture(c);
+  })();
+  const darkness = [0, 1, 2, 3].map(() => {
+    const mat = new THREE.MeshBasicMaterial({ map: darkTex, transparent: true, depthWrite: false, opacity: 0.7 });
+    terrainify(mat, { bridge: true });
+    const o = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), mat);
+    o.position.y = 0.02;
+    o.renderOrder = 2;
+    o.raycast = () => {};
+    o.visible = false;
+    group.add(o);
+    return o;
+  });
+  function tickDarkness(t, s) {
+    const on = (s.monsters ?? []).some((mo) => MONSTER_BY_ID[mo.kind]?.body === 'none');
+    darkness.forEach((o, k) => {
+      const pl = s.players[k], a = view.actors[k];
+      o.visible = on && !!pl && !pl.dead && !!a?.at && (board.light[pl.pos] ?? 0) < (s.config?.litThreshold ?? 0.5);
+      if (!o.visible) return;
+      o.position.set(a.at.x, a.at.y + 0.004, a.at.z);
+      o.rotation.y = 0.4 * Math.sin(t * 0.7 + k) + t * 0.15;
+      const w = 0.75 + 0.12 * Math.sin(t * 1.9 + k * 2) + 0.06 * Math.sin(t * 4.3 + k);
+      o.scale.set(w, 1, 0.75 + 0.12 * Math.cos(t * 1.6 + k));
+      o.material.opacity = 0.55 + 0.25 * Math.sin(t * 2.6 + k * 1.3);
+    });
   }
 
   // --- evidence on the board ----------------------------------------------------------
@@ -505,7 +566,7 @@ export function createPlay({
           break;
         case 'monsterSpawn':
           syncMonsters(true);
-          view.watch = { id: e.id, until: performance.now() + 3200 };
+          if (MONSTER_BY_ID[e.kind]?.body !== 'none') view.watch = { id: e.id, until: performance.now() + 3200 };
           onMonster({ kind: e.kind, cell: e.cell, appeared: true });
           break;
         case 'monsterStep': {
@@ -516,9 +577,27 @@ export function createPlay({
           break;
         }
         case 'monsterAttack': {
+          if (e.grab) {
+            // Shadow People: silhouettes rise around the player when they
+            // visibly step into the light, reaching for their shadow.
+            const strike = { fx: [] };
+            view.lastStrike = strike;
+            attachToArrival(view.actors[e.seat], e.cell, () => startGrab(e.seat, strike));
+            break;
+          }
           const mv = view.monsters.get(e.id);
-          if (mv) mv.queue.push({ attack: e.seat, cell: e.cell, fx: [] });
+          const strike = { attack: e.seat, cell: e.cell, fx: [] };
+          view.lastStrike = strike;
+          if (mv) mv.queue.push(strike);
           view.watch = { id: e.id, until: performance.now() + 1500 };
+          break;
+        }
+        case 'monsterSwarm': {
+          // Adze: a fly swarm leaves the cocoon and flies to its victim.
+          const mv = view.monsters.get(e.id);
+          const strike = { swarm: e.path, fx: [] };
+          view.lastStrike = strike;
+          if (mv) mv.queue.push(strike);
           break;
         }
         case 'monsterTeleport': {
@@ -529,10 +608,8 @@ export function createPlay({
         case 'damage': {
           if (e.source === 'Something unseen') break; // shown with the Attack Obol
           const fx = () => onDamage({ ...e, player: g()?.players[e.seat] });
-          // Monster strikes: show when its lunge lands.
-          const lunge = [...view.monsters.values()].flatMap((mv) => [mv.anim, ...mv.queue]).reverse()
-            .find((q) => q?.fx && q.attack !== undefined);
-          if (lunge) lunge.fx.push(fx); else fx();
+          // Monster strikes: show when the blow visibly lands (lunge, swarm, grab).
+          if (view.lastStrike && !view.lastStrike.done) view.lastStrike.fx.push(fx); else fx();
           break;
         }
         case 'monsterIntent':
@@ -628,7 +705,7 @@ export function createPlay({
   let last = performance.now();
   // Is anything animating (so the renderer should run at full rate)?
   function busy() {
-    return rolling() || !!view.watch || view.actors.some(running) || [...view.monsters.values()].some((mv) => running(mv) || mv.lunge > 0)
+    return rolling() || !!view.watch || grabs.length > 0 || view.actors.some(running) || [...view.monsters.values()].some((mv) => running(mv) || mv.lunge > 0)
       || (view.pan && group.visible);
   }
   function tick(_dt, t) {
@@ -668,10 +745,24 @@ export function createPlay({
     });
     // Monsters: stalk cell to cell, then lunge.
     const mStep = view.fast ? FAST_STEP : MONSTER_STEP;
+    tickGrabs(dt);
+    tickDarkness(t, s);
     for (const [, mv] of view.monsters) {
-      if (!mv.anim && mv.queue.length) mv.anim = { ...mv.queue.shift(), t: 0 };
+      if (!mv.anim && mv.queue.length) mv.anim = Object.assign(mv.queue.shift(), { t: 0 });
       const an = mv.anim;
-      if (an?.attack !== undefined) {
+      if (an?.swarm) {
+        // Fly the swarm along its route, strike, then let it scatter.
+        if (!an.cloud) { an.cloud = models.makeSwarm(); group.add(an.cloud); }
+        const n = an.swarm.length - 1;
+        an.t = Math.min(n + 0.6, an.t + dt / SWARM_STEP);
+        const k = Math.min(n, an.t), i = Math.floor(k);
+        const a = centreOf(an.swarm[i]), b = centreOf(an.swarm[Math.min(n, i + 1)]);
+        an.cloud.position.copy(a.lerp(b, k - i));
+        an.cloud.userData.tick(t);
+        an.cloud.scale.setScalar(an.t > n ? Math.max(0.05, 1 - (an.t - n) / 0.6) : 1);
+        if (an.t >= n && !an.done) runStrike(an);
+        if (an.t >= n + 0.6) { group.remove(an.cloud); mv.anim = null; }
+      } else if (an?.attack !== undefined) {
         // Lunge toward the victim's cell, then recoil.
         if (an.t === 0) {
           const tc = grid.coords(an.cell), mc = grid.coords(mv.vis);
@@ -682,7 +773,7 @@ export function createPlay({
         mv.lunge = Math.sin(an.t * Math.PI);
         if (an.t >= 1) {
           mv.anim = null; mv.lunge = 0;
-          for (const f of an.fx ?? []) { try { f(); } catch (err) { console.error(err); } }
+          runStrike(an);
         }
       } else if (an) {
         an.t = Math.min(1, an.t + dt / mStep);

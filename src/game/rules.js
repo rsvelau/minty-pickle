@@ -18,7 +18,7 @@
 import { MARKERS, streetMask, edgeKey, cellLabel } from '../state.js';
 import { MONSTERS, spawnMonsters, monstersAct, farthestFromPlayers } from './monsters.js';
 import { turnLimits, injuries } from './combat.js';
-import { refreshThreat } from './monsterTurn.js';
+import { refreshThreat, onPlayerEnters } from './monsterTurn.js';
 import { setupMystery, evidenceObol, revealEvidence, attackObol, nameMonster, revealMonster } from './mystery.js';
 
 export const RULES_VERSION = 1;
@@ -468,6 +468,7 @@ function takeStep(state, board, o, events) {
   state.steps--;
   events.push({ type: 'step', seat: state.cur, from, to: o.i });
   enter(state, board, o.i, events);
+  if (state.monsters.length) onPlayerEnters(state, board, pl, o.i, { state, log, randInt }, events);
 }
 function step(state, board, o, events) {
   takeStep(state, board, o, events);

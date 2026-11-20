@@ -59,6 +59,9 @@ export const MONSTER_CARDS = [
   },
   {
     id: 'hellhounds', name: 'Hellhounds', hp: 3, toughness: 2, badge: 4,
+    // Later (monster health): killing a hound sends the whole pack back to the
+    // Lair; the pack only shrinks through its weakness.
+    pack: true,
     traits: ['Corporeal', 'Demon'],
     note: 'Respawns at Lair when killed. Pinned players cannot move.',
     objective: 'Disrupt Ritual ({9} → Lair)',
@@ -183,6 +186,9 @@ export const MONSTER_CARDS = [
   },
   {
     id: 'adze', name: 'Adze', hp: 30, toughness: 3, badge: 3,
+    // It stays in its cocoon in the Lair; its actions are carried out by fly
+    // swarms that cross any terrain but not walls.
+    body: 'cocoon', actsBy: 'swarm',
     traits: ['Corporeal', 'Intelligent'],
     note: 'Attacks target only NPCs. NPCs are Frail and can be Defended. On NPC death: Global Attack (die × ☠). No NPCs left: attacks are Global.',
     objective: 'Kill Nest (Lair)',
@@ -197,6 +203,9 @@ export const MONSTER_CARDS = [
   },
   {
     id: 'shadow-people', name: 'Shadow People', hp: null, toughness: null, badge: 0,
+    // No body: the darkness around players ripples; it only takes shape to
+    // strike (Umbral Stab, when a player enters a lit space).
+    body: 'none', onEnterLit: { kind: 'physical', dmg: 'die' },
     traits: ['Incorporeal', 'Darkness'],
     note: 'Has no singular body. Attacks erupt from lit spaces. Dark spaces smother lit objects. All defensive dice are exhausted upon use.',
     objective: 'Light the Dark Room ({11} → Lair × 4)',

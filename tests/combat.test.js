@@ -146,3 +146,54 @@ test('monsters roll as many action dice as their card number, and act in order',
     assert.equal(state.monsters[0].intents.length, n, id);
   }
 });
+
+test('the Adze stays in its cocoon and sends swarms over any terrain, not through walls', () => {
+  const g = street();
+  for (let x = 0; x < 20; x++) g.apply(g.index(x, 11), { area: 'outdoor', sub: 'forest', walkable: false }, { silent: true });
+  const board = createBoard(g);
+  const { state } = newGame(board, { seed: 5, startMode: 'midnight', config: { players: 1, monsterPick: 'adze' } });
+  const mo = state.monsters[0];
+  mo.pos = g.index(10, 9);                       // across a blocked forest row
+  const home = mo.pos;
+  mo.intents = [{ roll: 1, ability: 0, name: 'Hotel Victim', kind: 'spiritual', text: '', ops: [{ op: 'attack', dmg: { fixed: 9 } }], unknown: [] }];
+  const act = (a) => applyAction(state, board, { ...a, seat: 0 });
+  act({ type: 'roll' });
+  const r = act({ type: 'end' });
+  const swarm = r.events.find((e) => e.type === 'monsterSwarm');
+  assert.ok(swarm, 'a swarm flew over the forest');
+  assert.equal(mo.pos, home, 'the cocoon stays put');
+  // A wall all round the player stops it.
+  const g2 = street();
+  const board2 = createBoard(g2);
+  const s2 = newGame(board2, { seed: 5, startMode: 'midnight', config: { players: 1, monsterPick: 'adze' } }).state;
+  const { x, y } = g2.coords(s2.players[0].pos);
+  for (const [o, ex, ey] of [['v', x, y], ['v', x + 1, y], ['h', x, y], ['h', x, y + 1]]) g2.setEdge(o, ex, ey, 'wall', { silent: true });
+  board2.invalidate();
+  s2.monsters[0].intents = mo.intents;
+  applyAction(s2, board2, { type: 'roll', seat: 0 });
+  const r2 = applyAction(s2, board2, { type: 'end', seat: 0 });
+  assert.ok(!r2.events.some((e) => e.type === 'monsterSwarm'));
+});
+
+test('Shadow People strike a player who enters a lit space, not a dark one', async () => {
+  const { onPlayerEnters } = await import('../src/game/monsterTurn.js');
+  const g = street();
+  g.apply(g.index(5, 12), { lit: true, radius: 1 }, { silent: true });
+  const board = createBoard(g);
+  const { state } = newGame(board, { seed: 5, startMode: 'midnight', config: { players: 1, monsterPick: 'shadow-people' } });
+  const pl = state.players[0];
+  const ctx = { state, log: () => {}, randInt: (s, n) => Math.floor(Math.random() * n) };
+  const dark = [];
+  onPlayerEnters(state, board, pl, g.index(12, 12), ctx, dark);
+  assert.equal(dark.length, 0, 'nothing in the dark');
+  const lit = [];
+  onPlayerEnters(state, board, pl, g.index(5, 12), ctx, lit);
+  assert.ok(lit.some((e) => e.type === 'monsterAttack' && e.grab));
+  assert.ok(lit.some((e) => e.type === 'damage'));
+});
+
+test('Adze attacks name a target spot and a damage die', () => {
+  const p = parseAbility('Attack ({1}, die) and Exhaust (defensive die)');
+  assert.equal(p.ops[0].op, 'attack');
+  assert.deepEqual(p.ops[0].dmg, { dice: 1 });
+});

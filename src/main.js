@@ -2654,7 +2654,8 @@ function showCard(c) {
   $('#cardPop').hidden = false;
   clearTimeout(cardTimer);
   if (!stay) cardTimer = setTimeout(hideCard, 4200);
-  $('#cardPopHint').textContent = stay ? 'Tap to continue' : 'Tap to continue · added to the Casebook';
+  const casebook = c.kind === 'observation' || c.kind === 'lair' || (c.kind === 'attack' && c.first);
+  $('#cardPopHint').textContent = casebook && !stay ? 'Tap to continue · added to the Casebook' : 'Tap to continue';
 }
 function hideCard() { $('#cardPop').hidden = true; clearTimeout(cardTimer); }
 $('#cardPop').addEventListener('click', hideCard);
@@ -2813,7 +2814,14 @@ function renderIntent() {
     ? mo.intents.map((i, n) => `<span class="act">${mo.intents.length > 1 ? `${n + 1}. ` : ''}🎲${i.roll} <b>${esc(i.name)}</b>` +
       `${i.ability >= 0 ? ` · ${esc(i.text)}` : ''}</span>`).join('')
     : ` <span class="acts">${mo.intents.map((i) => `🎲${i.roll} <b>${esc(i.name)}</b>`).join(' → ')}</span>`;
-  el.innerHTML = `<b>${esc(name)}</b>${mo.intents.length ? ` rolled ${mo.intents.length === 1 ? '1 die' : `${mo.intents.length} dice`}:` : ' rolls no dice this round'}${acts}<br>` +
+  if (!mo.intents.length) {
+    // No action dice: say what it does all the time instead.
+    const card = MONSTER_BY_ID[mo.kind];
+    const constant = (card?.abilities ?? []).filter((a) => a.roll === 'Persistent').map((a) => `<b>${esc(a.name)}</b>: ${esc(a.text)}`).join('<br>');
+    el.innerHTML = `<b>${esc(name)}</b> takes no actions; it is always at work.<br>${constant}`;
+    return;
+  }
+  el.innerHTML = `<b>${esc(name)}</b> rolled ${mo.intents.length === 1 ? '1 die' : `${mo.intents.length} dice`}:${acts}<br>` +
     (danger.length ? `<span class="danger">⚠ In danger: ${danger.join(', ')}</span>` : '<span class="muted">No one in reach, for now</span>') +
     ` <span class="muted">· acts at the end of the round · tap for ${intentOpen ? 'less' : 'details'}</span>`;
 }

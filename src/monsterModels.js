@@ -265,27 +265,36 @@ export function createMonsterModels(terrainify) {
     return rig(body, (t) => { body.position.y = m(0.35 + 0.12 * Math.sin(t * 1.4)); });
   };
 
-  // An ox-headed demon on six spider legs, ~2.5 m high and wide.
+  // An ox-headed demon on a broad, crab-like shell: four splayed walking legs
+  // and two heavy pincers, ~2.2 m high and wider than it is tall.
   B['ushi-oni'] = () => {
     const p = parts();
-    const hide = '#3a1714', dark = '#1e0c0a', horn = '#d8ccb0';
-    p.ball(0.75, [0, 1.25, -0.6], hide, [1.05, 0.8, 1.25]);                    // abdomen
-    p.ball(0.42, [0, 1.35, 0.35], dark, [1.05, 0.85, 1]);                       // thorax
-    p.ball(0.34, [0, 1.6, 0.82], hide, [1, 1, 1.15]);                           // bull head
-    p.box(0.34, 0.26, 0.3, [0, 1.5, 1.1], dark);                                // muzzle
+    const hide = '#3a1714', dark = '#1e0c0a', horn = '#d8ccb0', shell = '#4a1c16';
+    p.ball(0.95, [0, 1.05, -0.35], shell, [1.35, 0.5, 1.05]);                  // broad, flat carapace
+    p.ball(0.7, [0, 1.22, -0.35], hide, [1.2, 0.35, 0.9]);                      // ridge on top
+    p.ball(0.36, [0, 1.25, 0.55], dark, [1.1, 0.8, 0.9]);                       // neck
+    p.ball(0.34, [0, 1.5, 0.88], hide, [1, 1, 1.15]);                           // bull head
+    p.box(0.34, 0.26, 0.3, [0, 1.4, 1.16], dark);                               // muzzle
     for (const s of [-1, 1]) {
-      p.cone(0.07, 0.6, [s * 0.42, 1.95, 0.8], horn, [0, 0, -s * 1.1], 6);      // horns
-      p.cone(0.04, 0.3, [s * 0.68, 2.2, 0.8], horn, [0, 0, -s * 0.1], 6);
-      for (let k = 0; k < 3; k++) {                                              // spider legs
-        const z = 0.45 - k * 0.45;
-        const knee = [s * 1.25, 2.0, z + 0.15];
-        p.limb([s * 0.3, 1.35, z], knee, 0.09, 0.07, dark);
-        p.limb(knee, [s * 1.75, 0.02, z + 0.35 - k * 0.1], 0.07, 0.035, dark);
+      p.cone(0.07, 0.6, [s * 0.42, 1.85, 0.86], horn, [0, 0, -s * 1.1], 6);     // horns
+      p.cone(0.04, 0.3, [s * 0.68, 2.1, 0.86], horn, [0, 0, -s * 0.1], 6);
+      for (let k = 0; k < 2; k++) {                                              // walking legs, splayed sideways
+        const z = -0.05 - k * 0.6;
+        const knee = [s * 1.65, 1.55, z];
+        p.limb([s * 0.95, 1.0, z], knee, 0.12, 0.09, dark);
+        p.limb(knee, [s * 2.05, 0.02, z - 0.1], 0.09, 0.04, dark);
       }
+      // A heavy pincer arm reaching forward.
+      const elbow = [s * 1.15, 1.25, 0.75];
+      p.limb([s * 0.85, 1.05, 0.35], elbow, 0.14, 0.12, shell);
+      p.limb(elbow, [s * 0.95, 0.85, 1.35], 0.12, 0.1, shell);
+      p.ball(0.24, [s * 0.92, 0.82, 1.45], shell, [0.9, 0.75, 1.3]);           // claw body
+      p.cone(0.09, 0.5, [s * 0.98, 0.9, 1.82], horn, [Math.PI / 2 - 0.25, 0, 0], 5);   // upper finger
+      p.cone(0.07, 0.42, [s * 0.86, 0.72, 1.78], dark, [Math.PI / 2 + 0.3, 0, 0], 5);  // lower finger
     }
     const body = new THREE.Group();
     body.add(p.mesh());
-    eyes(body, [0.15, 1.72, 1.1], '#ff3020', 0.045, 0.35);
+    eyes(body, [0.15, 1.62, 1.16], '#ff3020', 0.045, 0.35);
     return rig(body);
   };
 
@@ -374,61 +383,96 @@ export function createMonsterModels(terrainify) {
     return rig(body);
   };
 
-  // A swarm of sickly fireflies, gathering now and then into a hunched shape.
+  // The Adze, mid-transformation: a great veined cocoon in its lair, lit from
+  // within and pulsing, bound to the ground by threads, a few flies drifting.
   B.adze = () => {
-    const body = new THREE.Group();
     const p = parts();
-    p.ball(0.3, [0, 0.9, 0], '#141410', [0.9, 1.4, 0.8], [0.4, 0, 0]);
-    p.ball(0.14, [0, 1.45, 0.25], '#141410');
-    const figure = p.mesh(ghost);
-    body.add(figure);
+    const husk = '#5a5236', vein = '#2e2818';
+    p.ball(0.62, [0, 1.15, 0], husk, [0.85, 1.7, 0.8]);                         // the cocoon
+    for (let k = 0; k < 7; k++) {                                               // veins wrapping it
+      const a = (k / 7) * Math.PI * 2;
+      p.limb([Math.cos(a) * 0.5, 0.25, Math.sin(a) * 0.46], [Math.cos(a + 0.8) * 0.18, 2.1, Math.sin(a + 0.8) * 0.16], 0.03, 0.02, vein);
+      p.limb([Math.cos(a) * 0.5, 0.25, Math.sin(a) * 0.46], [Math.cos(a) * 1.0, 0.0, Math.sin(a) * 0.95], 0.025, 0.015, '#8a8468');  // threads to the ground
+    }
+    p.cyl(0.08, 0.04, 0.5, [0, 2.25, 0], vein);                                   // stalk at the top
+    const body = new THREE.Group();
+    const cocoon = p.mesh();
+    body.add(cocoon);
+    const inner = noRay(new THREE.Sprite(spriteMat('#e8ff80', 0.7)));
+    inner.position.set(0, m(1.15), m(0.2));
+    inner.scale.setScalar(m(1.6));
+    body.add(inner);
     const flies = [];
-    for (let k = 0; k < 42; k++) {
-      const f = noRay(new THREE.Sprite(spriteMat(k % 3 ? '#d8ff70' : '#fff0a0', 0.95)));
-      f.scale.setScalar(m(0.18 + (k % 4) * 0.04));
-      f.userData = { a: k * 2.39996, r: 0.4 + (k % 7) * 0.12, h: 0.4 + (k % 9) * 0.15, s: 0.6 + (k % 5) * 0.25 };
+    for (let k = 0; k < 10; k++) {
+      const f = noRay(new THREE.Sprite(spriteMat('#d8ff70', 0.95)));
+      f.scale.setScalar(m(0.18));
+      f.userData = { a: k * 2.4, r: 0.8 + (k % 3) * 0.3, h: 0.6 + (k % 4) * 0.4 };
       body.add(f);
       flies.push(f);
     }
     return rig(body, (t) => {
-      const gather = 0.5 + 0.5 * Math.sin(t * 0.5);
-      figure.material.opacity = 0.15 + 0.35 * gather;
+      const beat = 0.5 + 0.5 * Math.sin(t * 2.2);
+      cocoon.scale.set(1 + 0.03 * beat, 1 + 0.05 * beat, 1 + 0.03 * beat);
+      inner.material.opacity = 0.35 + 0.45 * beat;
       for (const f of flies) {
-        const u = f.userData, a = u.a + t * u.s;
-        const r = u.r * (1.6 - gather);
-        f.position.set(m(Math.cos(a) * r), m(u.h + 0.2 * Math.sin(t * 2 + u.a)), m(Math.sin(a) * r));
-        f.material.opacity = 0.6 + 0.4 * Math.sin(t * 7 + u.a * 3);
+        const u = f.userData, a = u.a + t * 1.3;
+        f.position.set(m(Math.cos(a) * u.r), m(u.h + 0.2 * Math.sin(t * 3 + u.a)), m(Math.sin(a) * u.r));
       }
     });
   };
 
-  // Tall, thin silhouettes of pure darkness, never quite still.
-  B['shadow-people'] = () => {
-    const body = new THREE.Group();
+  // An Adze fly swarm flying out to strike: a cloud of glowing motes.
+  function makeSwarm() {
+    const g = new THREE.Group();
+    const flies = [];
+    for (let k = 0; k < 26; k++) {
+      const f = noRay(new THREE.Sprite(spriteMat(k % 3 ? '#d8ff70' : '#fff0a0', 0.95)));
+      f.scale.setScalar(m(0.16 + (k % 4) * 0.04));
+      f.userData = { a: k * 2.39996, r: 0.25 + (k % 6) * 0.12, h: 0.6 + (k % 7) * 0.18, s: 2 + (k % 5) * 0.6 };
+      g.add(f);
+      flies.push(f);
+    }
+    g.userData.tick = (t) => {
+      for (const f of flies) {
+        const u = f.userData, a = u.a + t * u.s;
+        f.position.set(m(Math.cos(a) * u.r), m(u.h + 0.25 * Math.sin(t * 5 + u.a)), m(Math.sin(a) * u.r));
+      }
+    };
+    return g;
+  }
+
+  // The Shadow People have no body: nothing stands on the board. They only
+  // take shape to strike (makeShadowGrab).
+  B['shadow-people'] = () => rig(new THREE.Group());
+
+  // Human silhouettes rising out of the ground around a player, reaching for
+  // their shadow. grow(k) 0..1 raises them; the caller fades and removes it.
+  function makeShadowGrab() {
+    const g = new THREE.Group();
     const figs = [];
-    for (let k = 0; k < 3; k++) {
+    for (let k = 0; k < 5; k++) {
       const p = parts();
-      const h = 2.1 + k * 0.25;
-      p.cyl(0.14, 0.2, h * 0.62, [0, h * 0.33, 0], '#000000', [0, 0, 0], 8);
-      p.ball(0.14, [0, h * 0.72, 0], '#000000', [0.9, 1.15, 0.9]);
-      for (const s of [-1, 1]) p.limb([s * 0.17, h * 0.6, 0], [s * 0.26, h * 0.22, 0.05], 0.035, 0.025, '#000000');
+      const h = 1.6 + (k % 3) * 0.3;
+      p.cyl(0.12, 0.18, h * 0.6, [0, h * 0.3, 0], '#000000', [0, 0, 0], 7);
+      p.ball(0.13, [0, h * 0.68, 0.02], '#000000', [0.9, 1.15, 0.9]);
+      // Both arms stretched toward the middle, fingers spread.
+      for (const s of [-1, 1]) {
+        p.limb([s * 0.14, h * 0.55, 0], [s * 0.1, h * 0.62, 0.75], 0.035, 0.025, '#000000');
+        for (let f = -1; f <= 1; f++) p.limb([s * 0.1, h * 0.62, 0.75], [s * 0.1 + f * 0.05, h * 0.6, 0.92], 0.012, 0.006, '#000000');
+      }
       const o = p.mesh(shadow);
-      const a = (k / 3) * Math.PI * 2;
-      o.position.set(m(Math.cos(a) * 1.3), 0, m(Math.sin(a) * 1.3));
-      o.userData.phase = k * 2.1;
-      body.add(o);
+      const a = (k / 5) * Math.PI * 2;
+      o.position.set(m(Math.cos(a) * 1.1), 0, m(Math.sin(a) * 1.1));
+      o.lookAt(0, 0, 0);
+      g.add(o);
       figs.push(o);
     }
-    return rig(body, (t) => {
-      for (const o of figs) {
-        const f = Math.sin(t * 3 + o.userData.phase) > 0.85 ? 0.92 : 1; // a flicker now and then
-        o.scale.set(f, 1 + 0.03 * Math.sin(t * 1.3 + o.userData.phase), f);
-      }
-    });
-  };
+    g.userData.grow = (k) => { for (const o of figs) { o.scale.set(1, Math.max(0.01, k), 1); } };
+    return g;
+  }
 
   function buildMonster(kind, opts = {}) {
     return B[kind]?.(opts) ?? null;
   }
-  return { buildMonster, kinds: Object.keys(B) };
+  return { buildMonster, makeSwarm, makeShadowGrab, kinds: Object.keys(B) };
 }

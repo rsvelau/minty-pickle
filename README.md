@@ -586,10 +586,17 @@ From the Player Mat and Monster Ref Sheet (`Monsters_and_Injuries` spreadsheet):
 Every card monster has its own low-poly figure (`src/monsterModels.js`), to scale with the players, with idle
 motion: a hunched Werewolf; a smoky black Barghest dragging a chain; a loose pack of fiery Hellhounds, one per
 action die; a pelt-draped Skinwalker in an animal skull; a 3 m Wendigo with antlers and ribs; a floating, wailing
-Banshee; the ox-headed, spider-legged Ushi-Oni; a knee-high Redcap with its red cap, iron boots and pikestaff;
-the Poltergeist as furniture and crockery whirling in a cold haze; the glowing, veiled White Lady; a hunched,
-bald Strigoi in a burial shroud; the Adze as a firefly swarm that gathers into a shape; and Shadow People as
-three flickering silhouettes.
+Banshee; the Ushi-Oni, an ox head on a broad crab-like shell with splayed legs and two pincers; a knee-high
+Redcap with its red cap, iron boots and pikestaff; the Poltergeist as furniture and crockery whirling in a cold
+haze; the glowing, veiled White Lady; and a hunched, bald Strigoi in a burial shroud.
+
+- **Adze**: a pulsing cocoon fixed in its Lair, mid-transformation. Its attacks are carried out by **fly swarms**
+  that fly out to the nearest player over any terrain (walls, windows and locked doors stop them).
+- **Shadow People**: no body on the board. The darkness around each player standing in an unlit cell ripples
+  unnaturally; when a player steps into a lit space, **Umbral Stab** strikes (one die, Physical) and a ring of
+  human silhouettes rises around them, reaching for their shadow, then sinks away.
+- **Hellhounds** (for later, with monster health): killing a hound sends the whole pack back to the Lair; only
+  its weakness reduces the number of hounds.
 
 ### Adding a monster
 

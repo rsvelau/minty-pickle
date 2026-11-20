@@ -28,7 +28,9 @@ function rollRange(roll) {
 }
 // Damage spec: "4", "die", "2 dice", "die, R4"...
 function damageSpec(spec) {
-  const t = String(spec).trim();
+  // "({1}, die)": a target location first ({n} = a numbered spot on the map,
+  // not on the board yet), then the damage.
+  const t = String(spec).trim().replace(/^\{[^}]*\}\s*,\s*/, '');
   const n = /^(\d+)\s*dice/.exec(t);
   if (n) return { dice: Number(n[1]) };
   if (/^die/.test(t)) return { dice: 1 };
@@ -137,6 +139,33 @@ const gridDist = (board, a, b) => cellRange(board.grid, a, b);
 // Players a melee Attack can reach: Close range (adjacent, diagonals too).
 const inClose = (state, board, pos) => alive(state).filter((pl) => cellRange(board.grid, pos, pl.pos) <= RANGE.close);
 
+// A fly swarm's route from `from` to the nearest living player: over any
+// terrain, but walls, windows and locked doors stop it. Returns cells or null.
+export function swarmRoute(state, board, from) {
+  const grid = board.grid;
+  const n = grid.cells.length;
+  const prev = new Int32Array(n).fill(-2);
+  prev[from] = -1;
+  const queue = [from];
+  const targets = new Set(alive(state).map((pl) => pl.pos));
+  for (let q = 0; q < queue.length; q++) {
+    const i = queue[q];
+    if (targets.has(i)) {
+      const path = [];
+      for (let c = i; c >= 0; c = prev[c]) path.unshift(c);
+      return path;
+    }
+    const { x, y } = grid.coords(i);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      if (!grid.inBounds(x + dx, y + dy) || !grid.canCross(x, y, dx, dy)) continue;
+      const j = grid.index(x + dx, y + dy);
+      if (prev[j] === -2) { prev[j] = i; queue.push(j); }
+    }
+  }
+  return null;
+}
+const swarmVictim = (state, path) => (path ? alive(state).find((pl) => pl.pos === path[path.length - 1]) : null);
+
 // The player a melee Attack goes for: in Close range, nearest first.
 function closeTarget(state, board, pos) {
   const near = inClose(state, board, pos);
@@ -161,8 +190,12 @@ function predictVictims(state, board, monster, intents) {
   let pos = monster.pos;
   for (const intent of intents) {
     pos = planMovement(state, board, { pos }, intent.ops, null).pos;
+    const swarm = MONSTER_BY_ID[monster.kind]?.actsBy === 'swarm';
     for (const o of intent.ops) {
-      if (o.op === 'attack') {
+      if (o.op === 'attack' && swarm) {
+        const v = swarmVictim(state, swarmRoute(state, board, pos));
+        if (v) seats.add(v.seat);
+      } else if (o.op === 'attack') {
         const t = closeTarget(state, board, pos);
         if (t) seats.add(t.seat);
       } else if (o.op === 'area') {
@@ -221,6 +254,15 @@ export function executeIntent(state, board, monster, ctx, events) {
     if (move.steps.length) ctx.log(state, `The ${card.name} moves to ${label(board, monster.pos)}.`);
     // Then attacks, rolling damage.
     for (const o of intent.ops) {
+      if (o.op === 'attack' && card.actsBy === 'swarm') {
+        // A fly swarm goes out from the cocoon to the nearest player.
+        const path = swarmRoute(state, board, monster.pos);
+        const v = swarmVictim(state, path);
+        if (!v) { ctx.log(state, `${source}: the swarm finds no one.`); continue; }
+        events.push({ type: 'monsterSwarm', id: monster.id, seat: v.seat, path });
+        applyDamage(state, board, v, type, rollDamage(ctx, o.dmg), { log: ctx.log, source: `${source} (fly swarm)` }, events);
+        continue;
+      }
       if (o.op === 'attack') {
         const t = closeTarget(state, board, monster.pos);
         if (!t) { ctx.log(state, `${source} finds no one in reach.`); continue; }
@@ -239,6 +281,21 @@ export function executeIntent(state, board, monster, ctx, events) {
   }
   monster.intents = null;
   monster.danger = [];
+}
+
+// Constant effects that fire when a player steps onto a cell, e.g. the
+// Shadow People's Umbral Stab (attack any player entering a lit space).
+export function onPlayerEnters(state, board, pl, cell, ctx, events) {
+  for (const monster of state.monsters) {
+    const card = MONSTER_BY_ID[monster.kind];
+    const rule = card?.onEnterLit;
+    if (!rule || pl.dead) continue;
+    if ((board.light[cell] ?? 0) < state.config.litThreshold) continue;
+    const ability = card.abilities.find((a) => a.roll === 'Persistent' && KIND_TO_TYPE[a.kind]);
+    const type = KIND_TO_TYPE[rule.kind] ?? card.evidence.attack;
+    events.push({ type: 'monsterAttack', id: monster.id, seat: pl.seat, cell, grab: true });
+    applyDamage(state, board, pl, type, rollDamage(ctx, damageSpec(rule.dmg)), { log: ctx.log, source: `The ${card.name}'s ${ability?.name ?? 'attack'}` }, events);
+  }
 }
 
 export { describeDamage };
