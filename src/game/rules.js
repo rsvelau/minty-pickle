@@ -17,6 +17,8 @@
 // which is plain data too, so a server can rebuild it from the saved board.
 import { MARKERS, streetMask, edgeKey, cellLabel } from '../state.js';
 import { MONSTERS, spawnMonsters, monstersAct, farthestFromPlayers } from './monsters.js';
+import { turnLimits, injuries } from './combat.js';
+import { refreshThreat } from './monsterTurn.js';
 import { setupMystery, evidenceObol, revealEvidence, attackObol, nameMonster, revealMonster } from './mystery.js';
 
 export const RULES_VERSION = 1;
@@ -56,6 +58,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   obols: Object.freeze({ attack: 7, event: 7, equipment: 7, evidence: 7 }),
   monster: 'mystery',
   monsterPool: 'all',
+  defenseSlots: 1,       // Defense slots (+1 when the turn starts in light)
   monsterPick: 'random', // or a monster id: always fight that one (testing)
 });
 export const defaultConfig = () => ({ ...DEFAULT_CONFIG, obols: { ...DEFAULT_CONFIG.obols } });
@@ -73,6 +76,7 @@ export const obolCounts = (pl) => Object.fromEntries(
 export const INVENTORY_TABS = {
   equipment: { label: 'Equipment', empty: 'No equipment yet. Anything you find to use will be kept here.' },
   obolcraft: { label: 'Obolcraft', empty: 'No Obols yet. Investigate to find them.' },
+  injuries: { label: 'Injuries', empty: '' },
 };
 
 export const MIDNIGHT = 24 * 60;
@@ -116,6 +120,9 @@ export function newGame(board, setup = {}) {
       seat, name: s.name, colour: s.colour,
       pos: start, prev: -1,
       white: 0,                                 // white dice in reserve (unrolled)
+      injuries: { P: 0, M: 0, S: 0 },           // tiers per track (combat.js)
+      defense: [],                              // defense dice committed this turn
+      dead: false,
       inventory: { equipment: [], obolcraft: [] },
     })),
     cur: 0,
@@ -128,6 +135,7 @@ export function newGame(board, setup = {}) {
     keys: 0,                // key groups picked up by anyone (bitmask)
     blackCount: config.startBlack,
     pool: [], slots: [], maxSlots: config.moveSlots, lit: false,
+    defSlots: [], maxDefense: 1,
     ask: null,
     bag: OBOL_TYPES.flatMap((t) => Array(Math.max(0, config.obols[t] | 0)).fill(t)),
     used: [],               // marker cells used up (cell indices)
@@ -173,32 +181,46 @@ export function applyAction(state, board, action) {
   switch (action.type) {
     case 'roll': {
       if (state.phase !== 'idle') return fail('cannot roll now');
-      state.pool = Array.from({ length: state.blackCount }, () => ({ kind: 'black', v: d6(state) }));
+      const pl = curPlayer(state);
+      const lim = turnLimits(state, board, pl);
+      pl.defense = [];                               // last turn's defense is spent
+      state.pool = Array.from({ length: lim.dice }, () => ({ kind: 'black', v: d6(state) }));
       state.slots = [];
-      state.lit = (board.light[curPlayer(state).pos] ?? 0) >= state.config.litThreshold;
-      state.maxSlots = state.lit ? Math.max(state.config.litSlots, state.config.moveSlots) : state.config.moveSlots;
+      state.defSlots = [];
+      state.lit = lim.lit;
+      state.maxSlots = lim.move;
+      state.maxDefense = lim.defense;
+      state.deathsDoor = lim.deathsDoor;
       state.roll = 0;
       state.phase = 'slotting';
       state.turn++;
       log(state, `${who(state)} rolled black ${state.pool.map((d) => d.v).join(', ')}. ` +
-        `${state.maxSlots} movement slots${state.lit ? ' (standing in light)' : ''}.`);
+        `${state.maxSlots} movement and ${state.maxDefense} defense slot${state.maxDefense === 1 ? '' : 's'}${state.lit ? ' (standing in light)' : ''}` +
+        `${lim.deathsDoor ? '. At Death\'s Door: one die only' : ''}.`);
       events.push({ type: 'rolled', seat: state.cur, pool: state.pool.map((d) => ({ ...d })) });
       break;
     }
     case 'slot': {
-      // Toggle a rolled die (index into pool) in or out of the movement slots.
+      // Put a rolled die (index into pool) into a Movement or Defense slot,
+      // or take it out again (tap it where it is).
       const n = action.die | 0;
       if (state.phase !== 'slotting' || !state.pool[n]) return fail('no such die');
-      const at = state.slots.indexOf(n);
-      if (at >= 0) state.slots.splice(at, 1);
-      else if (state.slots.length < state.maxSlots) state.slots.push(n);
-      else return fail('slots full');
+      const to = action.to === 'defense' ? 'defSlots' : 'slots';
+      const other = to === 'slots' ? 'defSlots' : 'slots';
+      const at = state[to].indexOf(n);
+      if (at >= 0) { state[to].splice(at, 1); break; }
+      const max = to === 'slots' ? state.maxSlots : state.maxDefense;
+      if (state[to].length >= max) return fail('slots full');
+      const o = state[other].indexOf(n);
+      if (o >= 0) state[other].splice(o, 1);
+      state[to].push(n);
       break;
     }
     case 'rollWhite': {
       // Take a white die out of reserve and roll it: usable this turn only.
       const pl = curPlayer(state);
       if (state.phase !== 'slotting' || pl.white <= 0) return fail('no white dice');
+      if (state.deathsDoor) return fail("at Death's Door: one die only");
       pl.white--;
       const v = d6(state);
       state.pool.push({ kind: 'white', v });
@@ -210,13 +232,17 @@ export function applyAction(state, board, action) {
       // Lock in the slotted dice and move that many cells (0 = stay put).
       if (state.phase !== 'slotting') return fail('not slotting');
       const used = state.slots.map((n) => state.pool[n]);
+      const guard = state.defSlots.map((n) => state.pool[n]);
+      curPlayer(state).defense = guard.map((d) => ({ ...d }));
       const rolledWhite = state.pool.filter((d) => d.kind === 'white').length;
-      const discarded = rolledWhite - used.filter((d) => d.kind === 'white').length;
+      const discarded = rolledWhite - [...used, ...guard].filter((d) => d.kind === 'white').length;
+      if (guard.length) log(state, `${who(state)} braces: defense ${guard.reduce((a, d) => a + d.v, 0)} (${guard.map((d) => `${d.kind} ${d.v}`).join(' + ')}).`);
       state.roll = used.reduce((a, d) => a + d.v, 0);
       state.steps = state.roll;
       curPlayer(state).prev = -1;
       state.pool = [];
       state.slots = [];
+      state.defSlots = [];
       if (discarded) log(state, `${who(state)} discards ${discarded} unused white ${discarded === 1 ? 'die' : 'dice'}.`);
       if (!state.roll) {
         log(state, `${who(state)} stays put.`);
@@ -270,6 +296,7 @@ export function applyAction(state, board, action) {
     default:
       return fail('unknown action');
   }
+  refreshThreat(state, board);
   return { ok: true, events };
 }
 
@@ -396,6 +423,13 @@ function investigate(state, board, i, events) {
 // Decide the next step: move on, ask, or finish.
 function advance(state, board, events) {
   for (;;) {
+    if (curPlayer(state).dead) {
+      state.ask = null;
+      if (state.mystery) state.mystery.pendingReveal = null;
+      state.steps = 0;
+      nextPlayer(state, board, events);
+      return;
+    }
     if (state.ask) { state.phase = 'asking'; state.options = []; return; }
     if (state.mystery?.pendingReveal) { state.phase = 'revealing'; state.options = []; return; }
     if (state.steps <= 0) {
@@ -442,24 +476,38 @@ function step(state, board, o, events) {
 // on a turn; at midnight the objectives appear and the monster (if any)
 // arrives; from then on monsters act at the end of every turn.
 function nextPlayer(state, board, events) {
-  state.cur = (state.cur + 1) % state.players.length;
-  if (state.cur === 0) {
-    const was = isMidnight(state);
-    state.round++;
-    if (isMidnight(state) && !was) {
-      log(state, 'Midnight. The clocktower strikes twelve, and the objectives appear.');
-      events.push({ type: 'midnight' });
-      revealMonster(state, mysteryCtx(state), events);
-      spawnMonsters(state, board, events, random, log);
-    }
-    if (isMidnight(state) && state.monsters.length) monstersAct(state, board, events, random, log);
+  for (let k = 0; k < state.players.length; k++) {
+    state.cur = (state.cur + 1) % state.players.length;
+    if (state.cur === 0) endRound(state, board, events);
+    if (state.players.every((pl) => pl.dead)) break;
+    if (!curPlayer(state).dead) break;
   }
-  state.phase = 'idle';
   state.stopAt = -1;
   state.stopReason = '';
   state.options = [];
+  if (state.players.every((pl) => pl.dead)) {
+    state.phase = 'over';
+    log(state, 'Everyone is dead. The night wins.');
+    events.push({ type: 'gameOver' });
+    return;
+  }
+  state.phase = 'idle';
   if (state.players.length > 1) log(state, `${who(state)}'s turn.`);
   events.push({ type: 'turn', cur: state.cur });
+}
+
+// Everyone has moved: the clock moves on; monsters act.
+function endRound(state, board, events) {
+  const was = isMidnight(state);
+  // Monsters already out carry out the action they declared, and declare the next.
+  if (was && state.monsters.length) monstersAct(state, board, events, random, log);
+  state.round++;
+  if (isMidnight(state) && !was) {
+    log(state, 'Midnight. The clocktower strikes twelve, and the objectives appear.');
+    events.push({ type: 'midnight' });
+    revealMonster(state, mysteryCtx(state), events);
+    spawnMonsters(state, board, events, random, log);
+  }
 }
 
 export { MONSTERS };

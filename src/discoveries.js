@@ -15,7 +15,7 @@ const S = 256; // decal texture size
 
 // --- decal painters (canvas 2D, centre = cell centre) ---------------------------
 function rng(seed) { let s = seed >>> 0 || 1; return () => ((s = Math.imul(s ^ (s >>> 15), 2246822519) + 0x9e3779b9 >>> 0) / 4294967296); }
-const PAINT = {
+export const PAINT = {
   frost(g, r) {
     const gr = g.createRadialGradient(128, 128, 10, 128, 128, 120);
     gr.addColorStop(0, 'rgba(210,235,255,0.75)'); gr.addColorStop(1, 'rgba(160,200,255,0)');
@@ -152,6 +152,64 @@ const PAINT = {
     g.beginPath(); g.ellipse(128, 128, 70, 45, r(), 0, 7); g.fill();
     for (let k = 0; k < 10; k++) { g.beginPath(); g.arc(128 + (r() - 0.5) * 190, 128 + (r() - 0.5) * 190, 5 + r() * 10, 0, 7); g.fill(); }
   },
+  glass(g, r) {     // Mangled Window: shattered glass and a bent frame
+    g.strokeStyle = 'rgba(200,225,240,0.85)'; g.lineWidth = 1.5;
+    for (let k = 0; k < 22; k++) {
+      const x = 40 + r() * 176, y = 40 + r() * 176, s = 6 + r() * 14;
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x + s, y + s * 0.3); g.lineTo(x + s * 0.4, y + s); g.closePath();
+      g.fillStyle = 'rgba(170,205,225,0.35)'; g.fill(); g.stroke();
+    }
+    g.strokeStyle = 'rgba(60,40,30,0.9)'; g.lineWidth = 6;
+    g.beginPath(); g.moveTo(50, 70); g.lineTo(140, 60); g.lineTo(200, 110); g.stroke();
+  },
+  shriek(g) {       // Inhuman Shriek: jagged sound rings
+    g.strokeStyle = 'rgba(255,170,200,0.75)'; g.lineWidth = 2.5;
+    for (let k = 1; k <= 3; k++) {
+      g.beginPath();
+      for (let a = 0; a <= 36; a++) {
+        const t = (a / 36) * Math.PI * 2, rr = k * 36 + (a % 2 ? 6 : -6);
+        const x = 128 + Math.cos(t) * rr, y = 128 + Math.sin(t) * rr;
+        a ? g.lineTo(x, y) : g.moveTo(x, y);
+      }
+      g.stroke();
+    }
+  },
+  terror(g, r) {    // Lingering Terror: frantic scratches and dropped light
+    PAINT.scattered(g, r);
+    g.strokeStyle = 'rgba(15,10,10,0.85)'; g.lineWidth = 2;
+    for (let k = 0; k < 18; k++) { const x = 40 + r() * 176, y = 40 + r() * 176; g.beginPath(); g.moveTo(x, y); g.lineTo(x + (r() - 0.5) * 50, y + (r() - 0.5) * 50); g.stroke(); }
+  },
+  symbols(g, r) {   // Esoteric Symbols: chalked sigils
+    g.strokeStyle = 'rgba(230,230,220,0.85)'; g.lineWidth = 3;
+    for (let k = 0; k < 5; k++) {
+      const x = 50 + r() * 156, y = 50 + r() * 156, s = 16 + r() * 12;
+      g.beginPath(); g.arc(x, y, s, 0, 7); g.moveTo(x - s, y); g.lineTo(x + s, y); g.moveTo(x, y - s); g.lineTo(x + s * 0.6, y + s * 0.8); g.stroke();
+    }
+  },
+  lightning(g, r) { // Distant Thunder: a lightning-scorched fork
+    g.strokeStyle = 'rgba(20,15,10,0.95)'; g.lineWidth = 7;
+    let x = 128, y = 20; g.beginPath(); g.moveTo(x, y);
+    for (let k = 0; k < 8; k++) { x += (r() - 0.5) * 50; y += 26; g.lineTo(x, y); }
+    g.stroke();
+    g.strokeStyle = 'rgba(190,210,255,0.6)'; g.lineWidth = 2; g.stroke();
+  },
+  eyes(g, r) {      // Feeling of Being Watched: eyes in the dark
+    PAINT.shadow(g, r);
+    for (let k = 0; k < 4; k++) {
+      const x = 60 + r() * 136, y = 60 + r() * 136;
+      for (const dx of [-9, 9]) {
+        const gr = g.createRadialGradient(x + dx, y, 0, x + dx, y, 7);
+        gr.addColorStop(0, 'rgba(255,230,120,1)'); gr.addColorStop(1, 'rgba(255,160,40,0)');
+        g.fillStyle = gr; g.fillRect(x + dx - 7, y - 7, 14, 14);
+      }
+    }
+  },
+  lethargy(g, r) {  // Severe Lethargy: a slumped shape and spilled pills
+    g.fillStyle = 'rgba(30,25,25,0.6)'; g.beginPath(); g.ellipse(128, 128, 70, 30, 0.3, 0, 7); g.fill();
+    g.fillStyle = 'rgba(240,240,230,0.9)';
+    for (let k = 0; k < 14; k++) { g.beginPath(); g.ellipse(60 + r() * 136, 60 + r() * 136, 4, 2.5, r() * 3, 0, 7); g.fill(); }
+  },
+  remains(g, r) { PAINT.withered(g, r); PAINT.bones(g, r); },
   // --- lairs (painted under their 3D pieces) ---
   scorched(g, r) {
     const gr = g.createRadialGradient(128, 128, 10, 128, 128, 128);
@@ -198,7 +256,7 @@ const PAINT = {
   sigil(g) { PAINT.ritual(g); },
 };
 // Which looks glow (additive, unlit) rather than stain the ground.
-const GLOWS = new Set(['frost', 'howl', 'motes', 'psychic', 'ectoplasm', 'whispers', 'static', 'ritual', 'spawn', 'sparks']);
+const GLOWS = new Set(['shriek', 'frost', 'howl', 'motes', 'psychic', 'ectoplasm', 'whispers', 'static', 'ritual', 'spawn', 'sparks']);
 // Lair glow colours.
 const LAIR_GLOW = { scorched: '#ff6a20', grave: '#7aff9a', cave: '#4ab0ff', ritual: '#ff2a1a', ruin: '#c01020', room: '#b080ff', pit: '#6a20c0' };
 

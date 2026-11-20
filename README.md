@@ -551,6 +551,27 @@ pools: all, flesh and blood, spirits and shadows, old-world folklore). Its 13 ca
 - **Secrets stay secret**: the monster, the face-down cards, the spawn point and the dice generator are
   stripped by `publicState()` before anything reaches the screen or another phone.
 
+### Defense, injuries and the monster's turn
+
+From the Player Mat and Monster Ref Sheet (`Monsters_and_Injuries` spreadsheet):
+
+- **Defense slots.** The dice tray has a **Slot to Move / Slot to Defense** switch. Defense has 1 slot, +1 when
+  the turn starts in light. Defense dice stay committed until that player's next turn, so they protect against
+  the monster's action at the end of the round and against Attack Obols mid-turn.
+- **Damage.** An attack's damage is compared with the total of the slotted defense dice: at least the damage is
+  **blocked**; less gives **one tier** on that attack's track (Physical, Mental, Spiritual).
+- **Injuries** (tiers add up; tracks are separate; scoreboard pips and an Injuries tab in the inventory):
+  Physical: Sprained (one die in reserve), Hobbled (−1 movement slot). Mental: Paranoid (−1 defense slot),
+  Terrified (teammates within Mid range, 3 cells, lose a defense slot). Spiritual: Doomed (defense 6s count as
+  1), Hexed (shown; applies once items exist). Tier 3 on any track is **Death's Door**: one die per turn, and any
+  unblocked damage **kills**. Dead players leave the board and are skipped; if everyone dies the night wins.
+- **The monster's turn.** At the start of each round the monster rolls its action die; the matching ability on
+  its card is announced in a banner (tap it to look at the monster) and players in danger get a pulsing red ring
+  and an "In danger" tag. The danger updates live as players move. At the end of the round the monster moves
+  and rolls its damage. Pursue, Outflank, Retreat, Teleport, Attack, Area Attack, Global Attack and Heal are
+  played from the card text (`src/game/monsterTurn.js`); other effects (Seize, Lure, Pin, Drag, Trap, Exhaust,
+  Block doors...) are named in the log and come with each monster's own rules.
+
 ### Adding a monster
 
 Add an entry to `MONSTERS` in `src/game/monsters.js`:

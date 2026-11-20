@@ -245,6 +245,8 @@
       </div>
     </div>
 
+    <!-- The monster's declared action for this round, and who's in danger. -->
+    <div id="intentBanner" class="intent-banner" hidden role="status"></div>
     <!-- Play demo: small game clock (time and turn), top centre. -->
     <div id="gameClock" class="game-clock" hidden aria-live="polite"></div>
     <!-- Play demo: floating controls (work with the panel folded away). -->
@@ -274,9 +276,14 @@
     </div>
     <!-- Dice tray: rolled dice and movement slots (shown after a roll). -->
     <div id="playTray" class="play-tray" hidden>
+      <div class="tray-target seg" id="trayTarget" role="group" aria-label="Tap a die to put it into">
+        <button type="button" data-to="move" class="on">Slot to Move</button>
+        <button type="button" data-to="defense">Slot to Defense</button>
+      </div>
       <div class="tray-row"><span class="tray-label">Rolled</span><div class="tray-dice" id="trayPool"></div></div>
       <div class="tray-row" id="trayReserveRow"><span class="tray-label">Reserve</span><div class="tray-dice" id="trayReserve"></div></div>
       <div class="tray-row"><span class="tray-label">Move</span><div class="tray-dice" id="traySlots"></div><b class="tray-total" id="trayTotal">0</b></div>
+      <div class="tray-row"><span class="tray-label">Defense</span><div class="tray-dice" id="trayDefense"></div><b class="tray-total def" id="trayDefTotal">0</b></div>
       <div class="tray-row tray-actions">
         <span class="tray-hint" id="trayHint">Tap dice to slot them</span>
         <button id="trayMove" class="hud-roll">Move</button>

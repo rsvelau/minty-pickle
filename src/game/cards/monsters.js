@@ -1,5 +1,8 @@
 // Monster cards, transcribed from the physical game (midnight_shift_cards.pdf).
 //
+// Evidence and attack types are checked against the Monster Ref Sheet
+// (Monsters_and_Injuries_11-20-2026.xlsx).
+//
 // Each card:
 //   id, name, hp, toughness (null = ∞), badge (the number in the top-right
 //   corner), traits, note (the rules text under the name), objective,
@@ -94,7 +97,7 @@ export const MONSTER_CARDS = [
       A('physical', 'Inhuman Speed', '1-3', 'Outflank (20) Attack (die)'),
       A('physical', 'Feed', '4-6', 'Lure (die, R4), Consume (die)'),
     ],
-    evidence: { attack: 'M', observations: ['CM', 'HS', 'SD'], lair: 'HC' },
+    evidence: { attack: 'M', observations: ['CM', 'IS', 'SD'], lair: 'HC' }, // card prints HS; the ref sheet says Inhuman Shriek
   },
   {
     id: 'banshee', name: 'Banshee', hp: 15, toughness: 2, badge: 1,

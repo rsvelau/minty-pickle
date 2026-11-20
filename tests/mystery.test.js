@@ -94,7 +94,8 @@ test('an Attack Obol deals one die and reveals the Attack card the first time', 
   const r2 = investigateNext(state, act, 'attack');
   const a2 = r2.events.find((e) => e.type === 'attacked');
   assert.equal(a2.first, false);
-  assert.equal(state.players[0].damage[type], a1.amount + a2.amount);
+  // No defense slotted: each hit is one tier on the attack's track.
+  assert.equal(state.players[0].injuries[type], 2);
 });
 
 test('the evidence narrows the field guide to the right monster', () => {

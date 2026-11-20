@@ -28,6 +28,8 @@
 // board's movement rules, the nearest player, light levels.
 import { cellLabel } from '../state.js';
 import { MONSTER_BY_ID } from './cards/monsters.js';
+import { declareIntent, executeIntent } from './monsterTurn.js';
+import { alive } from './combat.js';
 
 // --- AI helpers ---------------------------------------------------------------
 
@@ -42,7 +44,7 @@ export function reach(board, from) {
 export function nearestPlayer(ctx, from) {
   const field = reach(ctx.board, from);
   let best = null;
-  for (const pl of ctx.state.players) {
+  for (const pl of ctx.state.players.filter((p) => !p.dead)) {
     const d = field.dist[pl.pos];
     if (d < 0) continue;
     if (!best || d < best.dist || (d === best.dist && ctx.random() < 0.5)) best = { player: pl, dist: d, path: field.path(pl.pos) };
@@ -53,7 +55,7 @@ export function nearestPlayer(ctx, from) {
 // Players in a cell or orthogonally next to it (and reachable in one step).
 export function playersInReach(ctx, cell) {
   const field = reach(ctx.board, cell);
-  return ctx.state.players.filter((pl) => pl.pos === cell || field.dist[pl.pos] === 1);
+  return ctx.state.players.filter((pl) => !pl.dead && (pl.pos === cell || field.dist[pl.pos] === 1));
 }
 
 export const lightAt = (ctx, cell) => ctx.board.light[cell] ?? 0;
@@ -116,8 +118,8 @@ export function monsterDef(kind) {
 
 // --- called by the rules -----------------------------------------------------------
 
-function context(state, board, random) {
-  return { state, board, random: () => random(state) };
+function context(state, board, random, log) {
+  return { state, board, random: () => random(state), randInt: (s, n) => Math.floor(random(s) * n), log };
 }
 const label = (board, i) => { const { x, y } = board.grid.coords(i); return cellLabel(x, y); };
 
@@ -133,12 +135,20 @@ export function spawnMonsters(state, board, events, random, log) {
   state.monsters.push(monster);
   log(state, `Something stirs at ${label(board, cell)}.`);
   events.push({ type: 'monsterSpawn', id: monster.id, kind: monster.kind, cell });
+  // Card monsters declare their first action straight away.
+  if (MONSTER_BY_ID[kind]) declareIntent(state, board, monster, context(state, board, random, log), events);
 }
 
 // Every monster takes its turn.
 export function monstersAct(state, board, events, random, log) {
-  const ctx = context(state, board, random);
+  const ctx = context(state, board, random, log);
   for (const monster of state.monsters) {
+    // Card monsters: carry out the declared action, then declare the next.
+    if (MONSTER_BY_ID[monster.kind]) {
+      executeIntent(state, board, monster, ctx, events);
+      if (alive(state).length) declareIntent(state, board, monster, ctx, events);
+      continue;
+    }
     const def = monsterDef(monster.kind);
     if (!def) continue;
     const plan = def.act(ctx, monster) ?? {};

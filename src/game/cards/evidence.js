@@ -1,8 +1,7 @@
 // Evidence: the codes printed on the monster cards, what they're called, and
 // which board transformation each one leaves on the cell where it's found.
 //
-// `provisional: true` marks a name guessed from the code alone; confirm or
-// correct it here and every screen updates.
+// Names from the Monster Ref Sheet (Monsters_and_Injuries spreadsheet).
 //
 // visual: the look painted onto the cell (src/discoveries.js). Lairs change
 // their cell permanently and much more strongly.
@@ -14,36 +13,35 @@ export const ATTACK_TYPES = {
 };
 
 export const OBSERVATIONS = {
-  CS: { label: 'Cold Spots', visual: 'frost' },
-  SH: { label: 'Strange Howls', visual: 'howl' },
   CM: { label: 'Claw Marks', visual: 'claws' },
-  MW: { label: 'Mutilated Wildlife', visual: 'carcass', provisional: true },
-  DT: { label: 'Dark Tracks', visual: 'tracks', provisional: true },
-  SS: { label: 'Sulfur Smell', visual: 'sulfur', provisional: true },
-  SD: { label: 'Strange Disappearances', visual: 'scattered', provisional: true },
-  ES: { label: 'Eerie Silence', visual: 'withered', provisional: true },
-  HS: { label: 'Hunger Signs', visual: 'bones', provisional: true },
-  LT: { label: 'Lights Tampered', visual: 'sparks', provisional: true },
-  IS: { label: 'Insomnia', visual: 'static', provisional: true },
-  OT: { label: 'Odd Tremors', visual: 'cracks', provisional: true },
-  WT: { label: 'Wet Trails', visual: 'puddles', provisional: true },
-  FW: { label: 'Faint Whispers', visual: 'whispers', provisional: true },
-  PB: { label: 'Pooled Blood', visual: 'blood', provisional: true },
-  EV: { label: 'EVP Voices', visual: 'static', provisional: true },
-  WR: { label: 'Withered Roses', visual: 'withered', provisional: true },
-  UI: { label: 'Unexplained Illness', visual: 'sickness', provisional: true },
-  SL: { label: 'Swarming Lights', visual: 'motes', provisional: true },
-  US: { label: 'Unnatural Shadows', visual: 'shadow', provisional: true },
+  MW: { label: 'Mangled Window', visual: 'glass' },
+  SH: { label: 'Strange Howl', visual: 'howl' },
+  SS: { label: 'Sulfurous Smell', visual: 'sulfur' },
+  IS: { label: 'Inhuman Shriek', visual: 'shriek' },
+  SD: { label: 'Signs of Distress', visual: 'scattered' },
+  CS: { label: 'Cold Spot', visual: 'frost' },
+  LT: { label: 'Lingering Terror', visual: 'terror' },
+  ES: { label: 'Esoteric Symbols', visual: 'symbols' },
+  DT: { label: 'Distant Thunder', visual: 'lightning' },
+  OT: { label: 'Odd Tracks', visual: 'tracks' },
+  WT: { label: 'Wet Trail', visual: 'puddles' },
+  FW: { label: 'Feeling of Being Watched', visual: 'eyes' },
+  UI: { label: 'Unexplained Illness', visual: 'sickness' },
+  SL: { label: 'Severe Lethargy', visual: 'lethargy' },
+  PB: { label: 'Pooling Blood', visual: 'blood' },
+  US: { label: 'Uncanny Shadows', visual: 'shadow' },
+  EV: { label: 'Echoing Voices', visual: 'whispers' },
+  WR: { label: 'Withered Remains', visual: 'remains' },
 };
 
 export const LAIRS = {
   TS: { label: 'Transformation Site', visual: 'scorched' },
+  OR: { label: 'Occult Ritual', visual: 'ritual' },
+  HC: { label: 'Hidden Cavern', visual: 'cave' },
   UG: { label: 'Uncovered Grave', visual: 'grave' },
-  HC: { label: 'Hidden Cave', visual: 'cave', provisional: true },
-  OR: { label: 'Occult Ritual Site', visual: 'ritual', provisional: true },
-  BR: { label: 'Blood-Soaked Ruin', visual: 'ruin', provisional: true },
-  UR: { label: 'Unsettled Room', visual: 'room', provisional: true },
-  UD: { label: 'Unlit Depths', visual: 'pit', provisional: true },
+  UD: { label: 'Unnaturally Dark Room', visual: 'pit' },
+  UR: { label: 'Unsettling Room', visual: 'room' },
+  BR: { label: 'Bloodstained Room', visual: 'ruin' },
 };
 
 export const evidenceLabel = (kind, code) =>

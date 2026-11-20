@@ -17,6 +17,7 @@
 // multiplayer host can send each phone only what the players know.
 import { MONSTER_BY_ID, MONSTER_POOLS } from './cards/monsters.js';
 import { ATTACK_TYPES, evidenceLabel } from './cards/evidence.js';
+import { applyDamage } from './combat.js';
 
 // Monsters consistent with the evidence found so far.
 export function matchesEvidence(card, found) {
@@ -104,16 +105,15 @@ export function attackObol(state, board, cell, ctx, events) {
   const type = card.evidence.attack;
   const pl = state.players[state.cur];
   const amount = 1 + ctx.randInt(state, 6);
-  pl.damage ??= { P: 0, M: 0, S: 0 };
-  pl.damage[type] += amount;
   const first = !m.attack;
   if (first) {
     m.attack = { code: type, cell, seat: pl.seat, time: ctx.time() };
     m.found.push({ kind: 'attack', code: type, cell, seat: pl.seat, time: ctx.time() });
   }
-  ctx.log(state, `Something attacks ${pl.name} at ${label(board, cell, ctx.cellLabel)}: ${amount} ${ATTACK_TYPES[type].label} damage` +
-    `${first ? `. The Attack card is revealed: ${ATTACK_TYPES[type].label}.` : '.'}`);
-  events.push({ type: 'attacked', seat: pl.seat, cell, attack: type, amount, first });
+  if (first) ctx.log(state, `Something attacks ${pl.name} at ${label(board, cell, ctx.cellLabel)}. The Attack card is revealed: ${ATTACK_TYPES[type].label}.`);
+  // One die of damage against their slotted defense.
+  const outcome = applyDamage(state, board, pl, type, amount, { log: ctx.log, source: 'Something unseen' }, events);
+  events.push({ type: 'attacked', seat: pl.seat, cell, attack: type, amount, first, outcome, defense: events.at(-1)?.defense ?? 0 });
 }
 
 // The team names the monster (once, before midnight).

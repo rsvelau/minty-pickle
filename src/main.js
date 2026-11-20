@@ -16,6 +16,7 @@ import { createPlay, defaultConfig, OBOLS, OBOL_TYPES, formatClock, obolCounts, 
 import { MONSTER_CARDS, MONSTER_BY_ID, MONSTER_POOLS, DAMAGE_KINDS } from './game/cards/monsters.js';
 import { OBSERVATIONS, LAIRS, ATTACK_TYPES, evidenceLabel } from './game/cards/evidence.js';
 import { matchesEvidence } from './game/mystery.js';
+import { INJURY_TRACKS } from './game/cards/injuries.js';
 import { createMarkers, drawMarkerIcon } from './markers.js';
 import {
   installTerrain, setTerrain, terrainHeight, rayTerrain, isFlat, terrainId, TERRAIN_PRESETS,
@@ -2029,7 +2030,7 @@ function setTool(tool, start) {
   if (tool !== 'play') $('#gameClock').hidden = true;
   if (tool !== 'play') {
     $('#playTray').hidden = true; $('#askCard').hidden = true; $('#obolReveal').hidden = true; $('#inventory').hidden = true;
-    $('#revealSheet').hidden = true; $('#cardPop').hidden = true; $('#casebook').hidden = true;
+    $('#revealSheet').hidden = true; $('#cardPop').hidden = true; $('#casebook').hidden = true; $('#intentBanner').hidden = true;
   }
   document.body.classList.toggle('playing', tool === 'play');
   // Phones: fold the panel away so the board and the play bar are visible.
@@ -2297,6 +2298,7 @@ function renderPlay() {
     slotting: `Slot dice into up to <b>${s.maxSlots}</b> movement slots${s.lit ? ' (in light: extra slot open)' : ''}, then Move.`,
     asking: `Investigation spot. Investigate? <b>${s.steps}</b> move${s.steps === 1 ? '' : 's'} left.`,
     revealing: 'Evidence! Choose a face-down card to turn over.',
+    over: 'Everyone is dead. The night wins. Press Restart to play again.',
     moving: s.fast ? `Fast-forward ⏩ <b>${s.steps}</b> left` : `Running… <b>${s.steps}</b> left (press and hold the board to fast-forward)`,
     choosing: `${s.stopReason ? `Stopped at <b>${s.stopReason}</b>. ` : ''}Choose a direction: <b>${s.steps}</b> move${s.steps === 1 ? '' : 's'} left (${s.options.map((o) => o.name).join(', ')})`,
     done: `On <b>${here}</b>. Roll again.`,
@@ -2311,11 +2313,10 @@ function renderPlay() {
   $('#playBoard').innerHTML = s.players.map((p, k) => {
     const c = p.pos >= 0 ? grid.coords(p.pos) : null;
     const counts = obolCounts(p);
-    return `<div class="pl${k === s.cur ? ' cur' : ''}" data-inv="${k}" title="Open ${p.name}'s inventory"><span class="chip" style="background:${p.colour}">${p.name}</span>` +
+    const inDanger = s.monsters.some((mo) => mo.intent?.danger?.includes(k));
+    return `<div class="pl${k === s.cur ? ' cur' : ''}${p.dead ? ' dead' : ''}${inDanger && !p.dead ? ' danger' : ''}" data-inv="${k}" title="Open ${p.name}'s inventory"><span class="chip" style="background:${p.colour}">${p.name}</span>` +
       `<span>${c ? cellLabel(c.x, c.y) : '–'}</span><span>White dice ${p.white}</span>` +
-      (p.damage && (p.damage.P || p.damage.M || p.damage.S)
-        ? `<span class="obol-row" title="Damage taken (injuries come in Phase B)">Hurt: ${['P', 'M', 'S'].filter((t) => p.damage[t]).map((t) => `${ATTACK_TYPES[t].label} ${p.damage[t]}`).join(' · ')}</span>`
-        : '') +
+      `<span class="inj-row">${injuryPips(p)}${p.dead ? ' <b>Dead</b>' : inDanger ? ' <b style="color:#ff6a50">In danger</b>' : ''}</span>` +
       `<span class="obol-row">${OBOL_TYPES.map((t) => `<span class="obol-count${counts[t] ? '' : ' zero'}" title="${OBOLS[t].label} Obols">${obolHTML(t)}${counts[t]}</span>`).join('')}</span></div>`;
   }).join('');
   $('#playBoard').innerHTML += s.monsters.map((mo) => {
@@ -2327,6 +2328,7 @@ function renderPlay() {
   renderTray();
   renderClock();
   renderAsk();
+  renderIntent();
   renderRevealSheet();
   if (!$('#casebook').hidden) renderCasebook();
   if (!$('#inventory').hidden) renderInventory();
@@ -2343,6 +2345,7 @@ function renderPlay() {
     choosing: `${s.stopReason ? `<b>${s.stopReason}</b> · ` : ''}Tap an arrow · <b>${s.steps}</b> left`,
     asking: `Investigate? · <b>${s.steps}</b> left`,
     revealing: 'Evidence! Choose a card',
+    over: 'Everyone is dead. Restart to play again.',
     done: `On <b>${here}</b>. Roll again.`,
   }[s.phase] ?? '');
   renderChoices();
@@ -2430,10 +2433,13 @@ const play = createPlay({
     markCaseNew();
   },
   onAttacked: (e) => {
-    showCard({ kind: 'attack', code: e.attack, amount: e.amount, first: e.first, sub: `${e.player?.name ?? ''} takes ${e.amount} ${ATTACK_TYPES[e.attack].label} damage` });
+    showCard({ kind: 'attack', code: e.attack, amount: e.amount, first: e.first, sub: hitText({ ...e, source: 'Something unseen' }) });
     if (e.first) markCaseNew();
   },
   onNamed: (e) => showCard({ kind: 'named', monster: e.monster, correct: e.correct }),
+  onDamage: (e) => showCard({ kind: 'hurt', code: e.attack, e }),
+  onIntent: () => renderIntent(),
+  onGameOver: () => showCard({ kind: 'over' }),
   onMonsterRevealed: (e) => showCard({ kind: 'monster', monster: e.monster, correct: e.correct }),
   // A monster lunges: a brief, soft red flash at the edges of the screen.
   onAttack: () => {
@@ -2484,8 +2490,21 @@ function renderTray() {
   const rolling = s.phase === 'rolling';
   // While rolling, every die tumbles.
   $('#trayPool').innerHTML = s.pool.map((d, n) =>
-    dieHTML(rolling ? { ...d, v: 1 + ((s.rollFace + n * 2) % 6) } : d, s.slots.includes(n) ? 'used' : '')).join('');
-  [...$('#trayPool').children].forEach((b, n) => { b.onclick = () => play.toggleSlot(n); });
+    dieHTML(rolling ? { ...d, v: 1 + ((s.rollFace + n * 2) % 6) } : d, s.slots.includes(n) || s.defSlots.includes(n) ? 'used' : '')).join('');
+  [...$('#trayPool').children].forEach((b, n) => { b.onclick = () => play.toggleSlot(n, trayTarget); });
+  document.querySelectorAll('#trayTarget [data-to]').forEach((b) => b.classList.toggle('on', b.dataset.to === trayTarget));
+  // Defense slots (Defense ⬜ +💡⬜), after injuries.
+  const defs = [];
+  const dBase = s.cfg.defenseSlots ?? 1;
+  for (let k = 0; k < Math.max(s.maxDefense, dBase + 1); k++) {
+    const n = s.defSlots[k];
+    if (n !== undefined) defs.push(dieHTML(s.pool[n], 'in-def'));
+    else if (k < s.maxDefense) defs.push(`<span class="tdie slot def">${k >= dBase ? 'light' : ''}</span>`);
+    else defs.push('<span class="tdie slot def" title="Needs light (or lost to an injury)" style="opacity:.35">—</span>');
+  }
+  $('#trayDefense').innerHTML = defs.join('');
+  [...$('#trayDefense').querySelectorAll('.in-def')].forEach((b, k) => { b.onclick = () => play.toggleSlot(s.defSlots[k], 'defense'); });
+  $('#trayDefTotal').textContent = s.defSlots.reduce((a, n) => a + (s.pool[n]?.v ?? 0), 0);
   const slots = [];
   const base = s.cfg.moveSlots, most = Math.max(base, s.cfg.litSlots);
   for (let k = 0; k < most; k++) {
@@ -2500,14 +2519,16 @@ function renderTray() {
   $('#trayReserve').innerHTML = Array.from({ length: s.white }, () =>
     `<button class="tdie white reserve" ${rolling ? 'disabled' : ''} title="Roll this white die (usable this turn only)">roll</button>`).join('');
   [...$('#trayReserve').children].forEach((b) => { b.onclick = () => play.rollWhite(); });
-  [...$('#traySlots').querySelectorAll('.in-slot')].forEach((b, k) => { b.onclick = () => play.toggleSlot(s.slots[k]); });
+  [...$('#traySlots').querySelectorAll('.in-slot')].forEach((b, k) => { b.onclick = () => play.toggleSlot(s.slots[k], 'move'); });
   $('#trayTotal').textContent = rolling ? '…' : play.slotTotal();
   $('#trayMove').disabled = rolling;
   $('#trayMove').textContent = play.slotTotal() ? `Move ${play.slotTotal()}` : 'Stay put';
-  $('#trayHint').textContent = rolling ? 'Rolling…' : s.slots.length < s.maxSlots
-    ? (s.pool.some((d) => d.kind === 'white') ? 'Rolled white dice are discarded after this turn' : 'Tap dice to slot them')
-    : 'Slots full';
+  $('#trayHint').textContent = rolling ? 'Rolling…' : s.deathsDoor ? "Death's Door: one die only"
+    : trayTarget === 'defense' ? 'Defense lasts until your next turn'
+      : (s.pool.some((d) => d.kind === 'white') ? 'Rolled white dice are discarded after this turn' : 'Tap dice to slot them');
 }
+let trayTarget = 'move';
+document.querySelectorAll('#trayTarget [data-to]').forEach((b) => b.addEventListener('click', () => { trayTarget = b.dataset.to; renderTray(); }));
 
 // --- Investigating and Obols ------------------------------------------------------
 const OBOL_GLYPHS = {
@@ -2593,6 +2614,17 @@ function showCard(c) {
     html = `<div class="pc-kind">${c.first ? 'Attacked! The Attack card' : 'Attacked again'}</div>` +
       `<div class="pc-glyph">${ATTACK_GLYPH[c.code]}</div>` +
       `<div class="pc-title">${ATTACK_TYPES[c.code].label}</div><div class="pc-sub">${esc(c.sub)}</div>`;
+  } else if (c.kind === 'hurt') {
+    const e = c.e;
+    card.classList.add('hurt');
+    card.style.setProperty('--atk', ATTACK_TYPES[e.attack].colour);
+    html = `<div class="pc-kind">${esc(e.source)}</div><div class="pc-glyph">${ATTACK_GLYPH[e.attack]}</div>` +
+      `<div class="pc-title">${e.outcome === 'blocked' ? 'Blocked!' : e.outcome === 'killed' ? `${esc(e.player?.name ?? '')} is dead` : esc(INJURY_TRACKS[e.attack].tiers[e.tier - 1].name)}</div>` +
+      `<div class="pc-sub">${esc(hitText(e))}</div>`;
+  } else if (c.kind === 'over') {
+    html = '<div class="pc-kind">The night wins</div><div class="pc-glyph">☠</div><div class="pc-title">Everyone is dead</div>' +
+      '<div class="pc-sub">Restart to try again.</div>';
+    stay = true;
   } else if (c.kind === 'named') {
     const name = MONSTER_BY_ID[c.monster]?.name ?? '';
     html = c.correct
@@ -2745,6 +2777,42 @@ function fieldGuideHTML(my) {
       : `<p class="ge-out-head">${out.length} ruled out (tick “Show ruled out” to see them)</p>`) : '');
 }
 
+// --- Injuries and the monster's declared action -----------------------------------
+function injuryPips(p) {
+  const inj = p.injuries ?? { P: 0, M: 0, S: 0 };
+  return ['P', 'M', 'S'].map((t) => `<span class="inj" title="${INJURY_TRACKS[t].label}: ${inj[t] ? INJURY_TRACKS[t].tiers[inj[t] - 1].name : 'unhurt'}">` +
+    `${t}${[1, 2, 3].map((k) => `<i class="${inj[t] >= k ? `on${k}` : ''}"></i>`).join('')}</span>`).join('');
+}
+function hitText(e) {
+  const who = e.player?.name ?? '';
+  const type = ATTACK_TYPES[e.attack].label;
+  if (e.outcome === 'blocked') return `${who} blocks ${e.amount} ${type} damage (defense ${e.defense}).`;
+  if (e.outcome === 'killed') return `${e.amount} ${type} damage against defense ${e.defense}. ${who} was at Death's Door.`;
+  const tier = INJURY_TRACKS[e.attack].tiers[(e.tier ?? 1) - 1];
+  return `${who} takes ${e.amount} ${type} damage against defense ${e.defense}: ${tier?.name}. ${tier?.text}.`;
+}
+function renderIntent() {
+  const el = $('#intentBanner');
+  const s = play.state;
+  const mo = ui.tool === 'play' ? s.monsters.find((m) => m.intent) : null;
+  el.hidden = !mo;
+  if (!mo) return;
+  const i = mo.intent;
+  const name = monsterDef(mo.kind)?.label ?? 'The monster';
+  const danger = i.danger.map((k) => s.players[k]?.name).filter(Boolean);
+  el.innerHTML = `<b>${esc(name)}</b> rolled ${i.roll}: <b>${esc(i.name)}</b>${i.ability >= 0 ? ` · ${esc(i.text)}` : ''}<br>` +
+    (danger.length ? `<span class="danger">⚠ In danger: ${danger.join(', ')}</span>` : '<span class="muted">No one in reach, for now</span>') +
+    ' <span class="muted">· it acts at the end of the round</span>';
+}
+$('#intentBanner').addEventListener('click', () => {
+  const mo = play.state.monsters.find((m) => m.intent);
+  if (!mo) return;
+  const { x, y } = grid.coords(mo.pos);
+  const p = cellToWorld(x, y);
+  const offset = camera.position.clone().sub(controls.target);
+  camTween = { t: 0, fromPos: camera.position.clone(), fromTarget: controls.target.clone(), toPos: p.clone().add(offset), toTarget: p };
+});
+
 // --- Inventory -----------------------------------------------------------------------
 // Each player's own inventory, in tabs. Opens on the current player (the bag
 // button on the play bar, or I), or on whoever you tap in the scoreboard.
@@ -2762,10 +2830,18 @@ function renderInventory() {
   const tabs = $('#invTabs');
   tabs.innerHTML = Object.entries(INVENTORY_TABS).map(([id, t]) =>
     `<button type="button" role="tab" data-tab="${id}" class="${id === inv.tab ? 'on' : ''}" aria-selected="${id === inv.tab}">` +
-    `${t.label}<span class="n">${pl.inventory[id].length}</span></button>`).join('');
+    `${t.label}<span class="n">${id === 'injuries' ? Object.values(pl.injuries ?? {}).reduce((a, b) => a + b, 0) : pl.inventory[id].length}</span></button>`).join('');
   tabs.querySelectorAll('button').forEach((b) => { b.onclick = () => { inv.tab = b.dataset.tab; renderInventory(); }; });
-  const items = pl.inventory[inv.tab];
   const body = $('#invBody');
+  if (inv.tab === 'injuries') {
+    const inj = pl.injuries ?? { P: 0, M: 0, S: 0 };
+    body.innerHTML = `<div class="inj-list">${['P', 'M', 'S'].map((t) => `<div class="inj-track"><b>${INJURY_TRACKS[t].label}</b>` +
+      INJURY_TRACKS[t].tiers.map((tier, k) => `<div class="inj-tier${inj[t] > k ? ' has' : ''}"><span class="sw" style="background:${tier.colour}"></span>` +
+        `<span><b style="display:inline">${esc(tier.name)}</b> · ${esc(tier.text)}</span></div>`).join('') + '</div>').join('')}</div>` +
+      `<p class="inv-empty" style="padding:12px 4px">${pl.dead ? `${esc(pl.name)} is dead.` : 'Tiers add up; each track is separate. Tier 3 on any track is Death’s Door.'}</p>`;
+    return;
+  }
+  const items = pl.inventory[inv.tab];
   if (!items.length) {
     body.innerHTML = `<p class="inv-empty">${INVENTORY_TABS[inv.tab].empty}</p>`;
     return;
@@ -3172,7 +3248,7 @@ window.addEventListener('pointerdown', (ev) => {
   const t = ev.target;
   const inside = (sel) => t instanceof Element && !!t.closest(sel);
   if (inside('#dialog') || inside('#settings') || inside('#inventory') || inside('#playHud') || inside('#playChoices') || inside('#playTray')
-    || inside('#askCard') || inside('#obolReveal') || inside('#revealSheet') || inside('#cardPop') || inside('#casebook')) return;
+    || inside('#askCard') || inside('#obolReveal') || inside('#revealSheet') || inside('#cardPop') || inside('#casebook') || inside('#intentBanner')) return;
   let closed = false;
   if (panelOpen && !inside('#panel') && !inside('#expand')) { minimizePanel(); closed = true; }
   if (viewOpen && !inside('#viewMenu')) { setViewMenu(false); closed = true; }

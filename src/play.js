@@ -54,6 +54,7 @@ export function createPlay({
   grid, scene, camera, controls, cellToWorld, cellTop, terrainify, cellLabel, onChange,
   onUsed = () => {}, onCollect = () => {}, onObol = () => {}, onAttack = () => {}, onMonster = () => {},
   onEvidence = () => {}, onAttacked = () => {}, onNamed = () => {}, onMonsterRevealed = () => {},
+  onDamage = () => {}, onIntent = () => {}, onGameOver = () => {},
   config = defaultConfig(),
 }) {
   const cfg = config; // live: Game settings edits this object; used at the next new game
@@ -235,10 +236,21 @@ export function createPlay({
   // Ring under the player whose turn it is.
   const haloMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.8, depthWrite: false });
   terrainify(haloMat, { bridge: true });
+  // Red rings under players a monster's declared action would hit.
+  const dangerMat = new THREE.MeshBasicMaterial({ color: '#ff2a1a', transparent: true, opacity: 0.8, depthWrite: false });
+  terrainify(dangerMat, { bridge: true });
+  const dangerRings = [0, 1, 2, 3].map(() => {
+    const r = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.22, 28).rotateX(-Math.PI / 2).translate(0, 0.014, 0), dangerMat);
+    r.raycast = () => {};
+    r.renderOrder = 6;
+    r.visible = false;
+    return r;
+  });
   const halo = new THREE.Mesh(new THREE.RingGeometry(0.1, 0.14, 28).rotateX(-Math.PI / 2).translate(0, 0.012, 0), haloMat);
   halo.raycast = () => {};
   halo.renderOrder = 6;
   group.add(halo);
+  for (const r of dangerRings) group.add(r);
 
   const figures = PLAYERS.map((p) => {
     const fig = makeFigure(p);
@@ -490,10 +502,30 @@ export function createPlay({
         }
         case 'monsterAttack': {
           const mv = view.monsters.get(e.id);
-          if (mv) mv.queue.push({ attack: e.seat, cell: e.cell });
+          if (mv) mv.queue.push({ attack: e.seat, cell: e.cell, fx: [] });
           view.watch = { id: e.id, until: performance.now() + 1500 };
           break;
         }
+        case 'monsterTeleport': {
+          const mv = view.monsters.get(e.id);
+          if (mv) mv.queue.push({ from: e.to, to: e.to });
+          break;
+        }
+        case 'damage': {
+          if (e.source === 'Something unseen') break; // shown with the Attack Obol
+          const fx = () => onDamage({ ...e, player: g()?.players[e.seat] });
+          // Monster strikes: show when its lunge lands.
+          const lunge = [...view.monsters.values()].flatMap((mv) => [mv.anim, ...mv.queue]).reverse()
+            .find((q) => q?.fx && q.attack !== undefined);
+          if (lunge) lunge.fx.push(fx); else fx();
+          break;
+        }
+        case 'monsterIntent':
+          onIntent(e);
+          break;
+        case 'gameOver':
+          onGameOver();
+          break;
         default:
       }
     }
@@ -511,7 +543,7 @@ export function createPlay({
   };
   const rolling = () => view.rollT < ROLL_TIME;
   function roll() { return g()?.phase === 'idle' && act({ type: 'roll' }); }
-  function toggleSlot(n) { if (!rolling()) act({ type: 'slot', die: n }); }
+  function toggleSlot(n, to = 'move') { if (!rolling()) act({ type: 'slot', die: n, to }); }
   function rollWhite() { if (!rolling()) act({ type: 'rollWhite' }); }
   function confirmMove() { if (!rolling()) act({ type: 'move' }); }
   function answerInvestigate(yes) { act({ type: 'investigate', yes: !!yes }); }
@@ -629,7 +661,10 @@ export function createPlay({
         }
         an.t = Math.min(1, an.t + dt / LUNGE_TIME);
         mv.lunge = Math.sin(an.t * Math.PI);
-        if (an.t >= 1) { mv.anim = null; mv.lunge = 0; }
+        if (an.t >= 1) {
+          mv.anim = null; mv.lunge = 0;
+          for (const f of an.fx ?? []) { try { f(); } catch (err) { console.error(err); } }
+        }
       } else if (an) {
         an.t = Math.min(1, an.t + dt / mStep);
         mv.at = centreOf(an.from).lerp(centreOf(an.to), an.t);
@@ -647,9 +682,16 @@ export function createPlay({
       body.position.y = m(0.04) * Math.sin(t * 2.1);                         // a slow, uneasy sway
     }
     // Figures, the turn ring and name tags.
+    const danger = new Set((s.monsters ?? []).flatMap((mo) => mo.intent?.danger ?? []));
+    dangerMat.opacity = 0.55 + 0.4 * Math.sin(t * 6);
+    dangerRings.forEach((r, k) => {
+      const a = view.actors[k];
+      r.visible = danger.has(k) && !!a?.at && !s.players[k]?.dead;
+      if (r.visible) r.position.copy(a.at);
+    });
     figures.forEach(({ fig, tag }, k) => {
       const a = view.actors[k];
-      const on = !!a && !!a.at;
+      const on = !!a && !!a.at && !s.players[k]?.dead;
       fig.visible = tag.visible = on;
       if (!on) return;
       fig.position.copy(a.at);
@@ -748,6 +790,9 @@ export function createPlay({
     get pool() { return g()?.pool ?? []; },
     get slots() { return g()?.slots ?? []; },
     get maxSlots() { return g()?.maxSlots ?? 0; },
+    get defSlots() { return g()?.defSlots ?? []; },
+    get maxDefense() { return g()?.maxDefense ?? 0; },
+    get deathsDoor() { return !!g()?.deathsDoor; },
     get lit() { return !!g()?.lit; },
     get bag() { return g()?.bag ?? []; },
     get ask() { return g()?.ask ?? null; },
