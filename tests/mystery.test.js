@@ -147,3 +147,45 @@ test('a specific monster can be chosen (testing)', () => {
     assert.ok(state.mystery.pool.includes(id));
   }
 });
+
+test('at midnight a found Lair is where the monster rises', () => {
+  const board = createBoard(street());
+  const { state } = newGame(board, { seed: 12, config: { players: 1, turnsToMidnight: 1 } });
+  const act = (a) => applyAction(state, board, { ...a, seat: state.cur });
+  investigateNext(state, act, 'evidence');
+  const lairIdx = state.mystery.deck.findIndex((c) => c.kind === 'lair');
+  act({ type: 'reveal', card: lairIdx });
+  const lairCell = state.players[0].pos;
+  if (state.phase === 'slotting') act({ type: 'end' });
+  // The round ends: midnight.
+  assert.ok(state.mystery.revealed);
+  assert.equal(state.monsters[0].pos, lairCell);
+});
+
+test('at midnight a hidden Lair takes over an undiscovered investigation spot', () => {
+  const board = createBoard(street());
+  const { state, events } = newGame(board, { seed: 13, startMode: 'midnight', config: { players: 1 } });
+  const lair = state.mystery.found.find((f) => f.kind === 'lair');
+  assert.ok(lair, 'the lair card turned over');
+  assert.equal(board.grid.cells[lair.cell].marker, 'investigation');
+  assert.ok(state.used.includes(lair.cell));
+  assert.equal(state.monsters[0].pos, lair.cell);
+  assert.ok(events.some((e) => e.type === 'evidence' && e.kind === 'lair' && e.midnight));
+});
+
+test('monsters only walk on walkable cells', () => {
+  const g = street();
+  // A blocked row between the monster and the player.
+  for (let x = 0; x < 20; x++) g.apply(g.index(x, 13), { area: 'outdoor', sub: 'forest', walkable: false }, { silent: true });
+  for (let x = 0; x < 20; x++) g.apply(g.index(x, 14), { area: 'outdoor', sub: 'street' }, { silent: true });
+  const board = createBoard(g);
+  const { state } = newGame(board, { seed: 3, startMode: 'midnight', config: { players: 1, monsterPick: 'werewolf' } });
+  const mo = state.monsters[0];
+  mo.pos = g.index(10, 14);
+  mo.intent = { roll: 1, ability: 0, name: 'Vicious Pursuit', kind: 'physical', text: 'Pursue (8) and Attack (4)', ops: [{ op: 'pursue', n: 8 }, { op: 'attack', dmg: { fixed: 4 } }], unknown: [], danger: [] };
+  const act = (a) => applyAction(state, board, { ...a, seat: 0 });
+  act({ type: 'roll' });
+  const r = act({ type: 'end' });
+  for (const e of r.events.filter((ev) => ev.type === 'monsterStep')) assert.ok(g.cells[e.to].walkable, `stepped onto ${e.to}`);
+  assert.ok(g.cells[mo.pos].walkable);
+});

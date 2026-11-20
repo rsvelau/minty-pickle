@@ -29,6 +29,21 @@ export function matchesEvidence(card, found) {
   return true;
 }
 
+// Investigation spots nobody has used yet (on walkable cells).
+function openSpots(state, board) {
+  const out = [];
+  board.grid.cells.forEach((c, i) => {
+    if (c.marker === 'investigation' && c.walkable && !state.used?.includes(i)) out.push(i);
+  });
+  return out;
+}
+// Keep `current` if it's still an open spot, else draw one at random.
+function lairSpot(state, board, randInt, current) {
+  const spots = openSpots(state, board);
+  if (!spots.length) return null;
+  return spots.includes(current) ? current : spots[randInt(state, spots.length)];
+}
+
 export function setupMystery(state, board, { random, randInt, farthestCell }) {
   const pool = (MONSTER_POOLS[state.config.monsterPool] ?? MONSTER_POOLS.all).ids.filter((id) => MONSTER_BY_ID[id]);
   // A specific monster (Game settings, for testing), else a random one from the pool.
@@ -45,7 +60,9 @@ export function setupMystery(state, board, { random, randInt, farthestCell }) {
     flipped: [],          // indices of deck cards turned over
     found: [],            // [{ kind, code, cell, seat, time }] in order found
     attack: null,         // { code, cell, seat, time } once the Attack card shows
-    spawnCell: farthestCell(),
+    // Where it will rise: the Lair once found; until then, the undiscovered
+    // investigation spot that would become the Lair at midnight.
+    spawnCell: lairSpot(state, board, randInt, -1) ?? farthestCell(),
     guess: null,          // { id, seat, correct }
     initiative: false,
     revealed: false,      // midnight has come: the monster is known
@@ -91,6 +108,7 @@ export function revealEvidence(state, board, index, ctx, events) {
   const pl = state.players[state.cur];
   const entry = { kind: card.kind, code: card.code, cell, seat: pl.seat, time: ctx.time() };
   m.found.push(entry);
+  if (card.kind === 'lair') m.spawnCell = cell; // it will rise here
   ctx.log(state, `${pl.name} found evidence at ${label(board, cell, ctx.cellLabel)}: ${evidenceLabel(card.kind, card.code)}` +
     `${card.kind === 'lair' ? ' (the Lair)' : ''}.`);
   events.push({ type: 'evidence', seat: pl.seat, cell, kind: card.kind, code: card.code, index });
@@ -135,9 +153,26 @@ export function nameMonster(state, id, ctx, events) {
 }
 
 // Midnight: the monster is revealed.
-export function revealMonster(state, ctx, events) {
+export function revealMonster(state, board, ctx, events) {
   const m = state.mystery;
   if (!m || m.revealed) return;
+  // The Lair: where it was found; if still hidden, an undiscovered
+  // investigation spot becomes the Lair (its card turns over there).
+  const lair = m.found.find((f) => f.kind === 'lair');
+  if (lair) m.spawnCell = lair.cell;
+  else {
+    const spot = lairSpot(state, board, ctx.randInt, m.spawnCell);
+    const index = m.deck.findIndex((c) => c.kind === 'lair');
+    if (spot !== null && index >= 0) {
+      m.spawnCell = spot;
+      m.flipped.push(index);
+      state.used.push(spot);
+      const code = m.deck[index].code;
+      m.found.push({ kind: 'lair', code, cell: spot, seat: null, time: ctx.time() });
+      ctx.log(state, `The Lair reveals itself at ${label(board, spot, ctx.cellLabel)}: ${evidenceLabel('lair', code)}.`);
+      events.push({ type: 'evidence', seat: null, cell: spot, kind: 'lair', code, index, midnight: true });
+    }
+  }
   m.revealed = true;
   const card = MONSTER_BY_ID[m.monster];
   ctx.log(state, `It's the ${card.name}.`);

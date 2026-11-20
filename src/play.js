@@ -465,7 +465,7 @@ export function createPlay({
           onUsed(); // objectives appear
           break;
         case 'evidence':
-          attachToArrival(view.actors[e.seat], e.cell, () => {
+          attachToArrival(e.seat === null ? null : view.actors[e.seat], e.cell, () => {
             view.shownFinds = Math.max(view.shownFinds, (g()?.mystery?.found.findIndex((f) => f.cell === e.cell && f.code === e.code) ?? -1) + 1);
             refreshDiscoveries();
             onEvidence({ ...e, player: g()?.players[e.seat] });

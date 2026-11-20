@@ -546,7 +546,10 @@ pools: all, flesh and blood, spirits and shadows, old-world folklore). Its 13 ca
   away), with health, toughness, weaknesses, immunities, objective and abilities. The team may **name the
   monster once before midnight**; a correct name earns **Initiative**: its spawn point is marked ☠ on the map
   and the objective markers show early.
-- **Midnight**: the monster is revealed (its full entry) and appears at its spawn point. Until each monster's
+- **Midnight**: the monster is revealed (its full entry) and rises from its **Lair**: where the Lair card was
+  found, or, if it's still hidden, a random undiscovered Investigation spot becomes the Lair (its card turns over
+  and the cell transforms) and it rises there. With Initiative, that spot is the one marked ☠. Monsters only
+  walk on walkable cells unless their own rules say otherwise. Until each monster's
   own abilities are written it hunts like the test stalker.
 - **Secrets stay secret**: the monster, the face-down cards, the spawn point and the dice generator are
   stripped by `publicState()` before anything reaches the screen or another phone.

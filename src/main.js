@@ -2430,7 +2430,7 @@ const play = createPlay({
     toast(`The ${monsterDef(kind)?.label ?? 'monster'} has appeared at ${cellLabel(x, y)}.`);
   },
   onEvidence: (e) => {
-    showCard({ kind: e.kind, code: e.code, sub: `Found by ${e.player?.name ?? ''} · added to the Casebook` });
+    showCard({ kind: e.kind, code: e.code, sub: e.midnight ? 'At midnight the Lair reveals itself · added to the Casebook' : `Found by ${e.player?.name ?? ''} · added to the Casebook` });
     markCaseNew();
   },
   onAttacked: (e) => {
@@ -2717,7 +2717,7 @@ function casebookHTML(my) {
   const slot = (kind, f, label, wide = false) => (f
     ? `<button type="button" class="case-slot filled${wide ? ' wide' : ''}" data-goto="${f.cell}" title="Show where it was found">` +
       `<span class="cs-kind">${label}</span><span class="cs-name">${esc(evidenceLabel(kind, f.code))}</span>` +
-      `<span class="cs-where">${esc(play.state.players[f.seat]?.name ?? '')} · ${placeLabel(f.cell)} · ${esc(f.time)}</span></button>`
+      `<span class="cs-where">${esc(f.seat === null ? 'Revealed at midnight' : play.state.players[f.seat]?.name ?? '')} · ${placeLabel(f.cell)} · ${esc(f.time)}</span></button>`
     : `<div class="case-slot empty${wide ? ' wide' : ''}"><span class="cs-kind">${label}</span><span class="cs-name">?</span>` +
       `<span class="cs-where">${kind === 'attack' ? 'Revealed when it attacks someone' : 'Turn over an Evidence card'}</span></div>`);
   const obs = my.found.filter((f) => f.kind === 'observation');

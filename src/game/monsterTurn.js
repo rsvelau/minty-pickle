@@ -125,7 +125,7 @@ function nearestLight(state, board, from) {
   let best = -1, bd = Infinity;
   const a = board.grid.coords(from);
   board.light.forEach((v, i) => {
-    if (v < state.config.litThreshold) return;
+    if (v < state.config.litThreshold || !board.grid.cells[i].walkable) return;
     const b = board.grid.coords(i);
     const d = Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
     if (d < bd) { bd = d; best = i; }

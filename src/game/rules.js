@@ -162,7 +162,7 @@ export function newGame(board, setup = {}) {
     state.ask = null;
     state.stopAt = -1;
     if (isMidnight(state)) {
-      revealMonster(state, mysteryCtx(state), events);
+      revealMonster(state, board, mysteryCtx(state), events);
       spawnMonsters(state, board, events, random, log);
     }
   }
@@ -531,7 +531,7 @@ function endRound(state, board, events) {
   if (isMidnight(state) && !was) {
     log(state, 'Midnight. The clocktower strikes twelve, and the objectives appear.');
     events.push({ type: 'midnight' });
-    revealMonster(state, mysteryCtx(state), events);
+    revealMonster(state, board, mysteryCtx(state), events);
     spawnMonsters(state, board, events, random, log);
   }
 }
