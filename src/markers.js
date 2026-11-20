@@ -302,5 +302,5 @@ export function createMarkers(group) {
 
   function setVisible(v) { root.visible = v; }
 
-  return { update, tick, setVisible, burst };
+  return { update, tick, setVisible, burst, busy: () => bursts.length > 0 };
 }

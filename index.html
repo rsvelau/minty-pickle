@@ -186,6 +186,9 @@
     </div>
     <div id="toast" class="toast" role="status" hidden></div>
 
+    <!-- A monster attack: a soft red flash at the screen edges. -->
+    <div id="attackFlash" class="attack-flash" aria-hidden="true"></div>
+    <div id="fps" class="fps" hidden></div>
     <!-- Play demo: "Investigate?" when a runner reaches an Investigation space. -->
     <div id="askCard" class="ask-card" hidden role="dialog" aria-labelledby="askTitle">
       <div class="ask-top">
@@ -278,6 +281,13 @@
           <label class="vm-chip"><input type="checkbox" id="optAtmos" checked />Atmosphere</label>
           <label class="vm-chip"><input type="checkbox" id="optLowWalls" />Low walls</label>
           <label class="vm-chip"><input type="checkbox" id="optMarkers" checked />Markers</label>
+          <label class="vm-chip"><input type="checkbox" id="optFps" />FPS</label>
+        </div>
+        <span class="vm-label">Quality</span>
+        <div class="vm-grid vm-grid-3" id="qualityButtons">
+          <button data-quality="low" title="Phones that run warm: lower resolution, no shadows, fewer trees and less rain">Low</button>
+          <button data-quality="medium" title="Most phones">Medium</button>
+          <button data-quality="high" title="Computers and recent phones">High</button>
         </div>
       </div>
     </nav>

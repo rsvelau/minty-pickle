@@ -417,13 +417,32 @@ Trees between the camera and the board dissolve so they never hide cells.
 npm install
 npm run dev        # http://localhost:5173
 npm run build      # static site in dist/ (works from any sub-path, e.g. GitHub Pages)
+npm test           # headless rules tests (plain Node: no browser, no three.js)
 ```
+
+## Performance on phones
+
+- **Render on demand.** The scene redraws at full rate only while something is happening (a finger or the
+  camera moving, a runner jogging, dice tumbling, a marker burst, a monster stalking, midnight setting in).
+  Otherwise it ticks over at an idle rate, so rain, water and flicker keep moving but the phone stays cool.
+- **Quality** (View menu: Low / Medium / High, remembered per device). Sets render resolution, shadows, how
+  many trees ring the town, how much rain falls, and the idle frame rate:
+
+  | | Resolution | Shadows | Trees | Rain | Idle fps |
+  |---|---|---|---|---|---|
+  | Low | 1× | off | 35% | 35% | 12 |
+  | Medium | up to 1.5× | 1024 | 65% | 60% | 20 |
+  | High | up to 2× | 2048 | 100% | 100% | 30 |
+
+  Phones start on Medium, computers on High. `QUALITY` in `src/main.js`.
+- **FPS** (View menu) shows the real frame rate and whether it's in active or idle mode: handy when trying
+  the game on a phone.
 
 ## View menu
 
 The round **eye button** in the top-right corner opens a compact column of view controls (`V` toggles it):
 **Layer** (All / Area / Light / Move), **Camera** (Angled / Top / Orbit mode) and **Show** toggles (Labels,
-Atmosphere, Low walls, Markers). The button shows the current layer even when the menu is closed. Buttons
+Atmosphere, Low walls, Markers, FPS) and **Quality** (Low / Medium / High). The button shows the current layer even when the menu is closed. Buttons
 are at least 40 px tall for fingers. The menu starts open on wide screens and closed on phones, and
 remembers how you left it.
 
@@ -485,13 +504,76 @@ cells it separates (`null` past the board edge).
 Older files still import: version 1 (`"indoor": true/false`) and version 2 (no subcategories for
 outdoor/indoor, no edges) are converted on load, outdoor to Ground and indoor to Hardwood.
 
+## Game architecture (rules, view, sessions)
+
+The game is split so the same rules can run on one phone today and on a server for multiplayer later:
+
+- **Rules** (`src/game/rules.js`, `src/game/monsters.js`): the whole game as **plain JSON state** and pure
+  functions. `newGame(board, setup)` makes a game; `applyAction(state, board, action)` applies one action
+  (`roll`, `slot`, `rollWhite`, `move`, `choose`, `investigate`) and returns `events` (step, collect, obol,
+  rolled, turn, midnight, monsterSpawn, monsterStep, monsterAttack). No three.js, no DOM, no timers.
+  **All randomness** (dice, Obol draws, monster choices) comes from a seeded generator kept *in the state*,
+  so whoever applies the actions decides every roll, and replaying the same actions from the same seed gives
+  the same game. Actions carry a `seat`; one for a seat that isn't the current player is rejected.
+- **Board** (`src/game/board.js`): the rules read the map through `createBoard(grid)` (light levels, key
+  groups, start cell, cached until the board changes). `boardFromJSON(saved)` rebuilds it from a saved board,
+  e.g. on a server.
+- **Sessions** (`src/game/session.js`): the only thing the view talks to. `createLocalSession` is today's
+  hot-seat game on one device. `createHost` / `createClient` are the multiplayer shape (below).
+- **View** (`src/play.js`): figures, animation, camera, name tags, the dice tumble, monster figures. It sends
+  actions to the session and animates the events that come back; it never changes the game itself.
+- **Tests** (`tests/rules.test.js`, `npm test`): whole games played headless by a bot, determinism, JSON
+  round-trips, rejected moves, Obols, midnight, monsters stalking and attacking, the board travelling as
+  JSON, and a host with two phones staying in sync with seats enforced.
+
+### Adding a monster
+
+Add an entry to `MONSTERS` in `src/game/monsters.js`:
+
+- `label`, `note`: shown in Game settings (Monster at midnight).
+- `speed`: cells per monster turn.
+- `spawn(ctx)`: the cell where it appears at midnight.
+- `act(ctx, monster)`: its turn, returning `{ path: [cells...], attack: seat | null, say?: text }`. The rules
+  check every step against the board's walls and doors and stop at the first illegal one, and only allow an
+  attack on a player in or next to its cell.
+- `onAttack(ctx, monster, player)` (optional): what an attack does. Without it an attack is logged and
+  animated.
+- `look`: which 3D figure to use (`monsterLooks` in `src/play.js`; `shade` is the stooped figure with ember
+  eyes).
+
+Helpers for AI: `reach` (walking distances and paths over the real movement rules), `nearestPlayer`,
+`playersInReach`, `lightAt`, `farthestFromPlayers`. Use `ctx.random()` for any randomness so a server makes
+the same choices. Monsters act once at the end of every turn from midnight on. The **Test stalker** shows the
+pattern: it appears as far from the players as it can, hunts the nearest one through the dark, won't step
+into a well-lit cell, and lunges (with a soft red flash at the screen edges) when it reaches them.
+
+### Multiplayer (planned: a hosted realtime service)
+
+Exactly one **host** owns the state and applies every action; phones are **clients** that send actions and
+mirror the host. The host can be a small server or a cloud function next to the realtime service (or one
+player's device). They talk through a **transport** with two methods (`send(message)`,
+`onMessage(handler)`), so any realtime service fits behind it (Firebase, Supabase Realtime, PartyKit,
+Cloudflare Durable Objects...). Messages are plain JSON:
+
+- client → host: `join`, `claim` (a seat), `action`
+- host → clients: `update` (`seq`, the whole state, the events, who holds which seat), `reject`
+
+Every update carries the whole state (it's small), so a phone that drops off (iPhones pause pages when
+locked) catches up from the next update or by sending `join`. To switch the app over: build a transport on
+the chosen service, run `createHost` with `boardFromJSON(savedBoard)` where the rules should live, and give
+`play.js` a `createClient` session instead of the local one; the view needs no other changes. `loopback()`
+is an in-memory transport used by the tests and is a template for a real one.
+
 ## Code layout
 
 - `src/state.js` — grid data model, strokes, undo/redo, JSON (de)serialization. No rendering.
-- `src/main.js` — three.js scene, tile rendering, bridges, painting, UI wiring.
+- `src/game/` — the game rules, board adapter, monsters and sessions (see above). No rendering.
+- `src/main.js` — three.js scene, tile rendering, bridges, painting, UI wiring, quality and render loop.
 - `src/water.js` — water surface shader (flow-mapped river currents, still lakes).
 - `src/props.js` — walkable/blocked props for every surface (`VARIANTS`).
-- `src/play.js` — the playable demo (die roll, stepping, fork choices).
+- `src/play.js` — the play demo's view: figures, animation, camera, monster looks.
+- `src/clocktower.js` — the Old Clocktower model and its hands.
+- `src/dread.js` — midnight flicker and tree sway.
 - `src/markers.js` — gameplay marker badges and icons.
 - `src/bridge.js` — steel truss bridge structures built from connected bridge cells.
 - `src/street.js` — street surfaces: lane lines, crosswalks, sidewalks, chosen from neighbouring cells.

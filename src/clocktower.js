@@ -247,5 +247,5 @@ export function createClocktowers(parent) {
 
   function clear() { parent.remove(root); }
 
-  return { update, setTime, setGlow, tick, clear, materials: Object.values(mats) };
+  return { update, setTime, setGlow, tick, clear, busy: () => shown !== target && towers.length > 0, materials: Object.values(mats) };
 }

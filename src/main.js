@@ -12,7 +12,7 @@ import { createStreets } from './street.js';
 import { createBridges } from './bridge.js';
 import { createClocktowers } from './clocktower.js';
 import { dreadUniforms, swayUniforms, setLightSeeds, flickerize, flickerAt, swayFir } from './dread.js';
-import { createPlay, defaultConfig, OBOLS, OBOL_TYPES, formatClock, obolCounts, INVENTORY_TABS } from './play.js';
+import { createPlay, defaultConfig, OBOLS, OBOL_TYPES, formatClock, obolCounts, INVENTORY_TABS, MONSTERS } from './play.js';
 import { createMarkers, drawMarkerIcon } from './markers.js';
 import {
   installTerrain, setTerrain, terrainHeight, rayTerrain, isFlat, terrainId, TERRAIN_PRESETS,
@@ -189,7 +189,7 @@ grid.elevationAt = (x, y) => cellLevel(x, y) * METERS_PER_CELL;
 
 const container = document.getElementById('app');
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // replaced by applyQuality below
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -306,6 +306,53 @@ moon.shadow.mapSize.set(2048, 2048);
 moon.shadow.bias = -0.0008;
 scene.add(moon);
 scene.add(moon.target);
+
+// --- Quality (per device) ------------------------------------------------------
+// Phones run this for a whole game night, so heat and battery matter more
+// than peak frame rate. Each level sets the render resolution, shadows, how
+// many trees surround the town, how much rain falls, and the "idle" frame
+// rate used while nothing is moving (see the render loop at the bottom).
+const QUALITY = {
+  low: { pixelRatio: 1, shadows: false, shadowSize: 1024, trees: 0.35, rain: 0.35, idleFps: 12 },
+  medium: { pixelRatio: 1.5, shadows: true, shadowSize: 1024, trees: 0.65, rain: 0.6, idleFps: 20 },
+  high: { pixelRatio: 2, shadows: true, shadowSize: 2048, trees: 1, rain: 1, idleFps: 30 },
+};
+const QUALITY_KEY = 'minty-pickle.quality';
+const isPhoneish = () => window.matchMedia?.('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 900;
+let qualityName = (() => {
+  try { const q = localStorage.getItem(QUALITY_KEY); if (QUALITY[q]) return q; } catch { /* ignore */ }
+  return isPhoneish() ? 'medium' : 'high';
+})();
+let quality = QUALITY[qualityName];
+function applyQuality(name) {
+  qualityName = QUALITY[name] ? name : 'high';
+  quality = QUALITY[qualityName];
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, quality.pixelRatio));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  if (renderer.shadowMap.enabled !== quality.shadows) {
+    renderer.shadowMap.enabled = quality.shadows;
+    moon.castShadow = quality.shadows;
+    // Materials compile differently with shadows on or off.
+    scene.traverse((o) => { for (const mat of [].concat(o.material ?? [])) mat.needsUpdate = true; });
+  }
+  if (moon.shadow.mapSize.x !== quality.shadowSize) {
+    moon.shadow.mapSize.set(quality.shadowSize, quality.shadowSize);
+    moon.shadow.map?.dispose();
+    moon.shadow.map = null;
+  }
+  if (typeof surroundFirs !== 'undefined' && surroundFirs) surroundFirs.count = Math.round(surroundFirsPlaced * quality.trees);
+  document.querySelectorAll('[data-quality]').forEach((b) => b.classList.toggle('on', b.dataset.quality === qualityName));
+  wake();
+}
+
+// --- Render on demand ------------------------------------------------------------
+// The scene redraws at full rate only while something is happening: the
+// camera or a finger moving, a runner jogging, dice tumbling, a marker
+// burst, a camera tween, tiles easing, midnight setting in. Otherwise it
+// ticks over at the quality's idle rate (rain, water and flicker keep going,
+// just more slowly), which keeps phones cool. wake(ms) asks for full rate.
+let wakeUntil = 0;
+function wake(ms = 1200) { wakeUntil = Math.max(wakeUntil, performance.now() + ms); }
 
 // ---------------------------------------------------------------------------
 // Shared materials / geometry
@@ -1441,6 +1488,7 @@ ghostHouse.visible = false;
 scene.add(ghostHouse);
 
 let porchLight = null, houseWindow = null;
+let surroundFirs = null, surroundFirsPlaced = 0; // the forest ring (thinned on lower quality)
 function buildSurroundings() {
   disposeChildren(surroundGroup);
   const rnd = rand32(90210);
@@ -1498,6 +1546,9 @@ function buildSurroundings() {
   firs.count = placed;
   firs.computeBoundingSphere();
   surroundGroup.add(firs);
+  surroundFirs = firs;
+  surroundFirsPlaced = placed;
+  firs.count = Math.round(placed * quality.trees);
 }
 
 // Drizzle: streaks ~1.5 m long, spread over the board and the near forest.
@@ -1538,7 +1589,7 @@ function spawnDrop(i, y) {
 function updateRain(dt) {
   // At midnight: twice the drops, falling faster and driven by the wind.
   const d = dread;
-  const n = Math.round(rainSpeed.length * (0.5 + 0.5 * d));
+  const n = Math.round(rainSpeed.length * (0.5 + 0.5 * d) * quality.rain);
   rain.geometry.setDrawRange(0, n * 2);
   rainMat.opacity = 0.22 + 0.16 * d;
   rainMat.color.copy(RAIN_GREY).lerp(RAIN_RED, d); // blood-red at midnight
@@ -2351,10 +2402,16 @@ function saveConfig() {
 const play = createPlay({
   config: gameConfig,
   onObol: (draw) => showObol(draw),
-  lightAt: (i) => lightLevels[i] ?? 0,
+  // A monster lunges: a brief, soft red flash at the edges of the screen.
+  onAttack: () => {
+    const el = $('#attackFlash');
+    el.classList.remove('on');
+    void el.offsetWidth; // restart the fade
+    el.classList.add('on');
+  },
   grid, scene, camera, controls, cellToWorld, terrainify, cellLabel,
   cellTop: (i) => Math.max(visibleTop(i), WATER_Y) + 0.01,
-  onChange: renderPlay,
+  onChange: () => { wake(); renderPlay(); },
   onUsed: () => { refreshMarkers(); refreshPropsAndWalls(); },
   onCollect: (i, type, text) => {
     const { x, y } = grid.coords(i);
@@ -2522,6 +2579,9 @@ const SETTINGS = [
   { section: 'Markers' },
   { key: 'stopAtMarkers', label: 'Stop on every marker', note: 'Choose a way on at each marker', bool: true },
   { key: 'askInvestigate', label: 'Ask before investigating', note: '"Investigate?" on Investigation spaces', bool: true },
+  { section: 'Monster' },
+  { key: 'monster', label: 'Monster at midnight', note: 'Monsters are a work in progress: try the test stalker',
+    choice: [['none', 'None'], ...Object.entries(MONSTERS).map(([id, d]) => [id, d.label])] },
   { section: 'Obol bag' },
   ...OBOL_TYPES.map((t) => ({ obol: t, label: `${OBOLS[t].label} Obols`, note: OBOLS[t].note, min: 0, max: 20 })),
 ];
@@ -2553,7 +2613,19 @@ function renderSettings() {
       saveConfig();
       renderSettings();
     };
-    if (f.bool) {
+    if (f.choice) {
+      const wrap = document.createElement('div');
+      wrap.className = 'seg set-choice';
+      for (const [value, text] of f.choice) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = text;
+        b.classList.toggle('on', get() === value);
+        b.addEventListener('click', () => set(value));
+        wrap.appendChild(b);
+      }
+      row.appendChild(wrap);
+    } else if (f.bool) {
       const cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.id = id;
@@ -3098,8 +3170,18 @@ function updateDread(dt) {
 }
 
 const clock = new THREE.Clock();
+let heightsEasing = false;
+let lastFrame = 0;
+const fpsMeter = { frames: 0, since: performance.now(), show: false, active: false };
 renderer.setAnimationLoop(() => {
-  const dt = Math.min(clock.getDelta(), 0.05);
+  // Full rate while anything moves; the idle rate otherwise (see wake()).
+  const now = performance.now();
+  const active = now < wakeUntil || !!camTween || heightsEasing || play.busy() || markers.busy()
+    || clocktowers.busy() || (dread > 0 && dread < 1) || (towerOut > 0 && towerOut < 1);
+  if (!active && now - lastFrame < 1000 / quality.idleFps - 2) return;
+  lastFrame = now;
+  fpsMeter.active = active;
+  const dt = Math.min(clock.getDelta(), 0.1);
 
   if (camTween) {
     camTween.t = Math.min(1, camTween.t + dt / 0.6);
@@ -3127,6 +3209,7 @@ renderer.setAnimationLoop(() => {
     }
   }
   if (moved) { tiles.instanceMatrix.needsUpdate = true; tiles.computeBoundingSphere(); }
+  heightsEasing = moved;
 
   if (hoverIndex >= 0) {
     const { x, y } = grid.coords(hoverIndex);
@@ -3158,6 +3241,33 @@ renderer.setAnimationLoop(() => {
   updateTreeFade();
   if (atmos.visible) updateRain(dt);
   renderer.render(scene, camera);
+  // FPS readout (View → FPS).
+  fpsMeter.frames++;
+  if (now - fpsMeter.since >= 1000) {
+    if (fpsMeter.show) {
+      const fps = Math.round((fpsMeter.frames * 1000) / (now - fpsMeter.since));
+      $('#fps').textContent = `${fps} fps · ${fpsMeter.active ? 'active' : 'idle'} · ${qualityName}`;
+    }
+    fpsMeter.frames = 0;
+    fpsMeter.since = now;
+  }
+});
+
+// Anything the player does wakes the renderer to full rate.
+for (const type of ['pointerdown', 'pointermove', 'wheel', 'keydown', 'touchstart', 'touchmove']) {
+  window.addEventListener(type, () => wake(), { passive: true, capture: true });
+}
+controls.addEventListener('change', () => wake(400));
+grid.onChange(() => wake());
+applyQuality(qualityName);
+document.querySelectorAll('[data-quality]').forEach((b) => b.addEventListener('click', () => {
+  applyQuality(b.dataset.quality);
+  try { localStorage.setItem(QUALITY_KEY, qualityName); } catch { /* ignore */ }
+}));
+$('#optFps').addEventListener('change', (e) => {
+  fpsMeter.show = e.target.checked;
+  $('#fps').hidden = !fpsMeter.show;
+  $('#fps').textContent = '…';
 });
 
 // Handy for debugging / future tooling from the console.
