@@ -820,3 +820,15 @@ body.playing .fps { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
 .journal p, .journal .case-note, .journal .ge-body p { color: var(--ink); }
 .journal .case-note { color: var(--ink-soft); }
 .card-pop .paper-card p, .paper-card .ge-body p { color: var(--ink); }
+
+/* Settings: choices and dropdowns sit under their label, full width. */
+.set-row.stack { flex-direction: column; align-items: stretch; gap: 6px; padding: 8px 0 10px; }
+.set-row.stack label { flex: none; }
+.set-choice { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; justify-content: stretch; }
+.set-choice button { min-height: 40px; padding: 4px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.set-select {
+  width: 100%; min-height: 42px; padding: 8px 10px; border-radius: 8px; font: inherit; font-size: 14px;
+  color: #f3e3cf; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line);
+}
+.set-row label { overflow-wrap: anywhere; }
+.set-row > label + .stepper, .set-row > label + input { flex: none; }

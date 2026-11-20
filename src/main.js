@@ -2811,10 +2811,12 @@ const SETTINGS = [
   { key: 'stopAtMarkers', label: 'Stop on every marker', note: 'Choose a way on at each marker', bool: true },
   { key: 'askInvestigate', label: 'Ask before investigating', note: '"Investigate?" on Investigation spaces', bool: true },
   { section: 'Monster' },
-  { key: 'monster', label: 'Monster', note: 'Mystery: a secret monster from the pool, found out through evidence',
+  { key: 'monster', label: 'Monster', note: 'Mystery: a secret monster you uncover through evidence',
     choice: [['mystery', 'Mystery'], ...Object.entries(MONSTERS).map(([id, d]) => [id, d.label]), ['none', 'None']] },
-  { key: 'monsterPool', label: 'Monster pool', note: 'Which monsters the mystery can be',
-    choice: Object.entries(MONSTER_POOLS).map(([id, p]) => [id, `${p.label} (${p.ids.length})`]) },
+  { key: 'monsterPool', label: 'Monster pool', note: 'Which monsters the mystery can be', when: () => gameConfig.monster === 'mystery',
+    select: Object.entries(MONSTER_POOLS).map(([id, p]) => [id, `${p.label} (${p.ids.length})`]) },
+  { key: 'monsterPick', label: 'Specific monster', note: 'For testing: always fight this one', when: () => gameConfig.monster === 'mystery',
+    select: [['random', 'Random from the pool'], ...[...MONSTER_CARDS].sort((a, b) => a.name.localeCompare(b.name)).map((c) => [c.id, c.name])] },
   { section: 'Obol bag' },
   ...OBOL_TYPES.map((t) => ({ obol: t, label: `${OBOLS[t].label} Obols`, note: OBOLS[t].note, min: 0, max: 20 })),
 ];
@@ -2846,7 +2848,17 @@ function renderSettings() {
       saveConfig();
       renderSettings();
     };
-    if (f.choice) {
+    if (f.when && !f.when()) continue;
+    if (f.select) {
+      row.classList.add('stack');
+      const sel = document.createElement('select');
+      sel.id = id;
+      sel.className = 'set-select';
+      for (const [value, text] of f.select) sel.add(new Option(text, value, false, get() === value));
+      sel.addEventListener('change', () => set(sel.value));
+      row.appendChild(sel);
+    } else if (f.choice) {
+      row.classList.add('stack');
       const wrap = document.createElement('div');
       wrap.className = 'seg set-choice';
       for (const [value, text] of f.choice) {

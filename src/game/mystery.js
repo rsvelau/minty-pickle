@@ -30,7 +30,10 @@ export function matchesEvidence(card, found) {
 
 export function setupMystery(state, board, { random, randInt, farthestCell }) {
   const pool = (MONSTER_POOLS[state.config.monsterPool] ?? MONSTER_POOLS.all).ids.filter((id) => MONSTER_BY_ID[id]);
-  const id = pool[randInt(state, pool.length)];
+  // A specific monster (Game settings, for testing), else a random one from the pool.
+  const pick = MONSTER_BY_ID[state.config.monsterPick] ? state.config.monsterPick : null;
+  const id = pick ?? pool[randInt(state, pool.length)];
+  if (pick && !pool.includes(pick)) pool.push(pick);
   const card = MONSTER_BY_ID[id];
   const deck = [...card.evidence.observations.map((code) => ({ kind: 'observation', code })), { kind: 'lair', code: card.evidence.lair }];
   for (let i = deck.length - 1; i > 0; i--) { const j = randInt(state, i + 1); [deck[i], deck[j]] = [deck[j], deck[i]]; }

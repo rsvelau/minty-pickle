@@ -56,6 +56,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   obols: Object.freeze({ attack: 7, event: 7, equipment: 7, evidence: 7 }),
   monster: 'mystery',
   monsterPool: 'all',
+  monsterPick: 'random', // or a monster id: always fight that one (testing)
 });
 export const defaultConfig = () => ({ ...DEFAULT_CONFIG, obols: { ...DEFAULT_CONFIG.obols } });
 

@@ -136,3 +136,12 @@ test('monster pools limit which monster can be drawn', () => {
     assert.ok(MONSTER_POOLS.spirits.ids.includes(state.mystery.monster));
   }
 });
+
+test('a specific monster can be chosen (testing)', () => {
+  for (const id of ['wendigo', 'shadow-people']) {
+    const board = createBoard(street());
+    const { state } = newGame(board, { seed: 4, config: { monsterPick: id, monsterPool: 'folklore' } });
+    assert.equal(state.mystery.monster, id);
+    assert.ok(state.mystery.pool.includes(id));
+  }
+});
