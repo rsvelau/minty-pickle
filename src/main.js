@@ -2293,6 +2293,9 @@ $('#playBoard').addEventListener('click', (e) => {
 
 // --- Game settings -------------------------------------------------------------------
 const SETTINGS = [
+  { section: 'Players' },
+  { key: 'players', label: 'Characters', note: 'Play solo with 1, or take turns with up to 4', min: 1, max: 4,
+    fmt: (v) => (v === 1 ? '1 · solo' : `${v}`) },
   { section: 'Dice & movement' },
   { key: 'startBlack', label: 'Starting black dice', note: 'Everyone; renew each turn', min: 1, max: 6 },
   { key: 'moveSlots', label: 'Movement slots', min: 1, max: 4 },
@@ -2371,6 +2374,7 @@ function openSettings() {
 }
 function closeSettings() {
   $('#settings').hidden = true;
+  syncPlayerButtons();
   if (settingsDirty && ui.tool === 'play') {
     play.reset();
     toast('Game restarted with the new settings.');
@@ -2392,9 +2396,15 @@ $('#trayMove').addEventListener('click', () => play.confirmMove());
 $('#hudRoll').addEventListener('click', () => play.roll());
 $('#playStreets').addEventListener('change', (e) => { play.state.followStreets = e.target.checked; });
 $('#playReset').addEventListener('click', () => play.reset());
+// The panel's player buttons and Game settings share one setting.
+function syncPlayerButtons() {
+  document.querySelectorAll('[data-players]').forEach((o) => o.classList.toggle('on', Number(o.dataset.players) === gameConfig.players));
+}
+syncPlayerButtons();
 document.querySelectorAll('[data-players]').forEach((b) => b.addEventListener('click', () => {
-  document.querySelectorAll('[data-players]').forEach((o) => o.classList.toggle('on', o === b));
   play.setPlayers(Number(b.dataset.players));
+  saveConfig();
+  syncPlayerButtons();
 }));
 $('#playFollow').addEventListener('change', (e) => { play.state.follow = e.target.checked; });
 // Arrow keys choose a direction at a fork (before the camera can pan).

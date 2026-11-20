@@ -45,6 +45,7 @@ const ROLL_TIME = 0.7;    // die tumble before it lands
 //   way on; `askInvestigate` asks "Investigate?" on Investigation spaces.
 // - Obols: the bag investigators draw from, by type.
 export const DEFAULT_CONFIG = Object.freeze({
+  players: 4,          // characters in play, 1 (solo) to 4
   startBlack: 2,
   moveSlots: 2,
   litSlots: 3,
@@ -90,7 +91,7 @@ export function createPlay({
   const st = {
     cfg,
     players: [],       // [{ name, colour, pos, prev, white, black, figure, tag }]
-    count: 4,          // how many players (1-4)
+    count: Math.max(1, Math.min(4, cfg.players | 0 || 4)), // how many players (1-4; 1 = solo)
     startMode: 'standard', // 'standard' (11 PM) or 'midnight' (starts at midnight, objectives out)
     cur: 0,            // whose turn
     get pos() { return this.players[this.cur]?.pos ?? -1; },
@@ -494,6 +495,7 @@ export function createPlay({
   // --- turn flow ------------------------------------------------------------
   function reset() {
     const s = startCell();
+    st.count = Math.max(1, Math.min(4, cfg.players | 0 || 4));
     st.players = PLAYERS.slice(0, st.count).map((p) => ({
       ...p, pos: s, prev: -1, white: 0, black: 0, at: null, face: 0, vis: s, queue: [], anim: null,
       // Each player's own inventory, by tab: Equipment (nothing yet) and
@@ -514,7 +516,7 @@ export function createPlay({
     st.stopReason = '';
     onUsed();
     st.log = s >= 0
-      ? [(st.startMode === 'midnight' ? 'Midnight. The town is waiting, and the objectives are out. ' : '') + `${st.count} player${st.count === 1 ? '' : 's'} ready on the Start space (${label(s)}), in the van's headlights: starting light ${Math.round(lightAt(s) * 100)}%. ${who()} rolls first.`]
+      ? [(st.startMode === 'midnight' ? 'Midnight. The town is waiting, and the objectives are out. ' : '') + `${st.count === 1 ? 'Playing solo: P1 is' : `${st.count} players`} ready on the Start space (${label(s)}), in the van's headlights: starting light ${Math.round(lightAt(s) * 100)}%. ${who()} rolls first.`]
       : [];
     if (s >= 0) { placeAll(); enter(s)?.(); st.ask = null; }
     applyVisibility();
@@ -817,7 +819,7 @@ export function createPlay({
 
   // Change the number of players (restarts the game).
   function setPlayers(n) {
-    st.count = Math.max(1, Math.min(4, n));
+    cfg.players = Math.max(1, Math.min(4, n | 0 || 1));
     reset();
   }
 

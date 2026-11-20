@@ -206,7 +206,8 @@ markers** in View hides them. Marker art lives in `src/markers.js`; the list of 
 - **Obols** come in four kinds: **Attack** (bloody red), **Event** (misty blue), **Equipment** (shiny green)
   and **Evidence** (glowing yellow). The bag holds 7 of each (28) by default; when it's empty, investigating
   finds nothing.
-- **Game settings** (the ⚙ button under the play buttons) adjust the mechanics: starting black dice,
+- **Game settings** (the ⚙ button under the play buttons) adjust the mechanics: number of characters
+  (1 to 4; 1 plays solo, and the clock moves on after each of your turns), starting black dice,
   movement slots, slots when starting in light, the light level that counts as lit, minutes per turn, turns
   until midnight, stopping on every marker, asking before investigating, and the number of each Obol. They're
   saved on this device (`DEFAULT_CONFIG` in `src/play.js`), and changing them restarts a game in progress.
