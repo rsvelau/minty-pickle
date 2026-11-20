@@ -17,7 +17,7 @@ the edges between cells.
 | Category | Subcategories |
 |----------|---------------|
 | Outdoor | Ground (default), Street, Start space, Old Clocktower\*, Path, Cemetery, Cemetery path, Forest cemetery\*, Forest\*, Brambles\* |
-| Indoor | Hardwood (default), Carpet, Condemned\* |
+| Indoor | Hardwood (default), Carpet, Church floor, Condemned\* |
 | Water | Lake, River (always start blocked) |
 
 \* Starts out **blocked** when painted. Painting an ordinary subcategory over a default-blocked cell unblocks
@@ -49,6 +49,14 @@ cells become Street when loaded. The street surface lives in `src/street.js`.
 - **An antique street lamp**: the town is a late-1800s logging town kept historic, so lamps are cast-iron posts
   in old dark-green paint (flared base, fluted shaft, ladder bar) with an acorn glass globe, cap and finial,
   about 4.4 m tall. At a T it stands on the sidewalk opposite the side street; at a crossing, on a corner.
+
+### Church floor
+
+An indoor tile for churches. **Walkable** church cells each hold a dark oak **pew** (with hymnals and a
+kneeler) facing the pulpit; a **blocked** church cell (use the Blocked brush) is the **pulpit**: a raised
+dais with a red runner and front step, a carved octagonal pulpit with an open Bible, an altar with
+candlesticks, and a tall wooden cross. The pulpit faces its congregation, and every pew in the same church
+faces back along that line like a nave, so pews beside the pulpit still face the front.
 
 ### Old Clocktower
 

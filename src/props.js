@@ -98,6 +98,54 @@ function buildKinds() {
       box(0.9, 0.45, 0.9, '#6b4f5c'), box(0.9, 0.5, 0.2, '#6b4f5c', 0, -0.35, 0.45),
     ),
     table: merge(box(1.1, 0.06, 0.6, '#6e4a2e', 0, 0, 0.4), box(0.9, 0.4, 0.4, '#4e321e')),
+    // Church pew, 4.4 m long, facing +z (seat at the front, back behind),
+    // dark old oak with carved end panels and a hymnal shelf on the back.
+    pew: (() => {
+      const oak = '#5a3820', end = '#43291a';
+      return merge(
+        box(4.4, 0.07, 0.5, oak, 0, 0.02, 0.42),             // seat
+        box(4.4, 0.6, 0.07, oak, 0, -0.24, 0.48),            // back
+        box(4.4, 0.05, 0.12, end, 0, -0.24, 1.08),           // top rail
+        box(4.2, 0.05, 0.12, oak, 0, -0.33, 0.74),           // hymnal shelf (behind)
+        box(4.2, 0.08, 0.16, end, 0, 0.42, 0.12),            // kneeler
+        box(0.09, 1.0, 0.62, end, -2.2, -0.02, 0),           // end panels
+        box(0.09, 1.0, 0.62, end, 2.2, -0.02, 0),
+        box(0.07, 0.42, 0.42, end, 0, 0.02, 0),              // middle support
+        box(0.3, 0.2, 0.05, '#2a2a30', -1.2, -0.31, 0.79),    // a couple of hymnals
+        box(0.3, 0.2, 0.05, '#3a1e22', 1.0, -0.31, 0.79),
+      );
+    })(),
+    // The pulpit end of the church, facing +z (towards the pews): a raised
+    // oak dais with a red runner and front step, a carved octagonal pulpit
+    // with a sloped reading desk and open Bible, an altar in white cloth
+    // with candlesticks behind it, and a tall wooden cross at the back.
+    pulpit: (() => {
+      const oak = '#5a3820', dark = '#3f2616', cloth = '#ddd3bc', brass = '#a08440';
+      const desk = part(new THREE.BoxGeometry(m(0.78), m(0.04), m(0.5)).rotateX(0.32)
+        .translate(0, m(0.35 + 1.22), m(0.62)), dark);
+      const bible = part(new THREE.BoxGeometry(m(0.5), m(0.06), m(0.36)).rotateX(0.32)
+        .translate(0, m(0.35 + 1.27), m(0.62)), '#f0e8d4');
+      return merge(
+        box(6.2, 0.35, 5.0, '#4a3020', 0, -0.4),             // dais
+        box(3.0, 0.17, 0.6, '#4a3020', 0, 2.4),              // front step
+        box(1.6, 0.02, 4.9, '#6a1820', 0, -0.35, 0.35),      // red runner
+        part(new THREE.CylinderGeometry(m(0.66), m(0.58), m(1.15), 8)
+          .translate(0, m(0.35 + 0.575), m(0.45)), oak),     // pulpit body
+        part(new THREE.CylinderGeometry(m(0.74), m(0.74), m(0.07), 8)
+          .translate(0, m(0.35 + 1.18), m(0.45)), dark),     // top rim
+        part(new THREE.CylinderGeometry(m(0.5), m(0.66), m(0.1), 8)
+          .translate(0, m(0.35 + 0.05), m(0.45)), dark),     // base moulding
+        desk, bible,
+        box(2.0, 0.95, 0.8, cloth, 0, -1.7, 0.35),           // altar
+        box(2.1, 0.05, 0.9, '#efe8d6', 0, -1.7, 1.3),        // altar top
+        box(0.05, 0.4, 0.05, brass, -0.7, -1.7, 1.35),       // candlesticks
+        box(0.05, 0.4, 0.05, brass, 0.7, -1.7, 1.35),
+        box(0.06, 0.16, 0.06, '#f4ecd2', -0.7, -1.7, 1.75),  // candles
+        box(0.06, 0.16, 0.06, '#f4ecd2', 0.7, -1.7, 1.75),
+        box(0.16, 2.8, 0.12, '#6e4a26', 0, -2.65, 0.35),     // cross
+        box(1.3, 0.16, 0.12, '#6e4a26', 0, -2.65, 2.3),
+      );
+    })(),
     // Used early-80s full-size van, ~4.8 m long, 2 m wide, 2.1 m tall, along
     // x with the front at +x: two-tone cream and brown with an orange stripe,
     // rust spots, chrome bumpers, a spare on the back door.
@@ -336,6 +384,46 @@ const VARIANTS = {
   river: { walkable: (ctx) => ford(ctx) },
 };
 
+// Which way a church cell faces, as a unit step (fx, fz) along one axis.
+// A pulpit (blocked church cell) faces its congregation: the average
+// direction to every pew in its church. Pews all face back along that line,
+// towards their nearest pulpit, like a nave (so a pew beside the pulpit
+// still faces the front, not sideways). With no pulpit, north.
+function churchCells(grid, i) {
+  const seen = new Set([i]);
+  const order = [i];
+  for (let q = 0; q < order.length; q++) {
+    const { x, y } = grid.coords(order[q]);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (!grid.inBounds(nx, ny)) continue;
+      const k = grid.index(nx, ny);
+      if (!seen.has(k) && grid.cells[k].sub === 'church') { seen.add(k); order.push(k); }
+    }
+  }
+  return order; // breadth-first from i: nearest first
+}
+const snapAxis = (vx, vy, fallback) => (vx === 0 && vy === 0 ? fallback
+  : Math.abs(vx) >= Math.abs(vy) ? [Math.sign(vx), 0] : [0, Math.sign(vy)]);
+function pulpitFacing(grid, j, cells = churchCells(grid, j)) {
+  const { x: px, y: py } = grid.coords(j);
+  let vx = 0, vy = 0;
+  for (const k of cells) {
+    if (!grid.cells[k].walkable) continue;
+    const { x, y } = grid.coords(k);
+    vx += x - px; vy += y - py;
+  }
+  return snapAxis(vx, vy, [0, 1]);
+}
+function churchFacing(grid, i) {
+  const cells = churchCells(grid, i);
+  if (!grid.cells[i].walkable) return pulpitFacing(grid, i, cells);
+  const pulpit = cells.find((k) => !grid.cells[k].walkable);
+  if (pulpit === undefined) return [0, -1];
+  const [fx, fz] = pulpitFacing(grid, pulpit, cells);
+  return [-fx, -fz];
+}
+
 // The van faces (fx, fz); the painted start box sits on the cell in front.
 function startSpace(fx, fz) {
   const rot = Math.atan2(-fz, fx) + 0.08; // parked, very slightly askew
@@ -423,6 +511,11 @@ export function createProps(group, { firGeo, firMat }) {
         const variant = VARIANTS[c.sub]?.[c.walkable ? 'walkable' : 'blocked'];
         const { x, y } = grid.coords(i);
         let list = variant ? null : [];
+        // Church: a pew facing the pulpit, or the pulpit facing the pews.
+        if (c.sub === 'church') {
+          const [fx, fz] = churchFacing(grid, i);
+          list = [[c.walkable ? 'pew' : 'pulpit', 0, 0, Math.atan2(fx, fz)]];
+        } else
         // Start space: the van, facing along the road.
         if (c.sub === 'start') {
           const [fx, fz] = [[0, -1], [1, 0], [0, 1], [-1, 0]][grid.startFacing(i)];

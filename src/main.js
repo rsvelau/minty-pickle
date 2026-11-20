@@ -61,6 +61,7 @@ const SUB_LOOK = {
   brambles: { unlit: '#2e2926', lit: '#7a6a5c', area: '#6b4a5e' },
   hardwood: { unlit: '#7a5338', lit: '#f0a85a', area: '#9a6a3e' },
   carpet: { unlit: '#58303a', lit: '#c4727c', area: '#8a3f52' },
+  church: { unlit: '#5a4a3c', lit: '#d9a46c', area: '#6c5a8c' }, // worn oak boards
   condemned: { unlit: '#3a3430', lit: '#8a7a68', area: '#6a4a3e' },
   clocktower: { unlit: '#46443f', lit: '#a39d8e', area: '#b08850' }, // cobbled plaza
 };

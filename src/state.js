@@ -41,6 +41,9 @@ export const AREAS = {
     subs: {
       hardwood: { label: 'Hardwood' },
       carpet: { label: 'Carpet' },
+      // Church: walkable cells hold a pew facing the pulpit; a blocked church
+      // cell is the pulpit (a raised dais with lectern, altar and cross).
+      church: { label: 'Church floor' },
       // Condemned building: walls go up automatically round the outside of
       // the shape, with boarded-up doors and windows on the street side.
       condemned: { label: 'Condemned', walkable: false },
