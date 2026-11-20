@@ -2314,7 +2314,7 @@ function renderPlay() {
   $('#playBoard').innerHTML = s.players.map((p, k) => {
     const c = p.pos >= 0 ? grid.coords(p.pos) : null;
     const counts = obolCounts(p);
-    const inDanger = s.monsters.some((mo) => mo.intent?.danger?.includes(k));
+    const inDanger = s.monsters.some((mo) => mo.danger?.includes(k));
     return `<div class="pl${k === s.cur ? ' cur' : ''}${p.dead ? ' dead' : ''}${inDanger && !p.dead ? ' danger' : ''}" data-inv="${k}" title="Open ${p.name}'s inventory"><span class="chip" style="background:${p.colour}">${p.name}</span>` +
       `<span>${c ? cellLabel(c.x, c.y) : '–'}</span><span>White dice ${p.white}</span>` +
       `<span class="inj-row">${injuryPips(p)}${p.dead ? ' <b>Dead</b>' : inDanger ? ' <b style="color:#ff6a50">In danger</b>' : ''}</span>` +
@@ -2803,19 +2803,27 @@ function hitText(e) {
 function renderIntent() {
   const el = $('#intentBanner');
   const s = play.state;
-  const mo = ui.tool === 'play' ? s.monsters.find((m) => m.intent) : null;
+  const mo = ui.tool === 'play' ? s.monsters.find((m) => m.intents) : null;
   el.hidden = !mo;
   if (!mo) return;
-  const i = mo.intent;
   const name = monsterDef(mo.kind)?.label ?? 'The monster';
-  const danger = i.danger.map((k) => s.players[k]?.name).filter(Boolean);
-  el.innerHTML = `<b>${esc(name)}</b> rolled ${i.roll}: <b>${esc(i.name)}</b>${i.ability >= 0 ? ` · ${esc(i.text)}` : ''}<br>` +
+  const danger = (mo.danger ?? []).map((k) => s.players[k]?.name).filter(Boolean);
+  // Compact: just the action names; tap to expand into the card text.
+  const acts = intentOpen
+    ? mo.intents.map((i, n) => `<span class="act">${mo.intents.length > 1 ? `${n + 1}. ` : ''}🎲${i.roll} <b>${esc(i.name)}</b>` +
+      `${i.ability >= 0 ? ` · ${esc(i.text)}` : ''}</span>`).join('')
+    : ` <span class="acts">${mo.intents.map((i) => `🎲${i.roll} <b>${esc(i.name)}</b>`).join(' → ')}</span>`;
+  el.innerHTML = `<b>${esc(name)}</b>${mo.intents.length ? ` rolled ${mo.intents.length === 1 ? '1 die' : `${mo.intents.length} dice`}:` : ' rolls no dice this round'}${acts}<br>` +
     (danger.length ? `<span class="danger">⚠ In danger: ${danger.join(', ')}</span>` : '<span class="muted">No one in reach, for now</span>') +
-    ' <span class="muted">· it acts at the end of the round</span>';
+    ` <span class="muted">· acts at the end of the round · tap for ${intentOpen ? 'less' : 'details'}</span>`;
 }
+let intentOpen = false;
 $('#intentBanner').addEventListener('click', () => {
-  const mo = play.state.monsters.find((m) => m.intent);
+  const mo = play.state.monsters.find((m) => m.intents);
   if (!mo) return;
+  intentOpen = !intentOpen;
+  renderIntent();
+  if (!intentOpen) return;
   const { x, y } = grid.coords(mo.pos);
   const p = cellToWorld(x, y);
   const offset = camera.position.clone().sub(controls.target);

@@ -22,6 +22,8 @@ import {
 import { createBoard } from './game/board.js';
 import { createLocalSession } from './game/session.js';
 import { createDiscoveries } from './discoveries.js';
+import { createMonsterModels } from './monsterModels.js';
+import { MONSTER_BY_ID } from './game/cards/monsters.js';
 import { evidenceVisual } from './game/cards/evidence.js';
 
 export {
@@ -358,6 +360,20 @@ export function createPlay({
   };
 
   const MONSTER_LOOK = (kind) => monsterDef(kind)?.look ?? 'shade';
+  // Card monsters have their own figures (src/monsterModels.js); anything
+  // else uses a look from monsterLooks. Each stands on a faint red glow.
+  const models = createMonsterModels(terrainify);
+  function monsterFigure(kind) {
+    const card = MONSTER_BY_ID[kind];
+    const fig = card ? models.buildMonster(kind, { count: card.badge }) : null;
+    if (!fig) return (monsterLooks[MONSTER_LOOK(kind)] ?? monsterLooks.shade)();
+    const pool = new THREE.Mesh(new THREE.CircleGeometry(m(2.4), 24).rotateX(-Math.PI / 2), groundGlowMat);
+    pool.position.y = m(0.06);
+    pool.renderOrder = 3;
+    pool.raycast = () => {};
+    fig.add(pool);
+    return fig;
+  }
 
   // --- placing figures -----------------------------------------------------------
   // Where player k stands in cell i (its own quarter of the cell).
@@ -394,8 +410,7 @@ export function createPlay({
     for (const mo of s?.monsters ?? []) {
       let mv = view.monsters.get(mo.id);
       if (!mv) {
-        const look = monsterLooks[MONSTER_LOOK(mo.kind)] ?? monsterLooks.shade;
-        mv = { fig: look(), at: null, face: 0, vis: mo.pos, queue: [], anim: null, lunge: 0, lungeDir: 0 };
+        mv = { fig: monsterFigure(mo.kind), at: null, face: 0, vis: mo.pos, queue: [], anim: null, lunge: 0, lungeDir: 0 };
         group.add(mv.fig);
         view.monsters.set(mo.id, mv);
         force = true;
@@ -681,12 +696,14 @@ export function createPlay({
       mv.fig.position.copy(mv.at);
       mv.fig.rotation.y += (((mv.face - mv.fig.rotation.y + Math.PI * 3) % (Math.PI * 2)) - Math.PI) * Math.min(1, dt * 6);
       const body = mv.fig.userData.body;
-      body.rotation.x = 0.15 + 0.55 * mv.lunge + 0.04 * Math.sin(t * 1.3);   // stoop, lunge forward
+      const idle = mv.fig.userData.tick;
+      body.rotation.x = (idle ? 0 : 0.15) + 0.5 * mv.lunge + 0.04 * Math.sin(t * 1.3);   // (stoop), lunge forward
       body.position.z = m(0.9) * mv.lunge;
-      body.position.y = m(0.04) * Math.sin(t * 2.1);                         // a slow, uneasy sway
+      if (idle) idle(t, dt);
+      else body.position.y = m(0.04) * Math.sin(t * 2.1);                    // a slow, uneasy sway
     }
     // Figures, the turn ring and name tags.
-    const danger = new Set((s.monsters ?? []).flatMap((mo) => mo.intent?.danger ?? []));
+    const danger = new Set((s.monsters ?? []).flatMap((mo) => mo.danger ?? []));
     dangerMat.opacity = 0.55 + 0.4 * Math.sin(t * 6);
     dangerRings.forEach((r, k) => {
       const a = view.actors[k];

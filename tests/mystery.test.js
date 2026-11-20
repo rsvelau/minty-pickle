@@ -182,7 +182,7 @@ test('monsters only walk on walkable cells', () => {
   const { state } = newGame(board, { seed: 3, startMode: 'midnight', config: { players: 1, monsterPick: 'werewolf' } });
   const mo = state.monsters[0];
   mo.pos = g.index(10, 14);
-  mo.intent = { roll: 1, ability: 0, name: 'Vicious Pursuit', kind: 'physical', text: 'Pursue (8) and Attack (4)', ops: [{ op: 'pursue', n: 8 }, { op: 'attack', dmg: { fixed: 4 } }], unknown: [], danger: [] };
+  mo.intents = [{ roll: 1, ability: 0, name: 'Vicious Pursuit', kind: 'physical', text: 'Pursue (8) and Attack (4)', ops: [{ op: 'pursue', n: 8 }, { op: 'attack', dmg: { fixed: 4 } }], unknown: [] }];
   const act = (a) => applyAction(state, board, { ...a, seat: 0 });
   act({ type: 'roll' });
   const r = act({ type: 'end' });

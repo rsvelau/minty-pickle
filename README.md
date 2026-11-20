@@ -572,12 +572,24 @@ From the Player Mat and Monster Ref Sheet (`Monsters_and_Injuries` spreadsheet):
   Terrified (teammates within Mid range lose a defense slot). Spiritual: Doomed (defense 6s count as
   1), Hexed (shown; applies once items exist). Tier 3 on any track is **Death's Door**: one die per turn, and any
   unblocked damage **kills**. Dead players leave the board and are skipped; if everyone dies the night wins.
-- **The monster's turn.** At the start of each round the monster rolls its action die; the matching ability on
-  its card is announced in a banner (tap it to look at the monster) and players in danger get a pulsing red ring
+- **The monster's turn.** At the start of each round the monster rolls its **action dice** (the number in the
+  top right of its card: Hellhounds 4, Werewolf 3, Shadow People 0...); each die picks an ability, and they
+  play **in order** at the end of the round. The banner lists them compactly (tap for the card text and to look
+  at the monster) and players in danger get a pulsing red ring
   and an "In danger" tag. The danger updates live as players move. At the end of the round the monster moves
   and rolls its damage. Pursue, Outflank, Retreat, Teleport, Attack, Area Attack, Global Attack and Heal are
   played from the card text (`src/game/monsterTurn.js`); other effects (Seize, Lure, Pin, Drag, Trap, Exhaust,
   Block doors...) are named in the log and come with each monster's own rules.
+
+### Monster figures
+
+Every card monster has its own low-poly figure (`src/monsterModels.js`), to scale with the players, with idle
+motion: a hunched Werewolf; a smoky black Barghest dragging a chain; a loose pack of fiery Hellhounds, one per
+action die; a pelt-draped Skinwalker in an animal skull; a 3 m Wendigo with antlers and ribs; a floating, wailing
+Banshee; the ox-headed, spider-legged Ushi-Oni; a knee-high Redcap with its red cap, iron boots and pikestaff;
+the Poltergeist as furniture and crockery whirling in a cold haze; the glowing, veiled White Lady; a hunched,
+bald Strigoi in a burial shroud; the Adze as a firefly swarm that gathers into a shape; and Shadow People as
+three flickering silhouettes.
 
 ### Adding a monster
 

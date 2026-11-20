@@ -871,3 +871,5 @@ body.playing .fps { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
 .tdie.disabled { display: grid; place-items: center; color: #e07060; border-style: dashed; opacity: 0.6; font-size: 16px; }
 #endConfirm { z-index: 10; }
 #endConfirm { background: #0d1117; box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.55), 0 10px 30px rgba(0, 0, 0, 0.6); }
+.intent-banner .act { display: block; }
+.intent-banner { max-height: 34vh; overflow: auto; }

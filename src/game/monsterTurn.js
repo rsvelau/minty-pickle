@@ -1,12 +1,13 @@
 // A card monster's turn, played from its card's abilities.
 //
-//   1. Declare: at the start of a round the monster rolls its action die and
-//      the matching ability becomes its intent ("Vicious Pursuit: Pursue (8)
-//      and Attack (4)"). The game shows it and highlights players in danger.
+//   1. Declare: at the start of a round the monster rolls its action dice (the
+//      number in the top right of its card) and each die picks an ability
+//      ("Vicious Pursuit: Pursue (8) and Attack (4)"). The game shows them and
+//      highlights players in danger.
 //   2. Players take their turns; the danger is recomputed after every action
 //      (refreshThreat), so stepping out of reach clears it.
-//   3. Execute: at the end of the round the monster carries the intent out
-//      (moves, then rolls its damage), and a new intent is declared.
+//   3. Execute: at the end of the round the actions play in order, each
+//      moving then rolling its damage, and the next round's dice are rolled.
 //
 // Ability text is read into operations: Pursue (n), Outflank (n), Retreat
 // (n), Teleport (Lair / nearest light), Attack (n | die | k dice), Area
@@ -144,88 +145,100 @@ function closeTarget(state, board, pos) {
   return near.find((pl) => pl === t?.pl) ?? near[0];
 }
 
-// Who the intent would hit if the round ended now.
-function predictVictims(state, board, monster, intent) {
-  const { pos } = planMovement(state, board, monster, intent.ops, null);
+// One action from one die: the card ability whose roll range includes it.
+function actionFor(card, roll) {
+  const idx = card.abilities.findIndex((a) => { const r = rollRange(a.roll); return r && roll >= r[0] && roll <= r[1]; });
+  if (idx < 0) return { roll, ability: -1, name: 'Waits', text: 'Nothing on its card for this roll', ops: [], unknown: [] };
+  const a = card.abilities[idx];
+  const { ops, unknown } = parseAbility(a.text);
+  return { roll, ability: idx, name: a.name, kind: a.kind, text: a.text, ops, unknown };
+}
+
+// Who the declared actions would hit if the round ended now: the actions
+// play in order, each starting where the last one left the monster.
+function predictVictims(state, board, monster, intents) {
   const seats = new Set();
-  for (const o of intent.ops) {
-    if (o.op === 'attack') {
-      const t = closeTarget(state, board, pos);
-      if (t) seats.add(t.seat);
-    } else if (o.op === 'area') {
-      for (const pl of alive(state)) if (gridDist(board, pos, pl.pos) <= o.radius) seats.add(pl.seat);
-    } else if (o.op === 'global') {
-      for (const pl of alive(state)) seats.add(pl.seat);
+  let pos = monster.pos;
+  for (const intent of intents) {
+    pos = planMovement(state, board, { pos }, intent.ops, null).pos;
+    for (const o of intent.ops) {
+      if (o.op === 'attack') {
+        const t = closeTarget(state, board, pos);
+        if (t) seats.add(t.seat);
+      } else if (o.op === 'area') {
+        for (const pl of alive(state)) if (gridDist(board, pos, pl.pos) <= o.radius) seats.add(pl.seat);
+      } else if (o.op === 'global') {
+        for (const pl of alive(state)) seats.add(pl.seat);
+      }
     }
   }
   return [...seats];
 }
 
-// Roll the action die and declare the intent.
+// Start of a round: roll the monster's action dice (the number in the top
+// right of its card) and declare every action, in order.
 export function declareIntent(state, board, monster, ctx, events) {
   const card = MONSTER_BY_ID[monster.kind];
   if (!card) return;
-  const roll = rollDie(ctx);
-  const idx = card.abilities.findIndex((a) => { const r = rollRange(a.roll); return r && roll >= r[0] && roll <= r[1]; });
-  if (idx < 0) {
-    monster.intent = { roll, ability: -1, name: 'Waits', text: 'Nothing on its card for this roll', ops: [], unknown: [], danger: [] };
-  } else {
-    const a = card.abilities[idx];
-    const { ops, unknown } = parseAbility(a.text);
-    monster.intent = { roll, ability: idx, name: a.name, kind: a.kind, text: a.text, ops, unknown, danger: [] };
-  }
-  monster.intent.danger = predictVictims(state, board, monster, monster.intent);
-  const i = monster.intent;
-  ctx.log(state, `The ${card.name} rolls ${roll}: ${i.name}${i.ability >= 0 ? ` (${i.text})` : ''}.` +
-    (i.danger.length ? ` In danger: ${i.danger.map((s) => state.players[s].name).join(', ')}.` : ''));
-  events.push({ type: 'monsterIntent', id: monster.id, roll, name: i.name, danger: [...i.danger] });
+  const n = Math.max(0, card.badge | 0);
+  monster.intents = Array.from({ length: n }, () => actionFor(card, rollDie(ctx)));
+  monster.danger = predictVictims(state, board, monster, monster.intents);
+  const list = monster.intents.map((i) => `${i.roll}: ${i.name}${i.ability >= 0 ? ` (${i.text})` : ''}`).join('; then ');
+  ctx.log(state, n
+    ? `The ${card.name} rolls ${n === 1 ? 'its die' : `${n} dice`}: ${list}.` +
+      (monster.danger.length ? ` In danger: ${monster.danger.map((s) => state.players[s].name).join(', ')}.` : '')
+    : `The ${card.name} rolls no dice; only its constant effects apply.`);
+  events.push({ type: 'monsterIntent', id: monster.id, rolls: monster.intents.map((i) => i.roll), danger: [...monster.danger] });
 }
 
 // After any action: who's in danger now.
 export function refreshThreat(state, board) {
   for (const monster of state.monsters) {
-    if (monster.intent) monster.intent.danger = predictVictims(state, board, monster, monster.intent);
+    if (monster.intents) monster.danger = predictVictims(state, board, monster, monster.intents);
   }
 }
 
-// Carry out the intent at the end of the round.
+// End of the round: carry out each declared action in order.
 export function executeIntent(state, board, monster, ctx, events) {
   const card = MONSTER_BY_ID[monster.kind];
-  const intent = monster.intent;
-  if (!card || !intent) return;
-  const type = KIND_TO_TYPE[intent.kind] ?? card.evidence.attack;
-  const source = `The ${card.name}'s ${intent.name}`;
-  // Move first.
-  const move = planMovement(state, board, monster, intent.ops, ctx);
-  for (const s of move.steps) {
-    if (typeof s === 'object') {
-      events.push({ type: 'monsterTeleport', id: monster.id, from: monster.pos, to: s.teleport });
-      monster.pos = s.teleport;
-    } else {
-      events.push({ type: 'monsterStep', id: monster.id, from: monster.pos, to: s });
-      monster.prev = monster.pos;
-      monster.pos = s;
+  if (!card || !monster.intents) return;
+  for (const intent of monster.intents) {
+    if (!alive(state).length) break;
+    const type = KIND_TO_TYPE[intent.kind] ?? card.evidence.attack;
+    const source = `The ${card.name}'s ${intent.name}`;
+    // Move first.
+    const move = planMovement(state, board, monster, intent.ops, ctx);
+    for (const st of move.steps) {
+      if (typeof st === 'object') {
+        events.push({ type: 'monsterTeleport', id: monster.id, from: monster.pos, to: st.teleport });
+        monster.pos = st.teleport;
+      } else {
+        events.push({ type: 'monsterStep', id: monster.id, from: monster.pos, to: st });
+        monster.prev = monster.pos;
+        monster.pos = st;
+      }
     }
-  }
-  if (move.steps.length) ctx.log(state, `The ${card.name} moves to ${label(board, monster.pos)}.`);
-  // Then attacks, rolling damage.
-  for (const o of intent.ops) {
-    if (o.op === 'attack') {
-      const t = closeTarget(state, board, monster.pos);
-      if (!t) { ctx.log(state, `${source} finds no one in reach.`); continue; }
-      events.push({ type: 'monsterAttack', id: monster.id, seat: t.seat, cell: t.pos });
-      applyDamage(state, board, t, type, rollDamage(ctx, o.dmg), { log: ctx.log, source }, events);
-    } else if (o.op === 'area' || o.op === 'global') {
-      const hit = alive(state).filter((pl) => o.op === 'global' || gridDist(board, monster.pos, pl.pos) <= o.radius);
-      if (!hit.length) { ctx.log(state, `${source} strikes at nothing.`); continue; }
-      events.push({ type: 'monsterAttack', id: monster.id, seat: hit[0].seat, cell: monster.pos, area: true });
-      for (const pl of hit) applyDamage(state, board, pl, type, rollDamage(ctx, o.dmg), { log: ctx.log, source }, events);
-    } else if (o.op === 'heal') {
-      ctx.log(state, `The ${card.name} heals ${o.n}.`);
+    if (move.steps.length) ctx.log(state, `The ${card.name} moves to ${label(board, monster.pos)}.`);
+    // Then attacks, rolling damage.
+    for (const o of intent.ops) {
+      if (o.op === 'attack') {
+        const t = closeTarget(state, board, monster.pos);
+        if (!t) { ctx.log(state, `${source} finds no one in reach.`); continue; }
+        events.push({ type: 'monsterAttack', id: monster.id, seat: t.seat, cell: t.pos });
+        applyDamage(state, board, t, type, rollDamage(ctx, o.dmg), { log: ctx.log, source }, events);
+      } else if (o.op === 'area' || o.op === 'global') {
+        const hit = alive(state).filter((pl) => o.op === 'global' || gridDist(board, monster.pos, pl.pos) <= o.radius);
+        if (!hit.length) { ctx.log(state, `${source} strikes at nothing.`); continue; }
+        events.push({ type: 'monsterAttack', id: monster.id, seat: hit[0].seat, cell: monster.pos, area: true });
+        for (const pl of hit) applyDamage(state, board, pl, type, rollDamage(ctx, o.dmg), { log: ctx.log, source }, events);
+      } else if (o.op === 'heal') {
+        ctx.log(state, `The ${card.name} heals ${o.n}.`);
+      }
     }
+    if (intent.unknown.length) ctx.log(state, `(${intent.name}: ${intent.unknown.join(', ')} not played yet.)`);
   }
-  if (intent.unknown.length) ctx.log(state, `(${intent.unknown.join(', ')}: not played yet.)`);
-  monster.intent = null;
+  monster.intents = null;
+  monster.danger = [];
 }
 
 export { describeDamage };

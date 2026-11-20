@@ -93,14 +93,14 @@ test('a card monster declares its action, shows who is in danger, then carries i
   const { state, events } = newGame(board, { seed: 6, startMode: 'midnight', config: { players: 1, monsterPick: 'redcap' } });
   const mo = state.monsters[0];
   assert.ok(events.some((e) => e.type === 'monsterIntent'));
-  assert.ok(mo.intent && mo.intent.name);
+  assert.equal(mo.intents.length, 1, 'the Redcap rolls one die (its card number)');
   // Move the Redcap next to the player: Chase / Route both Attack → danger.
   const pl = state.players[0];
   const { x, y } = board.grid.coords(pl.pos);
   mo.pos = board.grid.index(x - 1, y);
   const act = (a) => applyAction(state, board, { ...a, seat: 0 });
   act({ type: 'roll' });
-  assert.deepEqual(mo.intent.danger, [0], 'danger updates live');
+  assert.deepEqual(mo.danger, [0], 'danger updates live');
   const r = act({ type: 'move' });             // stay put: the round ends
   assert.ok(r.events.some((e) => e.type === 'damage'), 'it struck');
   assert.ok(r.events.some((e) => e.type === 'monsterIntent'), 'and declared its next move');
@@ -137,4 +137,12 @@ test('Close range includes diagonals; Adze abilities cover every roll', async ()
   assert.equal(rangeBand(cellRange(g, g.index(5, 5), g.index(8, 5))), 'long');
   const adze = MONSTER_CARDS.find((c) => c.id === 'adze');
   assert.deepEqual(adze.abilities.map((a) => a.roll), ['1-2', '3-4', '5-6']);
+});
+
+test('monsters roll as many action dice as their card number, and act in order', () => {
+  const board = createBoard(street());
+  for (const [id, n] of [['hellhounds', 4], ['werewolf', 3], ['shadow-people', 0]]) {
+    const { state } = newGame(board, { seed: 9, startMode: 'midnight', config: { players: 1, monsterPick: id } });
+    assert.equal(state.monsters[0].intents.length, n, id);
+  }
 });
