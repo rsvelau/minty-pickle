@@ -514,3 +514,117 @@ body.playing .help { display: none; }
   .game-clock { font-size: 11px; padding: 2px 7px; }
   .game-clock .turn-word { display: none; }
 }
+
+/* Game settings ---------------------------------------------------------------- */
+.settings-btn { flex-basis: 100% !important; }
+.settings-card { width: min(480px, 100%); }
+.set-section { margin: 14px 0 6px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.set-row { display: flex; align-items: center; gap: 10px; min-height: 44px; border-top: 1px solid rgba(255, 255, 255, 0.05); }
+.set-row label { flex: 1; min-width: 0; color: #dfe6e2; font-size: 13px; }
+.set-row label small { display: block; color: var(--muted); font-size: 11px; }
+.stepper { display: flex; align-items: center; gap: 4px; }
+.stepper button { width: 36px; height: 36px; padding: 0; font-size: 18px; line-height: 1; }
+.stepper output { min-width: 52px; text-align: center; font-variant-numeric: tabular-nums; color: #f3e3cf; }
+.set-row input[type="checkbox"] { width: 22px; height: 22px; accent-color: #58e0a0; }
+.set-total { text-align: right; color: var(--muted); font-size: 12px; margin-top: 6px; }
+
+/* Obols: coins drawn when investigating ------------------------------------------ */
+.obol {
+  --s: 22px;
+  width: var(--s); height: var(--s); flex: none;
+  display: inline-grid; place-items: center;
+  border-radius: 50%;
+  color: rgba(0, 0, 0, 0.5);
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.28), inset 0 -3px 5px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.6);
+  vertical-align: middle;
+}
+.obol svg { width: 62%; height: 62%; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.obol.big { --s: 64px; }
+.obol.big svg { stroke-width: 1.8; }
+/* Attack: bloody red, darkened and wet at the rim. */
+.obol-attack {
+  background: radial-gradient(circle at 34% 28%, #ff8a80 0 8%, #c4141f 32%, #7a0710 62%, #3a0206 100%);
+  color: rgba(40, 0, 4, 0.7);
+}
+/* Event: misty blue, soft haze round it. */
+.obol-event {
+  background: radial-gradient(circle at 38% 32%, #eef6ff 0 10%, #8fb6e8 34%, #3f6ea8 66%, #1c3156 100%);
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.2), inset 0 -3px 6px rgba(10, 20, 50, 0.4), 0 0 10px 3px rgba(150, 190, 255, 0.35);
+  color: rgba(10, 25, 55, 0.6);
+}
+/* Equipment: shiny green metal with a bright sheen. */
+.obol-equipment {
+  background:
+    linear-gradient(125deg, transparent 30%, rgba(255, 255, 255, 0.75) 42%, transparent 52%),
+    radial-gradient(circle at 40% 35%, #b8ffc6 0 8%, #3fbf62 38%, #1d7a39 68%, #0c3a1a 100%);
+  color: rgba(5, 40, 15, 0.65);
+}
+/* Evidence: glowing yellow. */
+.obol-evidence {
+  background: radial-gradient(circle at 42% 38%, #fffbe0 0 14%, #ffd84a 44%, #d99a00 74%, #7a5200 100%);
+  box-shadow: inset 0 0 0 2px rgba(80, 50, 0, 0.3), inset 0 -3px 5px rgba(90, 60, 0, 0.3), 0 0 12px 4px rgba(255, 210, 70, 0.5);
+  color: rgba(90, 55, 0, 0.6);
+}
+.obol-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.obol-count { display: inline-flex; align-items: center; gap: 3px; font-variant-numeric: tabular-nums; font-size: 12px; color: #dfe6e2; }
+.obol-count.zero { opacity: 0.35; }
+
+/* "Investigate?" prompt, just above the play bar. */
+.ask-card {
+  position: fixed;
+  left: 50%;
+  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 9;
+  width: min(380px, calc(100% - 24px));
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid #c9a24a;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+}
+.ask-card[hidden] { display: none; }
+.ask-top { display: flex; gap: 10px; align-items: center; }
+.ask-top b { font-size: 17px; color: #f3e3cf; }
+.ask-sub { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+.ask-icon {
+  width: 34px; height: 34px; flex: none; border-radius: 50%;
+  background: radial-gradient(circle, #f3e3cf 0 18%, transparent 20%), radial-gradient(circle, #6a5a3a 0 60%, #2a2418 62%);
+  box-shadow: 0 0 0 2px #c9a24a;
+}
+.ask-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ask-actions button { min-height: 48px; font-size: 16px; }
+
+/* Obol reveal: centre of the screen for a moment. */
+.obol-reveal {
+  position: fixed;
+  left: 50%;
+  top: 34%;
+  transform: translate(-50%, -50%);
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: rgba(10, 13, 18, 0.92);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  animation: obol-in 0.35s ease-out;
+  cursor: pointer;
+  max-width: calc(100% - 32px);
+}
+.obol-reveal[hidden] { display: none; }
+.obol-reveal b { font-size: 17px; color: #f3e3cf; }
+.obol-reveal p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+@keyframes obol-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.8) rotateY(90deg); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1) rotateY(0); }
+}
+@media (prefers-reduced-motion: reduce) { .obol-reveal { animation: none; } }
+/* Scoreboard: each player's Obols on their own line under the name. */
+.play-board .pl { flex-wrap: wrap; row-gap: 2px; }
+.play-board .pl > span:nth-child(3) { margin-left: auto; color: var(--muted); }
+.play-board .pl > .obol-row { flex-basis: 100%; margin-left: 0; padding-left: 34px; gap: 12px; color: inherit; }

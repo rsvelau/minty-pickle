@@ -25,6 +25,7 @@
             <button data-tool="markers">Markers <kbd>P</kbd></button>
             <button data-tool="play" data-start="standard" class="play-btn">Play demo <kbd>Y</kbd></button>
             <button data-tool="play" data-start="midnight" class="play-btn play-btn-midnight">Midnight demo</button>
+            <button id="openSettings" class="settings-btn" type="button">⚙ Game settings</button>
           </div>
 
           <div id="cellTools">
@@ -184,6 +185,35 @@
       </div>
     </div>
     <div id="toast" class="toast" role="status" hidden></div>
+
+    <!-- Play demo: "Investigate?" when a runner reaches an Investigation space. -->
+    <div id="askCard" class="ask-card" hidden role="dialog" aria-labelledby="askTitle">
+      <div class="ask-top">
+        <span class="ask-icon" aria-hidden="true"></span>
+        <div><b id="askTitle">Investigate?</b><p class="ask-sub" id="askSub"></p></div>
+      </div>
+      <div class="ask-actions">
+        <button id="askNo" type="button">No</button>
+        <button id="askYes" type="button" class="on">Yes</button>
+      </div>
+    </div>
+    <!-- Play demo: the Obol a player just drew. Tap to dismiss. -->
+    <div id="obolReveal" class="obol-reveal" hidden role="status">
+      <span id="obolCoin"></span>
+      <div><b id="obolTitle"></b><p id="obolSub"></p></div>
+    </div>
+    <!-- Game settings: the adjustable mechanics. -->
+    <div id="settings" class="dialog" hidden role="dialog" aria-modal="true" aria-labelledby="setTitle">
+      <div class="dialog-card settings-card">
+        <h3 id="setTitle">Game settings</h3>
+        <p>Saved on this device. Changes restart a game in progress.</p>
+        <div id="settingsBody"></div>
+        <div class="dialog-actions">
+          <button id="setDefaults" type="button">Reset to defaults</button>
+          <button id="setDone" type="button" class="on">Done</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Play demo: small game clock (time and turn), top centre. -->
     <div id="gameClock" class="game-clock" hidden aria-live="polite"></div>

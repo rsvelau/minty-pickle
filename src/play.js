@@ -34,19 +34,38 @@ const STEP_TIME = (TILE_M) => TILE_M / JOG_SPEED;
 const FAST_STEP = 0.32;                       // seconds per cell when fast-forwarding
 const STRIDES_PER_M = 0.78;                   // running cadence: leg cycles per metre
 const ROLL_TIME = 0.7;    // die tumble before it lands
-// Dice rules.
-export const START_BLACK = 2;   // black dice everyone starts with (renew each turn)
-export const MOVE_SLOTS = 2;    // movement slots each turn...
-export const LIT_SLOTS = 3;     // ...or this many when starting the turn in a lit cell
-export const LIT_THRESHOLD = 0.5; // light level (0..1) that counts as a lit cell
+// Game configuration: the adjustable mechanics (Game settings in the UI).
+// - Dice: everyone starts with `startBlack` black dice (renew each turn);
+//   `moveSlots` movement slots, or `litSlots` when the turn starts in a cell
+//   lit at least `litThreshold` (0..1).
+// - Clock: each turn (every player moving once) is `turnMinutes`; midnight
+//   comes after `turnsToMidnight` turns (11 PM with the defaults). Objective
+//   markers stay hidden until midnight.
+// - Markers: `stopAtMarkers` stops the runner on every marker to choose a
+//   way on; `askInvestigate` asks "Investigate?" on Investigation spaces.
+// - Obols: the bag investigators draw from, by type.
+export const DEFAULT_CONFIG = Object.freeze({
+  startBlack: 2,
+  moveSlots: 2,
+  litSlots: 3,
+  litThreshold: 0.5,
+  turnMinutes: 5,
+  turnsToMidnight: 12,
+  stopAtMarkers: true,
+  askInvestigate: true,
+  obols: Object.freeze({ attack: 7, event: 7, equipment: 7, evidence: 7 }),
+});
+export const defaultConfig = () => ({ ...DEFAULT_CONFIG, obols: { ...DEFAULT_CONFIG.obols } });
 
-// Game clock: the night starts at 11 PM and each turn (every player moving
-// once) is 5 minutes, so 12 turns run to midnight. Objective markers stay
-// hidden until midnight (they'll depend on which monster appears).
-export const GAME_START_MIN = 23 * 60;
-export const TURN_MINUTES = 5;
-export const TURNS_TO_MIDNIGHT = 12;
-export const MIDNIGHT_MIN = GAME_START_MIN + TURN_MINUTES * TURNS_TO_MIDNIGHT;
+// Obols: coins drawn at random when investigating.
+export const OBOLS = {
+  attack: { label: 'Attack', note: 'bloody red' },
+  event: { label: 'Event', note: 'misty blue' },
+  equipment: { label: 'Equipment', note: 'shiny green' },
+  evidence: { label: 'Evidence', note: 'glowing yellow' },
+};
+export const OBOL_TYPES = Object.keys(OBOLS);
+export const MIDNIGHT = 24 * 60;
 // "11:05 PM", "12:00 AM".
 export function formatClock(min) {
   const h24 = Math.floor(min / 60) % 24, mm = min % 60;
@@ -56,9 +75,12 @@ export function formatClock(min) {
 
 export function createPlay({
   grid, scene, camera, controls, cellToWorld, cellTop, terrainify, cellLabel, onChange,
-  onUsed = () => {}, onCollect = () => {}, lightAt = () => 0,
+  onUsed = () => {}, onCollect = () => {}, lightAt = () => 0, onObol = () => {},
+  config = defaultConfig(),
 }) {
+  const cfg = config; // live: Game settings edits this object
   const st = {
+    cfg,
     players: [],       // [{ name, colour, pos, prev, white, black, figure, tag }]
     count: 4,          // how many players (1-4)
     startMode: 'standard', // 'standard' (11 PM) or 'midnight' (starts at midnight, objectives out)
@@ -354,11 +376,19 @@ export function createPlay({
     const m = c.marker;
     if (!m || !MARKERS[m]) return null;
     if (m === 'objective' && !midnight()) return null; // not there yet
-    st.stopAt = i;
+    if (cfg.stopAtMarkers) st.stopAt = i;
     if (st.used.has(i)) {
       st.stopReason = `${MARKERS[m].label} (already collected)`;
       return null;
     }
+    // Investigation: ask first ("Investigate?"); the answer comes back
+    // through answerInvestigate().
+    if (m === 'investigation' && cfg.askInvestigate) {
+      st.ask = { i };
+      st.stopReason = 'Investigation';
+      return null;
+    }
+    if (m === 'investigation') return investigate(i);
     st.used.add(i);
     let text, msg;
     if (m === 'whiteDice') {
@@ -402,6 +432,51 @@ export function createPlay({
     };
   }
 
+  // Investigate a spot: draw a random Obol from the bag for the current
+  // player. Returns the board effect to play when the runner gets there.
+  function investigate(i) {
+    st.used.add(i);
+    const pl = st.players[st.cur];
+    let type = null;
+    if (st.bag.length) {
+      type = st.bag.splice(Math.floor(Math.random() * st.bag.length), 1)[0];
+      pl.obols[type]++;
+      log(`${who()} investigated ${label(i)} and drew an ${OBOLS[type].label} Obol (${st.bag.length} left in the bag).`);
+    } else {
+      log(`${who()} investigated ${label(i)}, but the Obol bag is empty.`);
+    }
+    st.stopReason = 'Investigation';
+    onObol({ player: pl, type, left: st.bag.length });
+    return () => {
+      st.shownUsed.add(i);
+      onCollect(i, 'investigation', type ? `${OBOLS[type].label} Obol` : 'Investigation');
+      onUsed();
+    };
+  }
+
+  // The answer to "Investigate?". Yes draws an Obol; No runs on through the
+  // space, leaving it for later.
+  function answerInvestigate(yes) {
+    if (st.phase !== 'asking' || !st.ask) return;
+    const { i } = st.ask;
+    st.ask = null;
+    if (yes) {
+      const fx = investigate(i);
+      // Play the effect when the runner reaches the spot (or now, if there).
+      const pl = st.players[st.cur];
+      const q = pl.queue.find((e) => e.to === i && !e.fx);
+      if (q) q.fx = fx;
+      else if (pl.anim && pl.anim.to === i && !pl.anim.fx) pl.anim.fx = fx;
+      else fx();
+    } else {
+      log(`${who()} passes the investigation spot at ${label(i)}.`);
+      st.stopAt = -1;
+      st.stopReason = '';
+    }
+    st.phase = 'moving';
+    advance();
+  }
+
   // Landing at the end of a move.
   function land(i) {
     log(`${who()} ends on ${label(i)}.`);
@@ -412,11 +487,14 @@ export function createPlay({
     const s = startCell();
     st.players = PLAYERS.slice(0, st.count).map((p) => ({
       ...p, pos: s, prev: -1, white: 0, black: 0, at: null, face: 0, vis: s, queue: [], anim: null,
+      obols: Object.fromEntries(OBOL_TYPES.map((t) => [t, 0])),
     }));
     Object.assign(st, {
       cur: 0, steps: 0, roll: 0, phase: s >= 0 ? 'idle' : 'nostart', options: [],
-      turn: 0, round: st.startMode === 'midnight' ? TURNS_TO_MIDNIGHT + 1 : 1, keys: 0, keyGroups: grid.keyGroups(), pan: true,
-      blackCount: START_BLACK, pool: [], slots: [], maxSlots: MOVE_SLOTS,
+      turn: 0, round: st.startMode === 'midnight' ? cfg.turnsToMidnight + 1 : 1, keys: 0, keyGroups: grid.keyGroups(), pan: true,
+      blackCount: cfg.startBlack, pool: [], slots: [], maxSlots: cfg.moveSlots, ask: null,
+      // The Obol bag, shuffled as it's drawn from.
+      bag: OBOL_TYPES.flatMap((t) => Array(Math.max(0, cfg.obols[t] | 0)).fill(t)),
     });
     st.used = new Set();
     st.shownUsed = new Set();
@@ -427,7 +505,7 @@ export function createPlay({
     st.log = s >= 0
       ? [(st.startMode === 'midnight' ? 'Midnight. The town is waiting, and the objectives are out. ' : '') + `${st.count} player${st.count === 1 ? '' : 's'} ready on the Start space (${label(s)}), in the van's headlights: starting light ${Math.round(lightAt(s) * 100)}%. ${who()} rolls first.`]
       : [];
-    if (s >= 0) { placeAll(); enter(s)?.(); }
+    if (s >= 0) { placeAll(); enter(s)?.(); st.ask = null; }
     applyVisibility();
     showOptions();
     onChange();
@@ -443,8 +521,8 @@ export function createPlay({
     // in the player's reserve, unrolled, until they choose to roll one.
     st.pool = Array.from({ length: st.blackCount }, () => ({ kind: 'black', v: d6() }));
     st.slots = [];
-    st.lit = lightAt(st.pos) >= LIT_THRESHOLD;
-    st.maxSlots = st.lit ? LIT_SLOTS : MOVE_SLOTS;
+    st.lit = lightAt(st.pos) >= cfg.litThreshold;
+    st.maxSlots = st.lit ? Math.max(cfg.litSlots, cfg.moveSlots) : cfg.moveSlots;
     st.roll = 0;
     st.phase = 'rolling';
     st.rollT = 0;
@@ -454,6 +532,14 @@ export function createPlay({
 
   // Decide the next step: move on, ask, or finish.
   function advance() {
+    // Standing on an Investigation space: ask before anything else.
+    if (st.ask) {
+      st.phase = 'asking';
+      st.options = [];
+      showOptions();
+      onChange();
+      return;
+    }
     if (st.steps <= 0) {
       st.stopAt = -1;
       st.stopReason = '';
@@ -530,14 +616,16 @@ export function createPlay({
     advance();
   }
 
-  // Game time: turn N starts at 11 PM + 5 (N - 1) minutes.
-  function clockMinutes() { return GAME_START_MIN + ((st.round ?? 1) - 1) * TURN_MINUTES; }
-  function midnight() { return clockMinutes() >= MIDNIGHT_MIN; }
+  // Game time: the night starts turnsToMidnight turns before midnight, and
+  // turn N starts (N - 1) turns of turnMinutes later.
+  function startMinutes() { return MIDNIGHT - cfg.turnMinutes * cfg.turnsToMidnight; }
+  function clockMinutes() { return startMinutes() + ((st.round ?? 1) - 1) * cfg.turnMinutes; }
+  function midnight() { return (st.round ?? 1) > cfg.turnsToMidnight; }
 
   function nextPlayer() {
     st.cur = (st.cur + 1) % st.players.length;
     if (st.cur === 0) {
-      // Everyone has moved: the clock moves on 5 minutes.
+      // Everyone has moved: the clock moves on one turn.
       const wasMidnight = midnight();
       st.round++;
       if (midnight() && !wasMidnight) {
@@ -729,7 +817,7 @@ export function createPlay({
   }
 
   return {
-    state: st, roll, reset, clockMinutes, midnight, setStartMode, choose, chooseByKey, tick, setActive, boardChanged, setPlayers,
+    state: st, roll, reset, clockMinutes, startMinutes, midnight, setStartMode, answerInvestigate, choose, chooseByKey, tick, setActive, boardChanged, setPlayers,
     setFast: (on) => { st.fast = !!on; },
     toggleSlot, confirmMove, slotTotal, rollWhite,
     // Doors visibly unlocked by keys the runners have reached (edge keys).

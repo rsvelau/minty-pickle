@@ -12,7 +12,7 @@ import { createStreets } from './street.js';
 import { createBridges } from './bridge.js';
 import { createClocktowers } from './clocktower.js';
 import { dreadUniforms, swayUniforms, setLightSeeds, flickerize, flickerAt, swayFir } from './dread.js';
-import { createPlay, GAME_START_MIN, TURNS_TO_MIDNIGHT, formatClock } from './play.js';
+import { createPlay, defaultConfig, OBOLS, OBOL_TYPES, formatClock } from './play.js';
 import { createMarkers, drawMarkerIcon } from './markers.js';
 import {
   installTerrain, setTerrain, terrainHeight, rayTerrain, isFlat, terrainId, TERRAIN_PRESETS,
@@ -1757,7 +1757,7 @@ function setTool(tool, start) {
   $('#playTools').hidden = tool !== 'play';
   $('#playHud').hidden = tool !== 'play';
   if (tool !== 'play') $('#gameClock').hidden = true;
-  if (tool !== 'play') $('#playTray').hidden = true;
+  if (tool !== 'play') { $('#playTray').hidden = true; $('#askCard').hidden = true; $('#obolReveal').hidden = true; }
   document.body.classList.toggle('playing', tool === 'play');
   // Phones: fold the panel away so the board and the play bar are visible.
   if (tool === 'play' && window.innerWidth < 700) {
@@ -2021,7 +2021,8 @@ function renderPlay() {
     nostart: 'No Start space yet. Paint one (Spaces → Outdoor → Start space).',
     idle: `On <b>${here}</b>. Roll to move.`,
     rolling: 'Rolling…',
-    slotting: `Slot dice into up to <b>${s.maxSlots}</b> movement slots${s.lit ? ' (in light: 3rd slot open)' : ''}, then Move.`,
+    slotting: `Slot dice into up to <b>${s.maxSlots}</b> movement slots${s.lit ? ' (in light: extra slot open)' : ''}, then Move.`,
+    asking: `Investigation spot. Investigate? <b>${s.steps}</b> move${s.steps === 1 ? '' : 's'} left.`,
     moving: s.fast ? `Fast-forward ⏩ <b>${s.steps}</b> left` : `Running… <b>${s.steps}</b> left (press and hold the board to fast-forward)`,
     choosing: `${s.stopReason ? `Stopped at <b>${s.stopReason}</b>. ` : ''}Choose a direction: <b>${s.steps}</b> move${s.steps === 1 ? '' : 's'} left (${s.options.map((o) => o.name).join(', ')})`,
     done: `On <b>${here}</b>. Roll again.`,
@@ -2030,16 +2031,19 @@ function renderPlay() {
   const inHeadlights = s.pos >= 0 && grid.cells.some((c, j) => c.sub === 'start' && grid.startFront(j) === s.pos);
   const lightHere = s.pos >= 0 ? `Light <b>${Math.round(lightLevels[s.pos] * 100)}%</b>${inHeadlights ? ' (van headlights)' : ''} · ` : '';
   $('#playStats').innerHTML = `${lightHere}Turn <b>${s.turn}</b> · Black dice <b>${s.blackCount}</b> (everyone)` +
+    ` · Obol bag <b>${s.bag.length}</b>` +
     (s.keys ? ` · Keys found <b>${s.keys.toString(2).split('').filter((b) => b === '1').length}</b>` : '');
   // Scoreboard: each player's cell and dice.
   $('#playBoard').innerHTML = s.players.map((p, k) => {
     const c = p.pos >= 0 ? grid.coords(p.pos) : null;
     return `<div class="pl${k === s.cur ? ' cur' : ''}"><span class="chip" style="background:${p.colour}">${p.name}</span>` +
-      `<span>${c ? cellLabel(c.x, c.y) : '–'}</span><span>White dice ${p.white}</span></div>`;
+      `<span>${c ? cellLabel(c.x, c.y) : '–'}</span><span>White dice ${p.white}</span>` +
+      `<span class="obol-row">${OBOL_TYPES.map((t) => `<span class="obol-count${p.obols[t] ? '' : ' zero'}" title="${OBOLS[t].label} Obols">${obolHTML(t)}${p.obols[t]}</span>`).join('')}</span></div>`;
   }).join('');
   $('#playLog').innerHTML = s.log.map((l) => `<li>${l}</li>`).join('');
   renderTray();
   renderClock();
+  renderAsk();
   // Floating bar.
   [...$('#hudDie').children].forEach((el, n) => el.classList.toggle('on', !!face && PIPS[face].includes(n)));
   $('#hudRoll').disabled = roll.disabled;
@@ -2051,6 +2055,7 @@ function renderPlay() {
     slotting: `Slot dice · move <b>${play.slotTotal()}</b>`,
     moving: s.fast ? `Fast-forward ⏩ <b>${s.steps}</b> left` : `Running… <b>${s.steps}</b> left · hold to fast-forward`,
     choosing: `${s.stopReason ? `<b>${s.stopReason}</b> · ` : ''}Tap an arrow · <b>${s.steps}</b> left`,
+    asking: `Investigate? · <b>${s.steps}</b> left`,
     done: `On <b>${here}</b>. Roll again.`,
   }[s.phase] ?? '');
   renderChoices();
@@ -2102,7 +2107,30 @@ function positionChoices() {
     b.firstChild.style.transform = `rotate(${ang}rad)`;
   }
 }
+// Game settings (the adjustable mechanics), saved on this device.
+const CONFIG_KEY = 'minty-pickle.gameConfig';
+function loadConfig() {
+  const cfg = defaultConfig();
+  try {
+    const saved = JSON.parse(localStorage.getItem(CONFIG_KEY) ?? 'null');
+    if (saved && typeof saved === 'object') {
+      for (const k of Object.keys(cfg)) {
+        if (k === 'obols') {
+          for (const t of OBOL_TYPES) if (Number.isFinite(saved.obols?.[t])) cfg.obols[t] = saved.obols[t];
+        } else if (typeof saved[k] === typeof cfg[k]) cfg[k] = saved[k];
+      }
+    }
+  } catch { /* defaults */ }
+  return cfg;
+}
+const gameConfig = loadConfig();
+function saveConfig() {
+  try { localStorage.setItem(CONFIG_KEY, JSON.stringify(gameConfig)); } catch { /* ignore */ }
+}
+
 const play = createPlay({
+  config: gameConfig,
+  onObol: (draw) => showObol(draw),
   lightAt: (i) => lightLevels[i] ?? 0,
   grid, scene, camera, controls, cellToWorld, terrainify, cellLabel,
   cellTop: (i) => Math.max(visibleTop(i), WATER_Y) + 0.01,
@@ -2127,9 +2155,10 @@ function renderClock() {
   const r = play.state.round;
   const t = formatClock(play.clockMinutes());
   el.classList.toggle('midnight', play.midnight());
-  el.innerHTML = r <= TURNS_TO_MIDNIGHT
-    ? `${t}<span class="sep">·</span><span class="turn-word">Turn </span>${r}/${TURNS_TO_MIDNIGHT}`
-    : `${t}<span class="sep">·</span>${r === TURNS_TO_MIDNIGHT + 1 ? 'Midnight' : `Turn ${r}`}`;
+  const turns = play.state.cfg.turnsToMidnight;
+  el.innerHTML = r <= turns
+    ? `${t}<span class="sep">·</span><span class="turn-word">Turn </span>${r}/${turns}`
+    : `${t}<span class="sep">·</span>${r === turns + 1 ? 'Midnight' : `Turn ${r}`}`;
 }
 
 // Dice tray: tap rolled dice into movement slots, then Move.
@@ -2148,11 +2177,12 @@ function renderTray() {
     dieHTML(rolling ? { ...d, v: 1 + ((s.rollFace + n * 2) % 6) } : d, s.slots.includes(n) ? 'used' : '')).join('');
   [...$('#trayPool').children].forEach((b, n) => { b.onclick = () => play.toggleSlot(n); });
   const slots = [];
-  for (let k = 0; k < LIT_SLOTS_UI; k++) {
+  const base = s.cfg.moveSlots, most = Math.max(base, s.cfg.litSlots);
+  for (let k = 0; k < most; k++) {
     const n = s.slots[k];
     if (n !== undefined) slots.push(dieHTML(s.pool[n], 'in-slot'));
-    else if (k < s.maxSlots) slots.push(`<span class="tdie slot${k >= 2 ? ' lit' : ''}">${k >= 2 ? 'light' : ''}</span>`);
-    else slots.push('<span class="tdie slot" title="Third slot needs a lit cell at the start of the turn" style="opacity:.35">dark</span>');
+    else if (k < s.maxSlots) slots.push(`<span class="tdie slot${k >= base ? ' lit' : ''}">${k >= base ? 'light' : ''}</span>`);
+    else slots.push('<span class="tdie slot" title="Extra slots need a lit cell at the start of the turn" style="opacity:.35">dark</span>');
   }
   $('#traySlots').innerHTML = slots.join('');
   // Unrolled white dice in this player's reserve: tap one to roll it for this turn.
@@ -2168,7 +2198,142 @@ function renderTray() {
     ? (s.pool.some((d) => d.kind === 'white') ? 'Rolled white dice are discarded after this turn' : 'Tap dice to slot them')
     : 'Slots full';
 }
-const LIT_SLOTS_UI = 3;
+
+// --- Investigating and Obols ------------------------------------------------------
+const OBOL_GLYPHS = {
+  attack: '<path d="M7 4.5 10.5 19.5M11.5 4 14 18.5M16 5 17.5 15.5"/>',
+  event: '<path d="M4 9.5c3-3 6 2.5 9 0s5-1.5 7 0M4 14.5c3-3 6 2.5 9 0s5-1.5 7 0"/>',
+  equipment: '<circle cx="8" cy="12" r="3.6"/><path d="M11.6 12H20M17 12v3.2M19.6 12v2.2"/>',
+  evidence: '<path d="M3 12c4-6.5 14-6.5 18 0-4 6.5-14 6.5-18 0z"/><circle cx="12" cy="12" r="2.6"/>',
+};
+function obolHTML(type, big = false) {
+  return `<span class="obol obol-${type}${big ? ' big' : ''}" aria-hidden="true"><svg viewBox="0 0 24 24">${OBOL_GLYPHS[type]}</svg></span>`;
+}
+// "Investigate?" while the runner stands on an Investigation space.
+function renderAsk() {
+  const s = play.state;
+  const show = ui.tool === 'play' && s.phase === 'asking' && !!s.ask;
+  $('#askCard').hidden = !show;
+  if (!show) return;
+  const cur = s.players[s.cur];
+  const { x, y } = grid.coords(s.ask.i);
+  $('#askSub').innerHTML = `<b style="color:${cur.colour}">${cur.name}</b> at ${cellLabel(x, y)} · ` +
+    `${s.bag.length ? `draw an Obol (${s.bag.length} in the bag)` : 'the Obol bag is empty'}`;
+}
+$('#askYes').addEventListener('click', () => play.answerInvestigate(true));
+$('#askNo').addEventListener('click', () => play.answerInvestigate(false));
+// The Obol just drawn, shown for a moment (tap to dismiss).
+let obolTimer = 0;
+function showObol({ player, type, left }) {
+  const el = $('#obolReveal');
+  $('#obolCoin').innerHTML = type ? obolHTML(type, true) : '';
+  $('#obolTitle').textContent = type ? `${OBOLS[type].label} Obol` : 'Nothing found';
+  $('#obolSub').innerHTML = type
+    ? `<b style="color:${player.colour}">${player.name}</b> drew it · ${left} left in the bag`
+    : `<b style="color:${player.colour}">${player.name}</b>: the Obol bag is empty`;
+  el.hidden = false;
+  clearTimeout(obolTimer);
+  obolTimer = setTimeout(() => { el.hidden = true; }, 2600);
+}
+$('#obolReveal').addEventListener('click', () => { $('#obolReveal').hidden = true; });
+
+// --- Game settings -------------------------------------------------------------------
+const SETTINGS = [
+  { section: 'Dice & movement' },
+  { key: 'startBlack', label: 'Starting black dice', note: 'Everyone; renew each turn', min: 1, max: 6 },
+  { key: 'moveSlots', label: 'Movement slots', min: 1, max: 4 },
+  { key: 'litSlots', label: 'Slots when starting in light', min: 1, max: 5 },
+  { key: 'litThreshold', label: 'Light that counts as lit', min: 0.1, max: 1, step: 0.1, fmt: (v) => `${Math.round(v * 100)}%` },
+  { section: 'Clock' },
+  { key: 'turnMinutes', label: 'Minutes per turn', min: 1, max: 15, fmt: (v) => `${v} min` },
+  { key: 'turnsToMidnight', label: 'Turns until midnight', note: 'start', min: 1, max: 24 },
+  { section: 'Markers' },
+  { key: 'stopAtMarkers', label: 'Stop on every marker', note: 'Choose a way on at each marker', bool: true },
+  { key: 'askInvestigate', label: 'Ask before investigating', note: '"Investigate?" on Investigation spaces', bool: true },
+  { section: 'Obol bag' },
+  ...OBOL_TYPES.map((t) => ({ obol: t, label: `${OBOLS[t].label} Obols`, note: OBOLS[t].note, min: 0, max: 20 })),
+];
+let settingsDirty = false;
+function renderSettings() {
+  const body = $('#settingsBody');
+  body.replaceChildren();
+  const startNote = () => `Night starts at ${formatClock(24 * 60 - gameConfig.turnMinutes * gameConfig.turnsToMidnight)}`;
+  for (const f of SETTINGS) {
+    if (f.section) {
+      const h = document.createElement('div');
+      h.className = 'set-section';
+      h.textContent = f.section;
+      body.appendChild(h);
+      continue;
+    }
+    const row = document.createElement('div');
+    row.className = 'set-row';
+    const id = `set-${f.key ?? f.obol}`;
+    const note = f.note === 'start' ? startNote() : f.note;
+    row.innerHTML = `${f.obol ? obolHTML(f.obol) : ''}<label for="${id}">${f.label}${note ? `<small>${note}</small>` : ''}</label>`;
+    const get = () => (f.obol ? gameConfig.obols[f.obol] : gameConfig[f.key]);
+    const set = (v) => {
+      if (f.obol) gameConfig.obols[f.obol] = v; else gameConfig[f.key] = v;
+      // Keep the lit slots at least the normal slots.
+      if (f.key === 'moveSlots' && gameConfig.litSlots < v) gameConfig.litSlots = v;
+      if (f.key === 'litSlots' && gameConfig.moveSlots > v) gameConfig.moveSlots = v;
+      settingsDirty = true;
+      saveConfig();
+      renderSettings();
+    };
+    if (f.bool) {
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.id = id;
+      cb.checked = get();
+      cb.addEventListener('change', () => set(cb.checked));
+      row.appendChild(cb);
+    } else {
+      const step = f.step ?? 1;
+      const wrap = document.createElement('div');
+      wrap.className = 'stepper';
+      const v = get();
+      wrap.innerHTML = `<button type="button" aria-label="Less">−</button><output id="${id}">${f.fmt ? f.fmt(v) : v}</output><button type="button" aria-label="More">+</button>`;
+      const [less, more] = wrap.querySelectorAll('button');
+      const nudge = (d) => set(Math.round(Math.min(f.max, Math.max(f.min, get() + d * step)) * 100) / 100);
+      less.disabled = v <= f.min;
+      more.disabled = v >= f.max;
+      less.addEventListener('click', () => nudge(-1));
+      more.addEventListener('click', () => nudge(1));
+      row.appendChild(wrap);
+    }
+    body.appendChild(row);
+  }
+  const total = OBOL_TYPES.reduce((a, t) => a + gameConfig.obols[t], 0);
+  const tot = document.createElement('div');
+  tot.className = 'set-total';
+  tot.textContent = `${total} Obols in the bag`;
+  body.appendChild(tot);
+}
+function openSettings() {
+  settingsDirty = false;
+  renderSettings();
+  $('#settings').hidden = false;
+}
+function closeSettings() {
+  $('#settings').hidden = true;
+  if (settingsDirty && ui.tool === 'play') {
+    play.reset();
+    toast('Game restarted with the new settings.');
+  }
+  settingsDirty = false;
+}
+$('#openSettings').addEventListener('click', openSettings);
+$('#setDone').addEventListener('click', closeSettings);
+$('#settings').addEventListener('click', (e) => { if (e.target === $('#settings')) closeSettings(); });
+$('#setDefaults').addEventListener('click', () => {
+  const d = defaultConfig();
+  Object.assign(gameConfig, d);
+  gameConfig.obols = d.obols;
+  settingsDirty = true;
+  saveConfig();
+  renderSettings();
+});
 $('#trayMove').addEventListener('click', () => play.confirmMove());
 $('#hudRoll').addEventListener('click', () => play.roll());
 $('#playStreets').addEventListener('change', (e) => { play.state.followStreets = e.target.checked; });
@@ -2408,7 +2573,8 @@ window.addEventListener('pointerdown', (ev) => {
   if (!panelOpen && !viewOpen) return;
   const t = ev.target;
   const inside = (sel) => t instanceof Element && !!t.closest(sel);
-  if (inside('#dialog') || inside('#playHud') || inside('#playChoices') || inside('#playTray')) return;
+  if (inside('#dialog') || inside('#settings') || inside('#playHud') || inside('#playChoices') || inside('#playTray')
+    || inside('#askCard') || inside('#obolReveal')) return;
   let closed = false;
   if (panelOpen && !inside('#panel') && !inside('#expand')) { minimizePanel(); closed = true; }
   if (viewOpen && !inside('#viewMenu')) { setViewMenu(false); closed = true; }
@@ -2421,6 +2587,13 @@ if (window.innerWidth < 700) { $('#panel').hidden = true; $('#expand').hidden = 
 
 window.addEventListener('keydown', (e) => {
   if (!dlg.root.hidden) { if (e.key === 'Escape') closeDialog(); return; }
+  if (!$('#settings').hidden) { if (e.key === 'Escape') closeSettings(); return; }
+  // "Investigate?": Enter or Y = yes, Escape or N = no.
+  if (ui.tool === 'play' && play.state.phase === 'asking') {
+    const k = e.key.toLowerCase();
+    if (k === 'enter' || k === 'y') { e.preventDefault(); play.answerInvestigate(true); return; }
+    if (k === 'escape' || k === 'n') { e.preventDefault(); play.answerInvestigate(false); return; }
+  }
   if (e.key === 'Escape' && ui.tool === 'move') { clearMove(); return; }
   if (ui.tool === 'play' && e.key === 'Enter') {
     e.preventDefault();
@@ -2692,7 +2865,7 @@ renderer.setAnimationLoop(() => {
   // freeze and stop taking input): log it and keep going.
   try { play.tick(dt, clock.elapsedTime); } catch (e) { console.error(e); }
   // Clocktower dials: the game time while playing, 11 PM (the start) otherwise.
-  clocktowers.setTime(ui.tool === 'play' ? play.clockMinutes() : GAME_START_MIN);
+  clocktowers.setTime(ui.tool === 'play' ? play.clockMinutes() : play.startMinutes());
   clocktowers.tick(dt);
   updateDread(dt);
   try { positionChoices(); } catch (e) { console.error(e); }

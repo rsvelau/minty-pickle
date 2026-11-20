@@ -188,6 +188,17 @@ markers** in View hides them. Marker art lives in `src/markers.js`; the list of 
   firs sway, the cold blue night shifts to a muted red, and the night closes in a little (dimmer sky light, nearer fog). Code: `src/dread.js`.
 - **Midnight demo.** The second play button starts the game at midnight: objectives out, the town already
   menacing. **Play demo** (or `Y`) starts the standard 11 PM game.
+- **Investigating.** When a runner reaches an unused Investigation space, a prompt asks **Investigate?**
+  (Yes / No; on a keyboard Enter or Y = yes, Escape or N = no). **No** runs on through the space and leaves
+  it for later. **Yes** draws a random **Obol** from a shared bag for that player, shown in a short reveal and
+  on the scoreboard.
+- **Obols** come in four kinds: **Attack** (bloody red), **Event** (misty blue), **Equipment** (shiny green)
+  and **Evidence** (glowing yellow). The bag holds 7 of each (28) by default; when it's empty, investigating
+  finds nothing.
+- **Game settings** (the ⚙ button under the play buttons) adjust the mechanics: starting black dice,
+  movement slots, slots when starting in light, the light level that counts as lit, minutes per turn, turns
+  until midnight, stopping on every marker, asking before investigating, and the number of each Obol. They're
+  saved on this device (`DEFAULT_CONFIG` in `src/play.js`), and changing them restarts a game in progress.
 - **Turns don't wait for running.** A move is worked out the moment the player gives their input. As soon
   as they've made their last choice (or none is needed), the turn passes and the camera pans to the next
   player while the last figure is still jogging into place. Several players can be running at once; marker
