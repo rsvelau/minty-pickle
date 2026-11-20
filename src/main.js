@@ -370,23 +370,39 @@ const poolGeo = new THREE.PlaneGeometry(2.6 * TILE, 2.6 * TILE).rotateX(-Math.PI
 
 // Unit box with its base at y = 0 (walls, door leaves).
 const unitBoxGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
-// Walls take their building's colour (instance colour) and texture
-// (aWallTex, drawn in the shader in metres along the wall): 0 clapboard,
-// 1 brick, 2 board-and-batten, 3 worn plaster, 4 cedar shingle.
+// Every wall has two faces, each with its own colour and texture: the face
+// toward the west/north cell (aNegColor, aWallTex) and the face toward the
+// east/south cell (aPosColor, aPosTex). Textures are drawn in the shader in
+// metres along the wall. Exterior: 0 clapboard, 1 brick, 2 board-and-batten,
+// 3 worn plaster, 4 cedar shingle. Interior: 5 striped wallpaper, 6 floral
+// wallpaper, 7 oak wainscot under plaster, 8 beadboard, 9 walnut panelling
+// (and 3 plaster).
 const wallMat = new THREE.MeshLambertMaterial({ color: '#ffffff' });
 wallMat.onBeforeCompile = (shader) => {
   shader.vertexShader = shader.vertexShader
-    .replace('#include <common>', '#include <common>\nattribute float aWallTex;\nvarying float vWallTex;\nvarying vec3 vWallP;')
+    .replace('#include <common>', `#include <common>
+      attribute float aWallTex;
+      attribute float aPosTex;
+      attribute vec3 aNegColor;
+      attribute vec3 aPosColor;
+      varying float vWallTex;
+      varying vec3 vWallCol;
+      varying vec3 vWallP;`)
     .replace('#include <project_vertex>', `#include <project_vertex>
       vec4 wallW = vec4(transformed, 1.0);
       #ifdef USE_INSTANCING
         wallW = instanceMatrix * wallW;
       #endif
       vWallP = (modelMatrix * wallW).xyz;
-      vWallTex = aWallTex;`);
+      // Which face: walls are axis-aligned, so the face normal points east/
+      // south (+) or west/north (-); tops and ends take the west/north look.
+      float wallSide = normal.x + normal.z;
+      vWallTex = wallSide > 0.5 ? aPosTex : aWallTex;
+      vWallCol = wallSide > 0.5 ? aPosColor : aNegColor;`);
   shader.fragmentShader = shader.fragmentShader
     .replace('#include <common>', `#include <common>
       varying float vWallTex;
+      varying vec3 vWallCol;
       varying vec3 vWallP;
       float wallHash(vec2 v) { return fract(sin(dot(v, vec2(12.9898, 78.233))) * 43758.5453); }
       float wallNoise(vec2 v) {
@@ -427,8 +443,46 @@ wallMat.onBeforeCompile = (shader) => {
         float gap = step(fract(u), 0.05);
         float sh = 0.8 + 0.25 * wallHash(vec2(floor(u), row));
         return grime * mix(0.7, sh, smoothstep(0.0, 0.25, fy)) * (1.0 - 0.3 * gap);
+      }
+      // Interior finishes (a tint, so wainscot can be wood under plaster).
+      vec3 wallInterior(vec3 wp, float tex) {
+        float a = (wp.x + wp.z) * ${METERS_PER_CELL.toFixed(1)};
+        float y = wp.y * ${METERS_PER_CELL.toFixed(1)};
+        float age = 0.94 + 0.08 * wallNoise(vec2(a * 0.9, y * 0.9));
+        if (tex < 5.5) {            // striped wallpaper, a pinstripe at each seam
+          float s = fract(a / 0.14);
+          float v = mix(0.9, 1.04, step(0.5, s)) - 0.1 * step(abs(s - 0.5), 0.03);
+          return vec3(v * age);
+        } else if (tex < 6.5) {     // small floral print in a half-drop repeat
+          vec2 uv = vec2(a / 0.3, y / 0.3);
+          uv.x += 0.5 * mod(floor(uv.y), 2.0);
+          float d = length(fract(uv) - 0.5);
+          float flower = 1.0 - smoothstep(0.08, 0.13, d);
+          float ring = 1.0 - smoothstep(0.015, 0.04, abs(d - 0.2));
+          return vec3((1.02 - 0.2 * flower - 0.08 * ring) * age);
+        } else if (tex < 7.5) {     // oak wainscot, chair rail, plaster above
+          if (y < 0.88) {
+            float grain = 0.88 + 0.16 * wallNoise(vec2(a * 0.6, y * 18.0));
+            float groove = 1.0 - 0.3 * step(fract(a / 0.5), 0.04);
+            return vec3(0.56, 0.41, 0.3) * grain * groove;
+          }
+          if (y < 0.96) return vec3(0.42, 0.3, 0.22);
+          return vec3(age * (0.96 + 0.05 * wallNoise(vec2(a * 3.0, y * 3.0))));
+        } else if (tex < 8.5) {     // painted beadboard: narrow tongue-and-groove
+          float g = fract(a / 0.1);
+          return vec3((1.0 - 0.22 * step(g, 0.12) + 0.05 * step(0.5, g) * (1.0 - step(0.6, g))) * age);
+        }
+        // walnut panelling: stiles and rails framing sunken panels
+        float sx = fract(a / 0.75), sy = fract((y - 0.12) / 0.9);
+        float frame = max(step(sx, 0.12), max(step(sy, 0.1), step(0.92, sy)));
+        float bevel = (1.0 - frame) * (smoothstep(0.12, 0.17, sx) * (1.0 - smoothstep(0.87, 0.92, sx))) ;
+        float grain = 0.86 + 0.18 * wallNoise(vec2(a * 0.5, y * 14.0));
+        return vec3(grain * (frame > 0.5 ? 1.05 : mix(0.8, 0.95, bevel)));
+      }
+      vec3 wallTint(vec3 wp, float tex) {
+        return tex < 4.5 ? vec3(wallPattern(wp, tex)) : wallInterior(wp, tex);
       }`)
-    .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= wallPattern(vWallP, vWallTex);');
+    .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = vWallCol * wallTint(vWallP, vWallTex);');
 };
 wallMat.customProgramCacheKey = () => 'walls-textured';
 const doorMat = new THREE.MeshLambertMaterial({ color: '#d08a40', emissive: '#5a3414' });
@@ -455,6 +509,19 @@ const BUILDING_STYLES = [
   { name: 'Worn plaster', colour: '#c3bcab', tex: 3 },
   { name: 'Cedar shingle', colour: '#9a7658', tex: 4 },
 ];
+// Interior finishes, one per building (walls facing into it), independent
+// of its exterior.
+const INTERIOR_STYLES = [
+  { name: 'Faded rose striped wallpaper', colour: '#cfaaa2', tex: 5 },
+  { name: 'Sage striped wallpaper', colour: '#b0bca0', tex: 5 },
+  { name: 'Yellowed floral wallpaper', colour: '#d8c99e', tex: 6 },
+  { name: 'Dusty blue floral wallpaper', colour: '#a6b7c6', tex: 6 },
+  { name: 'Oak wainscot and cream plaster', colour: '#e0d4b8', tex: 7 },
+  { name: 'Mint beadboard', colour: '#bccfb8', tex: 8 },
+  { name: 'Nicotine-stained plaster', colour: '#cdbd92', tex: 3 },
+  { name: 'Grey-green plaster', colour: '#aeb4a2', tex: 3 },
+  { name: 'Dark walnut panelling', colour: '#8a6648', tex: 9 },
+];
 const hash32 = (n) => {
   n = Math.imul(n ^ (n >>> 16), 0x45d9f3b);
   n = Math.imul(n ^ (n >>> 16), 0x45d9f3b);
@@ -465,6 +532,9 @@ function buildingStyle(seed) {
   const h = hash32(seed * 2654435761 + 1013904223);
   const s = BUILDING_STYLES[h % BUILDING_STYLES.length];
   return { ...s, windowVariant: (h >>> 8) % 4, frame: FRAME_COLOURS[(h >>> 12) % FRAME_COLOURS.length] };
+}
+function interiorStyle(seed) {
+  return INTERIOR_STYLES[hash32(seed * 40503 + 2246822519) % INTERIOR_STYLES.length];
 }
 // Which building each cell belongs to: the lowest cell index of its
 // building (-1 outdoors). A building is indoor floor joined by open floor or
@@ -636,9 +706,12 @@ function buildBoard() {
   const maxEdges = 2 * N + cols + rows;
   // Walls get their own box geometry with a per-instance texture index.
   const wallGeo = unitBoxGeo.clone();
-  wallGeo.setAttribute('aWallTex', new THREE.InstancedBufferAttribute(new Float32Array(maxEdges * 3), 1));
-  walls = new THREE.InstancedMesh(wallGeo, wallMat, maxEdges * 3);
-  walls.setColorAt(0, tmpColor.set('#ffffff'));
+  const wallN = maxEdges * 3;
+  wallGeo.setAttribute('aWallTex', new THREE.InstancedBufferAttribute(new Float32Array(wallN), 1));
+  wallGeo.setAttribute('aPosTex', new THREE.InstancedBufferAttribute(new Float32Array(wallN), 1));
+  wallGeo.setAttribute('aNegColor', new THREE.InstancedBufferAttribute(new Float32Array(wallN * 3), 3));
+  wallGeo.setAttribute('aPosColor', new THREE.InstancedBufferAttribute(new Float32Array(wallN * 3), 3));
+  walls = new THREE.InstancedMesh(wallGeo, wallMat, wallN);
   doorLeaves = new THREE.InstancedMesh(unitBoxGeo, doorMat, maxEdges * 2);
   frames = new THREE.InstancedMesh(unitBoxGeo, frameMat, maxEdges * 9);
   foundations = new THREE.InstancedMesh(unitBoxGeo, foundationMat, maxEdges);
@@ -833,13 +906,20 @@ function refreshPropsAndWalls() {
   // Each edge takes the style of the building it belongs to (the indoor cell
   // on either side); edges with no building beside them use their own hash.
   const seeds = buildingSeeds();
-  const wallTex = walls.geometry.attributes.aWallTex;
+  const wa = walls.geometry.attributes;
+  // The two faces of the current edge, and its building's style (windows).
   let style = BUILDING_STYLES[0];
-  const edgeStyle = (o, x, y) => {
-    for (const c of grid.edgeCells(o, x, y)) {
-      if (grid.inBounds(c.x, c.y) && seeds[grid.index(c.x, c.y)] >= 0) return buildingStyle(seeds[grid.index(c.x, c.y)]);
-    }
-    return buildingStyle(100000 + (o === 'v' ? 1 : 2) * 7919 + x * 131 + y);
+  let faceNeg = style, facePos = style;
+  const seedOf = (c) => (grid.inBounds(c.x, c.y) ? seeds[grid.index(c.x, c.y)] : -1);
+  // A face looking into a building shows that building's interior; a face
+  // looking outdoors shows the exterior of the building it belongs to.
+  const edgeFaces = (o, x, y) => {
+    const [ca, cb] = grid.edgeCells(o, x, y);
+    const sa = seedOf(ca), sb = seedOf(cb);
+    const own = sa >= 0 ? sa : sb >= 0 ? sb : 100000 + (o === 'v' ? 1 : 2) * 7919 + x * 131 + y;
+    style = buildingStyle(own);
+    faceNeg = sa >= 0 ? interiorStyle(sa) : sb >= 0 ? buildingStyle(sb) : style;
+    facePos = sb >= 0 ? interiorStyle(sb) : sa >= 0 ? buildingStyle(sa) : style;
   };
   let EY = 0, DROP = 0; // current edge: floor level, and how far the ground falls below it
   const piece = (cx, cz, along, len, base, height, vertical) => {
@@ -854,8 +934,10 @@ function refreshPropsAndWalls() {
       vertical ? tmpScale.set(WALL_T, height + extra, len) : tmpScale.set(len, height + extra, WALL_T),
     );
     walls.setMatrixAt(nw, tmpMatrix);
-    walls.setColorAt(nw, tmpColor.set(style.colour));
-    wallTex.array[nw++] = style.tex;
+    tmpColor.set(faceNeg.colour).toArray(wa.aNegColor.array, nw * 3);
+    tmpColor.set(facePos.colour).toArray(wa.aPosColor.array, nw * 3);
+    wa.aWallTex.array[nw] = faceNeg.tex;
+    wa.aPosTex.array[nw++] = facePos.tex;
   };
   let nf = 0, ngd = 0, ngl = 0;
   // A box along the edge into any instanced mesh (`colour` for frames).
@@ -894,7 +976,7 @@ function refreshPropsAndWalls() {
     const cx = vertical ? x - grid.cols / 2 : x - grid.cols / 2 + 0.5;
     const cz = vertical ? y - grid.rows / 2 + 0.5 : y - grid.rows / 2;
     ({ base: EY, drop: DROP } = edgeBase(o, x, y));
-    style = edgeStyle(o, x, y);
+    edgeFaces(o, x, y);
     if (type === 'wall') {
       piece(cx, cz, 0, TILE + WALL_T, FLOOR_H, H, vertical);
       continue;
@@ -1065,7 +1147,7 @@ function refreshPropsAndWalls() {
   foundations.instanceMatrix.needsUpdate = true;
   foundations.computeBoundingSphere();
   walls.count = nw;
-  wallTex.needsUpdate = true;
+  for (const k of ['aWallTex', 'aPosTex', 'aNegColor', 'aPosColor']) wa[k].needsUpdate = true;
   doorLeaves.count = nd;
   frames.count = nf;
   glassDark.count = ngd;
@@ -2857,7 +2939,10 @@ function updateHoverInfo() {
   el.innerHTML =
     `<span class="id">${cellLabel(x, y)}</span>` +
     `<span class="tag">${AREAS[c.area].label} · ${areaLabel(c)}${c.sub === 'start' ? ` (van facing ${FACING_NAMES[grid.startFacing(hoverIndex)]})` : ''}</span>` +
-    (c.area === 'indoor' ? `<span class="tag">${buildingStyle(buildingSeeds()[hoverIndex]).name}</span>` : '') +
+    (c.area === 'indoor' ? (() => {
+      const seed = buildingSeeds()[hoverIndex];
+      return `<span class="tag">Outside: ${buildingStyle(seed).name}</span><span class="tag">Inside: ${interiorStyle(seed).name}</span>`;
+    })() : '') +
     (grid.cells.some((s, j) => s.sub === 'start' && grid.startFront(j) === hoverIndex) ? '<span class="tag marker-tag">Player start</span>' : '') +
     (c.bridge ? `<span class="tag">Bridge (spans ${grid.bridgeAxis(x, y) === 'x' ? 'E–W' : 'N–S'})</span>` : '') +
     `<span class="tag">${lightLabel(c, hoverIndex)}</span>` +

@@ -52,13 +52,22 @@ cells become Street when loaded. The street surface lives in `src/street.js`.
 
 ### Building finishes
 
-Every building gets **one** old-town finish, used on all of its walls, with **one** storefront window
-design and frame colour, so nothing on a building is mismatched. Finishes: faded barn-red, weathered olive,
-dusty mustard, old cream and slate-blue **clapboard**; red-brown and soot-dark **brick**; sage and grey-brown
-**board-and-batten**; **worn plaster**; and **cedar shingle** (textures are drawn in the wall shader, to
-scale). A building is indoor floor joined by open floor or doors; walls and windows between floors split
-buildings, so a row of shops sharing walls gets a look per shop. The pick comes from the building's first
-cell, so it stays put while you keep painting. Hovering an indoor cell names its building's finish.
+Every building gets **one exterior finish** and **one interior finish**, chosen separately, so all of its
+outside walls match each other and all of its inside walls match each other, but inside and outside don't
+have to match. It also gets **one** storefront window design and frame colour.
+
+- **Exterior:** faded barn-red, weathered olive, dusty mustard, old cream and slate-blue **clapboard**;
+  red-brown and soot-dark **brick**; sage and grey-brown **board-and-batten**; **worn plaster**; **cedar shingle**.
+- **Interior:** faded rose and sage **striped wallpaper**; yellowed and dusty blue **floral wallpaper**;
+  **oak wainscot** with a chair rail under cream plaster; **mint beadboard**; **nicotine-stained** and
+  **grey-green plaster**; **dark walnut panelling**.
+
+Each wall has two faces: a face looking into a building shows that building's interior, a face looking
+outdoors shows its exterior. Partition walls inside a building show its interior on both sides; a wall
+shared by two buildings shows each one's interior on its own side. Textures are drawn to scale in the wall
+shader. A building is indoor floor joined by open floor or doors (walls and windows between floors split
+buildings), and its finishes come from its first cell, so they stay put while you paint. Hovering an indoor
+cell names both finishes.
 
 ### Church floor
 
