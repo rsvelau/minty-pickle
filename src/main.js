@@ -2315,9 +2315,10 @@ function renderPlay() {
     const c = p.pos >= 0 ? grid.coords(p.pos) : null;
     const counts = obolCounts(p);
     const inDanger = s.monsters.some((mo) => mo.danger?.includes(k));
-    return `<div class="pl${k === s.cur ? ' cur' : ''}${p.dead ? ' dead' : ''}${inDanger && !p.dead ? ' danger' : ''}" data-inv="${k}" title="Open ${p.name}'s inventory"><span class="chip" style="background:${p.colour}">${p.name}</span>` +
+    const dangerType = s.monsters.flatMap((mo) => mo.dangerTypes?.[k] ?? [])[0];
+    return `<div class="pl${k === s.cur ? ' cur' : ''}${p.dead ? ' dead' : ''}${inDanger && !p.dead ? ` danger${dangerType ? ` danger-${dangerType}` : ''}` : ''}" data-inv="${k}" title="Open ${p.name}'s inventory"><span class="chip" style="background:${p.colour}">${p.name}</span>` +
       `<span>${c ? cellLabel(c.x, c.y) : '–'}</span><span>White dice ${p.white}</span>` +
-      `<span class="inj-row">${injuryPips(p)}${p.dead ? ' <b>Dead</b>' : inDanger ? ' <b style="color:#ff6a50">In danger</b>' : ''}</span>` +
+      `<span class="inj-row">${injuryPips(p)}${p.dead ? ' <b>Dead</b>' : inDanger ? ` <b class="${dangerType ? `dmg-${dangerType}` : ''}" style="${dangerType ? '' : 'color:#ff6a50'}">${dangerType ? dmgIcon(dangerType) : ''}In danger</b>` : ''}</span>` +
       `<span class="obol-row">${OBOL_TYPES.map((t) => `<span class="obol-count${counts[t] ? '' : ' zero'}" title="${OBOLS[t].label} Obols">${obolHTML(t)}${counts[t]}</span>`).join('')}</span></div>`;
   }).join('');
   $('#playBoard').innerHTML += s.monsters.map((mo) => {
@@ -2444,9 +2445,12 @@ const play = createPlay({
   onNpc: (e) => showCard({ kind: 'npc', e }),
   onExhaust: (e) => showCard({ kind: 'exhaust', e }),
   onMonsterRevealed: (e) => showCard({ kind: 'monster', monster: e.monster, correct: e.correct }),
-  // A monster lunges: a brief, soft red flash at the edges of the screen.
-  onAttack: () => {
+  // A monster strikes: a brief, soft flash at the screen edges, in the colour
+  // of its damage type (red, blue or green).
+  onAttack: (e = {}) => {
     const el = $('#attackFlash');
+    const rgb = { P: '170, 16, 20', M: '30, 80, 190', S: '20, 140, 50' }[e.attack] ?? '150, 10, 20';
+    el.style.setProperty('--flash', `rgba(${rgb}, 0.55)`);
     el.classList.remove('on');
     void el.offsetWidth; // restart the fade
     el.classList.add('on');
@@ -2580,7 +2584,16 @@ function showObol({ player, type, left }) {
 $('#obolReveal').addEventListener('click', () => { $('#obolReveal').hidden = true; });
 
 // --- The mystery: choosing evidence, cards turning over, Casebook, Field Guide -------
-const ATTACK_GLYPH = { P: '🩸', M: '🌀', S: '👻' };
+// Damage-type icons, as on the monster cards: claws (Physical, red), a brain
+// (Mental, blue), a skull (Spiritual, green).
+const DMG_SVG = {
+  P: '<path d="M6 3.5 9.5 20M11.5 3 13.5 19.5M17 4.5 17.5 17"/>',
+  M: '<path d="M9 5a3.2 3.2 0 0 0-5 3 3 3 0 0 0 0 5 3.2 3.2 0 0 0 5 4.5V5zM15 5a3.2 3.2 0 0 1 5 3 3 3 0 0 1 0 5 3.2 3.2 0 0 1-5 4.5V5z"/><path d="M9 9.5H7M15 9.5h2M9 14H6.5M15 14h2.5"/>',
+  S: '<path d="M12 3a7 7 0 0 0-7 7c0 2.6 1.3 4.3 3 5.3V19h8v-3.7c1.7-1 3-2.7 3-5.3a7 7 0 0 0-7-7z"/><circle cx="9.2" cy="10.5" r="1.6"/><circle cx="14.8" cy="10.5" r="1.6"/><path d="M10.5 19v2M13.5 19v2"/>',
+};
+const dmgIcon = (t) => `<span class="dmg-icon dmg-${t}" aria-hidden="true"><svg viewBox="0 0 24 24">${DMG_SVG[t] ?? ''}</svg></span>`;
+const kindType = (kind) => ({ physical: 'P', mental: 'M', spiritual: 'S' })[kind];
+const ATTACK_GLYPH = { P: dmgIcon('P'), M: dmgIcon('M'), S: dmgIcon('S') };
 const OBS_GLYPH = '👁', LAIR_GLYPH = '⚰';
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const placeLabel = (cell) => { const { x, y } = grid.coords(cell); return cellLabel(x, y); };
@@ -2745,8 +2758,8 @@ function confirmName(id) {
 
 function casebookHTML(my) {
   const slot = (kind, f, label, wide = false) => (f
-    ? `<button type="button" class="case-slot filled${wide ? ' wide' : ''}" data-goto="${f.cell}" title="Show where it was found">` +
-      `<span class="cs-kind">${label}</span><span class="cs-name">${esc(evidenceLabel(kind, f.code))}</span>` +
+    ? `<button type="button" class="case-slot filled${wide ? ' wide' : ''}${kind === 'attack' ? ` attack-${f.code}` : ''}" data-goto="${f.cell}" title="Show where it was found">` +
+      `<span class="cs-kind">${label}</span><span class="cs-name${kind === 'attack' ? ` dmg-${f.code}` : ''}">${kind === 'attack' ? `${dmgIcon(f.code)} ` : ''}${esc(evidenceLabel(kind, f.code))}</span>` +
       `<span class="cs-where">${esc(f.seat === null ? 'Revealed at midnight' : play.state.players[f.seat]?.name ?? '')} · ${placeLabel(f.cell)} · ${esc(f.time)}</span></button>`
     : `<div class="case-slot empty${wide ? ' wide' : ''}"><span class="cs-kind">${label}</span><span class="cs-name">?</span>` +
       `<span class="cs-where">${kind === 'attack' ? 'Revealed when it attacks someone' : 'Turn over an Evidence card'}</span></div>`);
@@ -2776,7 +2789,7 @@ function guideDetails(c, found, open) {
   const chip = (text, cls) => `<span class="ge-chip ${cls}">${esc(text)}</span>`;
   const ev = c.evidence;
   const evChips = [
-    chip(`Attack: ${ATTACK_TYPES[ev.attack].label}`, found.attack === ev.attack ? 'hit' : ''),
+    chip(`Attack: ${ATTACK_TYPES[ev.attack].label}`, `atk-${ev.attack}${found.attack === ev.attack ? ' hit' : ''}`),
     ...ev.observations.map((o) => chip(OBSERVATIONS[o].label, hitObs.has(o) ? 'hit' : '')),
     chip(`Lair: ${LAIRS[ev.lair].label}`, `lair${hitLair === ev.lair ? ' hit' : ''}`),
   ].join('');
@@ -2787,7 +2800,7 @@ function guideDetails(c, found, open) {
     `<p>Health <b>${stat(c.hp)}</b> · Toughness <b>${stat(c.toughness)}</b></p>` +
     dmg(c.weakness, 'weak', 'Weak to') + dmg(c.immune, 'imm', 'Immune to') +
     `<p>${esc(c.note)}</p><p><b>Objective:</b> ${esc(c.objective)}</p>` +
-    c.abilities.map((a) => `<p class="ge-abil ${a.kind}"><b>${esc(a.name)}</b> <i>[${esc(a.roll)}]</i> ${esc(a.text)}</p>`).join('') +
+    c.abilities.map((a) => `<p class="ge-abil ${a.kind}">${kindType(a.kind) ? dmgIcon(kindType(a.kind)) + ' ' : ''}<b>${esc(a.name)}</b> <i>[${esc(a.roll)}]</i> ${esc(a.text)}</p>`).join('') +
     (c.wounds.length ? `<p><b>When wounded:</b> ${c.wounds.map((w) => `${w.at === null ? '∞' : w.at}: ${esc(w.text)}`).join(' · ')}</p>` : '') +
     `</div>`;
 }
@@ -2819,8 +2832,8 @@ function fieldGuideHTML(my) {
 // --- Injuries and the monster's declared action -----------------------------------
 function injuryPips(p) {
   const inj = p.injuries ?? { P: 0, M: 0, S: 0 };
-  return ['P', 'M', 'S'].map((t) => `<span class="inj" title="${INJURY_TRACKS[t].label}: ${inj[t] ? INJURY_TRACKS[t].tiers[inj[t] - 1].name : 'unhurt'}">` +
-    `${t}${[1, 2, 3].map((k) => `<i class="${inj[t] >= k ? `on${k}` : ''}"></i>`).join('')}</span>`).join('');
+  return ['P', 'M', 'S'].map((t) => `<span class="inj" style="--trk:${ATTACK_TYPES[t].colour};--trk-soft:${ATTACK_TYPES[t].soft}" title="${INJURY_TRACKS[t].label}: ${inj[t] ? INJURY_TRACKS[t].tiers[inj[t] - 1].name : 'unhurt'}">` +
+    `${dmgIcon(t)}${[1, 2, 3].map((k) => `<i class="${inj[t] >= k ? `on${k}` : ''}"></i>`).join('')}</span>`).join('');
 }
 function hitText(e) {
   const who = e.player?.name ?? '';
@@ -2840,9 +2853,9 @@ function renderIntent() {
   const danger = (mo.danger ?? []).map((k) => s.players[k]?.name).filter(Boolean);
   // Compact: just the action names; tap to expand into the card text.
   const acts = intentOpen
-    ? mo.intents.map((i, n) => `<span class="act">${mo.intents.length > 1 ? `${n + 1}. ` : ''}🎲${i.roll} <b>${esc(i.name)}</b>` +
+    ? mo.intents.map((i, n) => `<span class="act ${kindType(i.kind) ? `dmg-${kindType(i.kind)}` : ''}">${mo.intents.length > 1 ? `${n + 1}. ` : ''}🎲${i.roll} ${kindType(i.kind) ? dmgIcon(kindType(i.kind)) : ''}<b>${esc(i.name)}</b>` +
       `${i.ability >= 0 ? ` · ${esc(i.text)}` : ''}</span>`).join('')
-    : ` <span class="acts">${mo.intents.map((i) => `🎲${i.roll} <b>${esc(i.name)}</b>`).join(' → ')}</span>`;
+    : ` <span class="acts">${mo.intents.map((i) => `<span class="${kindType(i.kind) ? `dmg-${kindType(i.kind)}` : ''}">🎲${i.roll} ${kindType(i.kind) ? dmgIcon(kindType(i.kind)) : ''}<b>${esc(i.name)}</b></span>`).join(' → ')}</span>`;
   if (!mo.intents.length) {
     // No action dice: say what it does all the time instead.
     const card = MONSTER_BY_ID[mo.kind];
@@ -2896,8 +2909,8 @@ function renderInventory() {
   const body = $('#invBody');
   if (inv.tab === 'injuries') {
     const inj = pl.injuries ?? { P: 0, M: 0, S: 0 };
-    body.innerHTML = `<div class="inj-list">${['P', 'M', 'S'].map((t) => `<div class="inj-track"><b>${INJURY_TRACKS[t].label}</b>` +
-      INJURY_TRACKS[t].tiers.map((tier, k) => `<div class="inj-tier${inj[t] > k ? ' has' : ''}"><span class="sw" style="background:${tier.colour}"></span>` +
+    body.innerHTML = `<div class="inj-list">${['P', 'M', 'S'].map((t) => `<div class="inj-track" style="--trk-soft:${ATTACK_TYPES[t].soft}"><b class="trk-head">${dmgIcon(t)} ${INJURY_TRACKS[t].label}</b>` +
+      INJURY_TRACKS[t].tiers.map((tier, k) => `<div class="inj-tier${inj[t] > k ? ' has' : ''}"><span class="sw" style="background:${ATTACK_TYPES[t].colour};opacity:${[0.5, 0.75, 1][k]}"></span>` +
         `<span><b style="display:inline">${esc(tier.name)}</b> · ${esc(tier.text)}</span></div>`).join('') + '</div>').join('')}</div>` +
       `<p class="inv-empty" style="padding:12px 4px">${pl.dead ? `${esc(pl.name)} is dead.` : 'Tiers add up; each track is separate. Tier 3 on any track is Death’s Door.'}</p>`;
     return;

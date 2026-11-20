@@ -274,3 +274,25 @@ test('Exhaust (Movement die) takes a die the player moved with', async () => {
   assert.equal(pl.lostBlack ?? 0, 0, 'a white die is simply gone');
   assert.deepEqual(parseAbility('Exhaust (Defensive die) and Attack (die)').ops.map((o) => o.op), ['exhaust', 'attack']);
 });
+
+test('each action carries the damage type of its icon colour on the card (red P, blue M, green S, grey none)', () => {
+  // Read off the monster cards: the symbol left of each action.
+  const icons = {
+    werewolf: ['P', 'M', '-'], barghest: ['M', '-', 'S'], hellhounds: ['-', 'P', 'P'], skinwalker: ['P', 'P', 'S'],
+    wendigo: ['-', 'P', 'P'], banshee: ['-', 'M', 'P'], 'ushi-oni': ['P', 'P', 'S'], redcap: ['P', 'P'],
+    poltergeist: ['M', 'P'], 'white-lady': ['-', 'P', 'M'], strigoi: ['S', 'S', 'P'], adze: ['S', 'S', 'S'],
+    'shadow-people': ['P', '-'],
+  };
+  const code = { physical: 'P', mental: 'M', spiritual: 'S', none: '-' };
+  for (const c of MONSTER_CARDS) assert.deepEqual(c.abilities.map((a) => code[a.kind]), icons[c.id], c.name);
+});
+
+test('danger records the damage type threatening each player', () => {
+  const board = createBoard(street());
+  const { state } = newGame(board, { seed: 6, startMode: 'midnight', config: { players: 1, monsterPick: 'redcap' } });
+  const mo = state.monsters[0];
+  const { x, y } = board.grid.coords(state.players[0].pos);
+  mo.pos = board.grid.index(x - 1, y);
+  applyAction(state, board, { type: 'roll', seat: 0 });
+  assert.deepEqual(mo.dangerTypes[0], ['P']);
+});

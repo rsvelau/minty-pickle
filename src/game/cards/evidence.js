@@ -6,11 +6,15 @@
 // visual: the look painted onto the cell (src/discoveries.js). Lairs change
 // their cell permanently and much more strongly.
 
+// Damage types and their theme: Physical is red, Mental blue, Spiritual
+// green, everywhere (cards, banners, rings, injuries, flashes, board marks).
+// The icons match the action symbols on the monster cards.
 export const ATTACK_TYPES = {
-  P: { label: 'Physical', colour: '#c4141f', visual: 'struggle' },
-  M: { label: 'Mental', colour: '#4a7ad8', visual: 'psychic' },
-  S: { label: 'Spiritual', colour: '#3fae5a', visual: 'ectoplasm' },
+  P: { label: 'Physical', colour: '#d42a2a', soft: '#ff8a7a', dark: '#5a0e10', visual: 'struggle', icon: 'claws' },
+  M: { label: 'Mental', colour: '#3a7ae0', soft: '#8ab8ff', dark: '#0e2450', visual: 'psychic', icon: 'brain' },
+  S: { label: 'Spiritual', colour: '#2fb04a', soft: '#8ae89a', dark: '#0c3a16', visual: 'ectoplasm', icon: 'skull' },
 };
+export const KIND_TO_TYPE = { physical: 'P', mental: 'M', spiritual: 'S' };
 
 export const OBSERVATIONS = {
   CM: { label: 'Claw Marks', visual: 'claws' },

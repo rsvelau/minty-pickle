@@ -24,7 +24,7 @@ import { createLocalSession } from './game/session.js';
 import { createDiscoveries, PAINT } from './discoveries.js';
 import { createMonsterModels } from './monsterModels.js';
 import { MONSTER_BY_ID } from './game/cards/monsters.js';
-import { evidenceVisual } from './game/cards/evidence.js';
+import { evidenceVisual, ATTACK_TYPES } from './game/cards/evidence.js';
 
 export {
   DEFAULT_CONFIG, defaultConfig, OBOLS, OBOL_TYPES, obolCounts, INVENTORY_TABS, formatClock, MIDNIGHT,
@@ -241,6 +241,12 @@ export function createPlay({
   // Red rings under players a monster's declared action would hit.
   const dangerMat = new THREE.MeshBasicMaterial({ color: '#ff2a1a', transparent: true, opacity: 0.8, depthWrite: false });
   terrainify(dangerMat, { bridge: true });
+  // One per damage type: a ring shows in the colour of what's coming.
+  const dangerMats = Object.fromEntries(Object.entries(ATTACK_TYPES).map(([k, t]) => {
+    const mat = new THREE.MeshBasicMaterial({ color: t.colour, transparent: true, opacity: 0.8, depthWrite: false });
+    terrainify(mat, { bridge: true });
+    return [k, mat];
+  }));
   const dangerRings = [0, 1, 2, 3].map(() => {
     const r = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.22, 28).rotateX(-Math.PI / 2).translate(0, 0.014, 0), dangerMat);
     r.raycast = () => {};
@@ -468,14 +474,14 @@ export function createPlay({
     for (const f of strike.fx ?? []) { try { f(); } catch (err) { console.error(err); } }
   }
   const grabs = [];
-  function startGrab(seat, strike) {
+  function startGrab(seat, strike, type) {
     const a = view.actors[seat];
     const fig = models.makeShadowGrab();
     fig.position.copy(a?.at ?? centreOf(g().players[seat].pos));
     fig.userData.grow(0.01);
     group.add(fig);
     grabs.push({ fig, t: 0, strike });
-    onAttack({ seat, cell: g().players[seat].pos });
+    onAttack({ seat, cell: g().players[seat].pos, attack: type });
   }
   function tickGrabs(dt) {
     for (let k = grabs.length - 1; k >= 0; k--) {
@@ -592,7 +598,7 @@ export function createPlay({
           attachToArrival(view.actors[e.seat], e.cell, () => {
             view.shownFinds = Math.max(view.shownFinds, g()?.mystery?.found.length ?? 0);
             refreshDiscoveries();
-            onAttack({ seat: e.seat, cell: e.cell });
+            onAttack({ seat: e.seat, cell: e.cell, attack: e.attack });
             onAttacked({ ...e, player: g()?.players[e.seat] });
           });
           break;
@@ -623,11 +629,11 @@ export function createPlay({
             // visibly step into the light, reaching for their shadow.
             const strike = { fx: [] };
             view.lastStrike = strike;
-            attachToArrival(view.actors[e.seat], e.cell, () => startGrab(e.seat, strike));
+            attachToArrival(view.actors[e.seat], e.cell, () => startGrab(e.seat, strike, e.attack));
             break;
           }
           const mv = view.monsters.get(e.id);
-          const strike = { attack: e.seat, cell: e.cell, fx: [] };
+          const strike = { attack: e.seat, cell: e.cell, type: e.attack, fx: [] };
           view.lastStrike = strike;
           if (mv) mv.queue.push(strike);
           view.watch = { id: e.id, until: performance.now() + 1500 };
@@ -653,7 +659,7 @@ export function createPlay({
         case 'monsterSwarm': {
           // Adze: a fly swarm leaves the cocoon and flies to its victim.
           const mv = view.monsters.get(e.id);
-          const strike = { swarm: e.path, fx: [] };
+          const strike = { swarm: e.path, type: e.attack, fx: [] };
           view.lastStrike = strike;
           if (mv) mv.queue.push(strike);
           break;
@@ -819,14 +825,14 @@ export function createPlay({
         an.cloud.position.copy(a.lerp(b, k - i));
         an.cloud.userData.tick(t);
         an.cloud.scale.setScalar(an.t > n ? Math.max(0.05, 1 - (an.t - n) / 0.6) : 1);
-        if (an.t >= n && !an.done) runStrike(an);
+        if (an.t >= n && !an.done) { onAttack({ attack: an.type }); runStrike(an); }
         if (an.t >= n + 0.6) { group.remove(an.cloud); mv.anim = null; }
       } else if (an?.attack !== undefined) {
         // Lunge toward the victim's cell, then recoil.
         if (an.t === 0) {
           const tc = grid.coords(an.cell), mc = grid.coords(mv.vis);
           if (an.cell !== mv.vis) mv.face = Math.atan2(tc.x - mc.x, tc.y - mc.y);
-          onAttack({ seat: an.attack, cell: an.cell });
+          onAttack({ seat: an.attack, cell: an.cell, attack: an.type });
         }
         an.t = Math.min(1, an.t + dt / LUNGE_TIME);
         mv.lunge = Math.sin(an.t * Math.PI);
@@ -855,10 +861,15 @@ export function createPlay({
     // Figures, the turn ring and name tags.
     const danger = new Set((s.monsters ?? []).flatMap((mo) => mo.danger ?? []));
     dangerMat.opacity = 0.55 + 0.4 * Math.sin(t * 6);
+    for (const mat of Object.values(dangerMats)) mat.opacity = dangerMat.opacity;
     dangerRings.forEach((r, k) => {
       const a = view.actors[k];
       r.visible = danger.has(k) && !!a?.at && !s.players[k]?.dead;
-      if (r.visible) r.position.copy(a.at);
+      if (!r.visible) return;
+      r.position.copy(a.at);
+      // Several threats of different types: the ring cycles through their colours.
+      const types = [...new Set((s.monsters ?? []).flatMap((mo) => mo.dangerTypes?.[k] ?? []))];
+      r.material = dangerMats[types[Math.floor(t * 1.2) % Math.max(1, types.length)]] ?? dangerMat;
     });
     figures.forEach(({ fig, tag }, k) => {
       const a = view.actors[k];

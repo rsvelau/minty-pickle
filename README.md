@@ -584,6 +584,15 @@ From the Player Mat and Monster Ref Sheet (`Monsters_and_Injuries` spreadsheet):
   played from the card text (`src/game/monsterTurn.js`); other effects (Seize, Lure, Pin, Drag, Trap, Exhaust,
   Block doors...) are named in the log and come with each monster's own rules.
 
+### Damage-type colours
+
+Everything tied to a damage type uses one colour and the icon from the monster cards: **Physical red** (claws),
+**Mental blue** (brain), **Spiritual green** (skull). That covers the monster's announced actions, the danger
+rings under threatened players (cycling colours if several types are coming), the scoreboard "In danger" tag,
+injury pips and the Injuries tab, hit pop-ups, the screen-edge flash when something strikes, the Casebook's
+Attack card, Field Guide chips and abilities, and the marks Attack cards leave on the board. Each action's type
+is the colour of its icon on the card (grey icons have no damage type); a test pins this to the cards.
+
 ### Monster figures
 
 Every card monster has its own low-poly figure (`src/monsterModels.js`), to scale with the players, with idle

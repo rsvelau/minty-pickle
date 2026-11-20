@@ -195,8 +195,12 @@ function actionFor(card, roll) {
 // play in order, each starting where the last one left the monster.
 function predictVictims(state, board, monster, intents) {
   const seats = new Set();
+  const types = {};
   let pos = monster.pos;
+  const card = MONSTER_BY_ID[monster.kind];
   for (const intent of intents) {
+    const type = KIND_TO_TYPE[intent.kind] ?? card?.evidence.attack;
+    const before = new Set(seats);
     pos = planMovement(state, board, { pos }, intent.ops, null).pos;
     const swarm = MONSTER_BY_ID[monster.kind]?.actsBy === 'swarm';
     for (const o of intent.ops) {
@@ -214,7 +218,9 @@ function predictVictims(state, board, monster, intents) {
         for (const pl of alive(state)) seats.add(pl.seat);
       }
     }
+    for (const seat of seats) if (!before.has(seat)) (types[seat] ??= []).push(type);
   }
+  monster.dangerTypes = types; // seat -> damage types threatening them (P/M/S)
   return [...seats];
 }
 
@@ -318,7 +324,7 @@ function attackVictim(state, board, monster, card, intent, o, ctx, events) {
   let v = victims.find((x) => x.target === o.target) ?? victims[0];
   const type = KIND_TO_TYPE[intent.kind] ?? card.evidence.attack;
   const path = swarmRouteTo(board, monster.pos, new Set([v.cell])) ?? [monster.pos, v.cell];
-  events.push({ type: 'monsterSwarm', id: monster.id, path, npc: v.id });
+  events.push({ type: 'monsterSwarm', id: monster.id, path, npc: v.id, attack: type });
   const dmg = rollDamage(ctx, o.dmg);
   const guards = alive(state).filter((pl) => cellRange(board.grid, pl.pos, v.cell) <= RANGE.close);
   const best = guards.reduce((a, pl) => (!a || defenseValue(pl) > defenseValue(a) ? pl : a), null);
@@ -373,7 +379,7 @@ export function executeIntent(state, board, monster, ctx, events) {
       if (o.op === 'attack' && o.target !== undefined && card.actsBy === 'swarm') {
         // No victims left: its attacks are Global.
         ctx.log(state, `${source}: with no victims left, the swarms fall on everyone.`);
-        events.push({ type: 'monsterAttack', id: monster.id, seat: alive(state)[0].seat, cell: monster.pos, area: true });
+        events.push({ type: 'monsterAttack', id: monster.id, seat: alive(state)[0].seat, cell: monster.pos, area: true, attack: type });
         hit = alive(state);
         for (const pl of hit) applyDamage(state, board, pl, type, rollDamage(ctx, o.dmg), { log: ctx.log, source }, events);
         continue;
@@ -382,7 +388,7 @@ export function executeIntent(state, board, monster, ctx, events) {
         const path = swarmRoute(state, board, monster.pos);
         const v = swarmVictim(state, path);
         if (!v) { ctx.log(state, `${source}: the swarm finds no one.`); continue; }
-        events.push({ type: 'monsterSwarm', id: monster.id, seat: v.seat, path });
+        events.push({ type: 'monsterSwarm', id: monster.id, seat: v.seat, path, attack: type });
         hit = [v];
         applyDamage(state, board, v, type, rollDamage(ctx, o.dmg), { log: ctx.log, source: `${source} (fly swarm)` }, events);
         continue;
@@ -397,13 +403,13 @@ export function executeIntent(state, board, monster, ctx, events) {
         const t = closeTarget(state, board, monster.pos);
         if (!t) { ctx.log(state, `${source} finds no one in reach.`); continue; }
         hit = [t];
-        events.push({ type: 'monsterAttack', id: monster.id, seat: t.seat, cell: t.pos });
+        events.push({ type: 'monsterAttack', id: monster.id, seat: t.seat, cell: t.pos, attack: type });
         applyDamage(state, board, t, type, rollDamage(ctx, o.dmg), { log: ctx.log, source }, events);
       } else if (o.op === 'area' || o.op === 'global') {
         const targets = alive(state).filter((pl) => o.op === 'global' || gridDist(board, monster.pos, pl.pos) <= o.radius);
         if (!targets.length) { ctx.log(state, `${source} strikes at nothing.`); continue; }
         hit = targets;
-        events.push({ type: 'monsterAttack', id: monster.id, seat: targets[0].seat, cell: monster.pos, area: true });
+        events.push({ type: 'monsterAttack', id: monster.id, seat: targets[0].seat, cell: monster.pos, area: true, attack: type });
         for (const pl of targets) applyDamage(state, board, pl, type, rollDamage(ctx, o.dmg), { log: ctx.log, source }, events);
       } else if (o.op === 'heal') {
         ctx.log(state, `The ${card.name} heals ${o.n}.`);
@@ -425,7 +431,7 @@ export function onPlayerEnters(state, board, pl, cell, ctx, events) {
     if ((board.light[cell] ?? 0) < state.config.litThreshold) continue;
     const ability = card.abilities.find((a) => a.roll === 'Persistent' && KIND_TO_TYPE[a.kind]);
     const type = KIND_TO_TYPE[rule.kind] ?? card.evidence.attack;
-    events.push({ type: 'monsterAttack', id: monster.id, seat: pl.seat, cell, grab: true });
+    events.push({ type: 'monsterAttack', id: monster.id, seat: pl.seat, cell, grab: true, attack: type });
     applyDamage(state, board, pl, type, rollDamage(ctx, damageSpec(rule.dmg)), { log: ctx.log, source: `The ${card.name}'s ${ability?.name ?? 'attack'}` }, events);
   }
 }
