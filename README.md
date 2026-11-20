@@ -192,6 +192,9 @@ markers** in View hides them. Marker art lives in `src/markers.js`; the list of 
   (Yes / No; on a keyboard Enter or Y = yes, Escape or N = no). **No** runs on through the space and leaves
   it for later. **Yes** draws a random **Obol** from a shared bag for that player, shown in a short reveal and
   on the scoreboard.
+- **Inventory.** Each player has their own inventory with two tabs, **Equipment** (empty for now) and
+  **Obolcraft**, where every Obol they draw is kept, with where and when it was found. Open it with the bag
+  button on the play bar (or `I`) for the current player, or tap a player in the scoreboard.
 - **Obols** come in four kinds: **Attack** (bloody red), **Event** (misty blue), **Equipment** (shiny green)
   and **Evidence** (glowing yellow). The bag holds 7 of each (28) by default; when it's empty, investigating
   finds nothing.

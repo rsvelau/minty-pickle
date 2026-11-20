@@ -12,7 +12,7 @@ import { createStreets } from './street.js';
 import { createBridges } from './bridge.js';
 import { createClocktowers } from './clocktower.js';
 import { dreadUniforms, swayUniforms, setLightSeeds, flickerize, flickerAt, swayFir } from './dread.js';
-import { createPlay, defaultConfig, OBOLS, OBOL_TYPES, formatClock } from './play.js';
+import { createPlay, defaultConfig, OBOLS, OBOL_TYPES, formatClock, obolCounts, INVENTORY_TABS } from './play.js';
 import { createMarkers, drawMarkerIcon } from './markers.js';
 import {
   installTerrain, setTerrain, terrainHeight, rayTerrain, isFlat, terrainId, TERRAIN_PRESETS,
@@ -1757,7 +1757,9 @@ function setTool(tool, start) {
   $('#playTools').hidden = tool !== 'play';
   $('#playHud').hidden = tool !== 'play';
   if (tool !== 'play') $('#gameClock').hidden = true;
-  if (tool !== 'play') { $('#playTray').hidden = true; $('#askCard').hidden = true; $('#obolReveal').hidden = true; }
+  if (tool !== 'play') {
+    $('#playTray').hidden = true; $('#askCard').hidden = true; $('#obolReveal').hidden = true; $('#inventory').hidden = true;
+  }
   document.body.classList.toggle('playing', tool === 'play');
   // Phones: fold the panel away so the board and the play bar are visible.
   if (tool === 'play' && window.innerWidth < 700) {
@@ -2036,14 +2038,16 @@ function renderPlay() {
   // Scoreboard: each player's cell and dice.
   $('#playBoard').innerHTML = s.players.map((p, k) => {
     const c = p.pos >= 0 ? grid.coords(p.pos) : null;
-    return `<div class="pl${k === s.cur ? ' cur' : ''}"><span class="chip" style="background:${p.colour}">${p.name}</span>` +
+    const counts = obolCounts(p);
+    return `<div class="pl${k === s.cur ? ' cur' : ''}" data-inv="${k}" title="Open ${p.name}'s inventory"><span class="chip" style="background:${p.colour}">${p.name}</span>` +
       `<span>${c ? cellLabel(c.x, c.y) : '–'}</span><span>White dice ${p.white}</span>` +
-      `<span class="obol-row">${OBOL_TYPES.map((t) => `<span class="obol-count${p.obols[t] ? '' : ' zero'}" title="${OBOLS[t].label} Obols">${obolHTML(t)}${p.obols[t]}</span>`).join('')}</span></div>`;
+      `<span class="obol-row">${OBOL_TYPES.map((t) => `<span class="obol-count${counts[t] ? '' : ' zero'}" title="${OBOLS[t].label} Obols">${obolHTML(t)}${counts[t]}</span>`).join('')}</span></div>`;
   }).join('');
   $('#playLog').innerHTML = s.log.map((l) => `<li>${l}</li>`).join('');
   renderTray();
   renderClock();
   renderAsk();
+  if (!$('#inventory').hidden) renderInventory();
   // Floating bar.
   [...$('#hudDie').children].forEach((el, n) => el.classList.toggle('on', !!face && PIPS[face].includes(n)));
   $('#hudRoll').disabled = roll.disabled;
@@ -2236,6 +2240,55 @@ function showObol({ player, type, left }) {
   obolTimer = setTimeout(() => { el.hidden = true; }, 2600);
 }
 $('#obolReveal').addEventListener('click', () => { $('#obolReveal').hidden = true; });
+
+// --- Inventory -----------------------------------------------------------------------
+// Each player's own inventory, in tabs. Opens on the current player (the bag
+// button on the play bar, or I), or on whoever you tap in the scoreboard.
+const inv = { player: 0, tab: 'obolcraft' };
+function renderInventory() {
+  const s = play.state;
+  const pl = s.players[inv.player] ?? s.players[0];
+  if (!pl) return;
+  $('#invTitle').textContent = `${pl.name}'s inventory`;
+  const host = $('#invPlayers');
+  host.innerHTML = s.players.map((p, k) =>
+    `<button type="button" role="tab" data-k="${k}" class="${k === inv.player ? 'on' : ''}" aria-selected="${k === inv.player}">` +
+    `<span class="chip" style="background:${p.colour}"></span>${p.name}</button>`).join('');
+  host.querySelectorAll('button').forEach((b) => { b.onclick = () => { inv.player = Number(b.dataset.k); renderInventory(); }; });
+  const tabs = $('#invTabs');
+  tabs.innerHTML = Object.entries(INVENTORY_TABS).map(([id, t]) =>
+    `<button type="button" role="tab" data-tab="${id}" class="${id === inv.tab ? 'on' : ''}" aria-selected="${id === inv.tab}">` +
+    `${t.label}<span class="n">${pl.inventory[id].length}</span></button>`).join('');
+  tabs.querySelectorAll('button').forEach((b) => { b.onclick = () => { inv.tab = b.dataset.tab; renderInventory(); }; });
+  const items = pl.inventory[inv.tab];
+  const body = $('#invBody');
+  if (!items.length) {
+    body.innerHTML = `<p class="inv-empty">${INVENTORY_TABS[inv.tab].empty}</p>`;
+    return;
+  }
+  if (inv.tab === 'obolcraft') {
+    const counts = obolCounts(pl);
+    body.innerHTML = `<div class="inv-summary">${OBOL_TYPES.map((t) =>
+      `<span class="obol-count${counts[t] ? '' : ' zero'}">${obolHTML(t)}${OBOLS[t].label} ${counts[t]}</span>`).join('')}</div>` +
+      `<div class="inv-grid">${items.map((o) => `<div class="inv-item">${obolHTML(o.type)}<b>${OBOLS[o.type].label}</b>` +
+        `<small>${o.at} · ${o.time}</small></div>`).join('')}</div>`;
+  } else {
+    body.innerHTML = `<div class="inv-grid">${items.map((e) => `<div class="inv-item"><b>${e.label ?? 'Item'}</b></div>`).join('')}</div>`;
+  }
+}
+function openInventory(k = play.state.cur) {
+  inv.player = k;
+  renderInventory();
+  $('#inventory').hidden = false;
+}
+function closeInventory() { $('#inventory').hidden = true; }
+$('#hudInv').addEventListener('click', () => openInventory());
+$('#invClose').addEventListener('click', closeInventory);
+$('#inventory').addEventListener('click', (e) => { if (e.target === $('#inventory')) closeInventory(); });
+$('#playBoard').addEventListener('click', (e) => {
+  const row = e.target instanceof Element && e.target.closest('[data-inv]');
+  if (row) openInventory(Number(row.dataset.inv));
+});
 
 // --- Game settings -------------------------------------------------------------------
 const SETTINGS = [
@@ -2573,7 +2626,7 @@ window.addEventListener('pointerdown', (ev) => {
   if (!panelOpen && !viewOpen) return;
   const t = ev.target;
   const inside = (sel) => t instanceof Element && !!t.closest(sel);
-  if (inside('#dialog') || inside('#settings') || inside('#playHud') || inside('#playChoices') || inside('#playTray')
+  if (inside('#dialog') || inside('#settings') || inside('#inventory') || inside('#playHud') || inside('#playChoices') || inside('#playTray')
     || inside('#askCard') || inside('#obolReveal')) return;
   let closed = false;
   if (panelOpen && !inside('#panel') && !inside('#expand')) { minimizePanel(); closed = true; }
@@ -2588,6 +2641,9 @@ if (window.innerWidth < 700) { $('#panel').hidden = true; $('#expand').hidden = 
 window.addEventListener('keydown', (e) => {
   if (!dlg.root.hidden) { if (e.key === 'Escape') closeDialog(); return; }
   if (!$('#settings').hidden) { if (e.key === 'Escape') closeSettings(); return; }
+  if (!$('#inventory').hidden) { if (e.key === 'Escape' || e.key.toLowerCase() === 'i') closeInventory(); return; }
+  if (ui.tool === 'play' && e.key.toLowerCase() === 'i' && !e.ctrlKey && !e.metaKey
+    && !(e.target instanceof HTMLInputElement)) { openInventory(); return; }
   // "Investigate?": Enter or Y = yes, Escape or N = no.
   if (ui.tool === 'play' && play.state.phase === 'asking') {
     const k = e.key.toLowerCase();

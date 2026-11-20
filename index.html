@@ -221,7 +221,22 @@
     <div id="playHud" class="play-hud" hidden>
       <div class="die die-sm" id="hudDie" aria-label="Black die"></div>
       <p class="hud-status" id="hudStatus"></p>
+      <button id="hudInv" class="hud-inv" type="button" aria-label="Inventory" title="Inventory (I)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7V5.5a4 4 0 0 1 8 0V7"/><rect x="4.5" y="7" width="15" height="13.5" rx="3"/><path d="M8.5 13h7M10 13v2.5"/></svg>
+      </button>
       <button id="hudRoll" class="hud-roll">Roll</button>
+    </div>
+    <!-- Inventory: each player's own, with tabs (Equipment, Obolcraft). -->
+    <div id="inventory" class="dialog" hidden role="dialog" aria-modal="true" aria-labelledby="invTitle">
+      <div class="dialog-card inv-card">
+        <div class="inv-head">
+          <h3 id="invTitle">Inventory</h3>
+          <button id="invClose" type="button" class="inv-close" aria-label="Close">✕</button>
+        </div>
+        <div class="inv-players" id="invPlayers" role="tablist" aria-label="Player"></div>
+        <div class="inv-tabs" id="invTabs" role="tablist" aria-label="Inventory tab"></div>
+        <div class="inv-body" id="invBody" role="tabpanel"></div>
+      </div>
     </div>
     <!-- Dice tray: rolled dice and movement slots (shown after a roll). -->
     <div id="playTray" class="play-tray" hidden>

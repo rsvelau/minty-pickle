@@ -65,6 +65,14 @@ export const OBOLS = {
   evidence: { label: 'Evidence', note: 'glowing yellow' },
 };
 export const OBOL_TYPES = Object.keys(OBOLS);
+// How many of each Obol a player holds.
+export const obolCounts = (pl) => Object.fromEntries(
+  OBOL_TYPES.map((t) => [t, pl?.inventory?.obolcraft.filter((o) => o.type === t).length ?? 0]));
+// Inventory tabs.
+export const INVENTORY_TABS = {
+  equipment: { label: 'Equipment', empty: 'No equipment yet. Anything you find to use will be kept here.' },
+  obolcraft: { label: 'Obolcraft', empty: 'No Obols yet. Investigate to find them.' },
+};
 export const MIDNIGHT = 24 * 60;
 // "11:05 PM", "12:00 AM".
 export function formatClock(min) {
@@ -440,7 +448,8 @@ export function createPlay({
     let type = null;
     if (st.bag.length) {
       type = st.bag.splice(Math.floor(Math.random() * st.bag.length), 1)[0];
-      pl.obols[type]++;
+      // Into the player's own inventory (Obolcraft tab).
+      pl.inventory.obolcraft.push({ type, at: label(i), time: formatClock(clockMinutes()), turn: st.round });
       log(`${who()} investigated ${label(i)} and drew an ${OBOLS[type].label} Obol (${st.bag.length} left in the bag).`);
     } else {
       log(`${who()} investigated ${label(i)}, but the Obol bag is empty.`);
@@ -487,7 +496,9 @@ export function createPlay({
     const s = startCell();
     st.players = PLAYERS.slice(0, st.count).map((p) => ({
       ...p, pos: s, prev: -1, white: 0, black: 0, at: null, face: 0, vis: s, queue: [], anim: null,
-      obols: Object.fromEntries(OBOL_TYPES.map((t) => [t, 0])),
+      // Each player's own inventory, by tab: Equipment (nothing yet) and
+      // Obolcraft (the Obols they've drawn, in order).
+      inventory: { equipment: [], obolcraft: [] },
     }));
     Object.assign(st, {
       cur: 0, steps: 0, roll: 0, phase: s >= 0 ? 'idle' : 'nostart', options: [],
