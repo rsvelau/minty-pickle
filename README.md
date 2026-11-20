@@ -50,6 +50,16 @@ cells become Street when loaded. The street surface lives in `src/street.js`.
   in old dark-green paint (flared base, fluted shaft, ladder bar) with an acorn glass globe, cap and finial,
   about 4.4 m tall. At a T it stands on the sidewalk opposite the side street; at a crossing, on a corner.
 
+### Building finishes
+
+Every building gets **one** old-town finish, used on all of its walls, with **one** storefront window
+design and frame colour, so nothing on a building is mismatched. Finishes: faded barn-red, weathered olive,
+dusty mustard, old cream and slate-blue **clapboard**; red-brown and soot-dark **brick**; sage and grey-brown
+**board-and-batten**; **worn plaster**; and **cedar shingle** (textures are drawn in the wall shader, to
+scale). A building is indoor floor joined by open floor or doors; walls and windows between floors split
+buildings, so a row of shops sharing walls gets a look per shop. The pick comes from the building's first
+cell, so it stays put while you keep painting. Hovering an indoor cell names its building's finish.
+
 ### Church floor
 
 An indoor tile for churches. **Walkable** church cells each hold a dark oak **pew** (with hymnals and a

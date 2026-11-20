@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {
-  GridState, COLS, ROWS, MIN_SIZE, MAX_SIZE, AREAS, colLabel, cellLabel, defaultCell, defaultWalkable, areaLabel, parseEdgeKey,
+  GridState, COLS, ROWS, MIN_SIZE, MAX_SIZE, AREAS, colLabel, cellLabel, defaultCell, defaultWalkable, areaLabel, parseEdgeKey, edgeKey,
   hasStreetLamp, lightKind, centreBrightness, MAX_RADIUS, blocksLight, MARKERS, FACINGS, FACING_NAMES,
 } from './state.js';
 import { createWaterSurface } from './water.js';
@@ -370,7 +370,67 @@ const poolGeo = new THREE.PlaneGeometry(2.6 * TILE, 2.6 * TILE).rotateX(-Math.PI
 
 // Unit box with its base at y = 0 (walls, door leaves).
 const unitBoxGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
-const wallMat = new THREE.MeshLambertMaterial({ color: '#b8b0a0' });
+// Walls take their building's colour (instance colour) and texture
+// (aWallTex, drawn in the shader in metres along the wall): 0 clapboard,
+// 1 brick, 2 board-and-batten, 3 worn plaster, 4 cedar shingle.
+const wallMat = new THREE.MeshLambertMaterial({ color: '#ffffff' });
+wallMat.onBeforeCompile = (shader) => {
+  shader.vertexShader = shader.vertexShader
+    .replace('#include <common>', '#include <common>\nattribute float aWallTex;\nvarying float vWallTex;\nvarying vec3 vWallP;')
+    .replace('#include <project_vertex>', `#include <project_vertex>
+      vec4 wallW = vec4(transformed, 1.0);
+      #ifdef USE_INSTANCING
+        wallW = instanceMatrix * wallW;
+      #endif
+      vWallP = (modelMatrix * wallW).xyz;
+      vWallTex = aWallTex;`);
+  shader.fragmentShader = shader.fragmentShader
+    .replace('#include <common>', `#include <common>
+      varying float vWallTex;
+      varying vec3 vWallP;
+      float wallHash(vec2 v) { return fract(sin(dot(v, vec2(12.9898, 78.233))) * 43758.5453); }
+      float wallNoise(vec2 v) {
+        vec2 i = floor(v), f = fract(v);
+        f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(wallHash(i), wallHash(i + vec2(1.0, 0.0)), f.x),
+                   mix(wallHash(i + vec2(0.0, 1.0)), wallHash(i + vec2(1.0, 1.0)), f.x), f.y);
+      }
+      float wallPattern(vec3 wp, float tex) {
+        float a = (wp.x + wp.z) * ${METERS_PER_CELL.toFixed(1)};   // metres along the wall
+        float y = wp.y * ${METERS_PER_CELL.toFixed(1)};            // metres up
+        float grime = 0.92 + 0.1 * wallNoise(vec2(a * 0.6, y * 0.8)) - 0.06 * (1.0 - smoothstep(0.0, 0.6, y));
+        if (tex < 0.5) {            // clapboard: lapped boards with a shadow line under each
+          float f = fract(y / 0.22);
+          return grime * mix(0.74, 1.0, smoothstep(0.0, 0.3, f)) * (0.96 + 0.06 * wallNoise(vec2(a * 3.0, floor(y / 0.22))));
+        } else if (tex < 1.5) {     // brick in running bond, pale mortar
+          float bh = 0.15, bw = 0.42;
+          float row = floor(y / bh);
+          float u = a / bw + 0.5 * mod(row, 2.0);
+          float mortar = max(step(fract(y / bh), 0.12), step(fract(u), 0.06));
+          float brick = 0.82 + 0.22 * wallHash(vec2(floor(u), row));
+          return grime * mix(brick, 1.35, mortar);
+        } else if (tex < 2.5) {     // board-and-batten: wide boards, raised battens
+          float f = fract(a / 0.6);
+          float batten = step(f, 0.1);
+          float shade = mix(1.0, 0.86, smoothstep(0.1, 0.16, f) * (1.0 - smoothstep(0.16, 0.3, f)));
+          return grime * (batten > 0.5 ? 1.08 : shade) * (0.95 + 0.08 * wallNoise(vec2(a * 0.8, y * 4.0)));
+        } else if (tex < 3.5) {     // worn plaster: mottled, stained, a few cracks
+          float mottle = 0.86 + 0.16 * wallNoise(vec2(a * 2.2, y * 2.2)) + 0.06 * wallNoise(vec2(a * 9.0, y * 9.0));
+          float stain = 1.0 - 0.12 * smoothstep(0.55, 0.9, wallNoise(vec2(a * 0.7, y * 0.35)));
+          return grime * mottle * stain;
+        }
+        // cedar shingles: staggered courses of uneven shingles
+        float ch = 0.3;
+        float row = floor(y / ch);
+        float u = a / 0.24 + 0.5 * mod(row, 2.0) + 0.3 * wallHash(vec2(row, 3.0));
+        float fy = fract(y / ch);
+        float gap = step(fract(u), 0.05);
+        float sh = 0.8 + 0.25 * wallHash(vec2(floor(u), row));
+        return grime * mix(0.7, sh, smoothstep(0.0, 0.25, fy)) * (1.0 - 0.3 * gap);
+      }`)
+    .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= wallPattern(vWallP, vWallTex);');
+};
+wallMat.customProgramCacheKey = () => 'walls-textured';
 const doorMat = new THREE.MeshLambertMaterial({ color: '#d08a40', emissive: '#5a3414' });
 // Storefront windows: painted frames (instance colour), and glass that is
 // dark, or glows warm when light reaches either side.
@@ -379,6 +439,60 @@ const glassDarkMat = new THREE.MeshLambertMaterial({ color: '#2b3c46', transpare
 const glassLitMat = new THREE.MeshBasicMaterial({ color: '#ffd9a0', transparent: true, opacity: 0.78, depthWrite: false });
 flickerize(glassLitMat);
 const FRAME_COLOURS = ['#1f3a2e', '#5a1f1c', '#1b1b1d', '#c8bfa6', '#2a3550']; // green, oxblood, black, cream, navy
+// Muted, old-town building finishes. Every building (connected indoor
+// cells) gets exactly one: wall colour and texture, plus one window design
+// and frame colour, so nothing on a building looks mismatched.
+const BUILDING_STYLES = [
+  { name: 'Faded barn-red clapboard', colour: '#a8705e', tex: 0 },
+  { name: 'Weathered olive clapboard', colour: '#949e7a', tex: 0 },
+  { name: 'Dusty mustard clapboard', colour: '#cdb984', tex: 0 },
+  { name: 'Old cream clapboard', colour: '#ddd3b8', tex: 0 },
+  { name: 'Slate-blue clapboard', colour: '#8a97a6', tex: 0 },
+  { name: 'Red-brown brick', colour: '#a8684f', tex: 1 },
+  { name: 'Soot-dark brick', colour: '#86594a', tex: 1 },
+  { name: 'Sage board-and-batten', colour: '#a8b39c', tex: 2 },
+  { name: 'Grey-brown board-and-batten', colour: '#a39684', tex: 2 },
+  { name: 'Worn plaster', colour: '#c3bcab', tex: 3 },
+  { name: 'Cedar shingle', colour: '#9a7658', tex: 4 },
+];
+const hash32 = (n) => {
+  n = Math.imul(n ^ (n >>> 16), 0x45d9f3b);
+  n = Math.imul(n ^ (n >>> 16), 0x45d9f3b);
+  return (n ^ (n >>> 16)) >>> 0;
+};
+// A building's look, from its first cell (so it stays put as you paint).
+function buildingStyle(seed) {
+  const h = hash32(seed * 2654435761 + 1013904223);
+  const s = BUILDING_STYLES[h % BUILDING_STYLES.length];
+  return { ...s, windowVariant: (h >>> 8) % 4, frame: FRAME_COLOURS[(h >>> 12) % FRAME_COLOURS.length] };
+}
+// Which building each cell belongs to: the lowest cell index of its
+// building (-1 outdoors). A building is indoor floor joined by open floor or
+// doors; a wall or window between two floors splits them, so a row of shops
+// sharing walls gets a different look per shop.
+function buildingSeeds() {
+  const seeds = new Int32Array(grid.cells.length).fill(-1);
+  const auto = grid.autoEdges();
+  const passable = (t) => !t || t === 'door' || t === 'lockedDoor' || t === 'boardedDoor' || t.startsWith('oneWayDoor');
+  for (let i = 0; i < grid.cells.length; i++) {
+    if (seeds[i] >= 0 || grid.cells[i].area !== 'indoor') continue;
+    seeds[i] = i;
+    const queue = [i];
+    while (queue.length) {
+      const { x, y } = grid.coords(queue.pop());
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        if (!grid.inBounds(x + dx, y + dy)) continue;
+        const k = grid.index(x + dx, y + dy);
+        if (seeds[k] >= 0 || grid.cells[k].area !== 'indoor') continue;
+        const ek = dx ? edgeKey('v', dx > 0 ? x + 1 : x, y) : edgeKey('h', x, dy > 0 ? y + 1 : y);
+        if (!passable(grid.edges.get(ek) ?? auto.get(ek))) continue;
+        seeds[k] = i;
+        queue.push(k);
+      }
+    }
+  }
+  return seeds;
+}
 // Walls, doors, windows and foundations are placed at their final height on
 // the CPU (see edgeBase) and stand perfectly upright: the terrain doesn't
 // bend them.
@@ -520,7 +634,11 @@ function buildBoard() {
   // Walls and doors on cell edges (a door = two short wall pieces, an
   // optional lintel, and an open door leaf).
   const maxEdges = 2 * N + cols + rows;
-  walls = new THREE.InstancedMesh(unitBoxGeo, wallMat, maxEdges * 3);
+  // Walls get their own box geometry with a per-instance texture index.
+  const wallGeo = unitBoxGeo.clone();
+  wallGeo.setAttribute('aWallTex', new THREE.InstancedBufferAttribute(new Float32Array(maxEdges * 3), 1));
+  walls = new THREE.InstancedMesh(wallGeo, wallMat, maxEdges * 3);
+  walls.setColorAt(0, tmpColor.set('#ffffff'));
   doorLeaves = new THREE.InstancedMesh(unitBoxGeo, doorMat, maxEdges * 2);
   frames = new THREE.InstancedMesh(unitBoxGeo, frameMat, maxEdges * 9);
   foundations = new THREE.InstancedMesh(unitBoxGeo, foundationMat, maxEdges);
@@ -712,6 +830,17 @@ function refreshPropsAndWalls() {
   // Walls and doors.
   const H = ui.lowWalls ? WALL_LOW : WALL_FULL;
   let nw = 0, nd = 0;
+  // Each edge takes the style of the building it belongs to (the indoor cell
+  // on either side); edges with no building beside them use their own hash.
+  const seeds = buildingSeeds();
+  const wallTex = walls.geometry.attributes.aWallTex;
+  let style = BUILDING_STYLES[0];
+  const edgeStyle = (o, x, y) => {
+    for (const c of grid.edgeCells(o, x, y)) {
+      if (grid.inBounds(c.x, c.y) && seeds[grid.index(c.x, c.y)] >= 0) return buildingStyle(seeds[grid.index(c.x, c.y)]);
+    }
+    return buildingStyle(100000 + (o === 'v' ? 1 : 2) * 7919 + x * 131 + y);
+  };
   let EY = 0, DROP = 0; // current edge: floor level, and how far the ground falls below it
   const piece = (cx, cz, along, len, base, height, vertical) => {
     // `along` is the offset along the edge from its centre. Pieces standing
@@ -724,7 +853,9 @@ function refreshPropsAndWalls() {
       tmpQuat.identity(),
       vertical ? tmpScale.set(WALL_T, height + extra, len) : tmpScale.set(len, height + extra, WALL_T),
     );
-    walls.setMatrixAt(nw++, tmpMatrix);
+    walls.setMatrixAt(nw, tmpMatrix);
+    walls.setColorAt(nw, tmpColor.set(style.colour));
+    wallTex.array[nw++] = style.tex;
   };
   let nf = 0, ngd = 0, ngl = 0;
   // A box along the edge into any instanced mesh (`colour` for frames).
@@ -763,6 +894,7 @@ function refreshPropsAndWalls() {
     const cx = vertical ? x - grid.cols / 2 : x - grid.cols / 2 + 0.5;
     const cz = vertical ? y - grid.rows / 2 + 0.5 : y - grid.rows / 2;
     ({ base: EY, drop: DROP } = edgeBase(o, x, y));
+    style = edgeStyle(o, x, y);
     if (type === 'wall') {
       piece(cx, cz, 0, TILE + WALL_T, FLOOR_H, H, vertical);
       continue;
@@ -770,9 +902,9 @@ function refreshPropsAndWalls() {
     if (type === 'window') {
       // Storefront: masonry piers at the ends, a painted wooden bulkhead
       // under a big glass pane, mullions/transom by variant, a header above.
-      const hash = (x * 73856093) ^ (y * 19349663) ^ (vertical ? 83492791 : 0);
-      const variant = (hash >>> 0) % 4;
-      const colour = FRAME_COLOURS[(hash >>> 3) % FRAME_COLOURS.length];
+      // One window design and frame colour per building.
+      const variant = style.windowVariant;
+      const colour = style.frame;
       const pier = m(0.35);
       const sill = ui.lowWalls ? m(0.3) : m(0.6);
       const head = m(2.8);
@@ -933,6 +1065,7 @@ function refreshPropsAndWalls() {
   foundations.instanceMatrix.needsUpdate = true;
   foundations.computeBoundingSphere();
   walls.count = nw;
+  wallTex.needsUpdate = true;
   doorLeaves.count = nd;
   frames.count = nf;
   glassDark.count = ngd;
@@ -2724,6 +2857,7 @@ function updateHoverInfo() {
   el.innerHTML =
     `<span class="id">${cellLabel(x, y)}</span>` +
     `<span class="tag">${AREAS[c.area].label} · ${areaLabel(c)}${c.sub === 'start' ? ` (van facing ${FACING_NAMES[grid.startFacing(hoverIndex)]})` : ''}</span>` +
+    (c.area === 'indoor' ? `<span class="tag">${buildingStyle(buildingSeeds()[hoverIndex]).name}</span>` : '') +
     (grid.cells.some((s, j) => s.sub === 'start' && grid.startFront(j) === hoverIndex) ? '<span class="tag marker-tag">Player start</span>' : '') +
     (c.bridge ? `<span class="tag">Bridge (spans ${grid.bridgeAxis(x, y) === 'x' ? 'E–W' : 'N–S'})</span>` : '') +
     `<span class="tag">${lightLabel(c, hoverIndex)}</span>` +
