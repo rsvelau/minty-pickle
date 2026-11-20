@@ -683,3 +683,5 @@ body.playing .help { display: none; }
 }
 .fps[hidden] { display: none; }
 body.playing .fps { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+
+.play-board .monster-row { cursor: default; color: #f0b0b0; }

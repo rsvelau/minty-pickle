@@ -2310,6 +2310,11 @@ function renderPlay() {
       `<span>${c ? cellLabel(c.x, c.y) : '–'}</span><span>White dice ${p.white}</span>` +
       `<span class="obol-row">${OBOL_TYPES.map((t) => `<span class="obol-count${counts[t] ? '' : ' zero'}" title="${OBOLS[t].label} Obols">${obolHTML(t)}${counts[t]}</span>`).join('')}</span></div>`;
   }).join('');
+  $('#playBoard').innerHTML += s.monsters.map((mo) => {
+    const c = grid.coords(mo.pos);
+    return `<div class="pl monster-row"><span class="chip" style="background:#6a0a12">!</span>` +
+      `<span>${MONSTERS[mo.kind]?.label ?? mo.kind}</span><span>${cellLabel(c.x, c.y)}</span></div>`;
+  }).join('');
   $('#playLog').innerHTML = s.log.map((l) => `<li>${l}</li>`).join('');
   renderTray();
   renderClock();
@@ -2388,6 +2393,8 @@ function loadConfig() {
       for (const k of Object.keys(cfg)) {
         if (k === 'obols') {
           for (const t of OBOL_TYPES) if (Number.isFinite(saved.obols?.[t])) cfg.obols[t] = saved.obols[t];
+        } else if (k === 'monster' && (saved.configVersion ?? 1) < 2) {
+          // Saved before the monster setting mattered: use today's default.
         } else if (typeof saved[k] === typeof cfg[k]) cfg[k] = saved[k];
       }
     }
@@ -2396,12 +2403,17 @@ function loadConfig() {
 }
 const gameConfig = loadConfig();
 function saveConfig() {
-  try { localStorage.setItem(CONFIG_KEY, JSON.stringify(gameConfig)); } catch { /* ignore */ }
+  try { localStorage.setItem(CONFIG_KEY, JSON.stringify({ ...gameConfig, configVersion: 2 })); } catch { /* ignore */ }
 }
 
 const play = createPlay({
   config: gameConfig,
   onObol: (draw) => showObol(draw),
+  // A monster appears: say so (the camera goes to look at it).
+  onMonster: ({ kind, cell }) => {
+    const { x, y } = grid.coords(cell);
+    toast(`${MONSTERS[kind]?.label ?? 'A monster'} has appeared at ${cellLabel(x, y)}.`);
+  },
   // A monster lunges: a brief, soft red flash at the edges of the screen.
   onAttack: () => {
     const el = $('#attackFlash');
@@ -2580,7 +2592,7 @@ const SETTINGS = [
   { key: 'stopAtMarkers', label: 'Stop on every marker', note: 'Choose a way on at each marker', bool: true },
   { key: 'askInvestigate', label: 'Ask before investigating', note: '"Investigate?" on Investigation spaces', bool: true },
   { section: 'Monster' },
-  { key: 'monster', label: 'Monster at midnight', note: 'Monsters are a work in progress: try the test stalker',
+  { key: 'monster', label: 'Monster at midnight', note: 'Monsters are a work in progress; the test stalker is on by default',
     choice: [['none', 'None'], ...Object.entries(MONSTERS).map(([id, d]) => [id, d.label])] },
   { section: 'Obol bag' },
   ...OBOL_TYPES.map((t) => ({ obol: t, label: `${OBOLS[t].label} Obols`, note: OBOLS[t].note, min: 0, max: 20 })),

@@ -50,7 +50,7 @@ const LUNGE_TIME = 0.7;   // a monster's attack lunge
 
 export function createPlay({
   grid, scene, camera, controls, cellToWorld, cellTop, terrainify, cellLabel, onChange,
-  onUsed = () => {}, onCollect = () => {}, onObol = () => {}, onAttack = () => {},
+  onUsed = () => {}, onCollect = () => {}, onObol = () => {}, onAttack = () => {}, onMonster = () => {},
   config = defaultConfig(),
 }) {
   const cfg = config; // live: Game settings edits this object; used at the next new game
@@ -68,6 +68,7 @@ export function createPlay({
     shownKeys: 0,            // key groups whose doors visibly unlocked
     actors: [],              // per seat: { at, face, vis, queue, anim }
     monsters: new Map(),     // id -> { fig, at, face, vis, queue, anim, lunge }
+    watch: null,             // { id, until }: the camera visits a monster (when it appears or moves)
   };
   const session = createLocalSession({ board, onUpdate: (state, events) => handleEvents(state, events) });
   const g = () => session.state;
@@ -436,16 +437,20 @@ export function createPlay({
           break;
         case 'monsterSpawn':
           syncMonsters(true);
+          view.watch = { id: e.id, until: performance.now() + 3200 };
+          onMonster({ kind: e.kind, cell: e.cell, appeared: true });
           break;
         case 'monsterStep': {
           syncMonsters();
           const mv = view.monsters.get(e.id);
           if (mv) mv.queue.push({ from: e.from, to: e.to });
+          view.watch = { id: e.id, until: performance.now() + 1500 };
           break;
         }
         case 'monsterAttack': {
           const mv = view.monsters.get(e.id);
           if (mv) mv.queue.push({ attack: e.seat, cell: e.cell });
+          view.watch = { id: e.id, until: performance.now() + 1500 };
           break;
         }
         default:
@@ -528,7 +533,7 @@ export function createPlay({
   let last = performance.now();
   // Is anything animating (so the renderer should run at full rate)?
   function busy() {
-    return rolling() || view.actors.some(running) || [...view.monsters.values()].some((mv) => running(mv) || mv.lunge > 0)
+    return rolling() || !!view.watch || view.actors.some(running) || [...view.monsters.values()].some((mv) => running(mv) || mv.lunge > 0)
       || (view.pan && group.visible);
   }
   function tick(_dt, t) {
@@ -635,6 +640,21 @@ export function createPlay({
     if (cur?.at) halo.position.copy(cur.at);
     halo.visible = !!cur?.at;
 
+    // Camera visits a monster when it appears or moves (and stays while it
+    // stalks or lunges), then returns to the current player.
+    const wmv = view.watch && view.monsters.get(view.watch.id);
+    if (wmv && (running(wmv) || wmv.lunge > 0 || performance.now() < view.watch.until)) {
+      if (view.follow && wmv.at) {
+        tmp.set(wmv.at.x, 0, wmv.at.z).sub(controls.target);
+        tmp.y = 0;
+        tmp.multiplyScalar(Math.min(1, dt * 3));
+        controls.target.add(tmp);
+        camera.position.add(tmp);
+      }
+      view.pan = true; // come back to the player afterwards
+      return;
+    }
+    view.watch = null;
     // Camera follows the current player gently (keeps the same viewing
     // angle): while they run, and to pan over when the turn changes.
     if (view.follow && (running(cur) || view.pan) && cur?.at) {
