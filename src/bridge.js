@@ -87,6 +87,9 @@ export function createBridges(group) {
   // A soft highlight reads as wet in the rain.
   const steel = weather(new THREE.MeshPhongMaterial({ color: '#ffffff', emissive: '#0a0403', specular: '#3a3330', shininess: 38 }), 'steel');
   const concrete = weather(new THREE.MeshPhongMaterial({ color: '#ffffff', emissive: '#050505', specular: '#222222', shininess: 18 }), 'concrete');
+  // The shadow pass draws the bridge with the same deck-level lift as the
+  // visible bridge, so it never shadows itself in the wrong place.
+  const shadowDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
   // Worn, half-gone yellow centre-line dashes.
   const paint = new THREE.MeshLambertMaterial({ color: '#7d6c3e', emissive: '#16120a' });
   const meshes = {};
@@ -102,6 +105,7 @@ export function createBridges(group) {
     mesh = new THREE.InstancedMesh(geo, mat, Math.max(64, Math.ceil(needed * 1.5)));
     mesh.castShadow = true;
     mesh.receiveShadow = true;
+    mesh.customDepthMaterial = shadowDepth;
     mesh.raycast = () => {};
     meshes[name] = mesh;
     group.add(mesh);
@@ -164,7 +168,7 @@ export function createBridges(group) {
     for (const k in meshes) { group.remove(meshes[k]); meshes[k].dispose(); delete meshes[k]; }
   }
 
-  return { update, clear, materials: [steel, concrete, paint] };
+  return { update, clear, materials: [steel, concrete, paint, shadowDepth] };
 }
 
 // Connected bridge cells -> [{ axis, cells: [{x,y}], minX, maxX, minY, maxY }]
@@ -247,8 +251,12 @@ function buildBridge(grid, br, deckTop, bedY, steelBars, blocks, columns, dashes
     const inset = m(0.35);
     const sides = [cMin + inset, cMax - inset];
     for (const c of sides) {
-      // Concrete edge girder along the deck (the pale band in the photo).
-      block(s0, s0 + L, c - m(0.35), c + m(0.35), underside, deckTop + m(0.15));
+      // Concrete edge girder along the deck (the pale band in the photo). It
+      // stands a little proud of the deck slab's side and ends, so no face of
+      // the girder shares a plane with the deck (that flickered).
+      const out = c < (cMin + cMax) / 2 ? -1 : 1;
+      const lip = m(0.1);
+      block(s0 - lip, s0 + L + lip, c - m(0.35) + (out < 0 ? -lip : 0), c + m(0.35) + (out > 0 ? lip : 0), underside, deckTop + m(0.15));
       // Bottom chord, top chord between the end posts.
       bar(s0, c, yb, s0 + L, c, yb, CHORD);
       if (L > 1) bar(s0 + 0.5, c, yt, s0 + L - 0.5, c, yt, CHORD);

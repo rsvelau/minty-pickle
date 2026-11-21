@@ -321,6 +321,9 @@ const moon = new THREE.DirectionalLight('#a9bcff', 1.8);
 moon.castShadow = true;
 moon.shadow.mapSize.set(2048, 2048);
 moon.shadow.bias = -0.0008;
+// Offsets shadow lookups along the surface normal: stops jagged self-shadow
+// bands ("acne") on steep faces the moon grazes, like bridge girders.
+moon.shadow.normalBias = 0.02;
 scene.add(moon);
 scene.add(moon.target);
 
@@ -424,6 +427,9 @@ terrainify(deckMat, { bridge: true });
 flickerize(tileMat, { part: 'emissive' });
 flickerize(deckMat, { part: 'emissive' });
 terrainify(railMat, { bridge: true });
+// Decks and railings cast shadows from where they are drawn (deck level on slopes).
+const bridgeDepthMat = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+terrainify(bridgeDepthMat, { bridge: true });
 
 // Soft light pools that spill past lit cells onto their neighbours.
 const poolMat = new THREE.MeshBasicMaterial({
@@ -738,6 +744,7 @@ function buildBoard() {
   deckGeo.setAttribute('aGlow', deckGlow);
   decks = new THREE.InstancedMesh(deckGeo, deckMat, N);
   decks.castShadow = true;
+  decks.customDepthMaterial = bridgeDepthMat;
   decks.receiveShadow = true;
   deckVisible = new Uint8Array(N);
   boardGroup.add(decks);
@@ -752,6 +759,7 @@ function buildBoard() {
   rails = new THREE.InstancedMesh(railGeo, railMat, N * 4);
   rails.userData.ownMaterial = true;
   rails.castShadow = true;
+  rails.customDepthMaterial = bridgeDepthMat;
   rails.raycast = () => {};
   rails.count = 0;
   boardGroup.add(rails);
