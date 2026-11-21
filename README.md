@@ -475,6 +475,9 @@ npm test           # headless rules tests (plain Node: no browser, no three.js)
 
 ## View menu
 
+The cell info box (hovered cell and board counts) has a **–** button that folds it down to a small
+**ⓘ Cell info** chip; tap the chip to bring it back. The choice is remembered on that device.
+
 The round **eye button** in the top-right corner opens a compact column of view controls (`V` toggles it):
 **Layer** (All / Area / Light / Move), **Camera** (Angled / Top / Orbit mode) and **Show** toggles (Labels,
 Atmosphere, Low walls, Markers, FPS) and **Quality** (Low / Medium / High). The button shows the current layer even when the menu is closed. Buttons

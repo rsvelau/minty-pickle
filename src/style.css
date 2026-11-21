@@ -951,3 +951,17 @@ body.playing .fps { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
 .area-grid .brush .fp { position: absolute; top: 1px; right: 3px; font-size: 9px; font-weight: 600; color: var(--muted); opacity: 0.85; }
 .area-grid .brush[hidden], .tile-cat[hidden] { display: none; }
 @media (max-width: 520px) { .tile-cat > .area-grid { grid-template-columns: repeat(2, 1fr); } }
+
+/* Cell info box: collapsible to a small chip. */
+.info-toggle {
+  float: right; margin: -4px -6px 2px 8px; width: 28px; height: 28px; padding: 0;
+  border-radius: 6px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.04);
+  color: var(--text); font: 600 14px/1 system-ui, sans-serif; cursor: pointer; pointer-events: auto;
+}
+.info-toggle:hover { border-color: var(--accent); }
+.info.collapsed { min-width: 0; padding: 0; border: none; background: none; }
+.info.collapsed .hover, .info.collapsed .counts { display: none; }
+.info.collapsed .info-toggle { float: none; margin: 0; width: auto; height: 34px; padding: 0 12px; font-size: 13px; font-weight: 500; background: var(--panel); border-radius: 10px; }
+@media (max-width: 700px) {
+  .info.collapsed { left: auto; }
+}

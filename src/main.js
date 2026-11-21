@@ -3851,4 +3851,22 @@ $('#optFps').addEventListener('change', (e) => {
 });
 
 // Handy for debugging / future tooling from the console.
+// The cell info box folds down to a small chip (remembered on this device).
+{
+  const box = $('#info'), btn = $('#infoToggle');
+  const set = (collapsed) => {
+    box.classList.toggle('collapsed', collapsed);
+    btn.textContent = collapsed ? 'ⓘ Cell info' : '–';
+    btn.title = collapsed ? 'Show cell info' : 'Hide cell info';
+    btn.setAttribute('aria-expanded', String(!collapsed));
+  };
+  let saved = false;
+  try { saved = localStorage.getItem('infoCollapsed') === '1'; } catch { /* fine */ }
+  set(saved);
+  btn.addEventListener('click', () => {
+    const c = !box.classList.contains('collapsed');
+    set(c);
+    try { localStorage.setItem('infoCollapsed', c ? '1' : '0'); } catch { /* fine */ }
+  });
+}
 window.gridPlanner = { grid, scene, camera, controls, cellToWorld, brushes: BRUSHES, terrainHeight, play, dread: () => dread };
