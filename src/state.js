@@ -10,6 +10,57 @@ const clampSize = (n, fallback) => {
   return Number.isFinite(v) ? Math.min(MAX_SIZE, Math.max(MIN_SIZE, v)) : fallback;
 };
 
+// Ready-made landmarks: blocked, fully dressed tiles. `footprint` [w, h]
+// (columns x rows) paints a whole block at once; 'fill' dresses whatever
+// area you paint, cell by cell (motel rows, trailer parks, junkyards...).
+// `cat` is the tile menu category; `ground` the surface colour under them.
+const L = (label, cat, footprint, ground) => ({ label, walkable: false, cat, footprint, ground, landmark: true });
+export const LANDMARK_SUBS = {
+  // 90s town
+  videoStore: L('Video rental store', 'town', [2, 2], '#2c2f33'),
+  diner: L('Shuttered diner', 'town', [2, 3], '#2c2f33'),
+  gasStation: L('Gas station', 'town', [2, 3], '#2a2c2f'),
+  laundromat: L('Laundromat', 'town', [1, 2], '#2c2f33'),
+  arcade: L('Arcade', 'town', [2, 2], '#2c2f33'),
+  motel: L('Motel strip', 'town', 'fill', '#2e3134'),
+  payphone: L('Payphone & news boxes', 'town', [1, 1], '#3a3d40'),
+  // Pacific Northwest
+  lumberMill: L('Lumber mill', 'pnw', [3, 4], '#3a3126'),
+  logDeck: L('Log deck', 'pnw', 'fill', '#3e3428'),
+  lookout: L('Fire lookout tower', 'pnw', [1, 1], '#2f3a2e'),
+  grange: L('Grange hall', 'pnw', [2, 3], '#33402f'),
+  cairn: L('Driftwood & cairns', 'pnw', [1, 1], '#3a3d36'),
+  clearCut: L('Clear-cut', 'pnw', 'fill', '#4a3c2c'),
+  cedarGrove: L('Cedar grove & nurse log', 'pnw', [2, 2], '#1e2a20'),
+  // Unsettling
+  rectory: L('Abandoned rectory', 'unsettling', [2, 2], '#2e2f2a'),
+  burnedHouse: L('Burned house', 'unsettling', [2, 2], '#26231f'),
+  schoolBus: L('Overturned school bus', 'unsettling', [1, 3], '#33362f'),
+  wreckedCar: L('Wrecked car in a ditch', 'unsettling', [1, 1], '#2e3329'),
+  playground: L('Empty playground', 'unsettling', [2, 2], '#4a3f30'),
+  radioTower: L('Radio tower', 'unsettling', [1, 1], '#2f3530'),
+  quarantine: L('Quarantine fence', 'unsettling', 'fill', '#3a3a34'),
+  memorial: L('Missing-person memorial', 'unsettling', [1, 1], '#3a3d40'),
+  // Rural
+  farm: L('Farmhouse & barn', 'rural', [3, 3], '#3a3a26'),
+  trailerPark: L('Trailer park', 'rural', 'fill', '#3d3a2e'),
+  waterTower: L('Water tower', 'rural', [2, 2], '#353a33'),
+  junkyard: L('Junkyard', 'rural', 'fill', '#3a342c'),
+};
+
+// Tile menu categories, in order. Every subcategory names its `cat`.
+export const TILE_CATEGORIES = [
+  { id: 'roads', label: 'Ground & roads' },
+  { id: 'nature', label: 'Nature' },
+  { id: 'cemetery', label: 'Cemetery' },
+  { id: 'water', label: 'Water' },
+  { id: 'interiors', label: 'Buildings & interiors' },
+  { id: 'town', label: '90s town' },
+  { id: 'pnw', label: 'Pacific Northwest' },
+  { id: 'unsettling', label: 'Unsettling' },
+  { id: 'rural', label: 'Rural' },
+];
+
 // Space categories and their subcategories. Add a subcategory here and it is
 // accepted everywhere: painting, saving, importing. The first subcategory is
 // the category's default. `walkable: false` marks subcategories that start
@@ -18,43 +69,54 @@ export const AREAS = {
   outdoor: {
     label: 'Outdoor',
     subs: {
-      ground: { label: 'Ground' },
+      ground: { label: 'Ground', cat: 'roads' },
       // Two-lane street with sidewalks; lines and curbs follow its neighbours.
-      street: { label: 'Street' },
+      street: { label: 'Street', cat: 'roads' },
       // Where every player starts: a street cell with the players' van.
       // Two-cell start: the van sits on this cell facing along the road; the
       // players start on the cell in front of it, in the headlights.
-      start: { label: 'Start space', walkable: false },
+      start: { label: 'Start space', walkable: false, cat: 'roads' },
       // Old Clocktower: a 2x2 landmark whose dials show the game time. The
       // brush paints a 2x2 block; each complete 2x2 of these cells is a tower.
-      clocktower: { label: 'Old Clocktower', walkable: false },
-      path: { label: 'Path' },
-      cemetery: { label: 'Cemetery' },
-      cemeteryPath: { label: 'Cemetery path' },
-      forestCemetery: { label: 'Forest cemetery', walkable: false },
-      forest: { label: 'Forest', walkable: false },
-      brambles: { label: 'Brambles', walkable: false },
+      clocktower: { label: 'Old Clocktower', walkable: false, cat: 'town', footprint: [2, 2] },
+      path: { label: 'Path', cat: 'roads' },
+      cemetery: { label: 'Cemetery', cat: 'cemetery' },
+      cemeteryPath: { label: 'Cemetery path', cat: 'cemetery' },
+      forestCemetery: { label: 'Forest cemetery', walkable: false, cat: 'cemetery' },
+      forest: { label: 'Forest', walkable: false, cat: 'nature' },
+      brambles: { label: 'Brambles', walkable: false, cat: 'nature' },
+      ...LANDMARK_SUBS,
     },
   },
   indoor: {
     label: 'Indoor',
     subs: {
-      hardwood: { label: 'Hardwood' },
-      carpet: { label: 'Carpet' },
+      hardwood: { label: 'Hardwood', cat: 'interiors' },
+      carpet: { label: 'Carpet', cat: 'interiors' },
       // Church: walkable cells hold a pew facing the pulpit; a blocked church
       // cell is the pulpit (a raised dais with lectern, altar and cross).
-      church: { label: 'Church floor' },
+      church: { label: 'Church floor', cat: 'interiors' },
       // Condemned building: walls go up automatically round the outside of
       // the shape, with boarded-up doors and windows on the street side.
-      condemned: { label: 'Condemned', walkable: false },
+      condemned: { label: 'Condemned', walkable: false, cat: 'interiors' },
     },
   },
   water: {
     label: 'Water',
     walkable: false,
-    subs: { lake: { label: 'Lake' }, river: { label: 'River' } },
+    subs: {
+      lake: { label: 'Lake', cat: 'water' },
+      river: { label: 'River', cat: 'water' },
+      // Fishing dock & boathouse: pilings, planks, crab pots and nets over the
+      // water (paint any area).
+      dock: { label: 'Fishing dock & boathouse', cat: 'water', footprint: 'fill', landmark: true },
+    },
   },
 };
+// Subcategories painted as whole blocks or dressed areas (landmarks and the clocktower).
+export const isLandmark = (sub) => !!(LANDMARK_SUBS[sub] || sub === 'clocktower' || sub === 'dock');
+export const footprintOf = (area, sub) => AREAS[area]?.subs[sub]?.footprint ?? null;
+
 export const CELL_KEYS = ['area', 'sub', 'lit', 'radius', 'walkable', 'bridge', 'lamp', 'marker', 'facing'];
 
 // Directions as [dx, dy], indexed 0..3 = north, east, south, west.
@@ -565,23 +627,25 @@ export class GridState {
     return this.inBounds(x + dx, y + dy) ? this.index(x + dx, y + dy) : -1;
   }
 
-  // --- clocktowers ------------------------------------------------------------
-  // North-west cells of each tower: clocktower cells grouped into 2x2 blocks,
-  // scanning row by row (leftover cells are just the tower's plaza).
-  clocktowers() {
+  // --- clocktowers and landmarks -----------------------------------------------
+  // North-west cells of each whole w x h block of `sub` cells, scanning row by
+  // row (leftover cells are just its yard).
+  blocks(sub, w, h) {
     const used = new Uint8Array(this.cells.length);
-    const is = (x, y) => this.inBounds(x, y) && !used[this.index(x, y)]
-      && this.cells[this.index(x, y)].sub === 'clocktower';
+    const is = (x, y) => this.inBounds(x, y) && !used[this.index(x, y)] && this.cells[this.index(x, y)].sub === sub;
     const out = [];
     for (let y = 0; y < this.rows; y++) {
       for (let x = 0; x < this.cols; x++) {
-        if (!(is(x, y) && is(x + 1, y) && is(x, y + 1) && is(x + 1, y + 1))) continue;
-        for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) used[this.index(x + dx, y + dy)] = 1;
+        let ok = true;
+        for (let dy = 0; dy < h && ok; dy++) for (let dx = 0; dx < w && ok; dx++) ok = is(x + dx, y + dy);
+        if (!ok) continue;
+        for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) used[this.index(x + dx, y + dy)] = 1;
         out.push(this.index(x, y));
       }
     }
     return out;
   }
+  clocktowers() { return this.blocks('clocktower', 2, 2); }
 
   // --- markers ----------------------------------------------------------------
 

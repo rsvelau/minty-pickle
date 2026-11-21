@@ -18,7 +18,13 @@ the edges between cells.
 |----------|---------------|
 | Outdoor | Ground (default), Street, Start space, Old Clocktower\*, Path, Cemetery, Cemetery path, Forest cemetery\*, Forest\*, Brambles\* |
 | Indoor | Hardwood (default), Carpet, Church floor, Condemned\* |
-| Water | Lake, River (always start blocked) |
+| Water | Lake, River (always start blocked), Fishing dock & boathouse\* |
+| Outdoor landmarks | 26 ready-made blocked landmarks (see **Landmarks** below) |
+
+The tile menu sorts every subcategory into collapsible sections (Ground & roads, Nature, Cemetery, Water,
+Buildings & interiors, 90s town, Pacific Northwest, Unsettling, Rural) with a **Find a tile** search box on
+top. Each button shows its size (`2×3`, or `area` for ones you paint in any shape). Which sections are open
+is remembered on that device. Categories are the `cat` on each subcategory in `src/state.js` (`TILE_CATEGORIES`).
 
 \* Starts out **blocked** when painted. Painting an ordinary subcategory over a default-blocked cell unblocks
 it; otherwise painting keeps the cell's walkability, and the Walkable/Blocked brushes always win.
@@ -84,6 +90,24 @@ open belfry and a steep spire. The brush paints a whole 2×2 block with the cell
 corner (Rectangle mode tiles towers 2×2 at a time). The ground under it is levelled like a building. Its
 dials show **11:00 PM** while planning and the **game time** in the play demo; the minute hand sweeps
 forward each turn. Model: `src/clocktower.js`.
+
+### Landmarks
+
+Blocked tiles that arrive fully dressed (models in `src/landmarks.js`; lights are decorative glows, not game
+light sources, and they flicker at midnight). **Fixed-size** landmarks paint as a whole block with the cell you
+click as the north-west corner, like the clocktower, and turn to face the side with the most street, path or
+start space along it (default south). **Area** landmarks dress whatever shape you paint, cell by cell, with
+fences running round the outside and signs on the first cell.
+
+| Section | Landmark (size) |
+|---------|-----------------|
+| 90s town | Video rental store 2×2 (neon VIDEO, posters, returns slot, a TV of static), Shuttered diner 2×3 (railcar, CLOSED, one lit booth), Gas station 2×3 (canopy, 2 pumps, ice machine, payphone with the handset hanging), Laundromat 1×2 (one dryer turning), Arcade 2×2 (blacked-out windows, GAME OVER), Motel strip *area* (numbered doors, VAC NCY sign), Payphone & news boxes 1×1 (LOCAL TEEN STILL MISSING), Old Clocktower 2×2 |
+| Pacific Northwest | Lumber mill 3×4 (corrugated sheds, log stacks, conveyor, rusted saw blade, steam stack), Log deck *area*, Fire lookout tower 1×1, Grange hall 2×3 (board of MISSING flyers), Driftwood & cairns 1×1, Clear-cut *area* (stumps, slash, dead snags), Cedar grove & nurse log 2×2, Fishing dock & boathouse *area, on water* |
+| Unsettling | Abandoned rectory 2×2 (boarded windows, crooked steeple, swaying bell rope), Burned house 2×2 (swing still moving), Overturned school bus 1×3 (blinking hazard light), Wrecked car in a ditch 1×1 (door open, headlights on), Empty playground 2×2 (merry-go-round turning on its own), Radio tower 1×1 (red light that skips a beat), Quarantine fence *area*, Missing-person memorial 1×1 (candles, photo, ribbon, teddy bear) |
+| Rural | Farmhouse & barn 3×3 (rusted tractor, porch light), Trailer park *area* (dog chain, no dog), Water tower 2×2 (PINE HOLLOW, and something red near the top), Junkyard *area* (stacked cars, crane) |
+
+To add one: an entry in `LANDMARK_SUBS` (`src/state.js`) with its section, footprint and ground colour, and a
+builder of the same name in `B` (fixed) or `F` (area) in `src/landmarks.js`.
 
 ### Start space
 

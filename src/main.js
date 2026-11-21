@@ -4,6 +4,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import {
   GridState, COLS, ROWS, MIN_SIZE, MAX_SIZE, AREAS, colLabel, cellLabel, defaultCell, defaultWalkable, areaLabel, parseEdgeKey, edgeKey,
   hasStreetLamp, lightKind, centreBrightness, MAX_RADIUS, blocksLight, MARKERS, FACINGS, FACING_NAMES,
+  isLandmark, footprintOf, TILE_CATEGORIES, LANDMARK_SUBS,
 } from './state.js';
 import { createWaterSurface } from './water.js';
 import { createProps } from './props.js';
@@ -11,6 +12,7 @@ import { METERS_PER_CELL, m } from './scale.js';
 import { createStreets } from './street.js';
 import { createBridges } from './bridge.js';
 import { createClocktowers } from './clocktower.js';
+import { createLandmarks } from './landmarks.js';
 import { dreadUniforms, swayUniforms, setLightSeeds, flickerize, flickerAt, swayFir } from './dread.js';
 import { createPlay, defaultConfig, OBOLS, OBOL_TYPES, formatClock, obolCounts, INVENTORY_TABS, MONSTERS, monsterDef } from './play.js';
 import { MONSTER_CARDS, MONSTER_BY_ID, MONSTER_POOLS, DAMAGE_KINDS } from './game/cards/monsters.js';
@@ -69,7 +71,15 @@ const SUB_LOOK = {
   church: { unlit: '#5a4a3c', lit: '#d9a46c', area: '#6c5a8c' }, // worn oak boards
   condemned: { unlit: '#3a3430', lit: '#8a7a68', area: '#6a4a3e' },
   clocktower: { unlit: '#46443f', lit: '#a39d8e', area: '#b08850' }, // cobbled plaza
+  dock: { unlit: '#2a3a44', lit: '#6a8a94', area: '#6a5a44' },
+  // Landmarks: the lot / yard under each ready-made building.
+  ...Object.fromEntries(Object.entries(LANDMARK_SUBS).map(([sub, d]) => [sub, { unlit: d.ground, lit: mixHexEarly(d.ground, '#c8c0a8', 0.45), area: mixHexEarly(d.ground, '#d0a060', 0.5) }])),
 };
+function mixHexEarly(a, b, t) {
+  const A = parseInt(a.slice(1), 16), B = parseInt(b.slice(1), 16);
+  const ch = (sh) => Math.round(((A >> sh) & 255) * (1 - t) + ((B >> sh) & 255) * t);
+  return `#${((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, '0')}`;
+}
 
 
 // Night-time PNW palette. "Lit" outdoor reads as old mercury-vapor streetlight
@@ -626,6 +636,7 @@ function buildingSeeds() {
 
 let N = 0;
 let clocktowers;
+let landmarks;
 let tiles, pools, glowAttr, slab, ground, decks, deckGlow, rails;
 let walls, doorLeaves, frames, glassDark, glassLit, foundations;
 const foundationMat = new THREE.MeshLambertMaterial({ color: '#615b51' });
@@ -752,6 +763,8 @@ function buildBoard() {
   streets = createStreets(boardGroup);
   clocktowers?.clear();
   clocktowers = createClocktowers(boardGroup);
+  landmarks?.clear();
+  landmarks = createLandmarks(boardGroup, { terrainify, flickerize });
 
   // Walls and doors on cell edges (a door = two short wall pieces, an
   // optional lintel, and an open door leaf).
@@ -939,6 +952,12 @@ function refreshPropsAndWalls() {
       const p = cellToWorld(x, y);
       return { x: p.x + TILE / 2, y: targetHeights[i], z: p.z + TILE / 2 };
     }),
+  });
+  landmarks.update(grid, {
+    visible: ui.view === 'all',
+    cellToWorld,
+    baseY: (i) => targetHeights[i],
+    deckY: WATER_Y,
   });
   props.update(grid, {
     visible: ui.view === 'all',
@@ -1172,7 +1191,7 @@ function refreshPropsAndWalls() {
   let nfd = 0;
   if (!isFlat()) {
     for (let i = 0; i < N; i++) {
-      const kind = (c) => (c.area === 'indoor' ? 'indoor' : c.sub === 'clocktower' ? 'tower' : null);
+      const kind = (c) => (c.area === 'indoor' ? 'indoor' : c.area === 'outdoor' && isLandmark(c.sub) ? `tower:${c.sub}` : null);
       const k0 = kind(grid.cells[i]);
       if (!k0) continue;
       const { x, y } = grid.coords(i);
@@ -1723,15 +1742,22 @@ function currentPatch() {
   };
 }
 
-// The Old Clocktower brush paints a whole 2x2 tower: the cell under the
-// pointer is its north-west corner (cells already part of a tower are left
-// alone, so dragging lays towers side by side instead of smearing them).
-const towerBrush = () => ui.tool !== 'markers' && ui.brush === 'outdoor:clocktower';
+// Fixed-size landmark brushes (the 2x2 Old Clocktower, a 3x4 lumber mill...)
+// paint a whole block: the cell under the pointer is its north-west corner.
+// Cells already of that landmark are left alone, so dragging lays them side
+// by side instead of smearing them.
+function brushFootprint() {
+  if (ui.tool === 'markers' || !ui.brush) return null;
+  const [area, sub] = ui.brush.split(':');
+  const fp = footprintOf(area, sub);
+  return Array.isArray(fp) && (fp[0] > 1 || fp[1] > 1) ? { sub, w: fp[0], h: fp[1] } : null;
+}
 function applyAt(x, y, patch, opts) {
-  if (!towerBrush()) return grid.apply(grid.index(x, y), patch, opts) ? [grid.index(x, y)] : [];
-  if (grid.cells[grid.index(x, y)].sub === 'clocktower') return [];
+  const fp = brushFootprint();
+  if (!fp) return grid.apply(grid.index(x, y), patch, opts) ? [grid.index(x, y)] : [];
+  if (grid.cells[grid.index(x, y)].sub === fp.sub) return [];
   const out = [];
-  for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+  for (let dy = 0; dy < fp.h; dy++) for (let dx = 0; dx < fp.w; dx++) {
     if (!grid.inBounds(x + dx, y + dy)) continue;
     const i = grid.index(x + dx, y + dy);
     if (grid.apply(i, patch, opts)) out.push(i);
@@ -1760,9 +1786,9 @@ function paintRect(a, b) {
   grid.revertStroke();
   const patch = currentPatch();
   const touched = [];
-  const step = towerBrush() ? 2 : 1; // towers tile the rectangle 2x2 at a time
-  for (let y = Math.min(a.y, b.y); y <= Math.max(a.y, b.y); y += step) {
-    for (let x = Math.min(a.x, b.x); x <= Math.max(a.x, b.x); x += step) {
+  const fp = brushFootprint(); // fixed landmarks tile the rectangle block by block
+  for (let y = Math.min(a.y, b.y); y <= Math.max(a.y, b.y); y += fp?.h ?? 1) {
+    for (let x = Math.min(a.x, b.x); x <= Math.max(a.x, b.x); x += fp?.w ?? 1) {
       touched.push(...applyAt(x, y, patch, { silent: true }));
     }
   }
@@ -2244,27 +2270,68 @@ function setOrbitMode(on) {
   applyControlBindings();
 }
 
-// Area brushes are generated from AREAS so new subcategories show up here.
+// Area brushes are generated from AREAS so new subcategories show up here,
+// sorted into TILE_CATEGORIES (collapsible), with a search box on top.
 {
   const keyFor = Object.fromEntries(Object.entries(BRUSH_KEYS).map(([k, v]) => [v, k]));
   const host = $('#areaBrushes');
-  for (const [area, def] of Object.entries(AREAS)) {
-    const group = document.createElement('div');
-    group.className = 'area-group';
-    group.innerHTML = `<span class="group-label">${def.label}</span><div class="area-grid"></div>`;
-    for (const [sub, sdef] of Object.entries(def.subs)) {
-      const id = `${area}:${sub}`;
-      const look = SUB_LOOK[sub];
-      const b = document.createElement('button');
-      b.className = 'brush';
-      b.dataset.brush = id;
-      b.title = `${def.label}: ${sdef.label}${defaultWalkable(area, sub) ? '' : ' (blocked)'}`;
-      const sw = look ? `<i class="sw" style="background:${look.unlit}"></i>` : `<i class="sw sw-${sub}"></i>`;
-      b.innerHTML = `${sw}<span>${sdef.label}</span>${keyFor[id] ? `<kbd>${keyFor[id]}</kbd>` : ''}`;
-      group.querySelector('.area-grid').appendChild(b);
+  const search = document.createElement('input');
+  search.type = 'search';
+  search.className = 'tile-search';
+  search.placeholder = 'Find a tile… (e.g. motel, forest)';
+  host.appendChild(search);
+  let openCats = new Set(['roads', 'nature', 'interiors']);
+  try { const saved = JSON.parse(localStorage.getItem('tileCatsOpen')); if (Array.isArray(saved)) openCats = new Set(saved); } catch { /* fine */ }
+  const sections = [];
+  for (const cat of TILE_CATEGORIES) {
+    const sec = document.createElement('details');
+    sec.className = 'tile-cat';
+    sec.dataset.cat = cat.id;
+    sec.open = openCats.has(cat.id);
+    sec.innerHTML = `<summary><span>${cat.label}</span><em></em></summary><div class="area-grid"></div>`;
+    sec.addEventListener('toggle', () => {
+      if (search.value) return;
+      if (sec.open) openCats.add(cat.id); else openCats.delete(cat.id);
+      try { localStorage.setItem('tileCatsOpen', JSON.stringify([...openCats])); } catch { /* fine */ }
+    });
+    let n = 0;
+    for (const [area, def] of Object.entries(AREAS)) {
+      for (const [sub, sdef] of Object.entries(def.subs)) {
+        if ((sdef.cat ?? 'roads') !== cat.id) continue;
+        const id = `${area}:${sub}`;
+        const look = SUB_LOOK[sub];
+        const blocked = !defaultWalkable(area, sub);
+        const fp = sdef.footprint;
+        const size = Array.isArray(fp) ? `${fp[0]}×${fp[1]}` : fp === 'fill' ? 'area' : '';
+        const b = document.createElement('button');
+        b.className = 'brush';
+        b.dataset.brush = id;
+        b.dataset.find = `${sdef.label} ${def.label} ${cat.label} ${sub}`.toLowerCase();
+        b.title = `${def.label}: ${sdef.label}${blocked ? ' (blocked)' : ''}${size === 'area' ? ' (paint any area)' : size ? ` (${size} cells)` : ''}`;
+        const sw = look ? `<i class="sw" style="background:${look.unlit}"></i>` : `<i class="sw sw-${sub}"></i>`;
+        b.innerHTML = `${sw}<span>${sdef.label}</span>${size ? `<b class="fp">${size}</b>` : ''}${keyFor[id] ? `<kbd>${keyFor[id]}</kbd>` : ''}`;
+        sec.querySelector('.area-grid').appendChild(b);
+        n++;
+      }
     }
-    host.appendChild(group);
+    if (!n) continue;
+    sec.querySelector('summary em').textContent = n;
+    host.appendChild(sec);
+    sections.push(sec);
   }
+  search.addEventListener('input', () => {
+    const q = search.value.trim().toLowerCase();
+    for (const sec of sections) {
+      let hits = 0;
+      for (const b of sec.querySelectorAll('.brush')) {
+        const hit = !q || q.split(/\s+/).every((w) => b.dataset.find.includes(w));
+        b.hidden = !hit;
+        hits += hit;
+      }
+      sec.hidden = !hits;
+      sec.open = q ? true : openCats.has(sec.dataset.cat);
+    }
+  });
 }
 $$('.brush[data-brush]').forEach((b) => b.addEventListener('click', () => setBrush(b.dataset.brush)));
 $$('[data-tool]').forEach((b) => b.addEventListener('click', () => setTool(b.dataset.tool, b.dataset.start)));
@@ -3741,6 +3808,7 @@ renderer.setAnimationLoop(() => {
 
   water.tick(clock.elapsedTime);
   props?.tick(clock.elapsedTime);
+  landmarks?.tick(clock.elapsedTime);
   markers.tick(clock.elapsedTime, camera);
   // A bug in game code must never stop the render loop (the board would
   // freeze and stop taking input): log it and keep going.
@@ -3783,4 +3851,4 @@ $('#optFps').addEventListener('change', (e) => {
 });
 
 // Handy for debugging / future tooling from the console.
-window.gridPlanner = { grid, scene, camera, controls, brushes: BRUSHES, terrainHeight, play, dread: () => dread };
+window.gridPlanner = { grid, scene, camera, controls, cellToWorld, brushes: BRUSHES, terrainHeight, play, dread: () => dread };

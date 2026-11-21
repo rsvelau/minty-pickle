@@ -9,6 +9,7 @@ import { flickerize } from './dread.js';
 import { m } from './scale.js';
 import { terrainify } from './terrain.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { isLandmark } from './state.js';
 
 
 // --- geometry helpers --------------------------------------------------------
@@ -432,7 +433,7 @@ function guardedSides(grid, x, y) {
   const solid = (nx, ny) => {
     if (!grid.inBounds(nx, ny)) return false;
     const n = grid.cells[grid.index(nx, ny)];
-    return n.area === 'indoor' || n.sub === 'clocktower';
+    return n.area === 'indoor' || isLandmark(n.sub);
   };
   g.e = solid(x + 1, y) || wallish('v', x + 1, y);
   g.w = solid(x - 1, y) || wallish('v', x, y);

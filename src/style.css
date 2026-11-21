@@ -937,3 +937,17 @@ body.playing .fps { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
 .ask-defense[hidden] { display: none; }
 .ask-defense .tdie { width: 40px; height: 40px; }
 #askCard { background: #0d1117; }
+
+/* Tile menu: searchable, collapsible categories ------------------------------ */
+.tile-search { width: 100%; box-sizing: border-box; margin: 0 0 6px; padding: 7px 9px; border-radius: 6px; border: 1px solid var(--line); background: rgba(0, 0, 0, 0.25); color: var(--text); font: inherit; font-size: 13px; }
+.tile-cat { margin-bottom: 4px; border: 1px solid var(--line); border-radius: 6px; background: rgba(255, 255, 255, 0.02); }
+.tile-cat > summary { display: flex; align-items: center; gap: 6px; padding: 7px 9px; cursor: pointer; list-style: none; font-size: 12px; color: var(--text); user-select: none; }
+.tile-cat > summary::-webkit-details-marker { display: none; }
+.tile-cat > summary::before { content: '▸'; color: var(--muted); transition: transform 0.15s; }
+.tile-cat[open] > summary::before { transform: rotate(90deg); }
+.tile-cat > summary em { margin-left: auto; font-style: normal; color: var(--muted); font-size: 11px; }
+.tile-cat > .area-grid { padding: 0 6px 6px; }
+.area-grid .brush { position: relative; }
+.area-grid .brush .fp { position: absolute; top: 1px; right: 3px; font-size: 9px; font-weight: 600; color: var(--muted); opacity: 0.85; }
+.area-grid .brush[hidden], .tile-cat[hidden] { display: none; }
+@media (max-width: 520px) { .tile-cat > .area-grid { grid-template-columns: repeat(2, 1fr); } }
