@@ -405,9 +405,13 @@ on the **edges between cells**, not in cells:
 - Painting water makes a cell unwalkable; painting land over water makes it walkable again and removes any
   bridge.
 - **Bridges are steel through-truss road bridges** in the Pacific Northwest style (loosely after Snohomish's
-  Avenue D bridge): rust-red Warren trusses with inclined end posts and verticals, overhead struts with X
-  bracing, an asphalt deck with a pale concrete edge girder and pipe railings, and round concrete piers
-  with cap beams in the water at each end and every two cells. Connected bridge cells form one bridge, so a
+  Avenue D bridge), long past their last maintenance: Warren trusses with inclined end posts and verticals
+  and overhead struts with X bracing, rusted through in mottled orange and brown with flaking spots, scabs
+  of old grey-green paint and grime running down; an asphalt deck with worn centre-line paint, a concrete
+  edge girder and pipe railings; and round concrete piers with cap beams in the water at each end and every
+  two cells. The concrete is dirty and chipped, with rust weeping down from the deck and damp, dark grime
+  toward the waterline. The weathering is drawn in the shader from world position (`weather()` in
+  `src/bridge.js`), so it stays the same scale on every beam and pier. Connected bridge cells form one bridge, so a
   line of three bridge cells is one two-lane, three-cell span (`src/bridge.js`).
 - **Bridge** only applies to water cells and makes them walkable. Each bridge cell knows which way it spans
   (`bridgeAxis()` in `src/state.js`, and `bridgeAxis` in exported JSON): toward land or other bridge cells

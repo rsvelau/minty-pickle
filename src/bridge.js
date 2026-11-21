@@ -1,8 +1,12 @@
 // Bridge structure: a Pacific Northwest steel through-truss road bridge
-// (loosely after Snohomish's Avenue D bridge). Rust-painted Warren trusses on
-// both sides with inclined end posts and verticals, overhead struts with
-// X lateral bracing, a pale concrete edge girder at deck level, and round
-// concrete piers with cap beams standing in the water.
+// (loosely after Snohomish's Avenue D bridge). Warren trusses on both sides
+// with inclined end posts and verticals, overhead struts with X lateral
+// bracing, a concrete edge girder at deck level, and round concrete piers with
+// cap beams standing in the water. Decades past its last coat of paint: the
+// steel is rusted through (with a few scabs of old paint), and the concrete is
+// stained, rust weeping down from the deck and damp grime near the water.
+// The weathering is drawn in the shader from world position (weather()), so it
+// stays the same scale on every stretched beam and pier.
 //
 // Bridge cells come from the grid (cell.bridge). Connected bridge cells form
 // one bridge; it spans along its majority bridgeAxis(). Rectangular bridges
@@ -18,16 +22,76 @@ const WEB = m(0.3);          // diagonal/vertical section
 const STRUT = m(0.25);       // overhead bracing section
 const GIRDER_H = m(0.9);     // concrete edge girder depth
 const PIER_R = m(0.45);      // pier column radius
-const RUST = '#93492f';      // weathered rust-red paint
-const CONCRETE = '#b8b5aa';  // pale concrete
+// Shared with weather(): heights (cells, before terrain) of the riverbed and deck.
+const WEATHER = { bed: { value: -0.5 }, deck: { value: 0 } };
+
+// GLSL: value noise, and the two weathered surfaces (p in metres, world space).
+const NOISE = /* glsl */ `
+varying vec3 vWeatherPos;
+uniform float uWeatherBed;
+uniform float uWeatherDeck;
+float wHash( vec3 p ) { p = fract( p * 0.3183099 + 0.1 ); p *= 17.0; return fract( p.x * p.y * p.z * ( p.x + p.y + p.z ) ); }
+float wNoise( vec3 x ) {
+	vec3 i = floor( x ), f = fract( x ); f = f * f * ( 3.0 - 2.0 * f );
+	return mix( mix( mix( wHash( i ), wHash( i + vec3( 1, 0, 0 ) ), f.x ), mix( wHash( i + vec3( 0, 1, 0 ) ), wHash( i + vec3( 1, 1, 0 ) ), f.x ), f.y ),
+	            mix( mix( wHash( i + vec3( 0, 0, 1 ) ), wHash( i + vec3( 1, 0, 1 ) ), f.x ), mix( wHash( i + vec3( 0, 1, 1 ) ), wHash( i + vec3( 1, 1, 1 ) ), f.x ), f.y ), f.z );
+}
+float wFbm( vec3 p ) { float a = 0.5, s = 0.0; for ( int i = 0; i < 4; i++ ) { s += a * wNoise( p ); p *= 2.03; a *= 0.5; } return s; }
+vec3 rustedSteel( vec3 p ) {
+	vec3 c = mix( vec3( 0.20, 0.09, 0.05 ), vec3( 0.42, 0.20, 0.09 ), smoothstep( 0.25, 0.75, wFbm( p * 1.4 ) ) );   // dark to orange rust
+	c = mix( c, vec3( 0.55, 0.30, 0.13 ), smoothstep( 0.66, 0.78, wNoise( p * 7.0 ) ) * 0.8 );                        // fresh flaking rust
+	c = mix( c, vec3( 0.25, 0.29, 0.26 ), smoothstep( 0.60, 0.66, wFbm( p * 0.7 + 5.0 ) ) * 0.85 );                  // scabs of old grey-green paint
+	float streak = wNoise( vec3( p.x * 3.0, p.y * 0.35, p.z * 3.0 ) );                                                // grime running down
+	c *= mix( 1.0, 0.6, smoothstep( 0.55, 0.85, streak ) );
+	return c;
+}
+vec3 weatheredConcrete( vec3 p, float h ) {
+	vec3 c = mix( vec3( 0.30, 0.28, 0.25 ), vec3( 0.45, 0.42, 0.36 ), smoothstep( 0.3, 0.7, wFbm( p * 1.1 ) ) );     // dirty, uneven concrete
+	// Rust weeping down from the deck steel: thin vertical runs, strongest up high.
+	float runs = smoothstep( 0.45, 0.68, wNoise( vec3( p.x * 6.0, p.y * 0.18, p.z * 6.0 ) ) );
+	runs *= 0.5 + 0.5 * wNoise( vec3( p.x * 14.0, p.y * 0.5, p.z * 14.0 ) );
+	float high = smoothstep( uWeatherBed, uWeatherDeck, h );
+	c = mix( c, vec3( 0.40, 0.19, 0.07 ), runs * ( 0.45 + 0.5 * high ) );
+	// Damp green-black grime and a tide line near the water.
+	float low = 1.0 - smoothstep( uWeatherBed, mix( uWeatherBed, uWeatherDeck, 0.45 ), h + ( wNoise( p * 2.0 ) - 0.5 ) * 0.06 );
+	c = mix( c, vec3( 0.14, 0.17, 0.12 ), low * 0.75 );
+	// Spalled, darker patches.
+	c *= mix( 1.0, 0.8, smoothstep( 0.72, 0.78, wNoise( p * 6.0 + 11.0 ) ) );
+	return c;
+}
+`;
+
+// Give a bridge material its weathered surface ('steel' or 'concrete').
+function weather(material, kind) {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uWeatherBed = WEATHER.bed;
+    shader.uniforms.uWeatherDeck = WEATHER.deck;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWeatherPos;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+	{
+		vec4 wp = vec4( transformed, 1.0 );
+		#ifdef USE_INSTANCING
+		wp = instanceMatrix * wp;
+		#endif
+		vWeatherPos = ( modelMatrix * wp ).xyz;
+	}`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>\n${NOISE}`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+	diffuseColor.rgb = ${kind === 'steel' ? 'rustedSteel( vWeatherPos * 7.0 )' : 'weatheredConcrete( vWeatherPos * 7.0, vWeatherPos.y )'};`);
+  };
+  material.customProgramCacheKey = () => `weather-${kind}`;
+  return material;
+}
 
 export function createBridges(group) {
   const unitBox = new THREE.BoxGeometry(1, 1, 1);           // centred
   const unitCyl = new THREE.CylinderGeometry(1, 1, 1, 12);   // centred, axis y
-  const steel = new THREE.MeshLambertMaterial({ color: RUST, emissive: '#1c0b06' });
-  const concrete = new THREE.MeshLambertMaterial({ color: CONCRETE });
-  // Faded yellow centre-line dashes, matching the streets.
-  const paint = new THREE.MeshLambertMaterial({ color: '#a8893e', emissive: '#2a220c' });
+  const steel = weather(new THREE.MeshLambertMaterial({ color: '#ffffff', emissive: '#0d0604' }), 'steel');
+  const concrete = weather(new THREE.MeshLambertMaterial({ color: '#ffffff', emissive: '#050505' }), 'concrete');
+  // Worn, half-gone yellow centre-line dashes.
+  const paint = new THREE.MeshLambertMaterial({ color: '#7d6c3e', emissive: '#16120a' });
   const meshes = {};
   const tmpM = new THREE.Matrix4();
   const tmpQ = new THREE.Quaternion();
@@ -49,6 +113,8 @@ export function createBridges(group) {
 
   // update(grid, { visible, deckTop, bedY })
   function update(grid, { visible, deckTop, bedY }) {
+    WEATHER.deck.value = deckTop;
+    WEATHER.bed.value = bedY;
     const steelBars = [];   // [ax, ay, az, bx, by, bz, thickness]
     const blocks = [];      // concrete boxes: [cx, cy, cz, sx, sy, sz]
     const dashes = [];      // paint boxes, same layout as blocks
