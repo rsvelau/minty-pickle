@@ -81,6 +81,7 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     if (flick) flickerize(mat);
     const o = new THREE.Mesh(new THREE.PlaneGeometry(m(w), m(h)), mat);
     o.raycast = () => {};
+    o.userData.text = true; // un-mirrored when the building is flipped
     return o;
   }
 
@@ -694,36 +695,92 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
   const footprints = Object.entries({ ...LANDMARK_SUBS }).filter(([, d]) => Array.isArray(d.footprint));
   const fills = [...Object.entries(LANDMARK_SUBS).filter(([, d]) => d.footprint === 'fill').map(([s]) => s), 'dock'];
 
+  // Older boards (no stored facing): face the side with the most road along it
+  // (long sides only for oblongs), south on a tie.
+  function autoFace(grid, x, y, w, h) {
+    const sides = [0, 1, 2, 3].filter((f) => w === h || (w > h ? f % 2 === 0 : f % 2 === 1));
+    let face = sides.includes(2) ? 2 : sides[0], best = -1;
+    for (const f of sides) {
+      const n = grid.roadsAlong(x, y, w, h, f);
+      if (n > best || (n === best && f === 2)) { best = n; face = f; }
+    }
+    return face;
+  }
+  // One premade building on its w x h block (NW cell x, y), front to `face`.
+  function placeFixed(sub, x, y, w, h, face, flip, baseY, ctx) {
+    const front = face % 2 ? h : w, depth = face % 2 ? w : h;
+    const built = B[sub](front * CELL * 0.92, depth * CELL * 0.92);
+    const c = ctx.cellToWorld(x, y);
+    built.g.position.set(c.x + (w - 1) / 2, baseY, c.z + (h - 1) / 2);
+    built.g.rotation.y = [Math.PI, Math.PI / 2, 0, -Math.PI / 2][face];
+    if (flip) {
+      built.g.scale.x = -1; // mirror the layout left to right...
+      built.g.traverse((o) => { if (o.userData.text) o.scale.x *= -1; }); // ...but keep signs readable
+    }
+    return built;
+  }
+
+  // --- the placement preview: a building you are still turning, not yet laid -------------
+  // p: { sub, x, y, w, h, face, flip, valid, hide (anchor of a building picked up) } or null.
+  let preview = null, previewItem = null, lastGrid = null, lastCtx = null;
+  const outlineMats = {
+    ok: new THREE.MeshBasicMaterial({ color: '#7fe08a', transparent: true, opacity: 0.95, depthTest: false, fog: false }),
+    bad: new THREE.MeshBasicMaterial({ color: '#ff5a4a', transparent: true, opacity: 0.95, depthTest: false, fog: false }),
+  };
+  for (const mat of Object.values(outlineMats)) terrainify(mat, { none: true });
+  function previewOutline(p, ctx) {
+    const g = new THREE.Group();
+    const mat = p.valid ? outlineMats.ok : outlineMats.bad;
+    const c = ctx.cellToWorld(p.x, p.y);
+    const x0 = c.x - 0.5, z0 = c.z - 0.5, y = ctx.baseY(p.anchor) + 0.03, t = 0.05;
+    const bar = (w, d, x, z) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, 0.02, d), mat); o.position.set(x, y, z); o.renderOrder = 999; g.add(o); };
+    bar(p.w, t, x0 + p.w / 2, z0); bar(p.w, t, x0 + p.w / 2, z0 + p.h);
+    bar(t, p.h, x0, z0 + p.h / 2); bar(t, p.h, x0 + p.w, z0 + p.h / 2);
+    // An arrow just outside the front edge.
+    const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.4, 3).rotateX(Math.PI / 2), mat);
+    arrow.renderOrder = 999;
+    const [dx, dz] = [[0, -1], [1, 0], [0, 1], [-1, 0]][p.face];
+    arrow.position.set(x0 + p.w / 2 + dx * (p.w / 2 + 0.3), y, z0 + p.h / 2 + dz * (p.h / 2 + 0.3));
+    arrow.rotation.y = Math.atan2(dx, dz);
+    g.add(arrow);
+    g.traverse((o) => { o.raycast = () => {}; });
+    return g;
+  }
+  function showPreview() {
+    if (previewItem) { root.remove(previewItem.group); previewItem = null; }
+    if (!preview || !lastCtx) return;
+    const group = new THREE.Group();
+    let ticks = [];
+    if (B[preview.sub]) {
+      try {
+        const built = placeFixed(preview.sub, preview.x, preview.y, preview.w, preview.h, preview.face, preview.flip, lastCtx.baseY(preview.anchor), lastCtx);
+        built.g.traverse((o) => { o.raycast = () => {}; });
+        group.add(built.g);
+        ticks = built.ticks ?? [];
+      } catch (e) { console.error('landmark preview', e); }
+    }
+    group.add(previewOutline(preview, lastCtx));
+    root.add(group);
+    previewItem = { group, ticks };
+  }
+  function setPreview(p) {
+    const hideChanged = (preview?.hide ?? -1) !== (p?.hide ?? -1);
+    preview = p;
+    if (hideChanged && lastGrid) update(lastGrid, lastCtx); // show/hide the building being moved
+    showPreview();
+  }
+
   // ctx: { visible, cellToWorld, baseY(i), deckY }
   function update(grid, ctx) {
+    lastGrid = grid; lastCtx = ctx;
     const want = new Map();
     if (ctx.visible) {
-      for (const [sub, def] of footprints) {
+      for (const [sub] of footprints) {
         if (!B[sub]) continue;
-        const [w, h] = def.footprint;
-        for (const anchor of grid.blocks(sub, w, h)) {
-          const { x, y } = grid.coords(anchor);
-          // Face the side with the most road along it (long sides only for oblongs).
-          const sides = [0, 1, 2, 3].filter((f) => w === h || (w > h ? f % 2 === 0 : f % 2 === 1));
-          let face = sides.includes(2) ? 2 : sides[0], best = -1;
-          for (const f of sides) {
-            let n = 0;
-            const len = f % 2 ? h : w;
-            for (let k = 0; k < len; k++) {
-              const cx = f === 1 ? x + w : f === 3 ? x - 1 : x + k;
-              const cy = f === 0 ? y - 1 : f === 2 ? y + h : y + k;
-              if (grid.inBounds(cx, cy) && ROAD(grid.cells[grid.index(cx, cy)])) n++;
-            }
-            if (n > best || (n === best && f === 2)) { best = n; face = f; }
-          }
-          const front = face % 2 ? h : w, depth = face % 2 ? w : h;
-          want.set(`${sub}:${anchor}:${face}`, () => {
-            const built = B[sub](front * CELL * 0.92, depth * CELL * 0.92);
-            const c = ctx.cellToWorld(x, y);
-            built.g.position.set(c.x + (w - 1) / 2, ctx.baseY(anchor), c.z + (h - 1) / 2);
-            built.g.rotation.y = [Math.PI, Math.PI / 2, 0, -Math.PI / 2][face];
-            return built;
-          });
+        for (const blk of grid.landmarkBlocks(sub)) {
+          if (preview?.hide === blk.anchor && preview.sub === sub) continue; // picked up: shown as the preview
+          const face = blk.face ?? autoFace(grid, blk.x, blk.y, blk.w, blk.h);
+          want.set(`${sub}:${blk.anchor}:${blk.w}x${blk.h}:${face}:${+blk.flip}`, () => placeFixed(sub, blk.x, blk.y, blk.w, blk.h, face, blk.flip, ctx.baseY(blk.anchor), ctx));
         }
       }
       // Fill landmarks, cell by cell.
@@ -776,9 +833,14 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
 
   function tick(t) {
     for (const [, it] of items) for (const f of it.ticks) f(t);
+    if (previewItem) {
+      for (const f of previewItem.ticks) f(t);
+      const k = 0.6 + 0.4 * Math.sin(t * 5);
+      outlineMats.ok.opacity = outlineMats.bad.opacity = k;
+    }
   }
   function clear() { parent.remove(root); }
-  return { update, tick, clear, setVisible: (v) => { root.visible = v; } };
+  return { update, tick, clear, setPreview, setVisible: (v) => { root.visible = v; } };
 }
 
 export const LANDMARK_GROUND = Object.fromEntries(Object.entries(LANDMARK_SUBS).map(([s, d]) => [s, d.ground]));

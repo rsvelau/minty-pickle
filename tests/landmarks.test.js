@@ -34,3 +34,18 @@ test('blocks() finds whole w x h blocks only', () => {
   paint(1, 5, 3, 4);   // stacked directly below the first: still two whole mills
   assert.deepEqual(g.blocks('lumberMill', 3, 4), [g.index(1, 1), g.index(5, 1), g.index(1, 5)]);
 });
+
+test('a turned building swaps its footprint and keeps its facing and flip', async () => {
+  const { landmarkDims, normalizeCell } = await import('../src/state.js');
+  assert.deepEqual(landmarkDims('diner', null), [2, 3]);   // as listed (older boards)
+  assert.deepEqual(landmarkDims('diner', 2), [3, 2]);      // facing south: long side along x
+  assert.deepEqual(landmarkDims('diner', 1), [2, 3]);      // facing east
+  const g = new GridState(10, 10);
+  for (let y = 1; y < 3; y++) for (let x = 1; x < 4; x++) Object.assign(g.cells[g.index(x, y)], { sub: 'diner', facing: 2, flip: true });
+  const [b] = g.landmarkBlocks('diner');
+  assert.deepEqual({ x: b.x, y: b.y, w: b.w, h: b.h, face: b.face, flip: b.flip }, { x: 1, y: 1, w: 3, h: 2, face: 2, flip: true });
+  assert.equal(g.landmarkAt(g.index(3, 2)).anchor, g.index(1, 1));
+  // Facing and flip survive a save; ordinary cells drop them.
+  assert.deepEqual([normalizeCell({ area: 'outdoor', sub: 'diner', facing: 2, flip: true }).facing, normalizeCell({ area: 'outdoor', sub: 'diner', facing: 2, flip: true }).flip], [2, true]);
+  assert.deepEqual([normalizeCell({ area: 'outdoor', sub: 'forest', facing: 2, flip: true }).facing, normalizeCell({ area: 'outdoor', sub: 'forest', flip: true }).flip], [null, false]);
+});

@@ -965,3 +965,22 @@ body.playing .fps { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
 @media (max-width: 700px) {
   .info.collapsed { left: auto; }
 }
+
+/* Premade building preview: floating Rotate / Flip / Place bar ---------------- */
+.place-bar {
+  position: fixed; z-index: 30; left: 50%; top: 50%;
+  padding: 6px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--panel); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  max-width: calc(100vw - 16px);
+}
+.place-bar[hidden] { display: none; }
+.place-name { padding: 2px 6px 6px; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.place-btns { display: flex; gap: 6px; }
+.place-btns button {
+  min-height: 44px; min-width: 44px; padding: 0 12px; border-radius: 9px;
+  border: 1px solid var(--line); background: rgba(255, 255, 255, 0.05); color: var(--text);
+  font: 500 14px system-ui, sans-serif; cursor: pointer; white-space: nowrap; touch-action: manipulation;
+}
+.place-btns button.on { border-color: #5fcf6a; background: rgba(95, 207, 106, 0.18); color: #dff5e2; }
+.place-btns button:disabled { opacity: 0.4; cursor: not-allowed; }
+.place-btns button[hidden] { display: none; }

@@ -116,8 +116,21 @@ export const AREAS = {
 // Subcategories painted as whole blocks or dressed areas (landmarks and the clocktower).
 export const isLandmark = (sub) => !!(LANDMARK_SUBS[sub] || sub === 'clocktower' || sub === 'dock');
 export const footprintOf = (area, sub) => AREAS[area]?.subs[sub]?.footprint ?? null;
+// Premade buildings: a fixed footprint (the clocktower, a 3x4 mill...).
+const fixedFootprint = (sub) => (sub === 'clocktower' ? [2, 2] : Array.isArray(LANDMARK_SUBS[sub]?.footprint) ? LANDMARK_SUBS[sub].footprint : null);
+export const hasFixedFootprint = (sub) => !!fixedFootprint(sub);
+// Cells a premade building covers when it faces `face` (0..3 = N E S W):
+// its long side is the front, so facing north or south it lies along x.
+// `face` null keeps the footprint as listed (older boards, auto-facing).
+export function landmarkDims(sub, face) {
+  const fp = fixedFootprint(sub);
+  if (!fp) return null;
+  if (face === null || face === undefined) return [fp[0], fp[1]];
+  const long = Math.max(...fp), short = Math.min(...fp);
+  return face % 2 === 0 ? [long, short] : [short, long];
+}
 
-export const CELL_KEYS = ['area', 'sub', 'lit', 'radius', 'walkable', 'bridge', 'lamp', 'marker', 'facing'];
+export const CELL_KEYS = ['area', 'sub', 'lit', 'radius', 'walkable', 'bridge', 'lamp', 'marker', 'facing', 'flip'];
 
 // Directions as [dx, dy], indexed 0..3 = north, east, south, west.
 export const FACINGS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
@@ -139,7 +152,8 @@ export const defaultWalkable = (area, sub) =>
 //         sits on top of the cell and never changes the cell itself.
 export const defaultCell = () => ({
   area: 'outdoor', sub: 'ground', lit: false, radius: 0, walkable: true, bridge: false, lamp: false, marker: null,
-  facing: null, // start space only: which way the van faces (index into FACINGS); null = automatic
+  facing: null, // start space / premade building: which way it faces (index into FACINGS); null = automatic
+  flip: false,  // premade building: mirrored left to right
 });
 
 // Gameplay markers, placed on walkable cells.
@@ -249,7 +263,8 @@ export function normalizeCell(c = {}) {
     bridge: water && !!c.bridge,
     lamp: !!c.lamp,
     marker: MARKERS[c.marker] ? c.marker : null,
-    facing: sub === 'start' && Number.isInteger(c.facing) && c.facing >= 0 && c.facing < 4 ? c.facing : null,
+    facing: (sub === 'start' || hasFixedFootprint(sub)) && Number.isInteger(c.facing) && c.facing >= 0 && c.facing < 4 ? c.facing : null,
+    flip: hasFixedFootprint(sub) && !!c.flip,
   };
 }
 
@@ -647,6 +662,48 @@ export class GridState {
   }
   clocktowers() { return this.blocks('clocktower', 2, 2); }
 
+  // Every placed premade building of `sub`: whole blocks of its cells that
+  // share a facing, scanning row by row. Each is { anchor, x, y, w, h, face, flip }.
+  landmarkBlocks(sub) {
+    const used = new Uint8Array(this.cells.length);
+    const out = [];
+    for (let i = 0; i < this.cells.length; i++) {
+      const c = this.cells[i];
+      if (used[i] || c.sub !== sub) continue;
+      const [w, h] = landmarkDims(sub, c.facing);
+      const { x, y } = this.coords(i);
+      let ok = true;
+      for (let dy = 0; dy < h && ok; dy++) for (let dx = 0; dx < w && ok; dx++) {
+        const j = this.inBounds(x + dx, y + dy) ? this.index(x + dx, y + dy) : -1;
+        ok = j >= 0 && !used[j] && this.cells[j].sub === sub && this.cells[j].facing === c.facing && this.cells[j].flip === c.flip;
+      }
+      if (!ok) continue;
+      const cells = [];
+      for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) { const j = this.index(x + dx, y + dy); used[j] = 1; cells.push(j); }
+      out.push({ anchor: i, x, y, w, h, face: c.facing, flip: !!c.flip, cells });
+    }
+    return out;
+  }
+  // The placed building of `sub` covering cell i, or null.
+  landmarkAt(i) {
+    const sub = this.cells[i]?.sub;
+    if (!hasFixedFootprint(sub)) return null;
+    return this.landmarkBlocks(sub).find((b) => b.cells.includes(i)) ?? null;
+  }
+  // How many street, path, start or bridge cells run along side `face` of a w x h block.
+  roadsAlong(x, y, w, h, face) {
+    let n = 0;
+    const len = face % 2 ? h : w;
+    for (let k = 0; k < len; k++) {
+      const cx = face === 1 ? x + w : face === 3 ? x - 1 : x + k;
+      const cy = face === 0 ? y - 1 : face === 2 ? y + h : y + k;
+      if (!this.inBounds(cx, cy)) continue;
+      const c = this.cells[this.index(cx, cy)];
+      if (c.sub === 'street' || c.sub === 'path' || c.sub === 'start' || c.bridge) n++;
+    }
+    return n;
+  }
+
   // --- markers ----------------------------------------------------------------
 
   // The building a key marker belongs to: the connected indoor cells (any
@@ -979,6 +1036,7 @@ export class GridState {
           ...(c.lit ? { radius: c.radius } : {}),
           lamp: this.lampOn(i),
           marker: c.marker,
+          ...(hasFixedFootprint(c.sub) && c.facing !== null ? { facing: c.facing, faces: FACING_NAMES[c.facing], flip: !!c.flip } : {}),
           ...(c.sub === 'start' ? (() => {
             const f = this.startFacing(i);
             const front = this.startFront(i);

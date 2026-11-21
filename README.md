@@ -94,10 +94,23 @@ forward each turn. Model: `src/clocktower.js`.
 ### Landmarks
 
 Blocked tiles that arrive fully dressed (models in `src/landmarks.js`; lights are decorative glows, not game
-light sources, and they flicker at midnight). **Fixed-size** landmarks paint as a whole block with the cell you
-click as the north-west corner, like the clocktower, and turn to face the side with the most street, path or
-start space along it (default south). **Area** landmarks dress whatever shape you paint, cell by cell, with
-fences running round the outside and signs on the first cell.
+light sources, and they flicker at midnight).
+
+**Placing a premade building** (any fixed-size landmark, the clocktower included) works the same on a phone
+and a computer: with its brush selected, **tap the board** and the building appears as a **preview** with a
+pulsing outline and an arrow at its front. Nothing is painted yet. A bar under it offers **⟳ Rotate** (a
+quarter turn clockwise), **⇋ Flip** (mirror the layout left to right; signs stay readable), **✓ Place** and
+**✕**. Drag the preview with one finger to move it, or tap somewhere else to jump it there. A long building
+turned a quarter takes the swapped footprint (a 2×3 diner facing south covers 3×2 cells), and only when you
+press **Place**. The outline turns red, and Place is disabled, where it would cover another landmark. The
+first preview faces the most road around the spot you tapped. **Tap a placed building with its own brush**
+to pick it up as a preview: turn it, flip it or move it, then Place (it leaves plain ground behind; Undo puts
+it back). Keys: `R` rotate, `F` flip, `Enter` place, `Esc` cancel while a preview is open. **Rectangle** shape
+still tiles buildings straight onto the board, facing their roads. The direction and flip are saved with
+the board (`facing`, `faces`, `flip` on its cells); boards from before keep facing their road.
+
+**Area** landmarks (motel strip, trailer park, junkyard...) dress whatever shape you paint, cell by cell,
+with fences running round the outside and signs on the first cell.
 
 | Section | Landmark (size) |
 |---------|-----------------|
