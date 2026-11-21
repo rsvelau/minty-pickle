@@ -44,7 +44,7 @@ const SLOTS = [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]];
 
 // Players jog: ~2.7 m/s, so one 7 m cell takes about 2.6 s. Holding the
 // screen fast-forwards to FAST_STEP per cell. Monsters stalk a bit slower.
-const JOG_SPEED = 5.4;                        // metres per second (a brisk run)
+const JOG_SPEED = 3.2;                        // metres per second (a jog, a little brisk)
 const STEP_TIME = (TILE_M) => TILE_M / JOG_SPEED;
 const FAST_STEP = 0.32;                       // seconds per cell when fast-forwarding
 const MONSTER_STEP = 1.4;                     // seconds per cell for a stalking monster
@@ -199,7 +199,7 @@ export function createPlay({
     lens.position.set(m(0.28), m(0.82 - SHOULDER), m(0.29));
     const beam = new THREE.Mesh(beamGeo, beamMat);
     beam.position.copy(lens.position);
-    beam.rotation.x = 0.28; // aimed a little down at the ground ahead
+    beam.rotation.x = 0.62; // the arm is held up; aim the beam a little down at the ground ahead
     beam.renderOrder = 4;
     lens.raycast = beam.raycast = () => {};
     limbs.armR.add(lens, beam);
@@ -894,7 +894,22 @@ export function createPlay({
       u.limbs.legL.rotation.x = sw * 0.75;
       u.limbs.legR.rotation.x = -sw * 0.75;
       u.limbs.armL.rotation.x = -sw * 0.7;
-      u.limbs.armR.rotation.x = sw * 0.7;
+      // The flashlight arm doesn't swing with the stride: it's held up and
+      // steady, and deliberately points around, settling on a new spot every
+      // few seconds (narrower while running, wider when standing still).
+      const aim = (u.aim ??= { yaw: 0, pitch: 0, toYaw: 0, toPitch: 0, next: 0 });
+      if (t >= aim.next) {
+        const wide = a.anim ? 0.3 : 0.75;
+        const r = Math.sin(t * 12.9898 + k * 78.233) * 43758.5453;
+        const f = r - Math.floor(r);
+        aim.toYaw = (f * 2 - 1) * wide;
+        aim.toPitch = a.anim ? 0 : ((f * 7) % 1 - 0.5) * 0.25;
+        aim.next = t + 1.8 + 2.5 * ((f * 13) % 1);
+      }
+      const ease = 1 - Math.exp(-dt * 2.2);   // smooth, unhurried turns
+      aim.yaw += (aim.toYaw - aim.yaw) * ease;
+      aim.pitch += (aim.toPitch - aim.pitch) * ease;
+      u.limbs.armR.rotation.set(-0.34 + aim.pitch + 0.03 * sw, aim.yaw, 0);
       u.torso.position.y = Math.abs(Math.cos(u.phase)) * m(0.06) * u.run;
       u.torso.rotation.x = 0.12 * u.run; // lean into the run
       fig.rotation.y += (((a.face - fig.rotation.y + Math.PI * 3) % (Math.PI * 2)) - Math.PI) * Math.min(1, dt * 10);

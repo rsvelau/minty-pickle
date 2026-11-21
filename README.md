@@ -239,7 +239,7 @@ markers** in View hides them. Marker art lives in `src/markers.js`; the list of 
   movement slots, slots when starting in light, the light level that counts as lit, minutes per turn, turns
   until midnight, stopping on every marker, asking before investigating, and the number of each Obol. They're
   saved on this device (`DEFAULT_CONFIG` in `src/play.js`), and changing them restarts a game in progress.
-- **Running and the camera.** Runners move at a brisk ~5.4 m/s (hold the board to fast-forward), and the camera
+- **Running and the camera.** Runners jog at ~3.2 m/s, flashlights held steady and sweeping slowly, (hold the board to fast-forward), and the camera
   drifts ahead toward the next place the runner stops for a decision.
 - **Turns don't wait for running.** A move is worked out the moment the player gives their input. As soon
   as they've made their last choice (or none is needed), the turn passes and the camera pans to the next
