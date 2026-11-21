@@ -114,6 +114,9 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
         const g = new THREE.ExtrudeGeometry(sh, { depth: m(w), bevelEnabled: false }).translate(0, 0, -m(w) / 2).rotateY(Math.PI / 2);
         return add(g.translate(m(x), m(y), m(z)), hex);
       },
+      // The top half of a cylinder lying along x, flat side down at y (railcar roofs).
+      halfBarrel: (r, len, [x, y, z], hex) => add(new THREE.CylinderGeometry(m(r), m(r), m(len), 14, 1, false, Math.PI, Math.PI)
+        .rotateZ(-Math.PI / 2).translate(m(x), m(y), m(z)), hex),
       // A beam from a to b (metres).
       beam: (a, b, r, hex) => {
         const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b);
@@ -190,7 +193,7 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     const bw = w * 0.82, bd = d * 0.45;
     p.box(bw, 3.2, bd, [0, 0.5, 0], '#b8bcc0');                          // railcar body
     p.box(bw, 0.35, bd + 0.04, [0, 1.4, 0], '#a02020');                   // red stripe
-    p.cyl(bd / 2, bd / 2, bw, [-bw / 2, 3.7, 0], '#9aa0a4', [0, 0, -Math.PI / 2], 12); // barrel roof
+    p.halfBarrel(bd / 2 + 0.15, bw + 0.2, [0, 3.7, 0], '#9aa0a4');  // barrel roof sitting on top, slight overhang
     p.box(bw, 0.5, bd, [0, 0, 0], '#4a4c4e');                              // skirt
     p.box(2.2, 0.3, 1.6, [bw * 0.3, 0, bd / 2 + 0.8], '#6a6a66');          // steps
     g.add(p.mesh());

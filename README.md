@@ -441,6 +441,11 @@ Some cells level the ground instead of following it (each connected group is han
   floor and reach straight down to the ground outside; a wall across open sloping ground steps down the
   slope in upright sections. (They're placed at their final height in `refreshPropsAndWalls`, not bent by
   the terrain shader.)
+- **Roads** (streets, start spaces and paths) are smoothed. Each road cell gets its own level, pulled toward
+  the road cells beside it, so bumps and kinks even out while the road still climbs a hill. A road cell
+  touching a building or premade landmark is pulled firmly to that building's floor, so the street in front
+  of a shop runs level with it. Between road cells the surface is blended along the road only, never
+  across it, so a road is level from kerb to kerb instead of tilting with the hillside.
 - **Bridges** keep the height of the road on their banks; their piers stretch down to the lowered riverbed.
 
 These levels are per-cell overrides (`updateOverrides` in `src/terrain.js`) read by every shader through a

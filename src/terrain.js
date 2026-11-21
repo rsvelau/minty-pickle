@@ -50,8 +50,11 @@ let installed = false;
 // --- per-cell overrides -------------------------------------------------------
 // Some cells don't follow the smooth formula: lakes sit level, rivers are
 // flattened down to their lowest point, buildings are levelled, and bridges
-// keep the height of the road on their banks. Each board cell stores
+// keep the height of the road on their banks. Roads are smoothed (see
+// updateOverrides). Each board cell stores
 //   R = 1 if its ground level is overridden, G = that level (cells),
+//   R = 2 for a road cell: G = its smoothed level; between road cells the
+//         ground is blended along the road only, never across it,
 //   B = 1 if it is a bridge cell,           A = the bridge deck level (cells).
 // Shaders read this texture; picking and marker badges read the same array.
 export const terrainUniforms = {
@@ -117,6 +120,21 @@ vec4 terrainCell( vec2 g ) {
 	if ( c.x < 0 || c.y < 0 || float( c.x ) >= terrainBoard.x || float( c.y ) >= terrainBoard.y ) return vec4( 0.0 );
 	return texelFetch( terrainTex, c, 0 );
 }
+// Road surface at a point: the smoothed levels of the road cells around it,
+// blended by distance. Only road cells count, so a road is level from side
+// to side and slopes gently along its length.
+float terrainRoad( vec2 p, float fallback ) {
+	vec2 g = p + terrainBoard * 0.5 - 0.5;
+	vec2 i0 = floor( g ) + 0.5;
+	vec2 f = g - floor( g );
+	float s = 0.0, wsum = 0.0;
+	vec4 c; float w;
+	c = terrainCell( i0 );                  w = ( 1.0 - f.x ) * ( 1.0 - f.y ); if ( c.r > 1.5 ) { s += w * c.g; wsum += w; }
+	c = terrainCell( i0 + vec2( 1.0, 0.0 ) ); w = f.x * ( 1.0 - f.y );         if ( c.r > 1.5 ) { s += w * c.g; wsum += w; }
+	c = terrainCell( i0 + vec2( 0.0, 1.0 ) ); w = ( 1.0 - f.x ) * f.y;         if ( c.r > 1.5 ) { s += w * c.g; wsum += w; }
+	c = terrainCell( i0 + vec2( 1.0, 1.0 ) ); w = f.x * f.y;                   if ( c.r > 1.5 ) { s += w * c.g; wsum += w; }
+	return wsum > 1e-4 ? s / wsum : fallback;
+}
 // Override for a point: its own cell, else an overridden neighbour whose edge
 // it hugs (within ${f(EDGE_GRAB)} cells).
 vec4 terrainOverride( vec2 p ) {
@@ -148,7 +166,12 @@ float terrainHeight( vec3 w ) {
 	#else
 	vec4 o = terrainOverride( w.xz );
 	#endif
-	if ( o.r > 0.5 ) h = o.g;
+	#ifdef TERRAIN_INSTANCE
+	if ( o.r > 0.5 ) h = o.g; // props stand on their cell's level
+	#else
+	if ( o.r > 1.5 ) h = terrainRoad( w.xz, o.g );
+	else if ( o.r > 0.5 ) h = o.g;
+	#endif
 	#ifdef TERRAIN_BRIDGE
 	// Bridge parts: deck and trusses at bank level; piers stretch from the
 	// (possibly lowered) riverbed up to the deck.
@@ -201,9 +224,23 @@ export function terrainHeight(x, z, { bridge = false } = {}) {
   if (gx >= 0 && gy >= 0 && gx < ovCols && gy < ovRows) {
     const o = (gy * ovCols + gx) * 4;
     if (bridge && overrideData[o + 2] > 0.5) return overrideData[o + 3];
+    if (overrideData[o] > 1.5) return roadHeight(x, z, overrideData[o + 1]);
     if (overrideData[o] > 0.5) return overrideData[o + 1];
   }
   return fn(x, z);
+}
+// The same blend as terrainRoad() in the shader.
+function roadHeight(x, z, fallback) {
+  const gx = x + ovCols / 2 - 0.5, gy = z + ovRows / 2 - 0.5;
+  const x0 = Math.floor(gx), y0 = Math.floor(gy), fx = gx - x0, fy = gy - y0;
+  let s = 0, wsum = 0;
+  for (const [dx, dy, w] of [[0, 0, (1 - fx) * (1 - fy)], [1, 0, fx * (1 - fy)], [0, 1, (1 - fx) * fy], [1, 1, fx * fy]]) {
+    const cx = x0 + dx, cy = y0 + dy;
+    if (cx < 0 || cy < 0 || cx >= ovCols || cy >= ovRows) continue;
+    const o = (cy * ovCols + cx) * 4;
+    if (overrideData[o] > 1.5) { s += w * overrideData[o + 1]; wsum += w; }
+  }
+  return wsum > 1e-4 ? s / wsum : fallback;
 }
 
 // Ground level of a board cell's centre (cells).
@@ -253,6 +290,50 @@ export function updateOverrides(grid) {
       const hs = cells.map(centre);
       const level = k === 'indoor' || k.startsWith('tower') ? hs.reduce((a, b) => a + b, 0) / hs.length : Math.min(...hs);
       for (const j of cells) { data[j * 4] = 1; data[j * 4 + 1] = level; }
+    }
+    // Roads (street, start space, path): each cell gets a smoothed level, pulled
+    // toward its neighbours along the road (so bumps and kinks even out) and,
+    // in front of a levelled building or landmark, toward that building's
+    // floor, so the road there runs level with the building.
+    const isRoad = (i) => {
+      const c = grid.cells[i];
+      return c.area === 'outdoor' && (c.sub === 'street' || c.sub === 'start' || c.sub === 'path');
+    };
+    const roads = [];
+    for (let i = 0; i < n; i++) if (isRoad(i)) roads.push(i);
+    if (roads.length) {
+      const level = new Float32Array(n), target = new Float32Array(n), pull = new Float32Array(n);
+      const nbrs = new Map();
+      for (const i of roads) {
+        const x = i % cols, y = Math.floor(i / cols);
+        const near = [], beside = [];
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+          const m = ny * cols + nx;
+          if (isRoad(m)) near.push(m);
+          else if (data[m * 4] > 0.5) {
+            const k = kind(m);
+            if (k === 'indoor' || k?.startsWith('tower')) beside.push(data[m * 4 + 1]);
+          }
+        }
+        nbrs.set(i, near);
+        level[i] = centre(i);
+        // Next to a building: aim for its floor (firmly). Otherwise: the hill (gently).
+        target[i] = beside.length ? beside.reduce((a, b) => a + b, 0) / beside.length : level[i];
+        pull[i] = beside.length ? 4 : 0.5;
+      }
+      for (let it = 0; it < 60; it++) {
+        const next = new Float32Array(level);
+        for (const i of roads) {
+          const near = nbrs.get(i);
+          let sum = pull[i] * target[i];
+          for (const m of near) sum += level[m];
+          next[i] = sum / (pull[i] + near.length);
+        }
+        level.set(next);
+      }
+      for (const i of roads) { data[i * 4] = 2; data[i * 4 + 1] = level[i]; }
     }
     // Bridges: deck level from the land beyond each end of the span.
     const bseen = new Uint8Array(n);
