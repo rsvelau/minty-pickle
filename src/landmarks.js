@@ -553,7 +553,7 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     p.cone(r * 1.05, 2.2, [0, H + 6, 0], '#5a6a68', [0, 0, 0], 18);
     p.box(0.1, H + 6, 0.1, [r + 0.2, 0, 0], '#3a3a38');                      // ladder
     g.add(p.mesh());
-    const name = plane(signTex('PINE HOLLOW', { fg: '#1a2a2a', font: '900 74px Georgia, serif', w: 512, h: 128 }), 7, 1.6, { lit: false });
+    const name = plane(signTex('HAWTHORN BEND', { fg: '#1a2a2a', font: '900 58px Georgia, serif', w: 512, h: 128 }), 5.8, 1.45, { lit: false });
     name.position.set(0, m(H + 3.4), m(r + 0.05));
     const scrawl = plane(signTex('SHE SEES YOU', { fg: '#8a0a0a', font: 'italic 700 46px Georgia, serif', w: 512, h: 96 }), 4, 0.8, { lit: false });
     scrawl.position.set(m(1.2), m(H + 5.3), m(r - 0.1));
