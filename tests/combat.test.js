@@ -296,3 +296,25 @@ test('danger records the damage type threatening each player', () => {
   applyAction(state, board, { type: 'roll', seat: 0 });
   assert.deepEqual(mo.dangerTypes[0], ['P']);
 });
+
+test('at the Investigate? prompt you can still brace: slot dice and roll white dice into Defense', () => {
+  const g = street();
+  g.apply(g.index(17, 12), { marker: 'investigation' }, { silent: true });
+  const board = createBoard(g);
+  const { state } = newGame(board, { seed: 3, config: { players: 1 } });
+  const act = (a) => applyAction(state, board, { ...a, seat: 0 });
+  const pl = state.players[0];
+  pl.white = 1;
+  act({ type: 'roll' });
+  state.pool = [{ kind: 'black', v: 1 }, { kind: 'black', v: 4 }];
+  state.maxDefense = 2;
+  act({ type: 'slot', die: 0, to: 'move' });
+  act({ type: 'move' });
+  if (state.phase === 'choosing') act({ type: 'choose', cell: g.index(17, 12) });
+  assert.equal(state.phase, 'asking');
+  assert.ok(act({ type: 'slot', die: 1, to: 'defense' }).ok);
+  assert.ok(act({ type: 'rollWhite' }).ok);
+  assert.ok(act({ type: 'slot', die: 2, to: 'defense' }).ok);
+  assert.equal(pl.defense.length, 2, 'defense is live before the draw');
+  assert.equal(act({ type: 'slot', die: 1, to: 'move' }).ok, false, 'no new movement mid-move');
+});

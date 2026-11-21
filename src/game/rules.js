@@ -228,7 +228,8 @@ export function applyAction(state, board, action) {
     case 'rollWhite': {
       // Take a white die out of reserve and roll it: usable this turn only.
       const pl = curPlayer(state);
-      if (state.phase !== 'slotting' || pl.white <= 0) return fail('no white dice');
+      // While slotting, or at the "Investigate?" prompt (last chance to brace).
+      if (!['slotting', 'asking'].includes(state.phase) || pl.white <= 0) return fail('no white dice');
       if (state.deathsDoor) return fail("at Death's Door: one die only");
       pl.white--;
       const v = d6(state);

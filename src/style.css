@@ -932,3 +932,8 @@ body.playing .fps { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
 .pay-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 .pay-actions button { min-height: 42px; }
 .pay-target button.on { border-color: #c9a24a; }
+
+.ask-defense { display: grid; gap: 6px; padding: 8px; border-radius: 10px; background: rgba(58, 122, 224, 0.08); border: 1px solid rgba(106, 168, 255, 0.3); }
+.ask-defense[hidden] { display: none; }
+.ask-defense .tdie { width: 40px; height: 40px; }
+#askCard { background: #0d1117; }

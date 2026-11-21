@@ -44,7 +44,7 @@ const SLOTS = [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]];
 
 // Players jog: ~2.7 m/s, so one 7 m cell takes about 2.6 s. Holding the
 // screen fast-forwards to FAST_STEP per cell. Monsters stalk a bit slower.
-const JOG_SPEED = 2.7;                        // metres per second
+const JOG_SPEED = 5.4;                        // metres per second (a brisk run)
 const STEP_TIME = (TILE_M) => TILE_M / JOG_SPEED;
 const FAST_STEP = 0.32;                       // seconds per cell when fast-forwarding
 const MONSTER_STEP = 1.4;                     // seconds per cell for a stalking monster
@@ -932,10 +932,15 @@ export function createPlay({
     // Camera follows the current player gently (keeps the same viewing
     // angle): while they run, and to pan over when the turn changes.
     if (view.follow && (running(cur) || view.pan) && cur?.at) {
-      tmp.set(cur.at.x, 0, cur.at.z).sub(controls.target);
+      // While running, drift ahead toward where the runner will next stop for
+      // a decision (a fork, a marker, the end of the move): the rules have
+      // already taken them there.
+      const dest = running(cur) && inBoard(s.players[s.cur]?.pos ?? -1) ? centreOf(s.players[s.cur].pos) : cur.at;
+      const lead = running(cur) ? 0.65 : 0;
+      tmp.set(cur.at.x + (dest.x - cur.at.x) * lead, 0, cur.at.z + (dest.z - cur.at.z) * lead).sub(controls.target);
       tmp.y = 0;
       if (!running(cur) && tmp.length() < 0.05) view.pan = false;
-      tmp.multiplyScalar(Math.min(1, dt * 3));
+      tmp.multiplyScalar(Math.min(1, dt * (running(cur) ? 1.6 : 3)));
       controls.target.add(tmp);
       camera.position.add(tmp);
     } else if (!running(cur)) view.pan = false;

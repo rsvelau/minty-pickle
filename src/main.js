@@ -2567,6 +2567,23 @@ function renderAsk() {
   const { x, y } = grid.coords(s.ask.i);
   $('#askSub').innerHTML = `<b style="color:${cur.colour}">${cur.name}</b> at ${cellLabel(x, y)} · ` +
     `${s.bag.length ? `draw an Obol (${s.bag.length} in the bag)` : 'the Obol bag is empty'}`;
+  // Last chance to brace before drawing: unused rolled dice and white dice
+  // in reserve can go into Defense (an Attack Obol strikes at once).
+  const free = s.pool.map((d, n) => ({ d, n })).filter(({ d, n }) => !d.spent && !s.slots.includes(n) && !s.defSlots.includes(n));
+  const show2 = free.length || s.white > 0 || s.defSlots.length;
+  $('#askDefense').hidden = !show2;
+  if (!show2) return;
+  $('#askPool').innerHTML = free.map(({ d }) => dieHTML(d)).join('') +
+    Array.from({ length: s.white }, () => '<button class="tdie white reserve" title="Roll a white die from reserve">roll</button>').join('');
+  [...$('#askPool').querySelectorAll('.tdie:not(.reserve)')].forEach((b, k) => { b.onclick = () => play.toggleSlot(free[k].n, 'defense'); });
+  [...$('#askPool').querySelectorAll('.reserve')].forEach((b) => { b.onclick = () => play.rollWhite(); });
+  const defs = s.defSlots.map((n) => dieHTML(s.pool[n], 'in-def'));
+  for (let k = s.defSlots.length; k < s.maxDefense; k++) defs.push('<span class="tdie slot def"></span>');
+  $('#askDef').innerHTML = defs.join('');
+  [...$('#askDef').querySelectorAll('.in-def')].forEach((b, k) => { b.onclick = () => play.toggleSlot(s.defSlots[k], 'defense'); });
+  $('#askDefTotal').textContent = s.defSlots.reduce((a, n) => a + (s.pool[n]?.v ?? 0), 0);
+  $('#askDefHint').textContent = s.defSlots.length >= s.maxDefense ? 'Defense slots full' :
+    'Last chance: brace before you investigate (tap a die to slot it into Defense)';
 }
 $('#askYes').addEventListener('click', () => play.answerInvestigate(true));
 $('#askNo').addEventListener('click', () => play.answerInvestigate(false));

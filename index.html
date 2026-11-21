@@ -197,6 +197,12 @@
         <span class="ask-icon" aria-hidden="true"></span>
         <div><b id="askTitle">Investigate?</b><p class="ask-sub" id="askSub"></p></div>
       </div>
+      <!-- Last chance to brace: slot rolled (or white) dice into Defense. -->
+      <div class="ask-defense" id="askDefense">
+        <div class="tray-row"><span class="tray-label">Dice</span><div class="tray-dice" id="askPool"></div></div>
+        <div class="tray-row"><span class="tray-label">Defense</span><div class="tray-dice" id="askDef"></div><b class="tray-total def" id="askDefTotal">0</b></div>
+        <p class="ask-sub" id="askDefHint"></p>
+      </div>
       <div class="ask-actions">
         <button id="askNo" type="button">No</button>
         <button id="askYes" type="button" class="on">Yes</button>
