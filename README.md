@@ -516,7 +516,8 @@ The **View** buttons isolate one layer at a time (Area, Light, Move) when the co
 ## Saving
 
 The board autosaves to your browser's local storage. **Export JSON** / **Import JSON** move layouts between
-machines (the file carries the board size); **Save PNG** grabs the current view. The JSON is deliberately plain so
+machines (the file carries the board size); **Save PNG** grabs the current view. Inside the published claude.ai page, downloads go through claude.ai's save
+prompt (you confirm each file); everywhere else they download directly. **Copy JSON** always works too. The JSON is deliberately plain so
 future tools can read it:
 
 ```json

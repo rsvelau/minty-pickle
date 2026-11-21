@@ -3666,14 +3666,34 @@ function scheduleSave() {
   }, 300);
 }
 
-function download(blob, name) {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+// Saving a file. Inside a claude.ai artifact the page can't download by itself,
+// so it asks the viewer through the "downloads" capability (they confirm each
+// save). Anywhere else (dev server, a plain web host) it uses a normal link.
+const claudeDownloads = window.claude?.use ? window.claude.use('downloads').catch(() => null) : Promise.resolve(null);
+async function download(blob, name) {
+  const saver = await claudeDownloads;
+  if (!saver) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    return;
+  }
+  try {
+    await saver.save({ filename: name, data: blob });
+    toast(`Saved ${name}.`);
+  } catch (err) {
+    const code = err?.code;
+    if (code === 'declined') return; // they said no: nothing to do
+    if (code === 'rate_limited') dialogError('A save is already waiting for you to confirm. Answer that one, then try again.');
+    else if (code === 'too_large') dialogError('That file is too large to save here.');
+    else dialogError(name.endsWith('.png')
+      ? 'Saving files is not available in this view. Long-press or right-click the image to save it instead.'
+      : 'Saving files is not available in this view. Use Copy JSON and keep the text somewhere safe instead.');
+  }
 }
 const stamp = () => new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
 
