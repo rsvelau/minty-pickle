@@ -2,9 +2,9 @@
 // (loosely after Snohomish's Avenue D bridge). Warren trusses on both sides
 // with inclined end posts and verticals, overhead struts with X lateral
 // bracing, a concrete edge girder at deck level, and round concrete piers with
-// cap beams standing in the water. Decades past its last coat of paint: the
-// steel is rusted through (with a few scabs of old paint), and the concrete is
-// stained, rust weeping down from the deck and damp grime near the water.
+// cap beams standing in the water. Old and rain-soaked rather than freshly
+// painted: the steel is a dark, wet rust brown and the concrete is darkened by
+// the weather, with faint rust staining under the deck.
 // The weathering is drawn in the shader from world position (weather()), so it
 // stays the same scale on every stretched beam and pier.
 //
@@ -38,25 +38,21 @@ float wNoise( vec3 x ) {
 }
 float wFbm( vec3 p ) { float a = 0.5, s = 0.0; for ( int i = 0; i < 4; i++ ) { s += a * wNoise( p ); p *= 2.03; a *= 0.5; } return s; }
 vec3 rustedSteel( vec3 p ) {
-	vec3 c = mix( vec3( 0.20, 0.09, 0.05 ), vec3( 0.42, 0.20, 0.09 ), smoothstep( 0.25, 0.75, wFbm( p * 1.4 ) ) );   // dark to orange rust
-	c = mix( c, vec3( 0.55, 0.30, 0.13 ), smoothstep( 0.66, 0.78, wNoise( p * 7.0 ) ) * 0.8 );                        // fresh flaking rust
-	c = mix( c, vec3( 0.25, 0.29, 0.26 ), smoothstep( 0.60, 0.66, wFbm( p * 0.7 + 5.0 ) ) * 0.85 );                  // scabs of old grey-green paint
-	float streak = wNoise( vec3( p.x * 3.0, p.y * 0.35, p.z * 3.0 ) );                                                // grime running down
-	c *= mix( 1.0, 0.6, smoothstep( 0.55, 0.85, streak ) );
+	// Dark, rain-soaked rust: deep brown with a gentle, low-contrast mottle.
+	vec3 c = mix( vec3( 0.16, 0.075, 0.045 ), vec3( 0.25, 0.115, 0.06 ), smoothstep( 0.3, 0.7, wFbm( p * 1.2 ) ) );
+	c *= mix( 1.0, 0.85, smoothstep( 0.6, 0.85, wNoise( vec3( p.x * 3.0, p.y * 0.35, p.z * 3.0 ) ) ) );   // faint wet runs
 	return c;
 }
 vec3 weatheredConcrete( vec3 p, float h ) {
-	vec3 c = mix( vec3( 0.30, 0.28, 0.25 ), vec3( 0.45, 0.42, 0.36 ), smoothstep( 0.3, 0.7, wFbm( p * 1.1 ) ) );     // dirty, uneven concrete
-	// Rust weeping down from the deck steel: thin vertical runs, strongest up high.
-	float runs = smoothstep( 0.45, 0.68, wNoise( vec3( p.x * 6.0, p.y * 0.18, p.z * 6.0 ) ) );
-	runs *= 0.5 + 0.5 * wNoise( vec3( p.x * 14.0, p.y * 0.5, p.z * 14.0 ) );
-	float high = smoothstep( uWeatherBed, uWeatherDeck, h );
-	c = mix( c, vec3( 0.40, 0.19, 0.07 ), runs * ( 0.45 + 0.5 * high ) );
-	// Damp green-black grime and a tide line near the water.
-	float low = 1.0 - smoothstep( uWeatherBed, mix( uWeatherBed, uWeatherDeck, 0.45 ), h + ( wNoise( p * 2.0 ) - 0.5 ) * 0.06 );
-	c = mix( c, vec3( 0.14, 0.17, 0.12 ), low * 0.75 );
-	// Spalled, darker patches.
-	c *= mix( 1.0, 0.8, smoothstep( 0.72, 0.78, wNoise( p * 6.0 + 11.0 ) ) );
+	// Old but sound concrete, darkened by the rain.
+	vec3 c = mix( vec3( 0.33, 0.32, 0.30 ), vec3( 0.40, 0.39, 0.36 ), smoothstep( 0.3, 0.7, wFbm( p * 1.1 ) ) );
+	// Faint rust staining under the steel, only near the deck.
+	float runs = smoothstep( 0.55, 0.75, wNoise( vec3( p.x * 6.0, p.y * 0.18, p.z * 6.0 ) ) );
+	float high = smoothstep( mix( uWeatherBed, uWeatherDeck, 0.5 ), uWeatherDeck, h );
+	c = mix( c, vec3( 0.30, 0.18, 0.11 ), runs * high * 0.35 );
+	// Damper and darker toward the water.
+	float low = 1.0 - smoothstep( uWeatherBed, mix( uWeatherBed, uWeatherDeck, 0.5 ), h );
+	c *= mix( 1.0, 0.72, low );
 	return c;
 }
 `;
@@ -88,8 +84,9 @@ function weather(material, kind) {
 export function createBridges(group) {
   const unitBox = new THREE.BoxGeometry(1, 1, 1);           // centred
   const unitCyl = new THREE.CylinderGeometry(1, 1, 1, 12);   // centred, axis y
-  const steel = weather(new THREE.MeshLambertMaterial({ color: '#ffffff', emissive: '#0d0604' }), 'steel');
-  const concrete = weather(new THREE.MeshLambertMaterial({ color: '#ffffff', emissive: '#050505' }), 'concrete');
+  // A soft highlight reads as wet in the rain.
+  const steel = weather(new THREE.MeshPhongMaterial({ color: '#ffffff', emissive: '#0a0403', specular: '#3a3330', shininess: 38 }), 'steel');
+  const concrete = weather(new THREE.MeshPhongMaterial({ color: '#ffffff', emissive: '#050505', specular: '#222222', shininess: 18 }), 'concrete');
   // Worn, half-gone yellow centre-line dashes.
   const paint = new THREE.MeshLambertMaterial({ color: '#7d6c3e', emissive: '#16120a' });
   const meshes = {};

@@ -135,6 +135,21 @@ float terrainRoad( vec2 p, float fallback ) {
 	c = terrainCell( i0 + vec2( 1.0, 1.0 ) ); w = f.x * f.y;                   if ( c.r > 1.5 ) { s += w * c.g; wsum += w; }
 	return wsum > 1e-4 ? s / wsum : fallback;
 }
+// The bridge cell a bridge part belongs to: its own cell, else the nearest
+// bridge cell within half a cell. Deck corners, girders and trusses sit on (or
+// overhang) cell borders; without this they could read the river or road next
+// door and tear away from the deck.
+vec4 terrainBridgeNear( vec2 p ) {
+	vec2 g = p + terrainBoard * 0.5;
+	vec4 o = terrainCell( g );
+	if ( o.b > 0.5 ) return o;
+	vec2 fr = fract( g );
+	vec2 d = vec2( fr.x < 0.5 ? -1.0 : 1.0, fr.y < 0.5 ? -1.0 : 1.0 );
+	vec4 n = terrainCell( g + vec2( d.x, 0.0 ) ); if ( n.b > 0.5 ) return n;
+	n = terrainCell( g + vec2( 0.0, d.y ) ); if ( n.b > 0.5 ) return n;
+	n = terrainCell( g + d ); if ( n.b > 0.5 ) return n;
+	return vec4( 0.0 );
+}
 // Override for a point: its own cell, else an overridden neighbour whose edge
 // it hugs (within ${f(EDGE_GRAB)} cells).
 vec4 terrainOverride( vec2 p ) {
@@ -175,7 +190,8 @@ float terrainHeight( vec3 w ) {
 	#ifdef TERRAIN_BRIDGE
 	// Bridge parts: deck and trusses at bank level; piers stretch from the
 	// (possibly lowered) riverbed up to the deck.
-	if ( o.b > 0.5 ) h = mix( h, o.a, smoothstep( ${f(BRIDGE_SPAN.bed)}, ${f(BRIDGE_SPAN.deck)} - 0.25, w.y ) );
+	vec4 bo = terrainBridgeNear( w.xz );
+	if ( bo.b > 0.5 ) h = mix( h, bo.a, smoothstep( ${f(BRIDGE_SPAN.bed)}, ${f(BRIDGE_SPAN.deck)} - 0.25, w.y ) );
 	#endif
 #endif
 	return h;
@@ -291,51 +307,8 @@ export function updateOverrides(grid) {
       const level = k === 'indoor' || k.startsWith('tower') ? hs.reduce((a, b) => a + b, 0) / hs.length : Math.min(...hs);
       for (const j of cells) { data[j * 4] = 1; data[j * 4 + 1] = level; }
     }
-    // Roads (street, start space, path): each cell gets a smoothed level, pulled
-    // toward its neighbours along the road (so bumps and kinks even out) and,
-    // in front of a levelled building or landmark, toward that building's
-    // floor, so the road there runs level with the building.
-    const isRoad = (i) => {
-      const c = grid.cells[i];
-      return c.area === 'outdoor' && (c.sub === 'street' || c.sub === 'start' || c.sub === 'path');
-    };
-    const roads = [];
-    for (let i = 0; i < n; i++) if (isRoad(i)) roads.push(i);
-    if (roads.length) {
-      const level = new Float32Array(n), target = new Float32Array(n), pull = new Float32Array(n);
-      const nbrs = new Map();
-      for (const i of roads) {
-        const x = i % cols, y = Math.floor(i / cols);
-        const near = [], beside = [];
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-          const nx = x + dx, ny = y + dy;
-          if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
-          const m = ny * cols + nx;
-          if (isRoad(m)) near.push(m);
-          else if (data[m * 4] > 0.5) {
-            const k = kind(m);
-            if (k === 'indoor' || k?.startsWith('tower')) beside.push(data[m * 4 + 1]);
-          }
-        }
-        nbrs.set(i, near);
-        level[i] = centre(i);
-        // Next to a building: aim for its floor (firmly). Otherwise: the hill (gently).
-        target[i] = beside.length ? beside.reduce((a, b) => a + b, 0) / beside.length : level[i];
-        pull[i] = beside.length ? 4 : 0.5;
-      }
-      for (let it = 0; it < 60; it++) {
-        const next = new Float32Array(level);
-        for (const i of roads) {
-          const near = nbrs.get(i);
-          let sum = pull[i] * target[i];
-          for (const m of near) sum += level[m];
-          next[i] = sum / (pull[i] + near.length);
-        }
-        level.set(next);
-      }
-      for (const i of roads) { data[i * 4] = 2; data[i * 4 + 1] = level[i]; }
-    }
-    // Bridges: deck level from the land beyond each end of the span.
+    // Bridges: deck level from the land beyond each end of the span (worked out
+    // before the roads, which then meet the deck exactly).
     const bseen = new Uint8Array(n);
     for (let i = 0; i < n; i++) {
       if (!grid.cells[i].bridge || bseen[i]) continue;
@@ -366,6 +339,55 @@ export function updateOverrides(grid) {
       const level = ends.length ? ends.reduce((a, b) => a + b, 0) / ends.length
         : cells.map(centre).reduce((a, b) => a + b, 0) / cells.length;
       for (const j of cells) { data[j * 4 + 2] = 1; data[j * 4 + 3] = level; }
+    }
+    // Roads (street, start space, path): each cell gets a smoothed level, pulled
+    // toward its neighbours along the road (so bumps and kinks even out) and,
+    // in front of a levelled building or landmark, toward that building's
+    // floor, so the road there runs level with the building. A road cell at a
+    // bridge end is held at the deck level, so road and bridge meet exactly.
+    const isRoad = (i) => {
+      const c = grid.cells[i];
+      return c.area === 'outdoor' && (c.sub === 'street' || c.sub === 'start' || c.sub === 'path');
+    };
+    const roads = [];
+    for (let i = 0; i < n; i++) if (isRoad(i)) roads.push(i);
+    if (roads.length) {
+      const level = new Float32Array(n), target = new Float32Array(n), pull = new Float32Array(n);
+      const nbrs = new Map();
+      for (const i of roads) {
+        const x = i % cols, y = Math.floor(i / cols);
+        const near = [], beside = [];
+        let deck = null;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+          const m = ny * cols + nx;
+          if (isRoad(m)) near.push(m);
+          else if (data[m * 4 + 2] > 0.5) deck = data[m * 4 + 3];
+          else if (data[m * 4] > 0.5) {
+            const k = kind(m);
+            if (k === 'indoor' || k?.startsWith('tower')) beside.push(data[m * 4 + 1]);
+          }
+        }
+        nbrs.set(i, near);
+        level[i] = centre(i);
+        // Next to a building: aim for its floor (firmly). Otherwise: the hill (gently).
+        target[i] = beside.length ? beside.reduce((a, b) => a + b, 0) / beside.length : level[i];
+        pull[i] = beside.length ? 4 : 0.5;
+        if (deck !== null) { level[i] = target[i] = deck; pull[i] = Infinity; } // fixed at the deck
+      }
+      for (let it = 0; it < 60; it++) {
+        const next = new Float32Array(level);
+        for (const i of roads) {
+          if (pull[i] === Infinity) continue;
+          const near = nbrs.get(i);
+          let sum = pull[i] * target[i];
+          for (const m of near) sum += level[m];
+          next[i] = sum / (pull[i] + near.length);
+        }
+        level.set(next);
+      }
+      for (const i of roads) { data[i * 4] = 2; data[i * 4 + 1] = level[i]; }
     }
   }
   overrideData = data;
