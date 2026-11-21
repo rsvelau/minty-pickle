@@ -2626,7 +2626,8 @@ function renderRevealSheet() {
   if (!show) return;
   const cur = s.players[s.cur];
   const left = deck.filter((c) => !c).length;
-  $('#revealTitle').textContent = 'Evidence found';
+  const at = s.mystery?.pendingReveal?.cell;
+  $('#revealTitle').textContent = at !== undefined && grid.cells[at]?.marker === 'research' ? 'Research: reveal a piece of evidence' : 'Evidence found';
   $('#revealSub').innerHTML = `<b style="color:${cur.colour}">${cur.name}</b>: choose 1 of ${left} face-down cards to turn over`;
   const host = $('#revealCards');
   const key = deck.map((c) => (c ? 1 : 0)).join('');

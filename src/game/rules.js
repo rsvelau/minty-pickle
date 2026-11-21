@@ -396,7 +396,10 @@ function enter(state, board, i, events) {
     text = 'Black Dice';
     msg = `${who(state)} attuned a Black Die at ${label(board, i)}: every player now rolls ${state.blackCount} black dice.`;
   } else if (m === 'research') {
-    msg = `${who(state)} used Research at ${label(board, i)}: a piece of evidence uncovered for free.`;
+    // Research: choose a face-down Evidence card to turn over (no Obol needed).
+    const open = state.mystery && evidenceObol(state, board, i, mysteryCtx(state));
+    msg = open ? `${who(state)} used Research at ${label(board, i)}: choose a piece of evidence to reveal.`
+      : `${who(state)} used Research at ${label(board, i)}, but there is no evidence left to find.`;
   } else if (m === 'objective') {
     msg = `Objective marker at ${label(board, i)} (active once the monster reveals itself).`;
   } else if (m === 'key') {

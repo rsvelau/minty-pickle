@@ -544,6 +544,8 @@ pools: all, flesh and blood, spirits and shadows, old-world folklore). Its 13 ca
 `src/game/cards/monsters.js` (transcribed from the physical cards), the evidence names and board looks in
 `src/game/cards/evidence.js`, and the rules in `src/game/mystery.js`.
 
+- **Research markers** work like an Evidence Obol: stepping on one lets you choose a face-down Evidence card to
+  reveal (once per marker).
 - **Evidence Obol:** the investigator chooses one of the remaining face-down Evidence cards (3 Observations +
   1 Lair). It flips for everyone, and the cell they're standing on changes to show it (frost, claw marks,
   blood, howl rings...). A **Lair** transforms its cell for good: an opened grave, a cave mouth, a scorched

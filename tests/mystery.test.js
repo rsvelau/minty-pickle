@@ -189,3 +189,22 @@ test('monsters only walk on walkable cells', () => {
   for (const e of r.events.filter((ev) => ev.type === 'monsterStep')) assert.ok(g.cells[e.to].walkable, `stepped onto ${e.to}`);
   assert.ok(g.cells[mo.pos].walkable);
 });
+
+test('a Research marker lets the player choose a piece of evidence to reveal', () => {
+  const g = street();
+  g.apply(g.index(17, 12), { marker: 'research' }, { silent: true });
+  g.apply(g.index(17, 12), { marker: 'research' }, { silent: true });
+  const board = createBoard(g);
+  const { state } = newGame(board, { seed: 3, config: { players: 1 } });
+  const act = (a) => applyAction(state, board, { ...a, seat: 0 });
+  act({ type: 'roll' });
+  state.pool = [{ kind: 'black', v: 1 }];
+  act({ type: 'slot', die: 0 });
+  act({ type: 'move' });
+  if (state.phase === 'choosing') act({ type: 'choose', cell: g.index(17, 12) });
+  assert.equal(state.phase, 'revealing');
+  const r = act({ type: 'reveal', card: 1 });
+  assert.ok(r.ok);
+  assert.equal(state.mystery.found.length, 1);
+  assert.equal(state.mystery.found[0].cell, g.index(17, 12));
+});
