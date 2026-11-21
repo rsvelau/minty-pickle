@@ -18,6 +18,12 @@ const CELL = METERS_PER_CELL;
 const FACES = [[0, -1], [1, 0], [0, 1], [-1, 0]]; // N E S W
 const ROAD = (c) => c && (c.sub === 'street' || c.sub === 'path' || c.sub === 'start' || c.bridge);
 
+// Flat decals (windows, posters, signs) are pulled slightly toward the camera
+// when drawn, so a decal never flickers against the wall it is mounted on.
+// Models also keep every decal at least ~8 cm off its wall and every trim
+// strictly larger than what it wraps: no two surfaces share a plane.
+const DECAL = { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 };
+
 export function createLandmarks(parent, { terrainify, flickerize }) {
   const root = new THREE.Group();
   root.name = 'landmarks';
@@ -31,7 +37,7 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
   const glow = (hex, flick = true) => {
     const k = `${hex}${flick}`;
     if (!glowMats[k]) {
-      const mat = new THREE.MeshBasicMaterial({ color: hex, fog: false });
+      const mat = new THREE.MeshBasicMaterial({ color: hex, fog: false, ...DECAL });
       terrainify(mat, { instance: true });
       if (flick) flickerize(mat);
       glowMats[k] = mat;
@@ -75,8 +81,8 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     return t;
   }
   function plane(tex, w, h, { lit = true, flick = false } = {}) {
-    const mat = lit ? new THREE.MeshBasicMaterial({ map: tex, transparent: true, fog: false, side: THREE.DoubleSide })
-      : new THREE.MeshLambertMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
+    const mat = lit ? new THREE.MeshBasicMaterial({ map: tex, transparent: true, fog: false, side: THREE.DoubleSide, ...DECAL })
+      : new THREE.MeshLambertMaterial({ map: tex, transparent: true, side: THREE.DoubleSide, ...DECAL });
     terrainify(mat, { instance: true });
     if (flick) flickerize(mat);
     const o = new THREE.Mesh(new THREE.PlaneGeometry(m(w), m(h)), mat);
@@ -152,7 +158,7 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     const pp = parts();
     pp.box(4.4, 0.8, 1.8, [0, 0.35, 0], hex);
     pp.box(2.4, 0.65, 1.7, [-0.2, 1.15, 0], hex);
-    pp.box(2.3, 0.5, 1.72, [-0.2, 1.2, 0], '#1c2328');
+    pp.box(2.3, 0.5, 1.82, [-0.2, 1.2, 0], '#1c2328');
     for (const [wx, wz] of [[1.4, 0.9], [1.4, -0.9], [-1.4, 0.9], [-1.4, -0.9]]) pp.cyl(0.36, 0.36, 0.26, [wx, 0.36, wz - (wz > 0 ? 0.13 : -0.13) * 0], '#141414', [Math.PI / 2, 0, 0], 10);
     const mesh = pp.mesh();
     mesh.position.set(m(x), m(y), m(z));
@@ -162,7 +168,7 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
 
   // --- the fixed-footprint landmarks: build(w, d) in metres, front at +z ---------------
   const B = {};
-  const lot = (p, w, d, hex = '#2a2c2e') => p.box(w, 0.06, d, [0, 0, 0], hex);
+  const lot = (p, w, d, hex = '#2a2c2e') => p.box(w, 0.15, d, [0, 0, 0], hex);
 
   B.videoStore = (w, d) => {
     const p = parts(), g = new THREE.Group(), ticks = [];
@@ -173,10 +179,10 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     p.box(bw * 0.9, 0.08, 0.1, [0, 2.6, bz + bd / 2 + 0.05], '#20181f');
     p.box(0.8, 0.5, 0.4, [bw * 0.38, 0.9, bz + bd / 2 + 0.2], '#30302e');    // returns slot
     g.add(p.mesh());
-    g.add(lightPanel(bw * 0.8, 2.2, [0, 1.4, bz + bd / 2 + 0.06], '#1c2440'));   // dark glass
+    g.add(lightPanel(bw * 0.8, 2.2, [0, 1.4, bz + bd / 2 + 0.08], '#1c2440'));   // dark glass
     const posters = ['#d04040', '#40a0d0', '#e0c040', '#60c060'];
-    posters.forEach((c, k) => g.add(lightPanel(0.9, 1.3, [-bw * 0.32 + k * 1.3, 1.5, bz + bd / 2 + 0.08], c, { flick: false })));
-    const stat = lightPanel(1.2, 0.9, [bw * 0.25, 1.4, bz + bd / 2 + 0.09], '#c8c8d0');
+    posters.forEach((c, k) => g.add(lightPanel(0.9, 1.3, [-bw * 0.32 + k * 1.3, 1.5, bz + bd / 2 + 0.16], c, { flick: false })));
+    const stat = lightPanel(1.2, 0.9, [bw * 0.25, 1.4, bz + bd / 2 + 0.16], '#c8c8d0');
     g.add(stat);
     const sign = plane(signTex('VIDEO', { fg: '#ff4fd0', glowCol: '#ff4fd0', font: '800 92px system-ui' }), bw * 0.7, 1.6, { flick: true });
     sign.position.set(0, m(5.2), m(bz + bd / 2 + 0.25));
@@ -192,16 +198,16 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     lot(p, w, d);
     const bw = w * 0.82, bd = d * 0.45;
     p.box(bw, 3.2, bd, [0, 0.5, 0], '#b8bcc0');                          // railcar body
-    p.box(bw, 0.35, bd + 0.04, [0, 1.4, 0], '#a02020');                   // red stripe
+    p.box(bw + 0.12, 0.35, bd + 0.16, [0, 1.4, 0], '#a02020');            // red stripe, wrapping the body
     p.halfBarrel(bd / 2 + 0.15, bw + 0.2, [0, 3.7, 0], '#9aa0a4');  // barrel roof sitting on top, slight overhang
-    p.box(bw, 0.5, bd, [0, 0, 0], '#4a4c4e');                              // skirt
+    p.box(bw - 0.4, 0.5, bd - 0.4, [0, 0, 0], '#4a4c4e');                  // skirt, tucked under
     p.box(2.2, 0.3, 1.6, [bw * 0.3, 0, bd / 2 + 0.8], '#6a6a66');          // steps
     g.add(p.mesh());
-    for (let k = 0; k < 6; k++) g.add(lightPanel(1.4, 1.1, [-bw / 2 + 1.6 + k * (bw - 3) / 5, 2.4, bd / 2 + 0.03], k === 4 ? '#ffd890' : '#1a2228', { flick: k === 4 }));
+    for (let k = 0; k < 6; k++) g.add(lightPanel(1.4, 1.1, [-bw / 2 + 1.6 + k * (bw - 3) / 5, 2.4, bd / 2 + 0.09], k === 4 ? '#ffd890' : '#1a2228', { flick: k === 4 }));
     const sign = plane(signTex('DINER', { fg: '#40e0ff', glowCol: '#40e0ff', font: '800 96px Georgia, serif' }), 5, 1.4, { flick: true });
     sign.position.set(-bw * 0.2, m(4.9), m(0.2));
     const closed = plane(signTex('CLOSED', { fg: '#ff4040', bg: '#200a0a', font: '800 60px system-ui', w: 256, h: 96 }), 1.2, 0.45);
-    closed.position.set(bw * 0.3, m(2.3), m(bd / 2 + 0.06));
+    closed.position.set(bw * 0.3, m(2.3), m(bd / 2 + 0.16));
     g.add(sign, closed);
     ticks.push((t) => { sign.material.opacity = Math.sin(t * 2.3) > 0.97 ? 0.15 : 1; });
     return { g, ticks };
@@ -213,8 +219,8 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     const cw = w * 0.55, cd = d * 0.42, cz = d * 0.12;
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.box(0.35, 4.6, 0.35, [sx * cw * 0.4, 0, cz + sz * cd * 0.35], '#d0d0cc');
     p.box(cw, 0.7, cd, [0, 4.6, cz], '#d8d8d2');                          // canopy
-    p.box(cw + 0.1, 0.35, cd + 0.1, [0, 4.9, cz], '#c03028');              // canopy stripe
-    for (const sx of [-1, 1]) { p.box(0.9, 1.7, 0.6, [sx * cw * 0.18, 0, cz], '#c8c0a8'); p.box(0.7, 0.4, 0.62, [sx * cw * 0.18, 1.2, cz], '#20201e'); }
+    p.box(cw + 0.2, 0.35, cd + 0.2, [0, 4.9, cz], '#c03028');              // canopy stripe
+    for (const sx of [-1, 1]) { p.box(0.9, 1.7, 0.6, [sx * cw * 0.18, 0, cz], '#c8c0a8'); p.box(0.7, 0.4, 0.72, [sx * cw * 0.18, 1.2, cz], '#20201e'); }
     p.box(w * 0.3, 3.2, d * 0.22, [-w * 0.18, 0, -d * 0.33], '#8a8070');  // kiosk
     p.box(1.2, 1.6, 0.9, [w * 0.1, 0, -d * 0.36], '#d8dce0');             // ice machine
     p.box(0.15, 2, 0.15, [w * 0.3, 0, -d * 0.2], '#4a4c4e');               // payphone post
@@ -223,11 +229,11 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     p.box(0.2, 6, 0.2, [w * 0.4, 0, d * 0.42], '#4a4c4e');                 // price sign pole
     p.box(2.2, 1.6, 0.25, [w * 0.4, 6, d * 0.42], '#e8e4d8');
     g.add(p.mesh());
-    const under = lightPanel(cw * 0.9, cd * 0.9, [0, 4.58, cz], '#e8f0ff');
+    const under = lightPanel(cw * 0.9, cd * 0.9, [0, 4.52, cz], '#e8f0ff');
     under.rotation.x = Math.PI / 2;
-    const kiosk = lightPanel(w * 0.2, 1.6, [-w * 0.18, 1.6, -d * 0.33 + d * 0.11 + 0.04], '#f0e8c0');
+    const kiosk = lightPanel(w * 0.2, 1.6, [-w * 0.18, 1.6, -d * 0.33 + d * 0.11 + 0.09], '#f0e8c0');
     const price = plane(signTex('1.19⁹', { fg: '#101010', bg: '#e8e4d8', font: '800 80px system-ui', w: 256, h: 128 }), 2, 1.2, { lit: false });
-    price.position.set(m(w * 0.4), m(6.8), m(d * 0.42 + 0.14));
+    price.position.set(m(w * 0.4), m(6.8), m(d * 0.42 + 0.22));
     g.add(under, kiosk, price);
     ticks.push((t) => { under.material.color.setScalar(Math.sin(t * 40) > 0.85 && Math.sin(t * 1.7) > 0.6 ? 0.4 : 1); });
     return { g, ticks };
@@ -241,18 +247,18 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     p.box(bw + 0.2, 0.5, bd + 0.2, [0, 3.6, -d * 0.05], '#4a4a44');
     for (let k = 0; k < 5; k++) p.box(0.9, 1.0, 0.8, [-bw / 2 + 1.2 + k * (bw - 2.4) / 4, 0, -d * 0.05 + bd / 2 - 1.2], '#e0e0dc');
     g.add(p.mesh());
-    const front = lightPanel(bw * 0.85, 2.2, [0, 1.6, -d * 0.05 + bd / 2 + 0.03], '#d8f0e0');
+    const front = lightPanel(bw * 0.85, 2.2, [0, 1.6, -d * 0.05 + bd / 2 + 0.08], '#d8f0e0');
     front.material = front.material.clone();
     front.material.transparent = true; front.material.opacity = 0.45;
     g.add(front);
     const drum = new THREE.Mesh(new THREE.CircleGeometry(m(0.35), 10), glow('#9ab0c0', false));
-    drum.position.set(m(-bw / 2 + 1.2 + 2 * (bw - 2.4) / 4), m(0.55), m(-d * 0.05 + bd / 2 - 0.78));
+    drum.position.set(m(-bw / 2 + 1.2 + 2 * (bw - 2.4) / 4), m(0.55), m(-d * 0.05 + bd / 2 - 0.74));
     const slot = new THREE.Mesh(new THREE.PlaneGeometry(m(0.5), m(0.1)), glow('#303840', false));
-    slot.position.z = 0.001;
+    slot.position.z = m(0.04);
     drum.add(slot);
     g.add(drum);
     const sign = plane(signTex('LAUNDROMAT', { fg: '#e8ffe8', glowCol: '#80ff90', font: '700 70px system-ui' }), bw * 0.6, 0.8, { flick: true });
-    sign.position.set(0, m(3.0), m(-d * 0.05 + bd / 2 + 0.06));
+    sign.position.set(0, m(3.0), m(-d * 0.05 + bd / 2 + 0.16));
     g.add(sign);
     ticks.push((t) => { slot.rotation.z = t * 4; front.material.opacity = Math.sin(t * 50) > 0.9 ? 0.2 : 0.45; });
     return { g, ticks };
@@ -263,14 +269,14 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     lot(p, w, d);
     const bw = w * 0.8, bd = d * 0.62, bz = -d * 0.1;
     p.box(bw, 5, bd, [0, 0, bz], '#2a2630');
-    p.box(bw * 0.9, 2.6, 0.06, [0, 0.6, bz + bd / 2 + 0.03], '#08080a');   // blacked-out windows
+    p.box(bw * 0.9, 2.6, 0.1, [0, 0.6, bz + bd / 2 + 0.05], '#08080a');    // blacked-out windows
     g.add(p.mesh());
-    const door = lightPanel(1.6, 2.2, [bw * 0.3, 1.1, bz + bd / 2 + 0.05], '#ff40ff');
+    const door = lightPanel(1.6, 2.2, [bw * 0.3, 1.1, bz + bd / 2 + 0.18], '#ff40ff');
     door.material = door.material.clone();
     const sign = plane(signTex('ARCADE', { fg: '#ffe040', glowCol: '#ff8020', font: '900 96px system-ui' }), bw * 0.6, 1.4, { flick: true });
-    sign.position.set(0, m(4.0), m(bz + bd / 2 + 0.08));
+    sign.position.set(0, m(4.0), m(bz + bd / 2 + 0.12));
     const over = plane(signTex('GAME OVER', { fg: '#ff3030', glowCol: '#ff3030', font: '800 64px monospace' }), 3, 0.6);
-    over.position.set(-bw * 0.25, m(2), m(bz + bd / 2 + 0.07));
+    over.position.set(-bw * 0.25, m(2), m(bz + bd / 2 + 0.18));
     g.add(door, sign, over);
     ticks.push((t) => { door.material.color.setHSL((t * 0.15) % 1, 0.9, 0.55); over.visible = Math.sin(t * 3) > 0; });
     return { g, ticks };
@@ -286,7 +292,7 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     for (const [x, c] of [[0.5, '#c02020'], [1.2, '#2050a0'], [1.9, '#d0b020']]) p.box(0.55, 1.1, 0.5, [x, 0, 0.05], c);
     g.add(p.mesh());
     const head = plane(signTex('LOCAL TEEN STILL MISSING', { fg: '#101010', bg: '#e8e4d8', font: '800 34px Georgia, serif', w: 512, h: 96 }), 0.48, 0.12, { lit: false });
-    head.position.set(m(0.5), m(0.95), m(0.31));
+    head.position.set(m(0.5), m(0.95), m(0.37));
     g.add(head);
     return { g, ticks: [] };
   };
@@ -303,7 +309,7 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     p.cyl(1.6, 1.6, 0.15, [w * 0.33, 1.7, d * 0.15], '#7a3a1c', [Math.PI / 2, 0, 0], 16); // rusted saw blade
     p.cyl(0.8, 0.9, 14, [w * 0.35, 0, -d * 0.38], '#4a3e34');               // stack
     g.add(p.mesh());
-    g.add(lightPanel(2.2, 1.2, [-w * 0.18, 3.5, -d * 0.18 + sd / 2 + 0.04], '#e0c080'));
+    g.add(lightPanel(2.2, 1.2, [-w * 0.18, 3.5, -d * 0.18 + sd / 2 + 0.1], '#e0c080'));
     const steam = [0, 1, 2].map((k) => { const s = halo('#9a9aa0', 5, 0.35); s.material = s.material.clone(); s.material.blending = THREE.NormalBlending; g.add(s); return s; });
     ticks.push((t) => steam.forEach((s, k) => { const ph = (t * 0.25 + k / 3) % 1; s.position.set(m(w * 0.35 + ph * 3), m(14 + ph * 8), m(-d * 0.38)); s.scale.setScalar(m(3 + ph * 6)); s.material.opacity = 0.4 * (1 - ph); }));
     return { g, ticks };
@@ -323,7 +329,7 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     p.roof(4.4, 4.4, 1.6, [0, H + 2.7, 0], '#2c2a26');
     p.beam([1.6, 0.2, 2.4], [1.6, H, 1.8], 0.05, '#3a2e22');                  // stair stringer
     g.add(p.mesh());
-    g.add(lightPanel(1.2, 0.8, [0, H + 1.7, 1.82], '#ffd080'));
+    g.add(lightPanel(1.2, 0.8, [0, H + 1.7, 1.9], '#ffd080'));
     return { g, ticks: [] };
   };
 
@@ -332,11 +338,11 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     lot(p, w, d, '#33402f');
     const bw = w * 0.8, bd = d * 0.55;
     p.box(bw, 4, bd, [0, 0.4, -d * 0.05], '#dcdad0');
-    for (let k = 0; k < 14; k++) p.box(bw + 0.04, 0.04, bd + 0.04, [0, 0.6 + k * 0.27, -d * 0.05], '#b8b6ac');
+    for (let k = 0; k < 14; k++) p.box(bw + 0.12, 0.05, bd + 0.12, [0, 0.6 + k * 0.27, -d * 0.05], '#b8b6ac');
     p.gable(bw + 0.6, bd + 0.6, 3, [0, 4.4, -d * 0.05], '#3a3a40');
     p.box(2.4, 0.4, 1.6, [0, 0, -d * 0.05 + bd / 2 + 0.6], '#8a8a84');       // steps
-    p.box(1.6, 2.6, 0.08, [0, 0.4, -d * 0.05 + bd / 2 + 0.02], '#5a2a1c');    // door
-    p.box(2.4, 1.6, 0.12, [-bw * 0.3, 1.2, -d * 0.05 + bd / 2 + 0.06], '#5a4632'); // bulletin board
+    p.box(1.6, 2.6, 0.14, [0, 0.4, -d * 0.05 + bd / 2 + 0.07], '#5a2a1c');    // door
+    p.box(2.4, 1.6, 0.14, [-bw * 0.3, 1.2, -d * 0.05 + bd / 2 + 0.11], '#5a4632'); // bulletin board
     g.add(p.mesh());
     const flyers = document.createElement('canvas');
     flyers.width = 256; flyers.height = 160;
@@ -350,9 +356,9 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     }
     const t = new THREE.CanvasTexture(flyers); t.colorSpace = THREE.SRGBColorSpace;
     const board = plane(t, 2.2, 1.4, { lit: false });
-    board.position.set(m(-bw * 0.3), m(2.0), m(-d * 0.05 + bd / 2 + 0.13));
+    board.position.set(m(-bw * 0.3), m(2.0), m(-d * 0.05 + bd / 2 + 0.24));
     g.add(board);
-    g.add(lightPanel(0.3, 0.3, [1.2, 3.4, -d * 0.05 + bd / 2 + 0.05], '#ffc070'));
+    g.add(lightPanel(0.3, 0.3, [1.2, 3.4, -d * 0.05 + bd / 2 + 0.14], '#ffc070'));
     return { g, ticks: [] };
   };
 
@@ -431,7 +437,7 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     p.box(w * 0.9, 0.15, d * 0.9, [0, 0, 0], '#33362f');
     const L = Math.min(11, w * 0.8);
     p.box(L, 2.5, 3.0, [0, 0, 0], '#e0a818');                              // body, on its side (height = width)
-    p.box(L, 0.25, 3.02, [0, 1.1, 0], '#1a1a1a');                          // black stripe
+    p.box(L + 0.12, 0.25, 3.12, [0, 1.1, 0], '#1a1a1a');                   // black stripe, wrapping the body
     for (let k = 0; k < 8; k++) p.box(0.9, 0.08, 1.4, [-L / 2 + 1 + k * 1.2, 2.5, 0.4], '#5a6468'); // fogged windows (facing up)
     for (const x of [-L * 0.35, L * 0.35]) p.cyl(0.55, 0.55, 0.35, [x, 0.6, -1.6], '#141414', [Math.PI / 2, 0, 0], 10);
     g.add(p.mesh());
@@ -514,10 +520,10 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     p.box(0.1, 1.4, 0.1, [0, 0, -0.4], '#5a4632');                         // post
     p.box(0.6, 0.75, 0.05, [0, 1.0, -0.33], '#e8e4d8');                    // photo
     p.box(0.45, 0.5, 0.06, [0, 1.1, -0.3], '#6a6460');
-    p.box(0.08, 0.5, 0.04, [0.15, 1.35, -0.3], '#e0d040', [0, 0, 0.6]);     // ribbon
+    p.box(0.08, 0.5, 0.04, [0.15, 1.35, -0.22], '#e0d040', [0, 0, 0.6]);    // ribbon
     p.ball(0.25, [0.6, 0.25, 0.2], '#8a5a3a', [1, 1.1, 0.9]);               // teddy bear
     p.ball(0.16, [0.6, 0.6, 0.22], '#8a5a3a');
-    p.box(1.6, 0.06, 0.4, [0, 0, 0.2], '#3a2a1a');
+    p.box(1.6, 0.12, 0.4, [0, 0, 0.2], '#3a2a1a');
     for (let k = 0; k < 6; k++) p.cyl(0.05, 0.05, 0.18, [-0.6 + k * 0.24, 0, 0.3 + (k % 2) * 0.15], '#e8e0c8');
     g.add(p.mesh());
     const flames = [];
@@ -544,7 +550,7 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     const porch = new THREE.Mesh(new THREE.SphereGeometry(m(0.15), 8, 6), glow('#ffd080'));
     porch.position.set(m(w * 0.22 + 1.2), m(2.4), m(d * 0.12 + 3.2));
     const ph = halo('#ffc060', 3.5, 0.7); ph.position.copy(porch.position);
-    g.add(porch, ph, lightPanel(1.2, 1, [w * 0.22 - 2, 1.8, d * 0.12 + 3.02], '#ffcf80'));
+    g.add(porch, ph, lightPanel(1.2, 1, [w * 0.22 - 2, 1.8, d * 0.12 + 3.09], '#ffcf80'));
     return { g, ticks: [] };
   };
 
@@ -558,7 +564,7 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     p.box(0.1, H + 6, 0.1, [r + 0.2, 0, 0], '#3a3a38');                      // ladder
     g.add(p.mesh());
     const name = plane(signTex('HAWTHORN BEND', { fg: '#1a2a2a', font: '900 58px Georgia, serif', w: 512, h: 128 }), 5.8, 1.45, { lit: false });
-    name.position.set(0, m(H + 3.4), m(r + 0.05));
+    name.position.set(0, m(H + 3.4), m(r + 0.12));
     const scrawl = plane(signTex('SHE SEES YOU', { fg: '#8a0a0a', font: 'italic 700 46px Georgia, serif', w: 512, h: 96 }), 4, 0.8, { lit: false });
     scrawl.position.set(m(1.2), m(H + 5.3), m(r - 0.1));
     scrawl.rotation.set(0, 0.25, 0.08);
@@ -586,13 +592,13 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     p.box(CELL, 0.25, 6.4, [0, 3.4, -0.6], '#5a4a3a');                    // roof / overhang
     p.box(CELL, 0.12, 1.8, [0, 0, 1.9], '#5a5856');                        // walkway
     for (const x of [-3.3, 3.3]) p.box(0.12, 3.4, 0.12, [x, 0, 2.5], '#6a6050');
-    p.box(1.1, 2.2, 0.06, [-1.6, 0, 1.06], ['#3a5a6a', '#6a3a3a', '#4a5a3a'][ctx.k % 3]);
-    p.box(2.2, 1.3, 0.06, [1.2, 1.1, 1.06], '#141a1e');
+    p.box(1.1, 2.2, 0.12, [-1.6, 0, 1.1], ['#3a5a6a', '#6a3a3a', '#4a5a3a'][ctx.k % 3]);
+    p.box(2.2, 1.3, 0.12, [1.2, 1.1, 1.1], '#141a1e');
     g.add(p.mesh());
     const num = plane(signTex(String(100 + ctx.k + 1), { fg: '#e8d8a0', font: '700 90px system-ui', w: 256, h: 128 }), 0.5, 0.25, { lit: false });
-    num.position.set(m(-1.6), m(2.4), m(1.1));
+    num.position.set(m(-1.6), m(2.4), m(1.14));
     g.add(num);
-    if (ctx.rnd() < 0.25) g.add(lightPanel(2.0, 1.1, [1.2, 1.75, 1.1], '#ffcf80'));
+    if (ctx.rnd() < 0.25) g.add(lightPanel(2.0, 1.1, [1.2, 1.75, 1.24], '#ffcf80'));
     if (ctx.first) {
       const pole = parts(); pole.box(0.25, 6, 0.25, [2.6, 0, 3.0], '#4a4a48'); g.add(pole.mesh());
       const sign = plane(signTex('MOTEL', { fg: '#ff5040', glowCol: '#ff5040', font: '900 90px Georgia, serif' }), 3.2, 1, { flick: true });
@@ -608,14 +614,14 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     const p = parts(), g = new THREE.Group(), r = ctx.rnd;
     const col = ['#d8d4c4', '#c8d0b8', '#d8c8a8', '#b8c4c8'][Math.floor(r() * 4)];
     p.box(5.8, 2.8, 2.6, [0, 0.4, -0.6], col);
-    p.box(5.82, 0.35, 2.62, [0, 1.6, -0.6], ['#8a3a2a', '#2a5a8a', '#5a6a2a'][Math.floor(r() * 3)]);
-    p.box(5.8, 0.4, 2.6, [0, 0, -0.6], '#3a3a38');                       // skirt
+    p.box(5.92, 0.35, 2.72, [0, 1.6, -0.6], ['#8a3a2a', '#2a5a8a', '#5a6a2a'][Math.floor(r() * 3)]);
+    p.box(5.5, 0.4, 2.3, [0, 0, -0.6], '#3a3a38');                       // skirt, tucked under
     p.box(1.2, 0.5, 0.8, [1.6, 0, 1.2], '#7a7468');                       // steps
-    p.box(0.5, 0.5, 0.5, [-2, 0, 2.0], '#3a6a8a'); p.box(0.5, 0.06, 0.5, [-2, 0.5, 2.0], '#3a6a8a'); // lawn chair
+    p.box(0.5, 0.5, 0.5, [-2, 0, 2.0], '#3a6a8a'); p.box(0.56, 0.06, 0.56, [-2, 0.5, 2.0], '#3a6a8a'); // lawn chair
     p.cyl(0.05, 0.05, 0.6, [2.6, 0, 2.6], '#5a5a58');                     // dog stake
     p.beam([2.6, 0.5, 2.6], [1.0, 0.05, 2.9], 0.015, '#8a8a88');           // chain, no dog
     g.add(p.mesh());
-    if (r() < 0.4) g.add(lightPanel(0.9, 0.6, [-1.2, 1.8, 0.72], '#ffd590'));
+    if (r() < 0.4) g.add(lightPanel(0.9, 0.6, [-1.2, 1.8, 0.79], '#ffd590'));
     return { g, ticks: [] };
   };
 
@@ -665,7 +671,7 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     fence(p, ctx, '#9a9e9e', 2.4);
     g.add(p.mesh());
     const tent = parts();
-    tent.box(3.4, 0.05, 3.4, [0, 0, 0], '#d8dcd8');
+    tent.box(3.4, 0.12, 3.4, [0, 0, 0], '#d8dcd8');
     tent.cone(2.6, 3, [0, 0, 0], '#e0e4e0', [0, r() * 3, 0], 4);
     g.add(tent.mesh(sheet));
     if (ctx.first) {

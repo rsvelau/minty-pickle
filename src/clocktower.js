@@ -141,7 +141,7 @@ export function createClocktowers(parent) {
     part(g, box, mats.clap, 0, s(SHAFT_TOP), 0, s(STAGE_W), s(STAGE_TOP - SHAFT_TOP), s(STAGE_W));
     for (let k = 1; k < 14; k++) {
       const y = SHAFT_TOP + (k / 14) * (STAGE_TOP - SHAFT_TOP);
-      part(g, box, mats.stoneDark, 0, s(y), 0, s(STAGE_W + 0.08), s(0.05), s(STAGE_W + 0.08));
+      part(g, box, mats.stoneDark, 0, s(y), 0, s(STAGE_W + 0.1), s(0.05), s(STAGE_W + 0.1));
     }
     for (const [cx, cz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
       part(g, box, mats.trim, cx * s(STAGE_W / 2), s(SHAFT_TOP), cz * s(STAGE_W / 2), s(0.45), s(STAGE_TOP - SHAFT_TOP), s(0.45));
@@ -153,7 +153,8 @@ export function createClocktowers(parent) {
       const a = (side * Math.PI) / 2;
       const face = new THREE.Group();
       face.rotation.y = a;
-      face.position.set(Math.sin(a) * s(STAGE_W / 2 + 0.05), s(DIAL_Y), Math.cos(a) * s(STAGE_W / 2 + 0.05));
+      // Dials stand well clear of the clapboard boards (no shared planes, no flicker).
+      face.position.set(Math.sin(a) * s(STAGE_W / 2 + 0.14), s(DIAL_Y), Math.cos(a) * s(STAGE_W / 2 + 0.14));
       const dial = new THREE.Mesh(dialGeo, mats.dial);
       dial.scale.setScalar(s(DIAL_R));
       dial.raycast = () => {};
