@@ -18,6 +18,7 @@
 import { MARKERS, streetMask, edgeKey, cellLabel } from '../state.js';
 import { MONSTERS, spawnMonsters, monstersAct, farthestFromPlayers } from './monsters.js';
 import { turnLimits, injuries } from './combat.js';
+import { craft } from './obolcraft.js';
 import { refreshThreat, onPlayerEnters } from './monsterTurn.js';
 import { setupMystery, evidenceObol, revealEvidence, attackObol, nameMonster, revealMonster } from './mystery.js';
 
@@ -64,11 +65,13 @@ export const DEFAULT_CONFIG = Object.freeze({
 export const defaultConfig = () => ({ ...DEFAULT_CONFIG, obols: { ...DEFAULT_CONFIG.obols } });
 
 // Obols: coins drawn at random when investigating.
+// Colours match the damage types: Attack = Physical red, Event = Mental
+// blue, Equipment = Spiritual green; Evidence is yellow.
 export const OBOLS = {
-  attack: { label: 'Attack', note: 'bloody red' },
-  event: { label: 'Event', note: 'misty blue' },
-  equipment: { label: 'Equipment', note: 'shiny green' },
-  evidence: { label: 'Evidence', note: 'glowing yellow' },
+  attack: { label: 'Attack', note: 'bloody red', colour: '#d42a2a', theme: 'P' },
+  event: { label: 'Event', note: 'misty blue', colour: '#3a7ae0', theme: 'M' },
+  equipment: { label: 'Equipment', note: 'shiny green', colour: '#2fb04a', theme: 'S' },
+  evidence: { label: 'Evidence', note: 'glowing yellow', colour: '#e0b020' },
 };
 export const OBOL_TYPES = Object.keys(OBOLS);
 export const obolCounts = (pl) => Object.fromEntries(
@@ -172,7 +175,7 @@ export function newGame(board, setup = {}) {
 
 // --- actions ------------------------------------------------------------------------
 // Every action: { type, seat? }. Returns { ok, error?, events }.
-export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name'];
+export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft'];
 
 export function applyAction(state, board, action) {
   const events = [];
@@ -229,7 +232,10 @@ export function applyAction(state, board, action) {
       if (state.deathsDoor) return fail("at Death's Door: one die only");
       pl.white--;
       const v = d6(state);
-      state.pool.push({ kind: 'white', v });
+      // Resonance (Obolcraft): this die returns to the reserve after the turn.
+      const resonant = (pl.resonance ?? 0) > 0;
+      if (resonant) pl.resonance--;
+      state.pool.push({ kind: 'white', v, ...(resonant ? { resonant: true } : {}) });
       log(state, `${who(state)} rolled a white die from reserve: ${v} (${pl.white} left in reserve).`);
       events.push({ type: 'rolledWhite', seat: state.cur, v });
       break;
@@ -286,6 +292,13 @@ export function applyAction(state, board, action) {
       revealEvidence(state, board, n, mysteryCtx(state), events);
       state.phase = 'moving';
       advance(state, board, events);
+      break;
+    }
+    case 'craft': {
+      // Obolcraft: on your own turn, before rolling or while slotting.
+      if (!['idle', 'slotting'].includes(state.phase)) return fail('finish moving first');
+      const err = craft(state, curPlayer(state), action, { log, randInt }, events);
+      if (err) return fail(err);
       break;
     }
     case 'name': {
@@ -514,7 +527,9 @@ function endTurn(state, board, events) {
   syncDefense(state);
   const left = unusedDice(state);
   pl.lastMove = state.pool.filter((d) => d.spent).map((d) => ({ ...d })); // for Exhaust (Movement die)
-  const whites = left.filter((d) => d.kind === 'white').length;
+  const back = state.pool.filter((d) => d.resonant).length;
+  if (back) { pl.white += back; log(state, `${who(state)}'s resonant white ${back === 1 ? 'die returns' : 'dice return'} to the reserve.`); }
+  const whites = left.filter((d) => d.kind === 'white' && !d.resonant).length;
   if (whites) log(state, `${who(state)} discards ${whites} unused white ${whites === 1 ? 'die' : 'dice'}.`);
   if (pl.defense.length) log(state, `${who(state)} braces: defense ${pl.defense.reduce((a, d) => a + d.v, 0)}.`);
   if (!state.pool.some((d) => d.spent)) log(state, `${who(state)} stays put.`);

@@ -17,6 +17,7 @@ import { MONSTER_CARDS, MONSTER_BY_ID, MONSTER_POOLS, DAMAGE_KINDS } from './gam
 import { OBSERVATIONS, LAIRS, ATTACK_TYPES, evidenceLabel } from './game/cards/evidence.js';
 import { matchesEvidence } from './game/mystery.js';
 import { INJURY_TRACKS } from './game/cards/injuries.js';
+import { RECIPES, RECIPE_BY_ID, autoPay, payFits, blocked as craftBlocked, ANY } from './game/obolcraft.js';
 import { createMarkers, drawMarkerIcon } from './markers.js';
 import {
   installTerrain, setTerrain, terrainHeight, rayTerrain, isFlat, terrainId, TERRAIN_PRESETS,
@@ -2444,6 +2445,7 @@ const play = createPlay({
   onGameOver: () => showCard({ kind: 'over' }),
   onNpc: (e) => showCard({ kind: 'npc', e }),
   onExhaust: (e) => showCard({ kind: 'exhaust', e }),
+  onCraft: (e) => { craftUI.recipe = null; showCard({ kind: 'craft', e }); },
   onMonsterRevealed: (e) => showCard({ kind: 'monster', monster: e.monster, correct: e.correct }),
   // A monster strikes: a brief, soft flash at the screen edges, in the colour
   // of its damage type (red, blue or green).
@@ -2667,6 +2669,10 @@ function showCardNow(c) {
       `<div class="pc-title">${esc(e.player?.name ?? '')} loses ${e.dice.length === 1 ? 'a die' : `${e.dice.length} dice`}</div>` +
       `<div class="pc-sub">${e.dice.map((d) => `${d.kind} ${d.v}`).join(', ')}: gone for the rest of the game` +
       `${e.dice.some((d) => d.kind === 'black') ? '. One fewer black die from now on.' : '.'}</div>`;
+  } else if (c.kind === 'craft') {
+    const e = c.e;
+    html = `<div class="pc-kind">Obolcraft</div><div class="pc-glyph obol-row" style="justify-content:center">${e.spent.map((t) => obolHTML(t)).join('')}</div>` +
+      `<div class="pc-title">${esc(RECIPE_BY_ID[e.recipe]?.text ?? '')}</div><div class="pc-sub">${esc(e.text)}.</div>`;
   } else if (c.kind === 'over') {
     html = '<div class="pc-kind">The night wins</div><div class="pc-glyph">☠</div><div class="pc-title">Everyone is dead</div>' +
       '<div class="pc-sub">Restart to try again.</div>';
@@ -2887,6 +2893,78 @@ $('#intentBanner').addEventListener('click', () => {
   camTween = { t: 0, fromPos: camera.position.clone(), fromTarget: controls.target.clone(), toPos: p.clone().add(offset), toTarget: p };
 });
 
+// --- Obolcraft: trade Obols for effects ---------------------------------------------------
+// A black slot takes any colour. Choose a recipe, check (or change) which
+// Obols pay for it, then Craft. Only on your own turn, before moving.
+const craftUI = { recipe: null, pay: [], target: null };
+const anyCoin = () => '<span class="obol obol-any" aria-label="any colour"><span>any</span></span>';
+function obolcraftHTML(pl) {
+  const s = play.state;
+  const obols = pl.inventory.obolcraft;
+  const counts = obolCounts(pl);
+  const mine = s.players[s.cur] === pl;
+  const canAct = mine && ['idle', 'slotting'].includes(s.phase);
+  const summary = `<div class="inv-summary">${OBOL_TYPES.map((t) =>
+    `<span class="obol-count${counts[t] ? '' : ' zero'}">${obolHTML(t)}${OBOLS[t].label} ${counts[t]}</span>`).join('')}</div>`;
+  const recipes = RECIPES.map((r) => {
+    const why = craftBlocked(s, pl, r);
+    // Which named colours are short, to dim them.
+    const have = { ...counts };
+    const cost = r.cost.map((c) => {
+      if (c === ANY) return anyCoin();
+      const ok = (have[c] ?? 0) > 0;
+      if (ok) have[c]--;
+      return obolHTML(c).replace('class="obol ', `class="obol ${ok ? '' : 'short '}`);
+    }).join('');
+    const open = craftUI.recipe === r.id;
+    return `<div class="recipe${why ? '' : ' ready'}"><div class="cost">${cost}</div>` +
+      `<button type="button" data-recipe="${r.id}" ${why || !canAct ? 'disabled' : ''}>${open ? 'Cancel' : 'Craft'}</button>` +
+      `<p>${esc(r.text)}</p>${why ? `<small>${esc(why)}</small>` : ''}</div>` + (open ? paySheetHTML(pl, r) : '');
+  }).join('');
+  const note = !mine ? `<p class="inv-empty" style="padding:8px 2px">Only ${esc(pl.name)} can craft with these, on their turn.</p>`
+    : !canAct ? '<p class="inv-empty" style="padding:8px 2px">Craft on your turn, before or between moves.</p>' : '';
+  const list = obols.length ? '' : `<p class="inv-empty" style="padding:8px 2px">${INVENTORY_TABS.obolcraft.empty}</p>`;
+  return summary + list + `<div class="craft-head">Recipes · ⚫ = any colour</div>${note}<div class="craft-list">${recipes}</div>`;
+}
+function paySheetHTML(pl, r) {
+  const obols = pl.inventory.obolcraft;
+  const fits = payFits(r, obols, craftUI.pay);
+  const dead = play.state.players.filter((p) => p.dead);
+  return `<div class="pay-sheet"><span class="lbl">Pay with (tap to swap which Obols fill the any-colour slots):</span>` +
+    `<div class="row">${obols.map((o, i) => `<button type="button" class="obol obol-${o.type}${craftUI.pay.includes(i) ? ' picked' : ''}" data-pay="${i}" aria-label="${OBOLS[o.type].label} Obol">` +
+      `<svg viewBox="0 0 24 24">${OBOL_GLYPHS[o.type]}</svg></button>`).join('')}</div>` +
+    (r.resurrect ? `<span class="lbl">Bring back:</span><div class="row pay-target">${dead.map((p) =>
+      `<button type="button" data-target="${p.seat}" class="${craftUI.target === p.seat ? 'on' : ''}"><span class="chip" style="background:${p.colour};display:inline-block;width:10px;height:10px;border-radius:50%"></span> ${esc(p.name)}</button>`).join('')}</div>` : '') +
+    `<div class="pay-actions"><button type="button" class="on" data-confirm ${fits && (!r.resurrect || craftUI.target !== null) ? '' : 'disabled'}>` +
+    `${fits ? `Spend ${r.cost.length} Obols` : `Pick ${r.cost.length} that fit`}</button></div></div>`;
+}
+function wireObolcraft(body, pl) {
+  body.querySelectorAll('[data-recipe]').forEach((b) => b.addEventListener('click', () => {
+    const r = RECIPE_BY_ID[b.dataset.recipe];
+    if (craftUI.recipe === r.id) { craftUI.recipe = null; renderInventory(); return; }
+    craftUI.recipe = r.id;
+    craftUI.pay = autoPay(r, pl.inventory.obolcraft) ?? [];
+    const dead = play.state.players.filter((p) => p.dead);
+    craftUI.target = dead.length === 1 ? dead[0].seat : null;
+    renderInventory();
+  }));
+  body.querySelectorAll('[data-pay]').forEach((b) => b.addEventListener('click', () => {
+    const i = Number(b.dataset.pay);
+    const r = RECIPE_BY_ID[craftUI.recipe];
+    const at = craftUI.pay.indexOf(i);
+    if (at >= 0) craftUI.pay.splice(at, 1);
+    else {
+      if (craftUI.pay.length >= r.cost.length) craftUI.pay.pop(); // swap out the last pick
+      craftUI.pay.push(i);
+    }
+    renderInventory();
+  }));
+  body.querySelectorAll('[data-target]').forEach((b) => b.addEventListener('click', () => { craftUI.target = Number(b.dataset.target); renderInventory(); }));
+  body.querySelector('[data-confirm]')?.addEventListener('click', () => {
+    play.craft(craftUI.recipe, [...craftUI.pay], craftUI.target ?? undefined);
+  });
+}
+
 // --- Inventory -----------------------------------------------------------------------
 // Each player's own inventory, in tabs. Opens on the current player (the bag
 // button on the play bar, or I), or on whoever you tap in the scoreboard.
@@ -2916,16 +2994,14 @@ function renderInventory() {
     return;
   }
   const items = pl.inventory[inv.tab];
-  if (!items.length) {
+  if (!items.length && inv.tab !== 'obolcraft') {
     body.innerHTML = `<p class="inv-empty">${INVENTORY_TABS[inv.tab].empty}</p>`;
     return;
   }
   if (inv.tab === 'obolcraft') {
-    const counts = obolCounts(pl);
-    body.innerHTML = `<div class="inv-summary">${OBOL_TYPES.map((t) =>
-      `<span class="obol-count${counts[t] ? '' : ' zero'}">${obolHTML(t)}${OBOLS[t].label} ${counts[t]}</span>`).join('')}</div>` +
-      `<div class="inv-grid">${items.map((o) => `<div class="inv-item">${obolHTML(o.type)}<b>${OBOLS[o.type].label}</b>` +
-        `<small>${o.at} · ${o.time}</small></div>`).join('')}</div>`;
+    body.innerHTML = obolcraftHTML(pl);
+    wireObolcraft(body, pl);
+    return;
   } else {
     body.innerHTML = `<div class="inv-grid">${items.map((e) => `<div class="inv-item"><b>${e.label ?? 'Item'}</b></div>`).join('')}</div>`;
   }

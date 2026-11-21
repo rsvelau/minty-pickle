@@ -56,7 +56,7 @@ export function createPlay({
   grid, scene, camera, controls, cellToWorld, cellTop, terrainify, cellLabel, onChange,
   onUsed = () => {}, onCollect = () => {}, onObol = () => {}, onAttack = () => {}, onMonster = () => {},
   onEvidence = () => {}, onAttacked = () => {}, onNamed = () => {}, onMonsterRevealed = () => {},
-  onDamage = () => {}, onIntent = () => {}, onGameOver = () => {}, onNpc = () => {}, onExhaust = () => {},
+  onDamage = () => {}, onIntent = () => {}, onGameOver = () => {}, onNpc = () => {}, onExhaust = () => {}, onCraft = () => {},
   config = defaultConfig(),
 }) {
   const cfg = config; // live: Game settings edits this object; used at the next new game
@@ -639,6 +639,10 @@ export function createPlay({
           view.watch = { id: e.id, until: performance.now() + 1500 };
           break;
         }
+        case 'crafted':
+          if (e.target !== null) placeAll(true); // brought back: stand them up beside their rescuer
+          onCraft({ ...e, player: state.players[e.seat], targetPlayer: e.target === null ? null : state.players[e.target] });
+          break;
         case 'npcs':
           syncNpcs();
           break;
@@ -705,6 +709,7 @@ export function createPlay({
   function endTurn() { if (!rolling()) act({ type: 'end' }); }
   function answerInvestigate(yes) { act({ type: 'investigate', yes: !!yes }); }
   function choose(i) { return g()?.phase === 'choosing' && act({ type: 'choose', cell: i }); }
+  function craft(recipe, pay, target) { return act({ type: 'craft', recipe, pay, target }); }
   function revealCard(n) { return act({ type: 'reveal', card: n }); }
   function nameMonster(id) { return act({ type: 'name', monster: id }); }
   // Pips on dice slotted into Movement but not yet moved.
@@ -1004,7 +1009,7 @@ export function createPlay({
     // Game settings changed outside a game: the next game starts fresh with them.
     invalidate: () => { stale = true; },
     state, session, board, roll, reset, setStartMode, answerInvestigate, choose, chooseByKey, tick, setActive,
-    boardChanged, setPlayers, toggleSlot, confirmMove, endTurn, unusedCount, slotTotal, rollWhite, busy, revealCard, nameMonster,
+    boardChanged, setPlayers, toggleSlot, confirmMove, endTurn, unusedCount, slotTotal, rollWhite, busy, revealCard, nameMonster, craft,
     clockMinutes: () => (g() ? rulesClockMinutes(g()) : rulesStartMinutesFor(cfg)),
     startMinutes: () => (g() ? rulesStartMinutes(g()) : rulesStartMinutesFor(cfg)),
     midnight: () => (g() ? isMidnight(g()) : false),

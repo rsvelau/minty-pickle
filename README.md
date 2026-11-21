@@ -222,6 +222,13 @@ markers** in View hides them. Marker art lives in `src/markers.js`; the list of 
 - **Inventory.** Each player has their own inventory with two tabs, **Equipment** (empty for now) and
   **Obolcraft**, where every Obol they draw is kept, with where and when it was found. Open it with the bag
   button on the play bar (or `I`) for the current player, or tap a player in the scoreboard.
+- **Obolcraft** (Obolcraft tab of the inventory): trade Obols for effects, from the Player Mat. Obol colours
+  share the damage-type theme (Attack red = Physical, Event blue = Mental, Equipment green = Spiritual, plus
+  yellow Evidence); a black slot takes any colour. Recipes: red + any → reduce Physical injury by a tier; blue +
+  any → Mental; green + any → Spiritual; yellow + any → your next white die is **Resonant** (it returns to your
+  reserve after use); any three → draw an Equipment card; red + blue + green + yellow + any three → **resurrect** a
+  dead player at your location (unhurt). Tap **Craft**, check or swap which Obols pay (the game suggests a
+  payment that keeps your rarer colours), and confirm. On your own turn, before or between moves.
 - **Obols** come in four kinds: **Attack** (bloody red), **Event** (misty blue), **Equipment** (shiny green)
   and **Evidence** (glowing yellow). The bag holds 7 of each (28) by default; when it's empty, investigating
   finds nothing.
