@@ -52,6 +52,7 @@ export function init() {
     onNpc: (e) => showCard({ kind: 'npc', e }),
     onExhaust: (e) => showCard({ kind: 'exhaust', e }),
     onCraft: (e) => { craftUI.recipe = null; showCard({ kind: 'craft', e }); },
+    onCard: (e) => showCard({ kind: e.deck === 'events' ? 'event' : 'equipment', e }),
     onMonsterRevealed: (e) => showCard({ kind: 'monster', monster: e.monster, correct: e.correct }),
     // A monster strikes: a brief, soft flash at the screen edges, in the colour
     // of its damage type (red, blue or green).

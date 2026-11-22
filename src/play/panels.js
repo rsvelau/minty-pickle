@@ -12,6 +12,8 @@ import { grid, ui } from '../app/config.js';
 import { $ } from '../app/dom.js';
 import { dieHTML, play } from './playView.js';
 import { __set_camTween, camera, cellToWorld, controls } from '../render/scene.js';
+import { EQUIPMENT_BY_ID } from '../game/cards/equipment.js';
+import { EVENT_BY_ID, EVENT_CATEGORIES } from '../game/cards/events.js';
 
 // Module state: assigned by init() below, in the same order as before the split.
 export let OBOL_GLYPHS, DMG_SVG, ATTACK_GLYPH, cardQueue, caseUI, craftUI;
@@ -199,6 +201,17 @@ export function showCardNow(c) {
     const e = c.e;
     html = `<div class="pc-kind">Obolcraft</div><div class="pc-glyph obol-row" style="justify-content:center">${e.spent.map((t) => obolHTML(t)).join('')}</div>` +
       `<div class="pc-title">${esc(RECIPE_BY_ID[e.recipe]?.text ?? '')}</div><div class="pc-sub">${esc(e.text)}.</div>`;
+  } else if (c.kind === 'equipment') {
+    const card = EQUIPMENT_BY_ID[c.e.id];
+    html = `<div class="pc-kind">${esc(c.e.player?.name ?? '')} found equipment</div><div class="pc-title">${esc(card?.name ?? '')}</div>` +
+      (card ? abilitiesHTML(card) : '');
+    stay = true;
+  } else if (c.kind === 'event') {
+    const card = EVENT_BY_ID[c.e.id];
+    html = `<div class="pc-kind">Event · ${esc(EVENT_CATEGORIES[card?.category]?.label ?? '')}</div><div class="pc-title">${esc(card?.name ?? '')}</div>` +
+      `<div class="pc-sub">${esc(card?.text ?? '')}</div>` +
+      '<div class="pc-note">Card effects arrive after the rules walkthrough: for now, play this one at the table.</div>';
+    stay = true;
   } else if (c.kind === 'over') {
     html = '<div class="pc-kind">The night wins</div><div class="pc-glyph">☠</div><div class="pc-title">Everyone is dead</div>' +
       '<div class="pc-sub">Restart to try again.</div>';
@@ -502,7 +515,11 @@ export function renderInventory() {
     wireObolcraft(body, pl);
     return;
   } else {
-    body.innerHTML = `<div class="inv-grid">${items.map((e) => `<div class="inv-item"><b>${e.label ?? 'Item'}</b></div>`).join('')}</div>`;
+    body.innerHTML = `<div class="eq-list">${items.map((e) => {
+      const card = EQUIPMENT_BY_ID[e.id];
+      return `<div class="eq-card"><b>${esc(e.label ?? card?.name ?? 'Item')}</b>${card ? abilitiesHTML(card) : ''}` +
+        `${e.from ? `<small class="eq-from">From ${esc(e.from)}</small>` : ''}</div>`;
+    }).join('')}</div>`;
   }
 }
 export function openInventory(k = play.state.cur) {
@@ -511,3 +528,17 @@ export function openInventory(k = play.state.cur) {
   $('#inventory').hidden = false;
 }
 export function closeInventory() { $('#inventory').hidden = true; }
+
+// An Equipment card's abilities, as printed: range, damage kind, name, cost
+// [requirement], effect, and its 1️⃣ / 🔗 limit.
+const RANGE_LABEL = { close: 'Close', mid: 'Mid', long: 'Long', self: 'Self', all: 'All' };
+export function abilitiesHTML(card) {
+  return `<ul class="eq-abilities">${card.abilities.map((a) => {
+    const kind = a.kind ? DAMAGE_KINDS[a.kind] : null;
+    const cost = a.coins ? '🪙'.repeat(a.coins) : '🎲'.repeat(a.dice);
+    const limit = a.limit === 'once' ? ' <span title="Once (until refreshed)">1️⃣</span>' : a.limit === 'chain' ? ' <span title="Chain">🔗</span>' : '';
+    return `<li><span class="eq-range">${RANGE_LABEL[a.range] ?? '—'}</span>` +
+      `<span class="eq-kind" title="${kind ? esc(kind.label) : 'Untyped'}">${kind ? kind.icon : '◯'}</span>` +
+      `<span><b>${esc(a.name)}</b>${cost || a.req ? ` · ${cost}${a.req ? ` [${esc(a.req)}]` : ''}` : ''} ${esc(a.text)}${limit}</span></li>`;
+  }).join('')}</ul>`;
+}

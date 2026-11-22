@@ -21,8 +21,26 @@ import { turnLimits, injuries } from './combat.js';
 import { craft } from './obolcraft.js';
 import { refreshThreat, onPlayerEnters } from './monsterTurn.js';
 import { setupMystery, evidenceObol, revealEvidence, attackObol, nameMonster, revealMonster } from './mystery.js';
+import { setupDecks, drawEquipment, drawCard, eventCard } from './decks.js';
+import { EVENT_CATEGORIES } from './cards/events.js';
 
-export const RULES_VERSION = 1;
+// 2: card decks (state.decks; Equipment and Event Obols draw cards).
+export const RULES_VERSION = 2;
+
+// Bring a saved state from an older version up to date (saveFormat.readSave
+// calls this). One step per version.
+export function migrateState(state) {
+  let v = Number.isInteger(state.version) ? state.version : 1;
+  if (v < 2) {
+    // Decks didn't exist: build them, leaving out equipment already held.
+    state.config.deckCounts ??= {};
+    const owned = state.players.flatMap((p) => p.inventory.equipment.map((e) => e.id).filter(Boolean));
+    setupDecks(state, randInt, owned);
+    v = 2;
+  }
+  state.version = v;
+  return state;
+}
 
 // Seats: name and colour (also used by the 3D figures).
 export const SEATS = [
@@ -61,8 +79,9 @@ export const DEFAULT_CONFIG = Object.freeze({
   monsterPool: 'all',
   defenseSlots: 1,       // Defense slots (+1 when the turn starts in light)
   monsterPick: 'random', // or a monster id: always fight that one (testing)
+  deckCounts: Object.freeze({}), // cards in the game: changes from 1 copy each (decks.js)
 });
-export const defaultConfig = () => ({ ...DEFAULT_CONFIG, obols: { ...DEFAULT_CONFIG.obols } });
+export const defaultConfig = () => ({ ...DEFAULT_CONFIG, obols: { ...DEFAULT_CONFIG.obols }, deckCounts: {} });
 
 // Obols: coins drawn at random when investigating.
 // Colours match the damage types: Attack = Physical red, Event = Mental
@@ -150,6 +169,7 @@ export function newGame(board, setup = {}) {
     log: [],
   };
   if (state.startMode === 'midnight') state.round = config.turnsToMidnight + 1;
+  setupDecks(state, randInt);
   const events = [{ type: 'start' }];
   if (start >= 0) {
     if (config.monster === 'mystery') {
@@ -435,6 +455,17 @@ function investigate(state, board, i, events) {
   // The mystery: evidence to choose, or the monster strikes.
   if (type === 'evidence') evidenceObol(state, board, i, mysteryCtx(state));
   if (type === 'attack') attackObol(state, board, i, mysteryCtx(state), events);
+  if (type === 'equipment') {
+    const card = drawEquipment(state, pl, 'Investigation');
+    log(state, card ? `${who(state)} found equipment: ${card.name}.` : 'The Equipment deck is empty.');
+    if (card) events.push({ type: 'card', deck: 'equipment', id: card.id, seat: state.cur, cell: i });
+  }
+  if (type === 'event') {
+    const id = drawCard(state, 'events');
+    const card = id && eventCard(id);
+    log(state, card ? `${who(state)} drew an event: ${card.name} (${EVENT_CATEGORIES[card.category].label}). ${card.text}` : 'The Event deck is empty.');
+    if (card) events.push({ type: 'card', deck: 'events', id, seat: state.cur, cell: i });
+  }
   events.push({ type: 'collect', seat: state.cur, cell: i, marker: 'investigation', text: type ? `${OBOLS[type].label} Obol` : 'Investigation', keyGroup: -1 });
 }
 

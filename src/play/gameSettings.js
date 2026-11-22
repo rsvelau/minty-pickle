@@ -11,6 +11,8 @@ import { $, $$ } from '../app/dom.js';
 import { obolHTML } from './panels.js';
 import { gameConfig, play, saveConfig } from './playView.js';
 import { setCamera } from '../render/scene.js';
+import { openDecks } from './deckBuilder.js';
+import { deckList } from '../game/decks.js';
 
 // Module state: assigned by init() below, in the same order as before the split.
 export let SETTINGS;
@@ -40,6 +42,8 @@ export function init() {
       select: Object.entries(MONSTER_POOLS).map(([id, p]) => [id, `${p.label} (${p.ids.length})`]) },
     { key: 'monsterPick', label: 'Specific monster', note: 'For testing: always fight this one', when: () => gameConfig.monster === 'mystery',
       select: [['random', 'Random from the pool'], ...[...MONSTER_CARDS].sort((a, b) => a.name.localeCompare(b.name)).map((c) => [c.id, c.name])] },
+    { section: 'Cards' },
+    { cards: true, label: 'Cards in the game', note: 'Choose the Equipment, Events, Mindsets and Monsters new games use' },
     { section: 'Obol bag' },
     ...OBOL_TYPES.map((t) => ({ obol: t, label: `${OBOLS[t].label} Obols`, note: OBOLS[t].note, min: 0, max: 20 })),
   ];
@@ -95,6 +99,13 @@ export function renderSettings() {
     }
     const row = document.createElement('div');
     row.className = 'set-row';
+    if (f.cards) {
+      const n = ['equipment', 'events', 'mindsets'].map((d) => deckList(gameConfig, d).length);
+      row.innerHTML = `<label>${f.label}<small>${n[0]} Equipment · ${n[1]} Events · ${n[2]} Mindsets</small></label><button type="button" class="set-cards">Choose…</button>`;
+      row.querySelector('button').onclick = openDecks;
+      body.appendChild(row);
+      continue;
+    }
     const id = `set-${f.key ?? f.obol}`;
     const note = f.note === 'start' ? startNote() : f.note;
     row.innerHTML = `${f.obol ? obolHTML(f.obol) : ''}<label for="${id}">${f.label}${note ? `<small>${note}</small>` : ''}</label>`;
@@ -159,6 +170,7 @@ export function renderSettings() {
   tot.textContent = `${total} Obols in the bag`;
   body.appendChild(tot);
 }
+export function markSettingsDirty() { settingsDirty = true; }
 export function openSettings() {
   settingsDirty = false;
   renderSettings();

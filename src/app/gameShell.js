@@ -9,7 +9,7 @@
 // own board is set aside first and put back when you return to the editor;
 // a game never overwrites it.
 import { MONSTER_CARDS, MONSTER_POOLS } from '../game/cards/monsters.js';
-import { RULES_VERSION, clockMinutes, formatClock } from '../game/rules.js';
+import { RULES_VERSION, clockMinutes, formatClock, migrateState } from '../game/rules.js';
 import { readMap, writeMap, normalizeMeta } from '../core/mapFormat.js';
 import { makeSave, readSave } from '../core/saveFormat.js';
 import { checkMap } from '../core/mapCheck.js';
@@ -262,7 +262,7 @@ function loadSlot(id) {
   try {
     const raw = storage.saves.get(id);
     if (!raw) throw new Error('That save is empty.');
-    loaded = readSave(raw, { rulesVersion: RULES_VERSION });
+    loaded = readSave(raw, { rulesVersion: RULES_VERSION, migrate: migrateState });
   } catch (err) {
     toast(`Couldn't load: ${err.message}`);
     return;
@@ -403,12 +403,14 @@ export function init() {
   $('#toTitle').addEventListener('click', showTitle);
   $('#myMaps').addEventListener('click', showMyMaps);
   window.addEventListener('keydown', (e) => {
+    if (!$('#deckScreen').hidden) { if (e.key === 'Escape') { e.stopImmediatePropagation(); $('#deckScreen').hidden = true; } return; }
     if ($('#screen').hidden) {
       // Escape in a game opens the menu (unless something else wants it).
       const free = ['#dialog', '#settings', '#inventory', '#casebook', '#cardPop', '#revealSheet', '#endConfirm'].every((s) => $(s).hidden);
       if (e.key === 'Escape' && ui.mode === 'game' && free && play.state.phase !== 'asking') { e.stopImmediatePropagation(); showPauseMenu(); }
       return;
     }
+    if (!$('#settings').hidden || !$('#dialog').hidden) return; // a dialog over the screen takes its own keys
     // A screen is open: keys belong to it (typing still works), not the board.
     e.stopImmediatePropagation();
     if (e.key === 'Escape' && ui.mode !== 'title') closeScreen();

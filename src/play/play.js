@@ -56,7 +56,7 @@ export function createPlay({
   grid, scene, camera, controls, cellToWorld, cellTop, terrainify, cellLabel, onChange,
   onUsed = () => {}, onCollect = () => {}, onObol = () => {}, onAttack = () => {}, onMonster = () => {},
   onEvidence = () => {}, onAttacked = () => {}, onNamed = () => {}, onMonsterRevealed = () => {},
-  onDamage = () => {}, onIntent = () => {}, onGameOver = () => {}, onNpc = () => {}, onExhaust = () => {}, onCraft = () => {},
+  onDamage = () => {}, onIntent = () => {}, onGameOver = () => {}, onNpc = () => {}, onExhaust = () => {}, onCraft = () => {}, onCard = () => {},
   config = defaultConfig(),
 }) {
   const cfg = config; // live: Game settings edits this object; used at the next new game
@@ -584,6 +584,9 @@ export function createPlay({
           break;
         case 'obol':
           onObol({ player: state.players[e.seat], type: e.obol, left: e.left });
+          break;
+        case 'card':
+          attachToArrival(view.actors[e.seat], e.cell, () => onCard({ ...e, player: state.players[e.seat] }));
           break;
         case 'turn':
           view.pan = true;

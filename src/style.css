@@ -1060,3 +1060,38 @@ body.mode-game .editor-only, body.mode-game #info, body.mode-game .help { displa
 .slot-info b { display: block; color: var(--text); }
 .slot-info small { display: block; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .save-map { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-bottom: 14px; }
+
+/* Cards: drawn card popups, equipment lists, Cards in the game ------------------ */
+.pc-note { margin-top: 10px; font-size: 12px; opacity: 0.7; font-style: italic; }
+.eq-abilities { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; text-align: left; font-size: 13px; line-height: 1.35; }
+.eq-abilities li { display: grid; grid-template-columns: 38px 18px 1fr; gap: 6px; align-items: start; }
+.eq-range { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.7; padding-top: 2px; }
+.eq-kind { text-align: center; }
+.eq-list { display: grid; gap: 8px; }
+.eq-card { padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255, 255, 255, 0.03); }
+.eq-card .eq-abilities { color: var(--text); }
+.eq-from { display: block; margin-top: 6px; color: var(--muted); font-size: 11px; }
+.set-cards { min-height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.05); color: var(--text); cursor: pointer; }
+.dk-card { max-width: 560px; }
+.dk-tabs { margin: 10px 0; }
+.dk-tabs button small { display: block; font-size: 11px; color: var(--muted); }
+.dk-tools { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; margin-bottom: 10px; }
+.dk-tools button { min-height: 44px; }
+.dk-list { display: grid; gap: 8px; }
+.dk-row { display: flex; gap: 10px; align-items: center; padding: 10px; border: 1px solid var(--line); border-radius: 10px; }
+.dk-row.out { opacity: 0.45; }
+.dk-info { flex: 1; min-width: 0; }
+.dk-info b { color: var(--text); }
+.dk-text { margin: 4px 0 0; font-size: 13px; color: var(--muted); line-height: 1.35; }
+.dk-cat { display: inline-block; margin-right: 4px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--line); font-size: 11px; color: var(--text); }
+.dk-step { display: flex; align-items: center; gap: 4px; }
+.dk-step button { min-width: 40px; min-height: 40px !important; padding: 0 !important; }
+.dk-step span { min-width: 18px; text-align: center; font-variant-numeric: tabular-nums; color: var(--text); }
+.dk-toggle { min-width: 64px; }
+.dk-toggle.on { border-color: var(--accent) !important; background: rgba(217, 164, 106, 0.18) !important; }
+
+/* Dialogs opened from a game-shell screen (Game settings, its card chooser) sit above it. */
+#settings, #dialog { z-index: 65; }
+.deck-screen { z-index: 70; }
+.screen-card .dk-tabs { grid-template-columns: repeat(4, 1fr); }
+.screen-card .dk-tabs button { font-size: 13px; padding: 6px 2px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }

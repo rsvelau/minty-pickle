@@ -31,6 +31,28 @@ return to the map editor. The editor's **Play demo** still test-plays the editor
 The built-in map is built by `tools/build-hawthorn-bend.mjs` (run it with Node after editing it); the script
 refuses to write a map that doesn't pass the Ready to play? check cleanly.
 
+## Cards
+
+All the cards from the card PDF are in the game as data (`src/game/cards/`): **44 Equipment** cards
+(`equipment.js`: each ability's range, damage kind, dice cost, requirement and 1️⃣ / 🔗 limit, word for word),
+**37 Event** cards in six categories (Event, Decision, Cursed Object, Hazard, Opportunity, Global) and
+**6 Mindsets** (`events.js`). `requirements.js` reads the bracketed die requirements ([4+], [12], [11-],
+[1,2], [2-3], [2, 5+], [Any], [2x Target's 🎲]).
+
+**Decks** (`src/game/decks.js`): each new game shuffles an Equipment and an Event deck with the game's seeded
+dice; they are part of the saved game. An **Equipment Obol** draws an Equipment card into the investigator's
+inventory (the Inventory lists each card's abilities), and the Obolcraft "Draw an Equipment card" recipe
+draws from the same deck. An **Event Obol** draws an Event card, shown and logged. Cards come out once each
+(one copy = once per game). *Card effects are not played by the game yet*: they are being worked out with the
+designer card by card, and come next. Mindsets are listed but not dealt yet.
+
+**Cards in the game** (Game settings → Cards → Choose…): pick which Equipment, Events and Mindsets new games
+use, 0-3 copies of each, and which Monsters the random mystery can be. Search, All in / All out. Saved with the
+game settings (`deckCounts`: only the changes from one copy each).
+
+Saved games from before decks existed still load: `migrateState` in `src/game/rules.js` gives them decks
+(minus equipment already held). Rules version 2.
+
 ## The board
 The board is a whole town: a 20 × 26 grid by default (columns **A–T**, rows **1–26**), resizable from 4 to 60
 cells per side. Every cell has an area (category + subcategory), light and movement; walls and doors sit on

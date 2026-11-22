@@ -45,7 +45,10 @@ function lairSpot(state, board, randInt, current) {
 }
 
 export function setupMystery(state, board, { random, randInt, farthestCell }) {
-  const pool = (MONSTER_POOLS[state.config.monsterPool] ?? MONSTER_POOLS.all).ids.filter((id) => MONSTER_BY_ID[id]);
+  // The pool, minus monsters taken out in Settings → Cards in the game (if any are left).
+  const base = (MONSTER_POOLS[state.config.monsterPool] ?? MONSTER_POOLS.all).ids.filter((id) => MONSTER_BY_ID[id]);
+  const kept = base.filter((id) => state.config.deckCounts?.[`monsters:${id}`] !== 0);
+  const pool = kept.length ? kept : base;
   // A specific monster (Game settings, for testing), else a random one from the pool.
   const pick = MONSTER_BY_ID[state.config.monsterPick] ? state.config.monsterPick : null;
   const id = pick ?? pool[randInt(state, pool.length)];

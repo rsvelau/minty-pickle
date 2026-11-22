@@ -51,7 +51,7 @@ export function makeSave({ map, state, name = '', view = null, savedAt = new Dat
 // Read a save (object or JSON text). Returns { map: { data, meta }, state,
 // view, name, savedAt }. `rulesVersion` is the engine's RULES_VERSION: a save
 // from a newer engine is refused; older ones go through upgradeState().
-export function readSave(input, { rulesVersion } = {}) {
+export function readSave(input, { rulesVersion, migrate } = {}) {
   let json = input;
   if (typeof input === 'string') {
     try { json = JSON.parse(input); } catch { throw new Error('This file is not valid JSON.'); }
@@ -62,19 +62,19 @@ export function readSave(input, { rulesVersion } = {}) {
   }
   if (!json.state || typeof json.state !== 'object') throw new Error('This save has no game in it.');
   const map = readMap(json.map);
-  const state = upgradeState(structuredCloneJSON(json.state), rulesVersion);
+  const state = upgradeState(structuredCloneJSON(json.state), rulesVersion, migrate);
   return { map, state, view: json.view ?? null, name: json.name ?? '', savedAt: json.savedAt ?? null };
 }
 
-// Bring an older rules state up to date. There is only version 1 so far; add
-// a step here whenever RULES_VERSION goes up, so old saves keep loading.
-export function upgradeState(state, rulesVersion) {
+// Bring an older rules state up to date: refuse a newer one, and pass older
+// ones through the engine's `migrate` (rules.js migrateState), which has one
+// step per rules version so old saves keep loading.
+export function upgradeState(state, rulesVersion, migrate) {
   const v = Number.isInteger(state.version) ? state.version : 1;
   if (rulesVersion !== undefined && v > rulesVersion) {
     throw new Error(`This save comes from a newer version of the game rules (${v}); this app knows up to ${rulesVersion}.`);
   }
-  // (future) if (v < 2) { ...; state.version = 2; }
-  return state;
+  return migrate && v < (rulesVersion ?? v) ? migrate(state) : state;
 }
 
 const structuredCloneJSON = (v) => JSON.parse(JSON.stringify(v));

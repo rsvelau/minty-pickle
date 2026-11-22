@@ -9,7 +9,7 @@
 // `pay` must fill the recipe exactly; autoPay() suggests a payment that keeps
 // your rarer colours.
 import { INJURY_TRACKS } from './cards/injuries.js';
-import { EQUIPMENT_NAMES } from './cards/equipment.js';
+import { drawEquipment } from './decks.js';
 
 export const ANY = 'any';
 export const RECIPES = [
@@ -62,6 +62,7 @@ export function autoPay(recipe, obols) {
 export function blocked(state, pl, recipe) {
   if (recipe.heal && !(pl.injuries?.[recipe.heal] > 0)) return `No ${INJURY_TRACKS[recipe.heal].label} injury to heal`;
   if (recipe.resurrect && !state.players.some((p) => p.dead)) return 'No one has died';
+  if (recipe.draw && !state.decks?.equipment?.length) return 'The Equipment deck is empty';
   if (!autoPay(recipe, pl.inventory.obolcraft)) return 'Not enough Obols';
   return null;
 }
@@ -91,9 +92,9 @@ export function craft(state, pl, action, ctx, events) {
     pl.resonance = (pl.resonance ?? 0) + 1;
     msg = `${pl.name}'s next white die will return to their reserve after use`;
   } else if (recipe.draw) {
-    const name = EQUIPMENT_NAMES[ctx.randInt(state, EQUIPMENT_NAMES.length)];
-    pl.inventory.equipment.push({ label: name, from: 'Obolcraft' });
-    msg = `${pl.name} draws an Equipment card: ${name}`;
+    const card = drawEquipment(state, pl, 'Obolcraft');
+    msg = `${pl.name} draws an Equipment card: ${card.name}`;
+    events.push({ type: 'card', deck: 'equipment', id: card.id, seat: pl.seat, cell: pl.pos });
   } else if (recipe.resurrect) {
     target.dead = false;
     target.injuries = { P: 0, M: 0, S: 0 };
