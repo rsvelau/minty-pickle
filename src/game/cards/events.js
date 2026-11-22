@@ -67,7 +67,7 @@ export const EVENT_CARDS = [
   E('sinkhole', 'Sinkhole', 'hazard', 'This space costs 5 movement to cross for the rest of the game.', { lasting: true }),
   E('huddled-survivors', 'Huddled Survivors', 'decision', 'Choose: Live (Can discard 1 Weapon and 1 white 🎲 to investigate twice). Die (Do nothing).'),
   E('insane-survivor', 'Insane Survivor', 'decision', 'Choose: Live (Take 💥 [P] and reveal an evidence card). Die (Do nothing).'),
-  E('overgrown-brambles', 'Overgrown Brambles', 'hazard', 'Crossing this space costs ⏳. Can be destroyed with 🔥 or specific weapons.', { lasting: true }),
+  E('overgrown-brambles', 'Overgrown Brambles', 'hazard', 'Entering this space ends your movement for the turn. Can be destroyed with 🔥 or specific weapons.', { lasting: true }),
   E('coil-of-razor-wire', 'Coil of Razor Wire', 'hazard', 'Create a hazard space which only affects corporeal monsters. Crossing it costs them 5 movement this turn and 🎲 damage. 1️⃣', { lasting: true }),
   E('rusty-bear-trap', 'Rusty Bear Trap', 'hazard', 'You can set a trap on this space. A Corporeal monster walking through it is immobilized for ⏳ (Fae: ⏳⏳). Immobilized monsters do everything except move. 1️⃣', { lasting: true }),
   // Page 4

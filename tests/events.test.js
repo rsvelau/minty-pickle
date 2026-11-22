@@ -190,4 +190,5 @@ test('Mindsets: Rushed doubles movement, Meticulous caps movement dice at 4, Rec
   pl.mindset = 'reckless';
   s.act({ type: 'roll' });
   assert.match(s.act({ type: 'slot', die: 0, to: 'defense' }).error, /Reckless/);
+  assert.equal(s.state.maxDefense, 0);
 });

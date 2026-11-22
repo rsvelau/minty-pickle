@@ -263,7 +263,7 @@ export function applyAction(state, board, action) {
         if (heads) { state.windDouble = true; log(state, `Strong Winds: heads, a Favorable Wind (${who(state)}'s slotted movement is doubled).`); }
         else { state.maxSlots = Math.max(0, state.maxSlots - 1); log(state, `Strong Winds: tails, an Unfavorable Wind (${who(state)} loses a movement slot).`); }
       }
-      state.maxDefense = lim.defense;
+      state.maxDefense = pl.mindset === 'reckless' ? 0 : lim.defense; // Reckless: no defense slots (equipment bonuses still count)
       state.deathsDoor = lim.deathsDoor;
       state.disabledDice = Math.max(0, state.blackCount - lim.dice);
       state.roll = 0;
@@ -284,7 +284,7 @@ export function applyAction(state, board, action) {
       if (!state.pool[n] || !turnPhases.includes(state.phase)) return fail('no such die');
       if (to === 'slots' && state.phase !== 'slotting') return fail('finish moving first');
       if (state.pool[n].spent) return fail('that die has been used to move');
-      if (to === 'defSlots' && curPlayer(state).mindset === 'reckless' && state.defSlots.indexOf(n) < 0) return fail('Reckless: you cannot pre-slot defensive dice');
+      if (to === 'defSlots' && curPlayer(state).mindset === 'reckless' && state.defSlots.indexOf(n) < 0) return fail('Reckless: no defense slots (equipment defense bonuses still count)');
       const other = to === 'slots' ? 'defSlots' : 'slots';
       const at = state[to].indexOf(n);
       if (at >= 0) { state[to].splice(at, 1); syncDefense(state); break; }
