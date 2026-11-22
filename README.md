@@ -867,6 +867,12 @@ the chosen service, run `createHost` with `boardFromJSON(savedBoard)` where the 
 `play.js` a `createClient` session instead of the local one; the view needs no other changes. `loopback()`
 is an in-memory transport used by the tests and is a template for a real one.
 
+## Backlog
+
+`docs/BACKLOG.md` lists every effect that is in the game as data but not played yet (✋ equipment skills,
+travel events, the Curious Mindset, monster ability keywords, some weakness effects, discard weaknesses,
+objectives other than Kill), grouped by mechanic with the open rules questions.
+
 ## Code layout
 
 The code is grouped by job, so a future game build can reuse the map model, rules and 3D board with its own
