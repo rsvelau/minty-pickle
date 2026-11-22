@@ -13,23 +13,23 @@
 // - Players are small stylised 90s figures (to scale) that each stand in
 //   their own quarter of a cell, with a name tag (it fades when zoomed in).
 import * as THREE from 'three';
-import { m, METERS_PER_CELL } from './scale.js';
-import { dreadUniforms, flickerAt } from './dread.js';
+import { m, METERS_PER_CELL } from '../core/scale.js';
+import { dreadUniforms, flickerAt } from '../render/dread.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {
   DIRS, startMinutes as rulesStartMinutes, clockMinutes as rulesClockMinutes, isMidnight, defaultConfig,
-} from './game/rules.js';
-import { createBoard } from './game/board.js';
-import { createLocalSession } from './game/session.js';
-import { createDiscoveries, PAINT } from './discoveries.js';
-import { createMonsterModels } from './monsterModels.js';
-import { MONSTER_BY_ID } from './game/cards/monsters.js';
-import { evidenceVisual, ATTACK_TYPES } from './game/cards/evidence.js';
+} from '../game/rules.js';
+import { createBoard } from '../game/board.js';
+import { createLocalSession } from '../game/session.js';
+import { createDiscoveries, PAINT } from '../render/discoveries.js';
+import { createMonsterModels } from '../render/monsterModels.js';
+import { MONSTER_BY_ID } from '../game/cards/monsters.js';
+import { evidenceVisual, ATTACK_TYPES } from '../game/cards/evidence.js';
 
 export {
   DEFAULT_CONFIG, defaultConfig, OBOLS, OBOL_TYPES, obolCounts, INVENTORY_TABS, formatClock, MIDNIGHT,
-} from './game/rules.js';
-import { MONSTERS, monsterDef } from './game/monsters.js';
+} from '../game/rules.js';
+import { MONSTERS, monsterDef } from '../game/monsters.js';
 export { MONSTERS, monsterDef };
 
 // The four players' looks: jacket colour (also the name tag), hair, extras.

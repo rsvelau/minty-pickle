@@ -24,7 +24,7 @@ the edges between cells.
 The tile menu sorts every subcategory into collapsible sections (Ground & roads, Nature, Cemetery, Water,
 Buildings & interiors, 90s town, Pacific Northwest, Unsettling, Rural) with a **Find a tile** search box on
 top. Each button shows its size (`2×3`, or `area` for ones you paint in any shape). Which sections are open
-is remembered on that device. Categories are the `cat` on each subcategory in `src/state.js` (`TILE_CATEGORIES`).
+is remembered on that device. Categories are the `cat` on each subcategory in `src/core/state.js` (`TILE_CATEGORIES`).
 
 \* Starts out **blocked** when painted. Painting an ordinary subcategory over a default-blocked cell unblocks
 it; otherwise painting keeps the cell's walkability, and the Walkable/Blocked brushes always win.
@@ -46,7 +46,7 @@ itself out to match:
 A street running straight to the board edge continues off it rather than dead-ending, and streets carry on
 across bridges (the deck has the same centre line). Paint is faded and chipped, the asphalt cracked and
 patched, and the sidewalks are jointed concrete with moss and raised curbs. Old **Road** and **Sidewalk**
-cells become Street when loaded. The street surface lives in `src/street.js`.
+cells become Street when loaded. The street surface lives in `src/render/street.js`.
 
 **Intersections** (T-junctions and crossings) get street furniture:
 
@@ -89,11 +89,11 @@ A **2×2** landmark: a late-1800s stone tower with a weathered clapboard clock s
 open belfry and a steep spire. The brush paints a whole 2×2 block with the cell you click as its north-west
 corner (Rectangle mode tiles towers 2×2 at a time). The ground under it is levelled like a building. Its
 dials show **11:00 PM** while planning and the **game time** in the play demo; the minute hand sweeps
-forward each turn. Model: `src/clocktower.js`.
+forward each turn. Model: `src/render/clocktower.js`.
 
 ### Landmarks
 
-Blocked tiles that arrive fully dressed (models in `src/landmarks.js`; lights are decorative glows, not game
+Blocked tiles that arrive fully dressed (models in `src/render/landmarks.js`; lights are decorative glows, not game
 light sources, and they flicker at midnight).
 
 **Placing a premade building** (any fixed-size landmark, the clocktower included) works the same on a phone
@@ -119,8 +119,8 @@ with fences running round the outside and signs on the first cell.
 | Unsettling | Abandoned rectory 2×2 (boarded windows, crooked steeple, swaying bell rope), Burned house 2×2 (swing still moving), Overturned school bus 1×3 (blinking hazard light), Wrecked car in a ditch 1×1 (door open, headlights on), Empty playground 2×2 (merry-go-round turning on its own), Radio tower 1×1 (red light that skips a beat), Quarantine fence *area*, Missing-person memorial 1×1 (candles, photo, ribbon, teddy bear) |
 | Rural | Farmhouse & barn 3×3 (rusted tractor, porch light), Trailer park *area* (dog chain, no dog), Water tower 2×2 (HAWTHORN BEND, and something red near the top), Junkyard *area* (stacked cars, crane) |
 
-To add one: an entry in `LANDMARK_SUBS` (`src/state.js`) with its section, footprint and ground colour, and a
-builder of the same name in `B` (fixed) or `F` (area) in `src/landmarks.js`.
+To add one: an entry in `LANDMARK_SUBS` (`src/core/state.js`) with its section, footprint and ground colour, and a
+builder of the same name in `B` (fixed) or `F` (area) in `src/render/landmarks.js`.
 
 ### Start space
 
@@ -134,7 +134,7 @@ a pulsing yellow painted box and amber glow, and lit by the headlights.
   `van facing west` and the front cell shows `Player start`.
 - The van's cell is blocked; the player start cell keeps its own surface (normally street).
 - **The headlights are a real light source**: 35 % on the van's cell, 90 % on the player start cell and 50 %
-  on the cell beyond (`HEADLIGHTS` in `src/state.js`). Walls block them, like any light.
+  on the cell beyond (`HEADLIGHTS` in `src/core/state.js`). Walls block them, like any light.
 - The headlights are warm sealed-beam / early-halogen white (about 3,200 K, as on 80s–90s cars), with soft
   beams in the air that fade out over about 13 m as well as the glow on the road.
 - The play demo starts the pawn on the player start cell, and the headlights are its starting light (the
@@ -165,7 +165,7 @@ A street lamp is a light source of radius 1.5 at full brightness.
 Light levels are data: hovering a cell shows its light (`Light 50 %`, `Light source r 3 (Floodlight)`), the
 **Light** view shows the levels as a gradient, storefront glass glows when light reaches either side, and
 exported JSON gives every cell a `light` level from 0 to 1 (plus `lit`/`radius` on sources and `"lamp": true`
-on lit lamps). The rules live in `src/state.js` (`centreBrightness`, `lightAt`, `lightReaches`). Saves from
+on lit lamps). The rules live in `src/core/state.js` (`centreBrightness`, `lightAt`, `lightReaches`). Saves from
 before light sources had a radius load their lit cells as radius-½ bulbs.
 
 ### Walkable and blocked versions
@@ -188,12 +188,12 @@ the cells around them (across a road, along a path).
 | Lake / River | Stepping stones (a ford) | Open water |
 | Bridge | Open deck | Barricade on the deck |
 
-The variants live in `VARIANTS` in `src/props.js`: one entry per subcategory, each returning the props
+The variants live in `VARIANTS` in `src/render/props.js`: one entry per subcategory, each returning the props
 for its walkable and blocked look. Props are built to scale (1 cell = 7 m).
 
-Everything is defined once in `AREAS` in `src/state.js` (label, default walkability). The brush buttons are
+Everything is defined once in `AREAS` in `src/core/state.js` (label, default walkability). The brush buttons are
 generated from it, so a new subcategory added there shows up in the panel, saves and imports. Give it a
-colour in `SUB_LOOK` in `src/main.js`.
+colour in `SUB_LOOK` in `src/app/config.js`.
 
 ### Gameplay markers
 
@@ -215,8 +215,8 @@ One marker per cell; **Remove marker** clears it, and undo works as usual. A key
 connected indoor area it sits in (interior walls don't split it), or, for a key just outside, the buildings
 its cell touches. Hovering a key outlines the doors it unlocks in gold and the info box says how many.
 Exported cells carry `"marker"`, and key cells also list the doors they unlock (`"unlocks"`). **Show
-markers** in View hides them. Marker art lives in `src/markers.js`; the list of markers is `MARKERS` in
-`src/state.js`.
+markers** in View hides them. Marker art lives in `src/render/markers.js`; the list of markers is `MARKERS` in
+`src/core/state.js`.
 
 ### Play demo
 
@@ -233,7 +233,7 @@ markers** in View hides them. Marker art lives in `src/markers.js`; the list of 
   rolling **all your black dice**; then a dice tray opens with your rolled dice and **2 movement slots**.
   Tap dice to put them in slots (tap again to take one out) and press **Move N**: you move the total of the
   slotted dice. Slots can be left empty (**Stay put** with none). If your cell is **lit (light 50 % or
-  more) at the start of your turn, a 3rd slot opens** (`LIT_THRESHOLD`, `LIT_SLOTS` in `src/play.js`).
+  more) at the start of your turn, a 3rd slot opens** (`LIT_THRESHOLD`, `LIT_SLOTS` in `src/play/play.js`).
 - **Black dice are shared:** when anyone attunes a Black Dice marker, every player rolls one more black die
   from then on (each marker works once).
 - **White dice are personal and kept in reserve, unrolled.** Each player keeps the White Dice they collect.
@@ -242,14 +242,14 @@ markers** in View hides them. Marker art lives in `src/markers.js`; the list of 
 - **Game clock.** The night starts at **11:00 PM**; each turn (every player moving once) is
   **5 minutes**, so 12 turns run to **midnight**. A small counter at the top of the screen shows the time
   and turn (`11:05 PM · Turn 2/12`). Constants: `GAME_START_MIN`, `TURN_MINUTES`, `TURNS_TO_MIDNIGHT` in
-  `src/play.js`.
+  `src/play/play.js`.
 - **Objectives are hidden until midnight:** in the play demo, Objective markers don't show and can't be
   touched until the clock strikes twelve (which ones appear will depend on the monster, coming later).
 - **Midnight turns menacing.** When the clock strikes twelve (play demo only), over a few seconds: every
   light source (players' flashlights included) flickers on its own uneasy rhythm, with its whole pool of light dipping together (lit cells,
   street surface, lamp globes, van headlights, lit windows, the porch light). Dips are slow and partial,
   never a strobe (at most ~1.4 dips a second per light). The clocktower's dials sputter and go out, the rain turns blood red, doubles and drives in on the wind, the
-  firs sway, the cold blue night shifts to a muted red, and the night closes in a little (dimmer sky light, nearer fog). Code: `src/dread.js`.
+  firs sway, the cold blue night shifts to a muted red, and the night closes in a little (dimmer sky light, nearer fog). Code: `src/render/dread.js`.
 - **Midnight demo.** The second play button starts the game at midnight: objectives out, the town already
   menacing. **Play demo** (or `Y`) starts the standard 11 PM game.
 - **Investigating.** When a runner reaches an unused Investigation space, a prompt asks **Investigate?** It also
@@ -275,7 +275,7 @@ markers** in View hides them. Marker art lives in `src/markers.js`; the list of 
   (1 to 4; 1 plays solo, and the clock moves on after each of your turns), starting black dice,
   movement slots, slots when starting in light, the light level that counts as lit, minutes per turn, turns
   until midnight, stopping on every marker, asking before investigating, and the number of each Obol. They're
-  saved on this device (`DEFAULT_CONFIG` in `src/play.js`), and changing them restarts a game in progress.
+  saved on this device (`DEFAULT_CONFIG` in `src/play/play.js`), and changing them restarts a game in progress.
 - **Running and the camera.** Runners jog at ~3.2 m/s, flashlights held steady and sweeping slowly, (hold the board to fast-forward), and the camera
   drifts ahead toward the next place the runner stops for a decision.
 - **Turns don't wait for running.** A move is worked out the moment the player gives their input. As soon
@@ -320,7 +320,7 @@ markers** in View hides them. Marker art lives in `src/markers.js`; the list of 
   `(collected)` / `(attuned)` / `(picked up)` / `(visited)` / `(used)`. This only shows while playing; the board itself is unchanged.
 - **Follow** keeps the camera on the pawn; **Restart** puts it back on the Start space and brings faded markers back.
 
-The demo never changes the board. Its logic is in `src/play.js`.
+The demo never changes the board. Its logic is in `src/play/play.js`.
 
 ### Movement check
 
@@ -342,7 +342,7 @@ cell counts too), and from then on every locked and one-way door in that key's b
 The search tracks which keys you carry, so a route detours to fetch a key when that's the only way in or
 it's shorter; the info box says where (`Picks up a key at M10`) and the key gets a gold ring. Range shading
 uses the same rule. Keys whose buildings unlock the same doors count as one; up to 8 distinct keys are
-tracked at once (`MAX_KEY_GROUPS`). The rules live in `src/state.js` (`canCross`, `canStep`, `keyGroups`, `moveField`, `route`) so game code can
+tracked at once (`MAX_KEY_GROUPS`). The rules live in `src/core/state.js` (`canCross`, `canStep`, `keyGroups`, `moveField`, `route`) so game code can
 reuse them.
 
 ### Condemned buildings
@@ -354,7 +354,7 @@ corner building gets one on each street). Sides that don't face a street are pla
 sheeted with weathered plywood and nailed across with planks, and the inside is full of rubble and junk.
 
 - The walls follow the shape as you paint or erase, so you never draw them by hand. They aren't stored;
-  they're rebuilt from the cells (`autoEdges` in `src/state.js`).
+  they're rebuilt from the cells (`autoEdges` in `src/core/state.js`).
 - Boarded doors and windows block movement and light, like walls.
 - A wall, door or window you draw yourself on the same edge replaces the automatic piece (for example, a
   door to make one way in). The Erase tool can't remove automatic pieces; change the cells instead.
@@ -410,12 +410,12 @@ on the **edges between cells**, not in cells:
   deck with worn centre-line paint, a concrete edge girder and pipe railings; and round concrete piers with
   cap beams in the water at each end and every two cells. The concrete is darkened by the weather, damper
   toward the water, with faint rust staining under the deck. The colouring is drawn in the shader from
-  world position (`weather()` in `src/bridge.js`), so it stays the same scale on every beam and pier.
+  world position (`weather()` in `src/render/bridge.js`), so it stays the same scale on every beam and pier.
   On slopes every bridge part takes the deck level from the bridge cell it sits on or overhangs (within
   half a cell), and the road cells at each end are held at that level, so road, deck and frame line up. Connected bridge cells form one bridge, so a
-  line of three bridge cells is one two-lane, three-cell span (`src/bridge.js`).
+  line of three bridge cells is one two-lane, three-cell span (`src/render/bridge.js`).
 - **Bridge** only applies to water cells and makes them walkable. Each bridge cell knows which way it spans
-  (`bridgeAxis()` in `src/state.js`, and `bridgeAxis` in exported JSON): toward land or other bridge cells
+  (`bridgeAxis()` in `src/core/state.js`, and `bridgeAxis` in exported JSON): toward land or other bridge cells
   and across the water. That is what future bridge assets and pylons should use.
 
 ## Elevation
@@ -431,7 +431,7 @@ light or movement work.
 | Hill and hollow | A rounded rise toward the top right (≈5 m), a damp hollow toward the bottom left, a low ridge between |
 
 Everything follows the ground: tiles, streets, water, walls, props, bridges, lamps, markers and the
-surrounding forest. Each preset is one height formula in `TERRAIN_PRESETS` (`src/terrain.js`), written so
+surrounding forest. Each preset is one height formula in `TERRAIN_PRESETS` (`src/render/terrain.js`), written so
 the same text runs on the GPU (lifting every vertex) and in JavaScript (picking cells under the pointer).
 The preset is saved with the board, and exported cells carry their ground `elevation` in metres when the
 board isn't flat.
@@ -453,14 +453,14 @@ Some cells level the ground instead of following it (each connected group is han
   across it, so a road is level from kerb to kerb instead of tilting with the hillside.
 - **Bridges** keep the height of the road on their banks; their piers stretch down to the lowered riverbed.
 
-These levels are per-cell overrides (`updateOverrides` in `src/terrain.js`) read by every shader through a
+These levels are per-cell overrides (`updateOverrides` in `src/render/terrain.js`) read by every shader through a
 small texture, and they're what the exported `elevation` reports. On the Flat preset nothing changes.
 
 ## Scale
 
 One cell is about **7 m (23 ft)**: the width of a narrow two-lane street with small sidewalks. The default
 board is roughly 140 × 182 m. Everything is built in metres and converted through `METERS_PER_CELL` in
-`src/scale.js`:
+`src/core/scale.js`:
 
 - Douglas firs 16–44 m tall (about 2–6 cells), younger ones at the forest edge
 - A small reference house (9 × 8 m, about 1.3 × 1.1 cells, 3 m walls) in the clearing beside the board
@@ -492,7 +492,7 @@ npm test           # headless rules tests (plain Node: no browser, no three.js)
   | Medium | up to 1.5× | 1024 | 65% | 60% | 20 |
   | High | up to 2× | 2048 | 100% | 100% | 30 |
 
-  Phones start on Medium, computers on High. `QUALITY` in `src/main.js`.
+  Phones start on Medium, computers on High. `QUALITY` in `src/render/scene.js`.
 - **FPS** (View menu) shows the real frame rate and whether it's in active or idle mode: handy when trying
   the game on a phone.
 
@@ -566,6 +566,26 @@ cells it separates (`null` past the board edge).
 Older files still import: version 1 (`"indoor": true/false`) and version 2 (no subcategories for
 outdoor/indoor, no edges) are converted on load, outdoor to Ground and indoor to Hardwood.
 
+A map file may also carry details: `"meta": { "id", "name", "description", "created", "updated" }`
+(`src/core/mapFormat.js`). Files from a newer version of the app are refused with a message rather than
+half-loaded, and a saved game pasted into Import is recognised and turned away.
+
+**Ready to play?** (under the file buttons) checks the board against what the game needs
+(`src/core/mapCheck.js`): a Start space whose front cell is open (errors stop play), Investigation spots
+(4 or more, one per evidence card), Objective markers in 3 separate buildings for monsters that hunt
+townspeople, markers on blocked cells, and markers players can't reach from the start (doors, locks and
+keys counted). The future game will run the same check before letting a custom map be played.
+
+**Saved games** (`src/core/saveFormat.js`, used by the game build to come) hold the rules state, which is
+plain JSON including the seeded random-number state, so a loaded game continues exactly as it would have,
+plus a full copy of the map, so editing or deleting the map later never breaks a save. Saves from a newer
+version are refused; older ones pass through `upgradeState()`, where each future rules change adds a step.
+
+**Storage** (`src/core/storage.js`) is one interface for the planner's board, a library of maps, saved games
+and preferences, over a swappable backend: browser storage today, a folder of files in a desktop build later,
+memory in tests. Blocked or full storage never crashes the app. The planner's board keeps the key it has
+always used, so existing boards carry over.
+
 ## Game architecture (rules, view, sessions)
 
 The game is split so the same rules can run on one phone today and on a server for multiplayer later:
@@ -582,7 +602,7 @@ The game is split so the same rules can run on one phone today and on a server f
   e.g. on a server.
 - **Sessions** (`src/game/session.js`): the only thing the view talks to. `createLocalSession` is today's
   hot-seat game on one device. `createHost` / `createClient` are the multiplayer shape (below).
-- **View** (`src/play.js`): figures, animation, camera, name tags, the dice tumble, monster figures. It sends
+- **View** (`src/play/play.js`): figures, animation, camera, name tags, the dice tumble, monster figures. It sends
   actions to the session and animates the events that come back; it never changes the game itself.
 - **Tests** (`tests/rules.test.js`, `npm test`): whole games played headless by a bot, determinism, JSON
   round-trips, rejected moves, Obols, midnight, monsters stalking and attacking, the board travelling as
@@ -601,7 +621,7 @@ pools: all, flesh and blood, spirits and shadows, old-world folklore). Its 13 ca
   1 Lair). It flips for everyone, and the cell they're standing on changes to show it (frost, claw marks,
   blood, howl rings...). A **Lair** transforms its cell for good: an opened grave, a cave mouth, a scorched
   transformation site, a ritual circle, a ruin, a wrecked room, a pit of darkness, each with its own glow
-  (`src/discoveries.js`).
+  (`src/render/discoveries.js`).
 - **Attack Obol:** the monster strikes for one die of damage of its type; the first time, its **Attack card**
   (Physical / Mental / Spiritual) is revealed. Damage is tallied per type until injuries arrive.
 - **Casebook** (book button on the play bar, or `C`): the five evidence slots, who found each and where (tap
@@ -659,7 +679,7 @@ is the colour of its icon on the card (grey icons have no damage type); a test p
 
 ### Monster figures
 
-Every card monster has its own low-poly figure (`src/monsterModels.js`), to scale with the players, with idle
+Every card monster has its own low-poly figure (`src/render/monsterModels.js`), to scale with the players, with idle
 motion: a hunched Werewolf; a smoky black Barghest dragging a chain; a loose pack of fiery Hellhounds, one per
 action die; a pelt-draped Skinwalker in an animal skull; a 3 m Wendigo with antlers and ribs; a floating, wailing
 Banshee; the Ushi-Oni, an ox head on a broad crab-like shell with splayed legs and two pincers; a knee-high
@@ -692,7 +712,7 @@ Add an entry to `MONSTERS` in `src/game/monsters.js`:
   attack on a player in or next to its cell.
 - `onAttack(ctx, monster, player)` (optional): what an attack does. Without it an attack is logged and
   animated.
-- `look`: which 3D figure to use (`monsterLooks` in `src/play.js`; `shade` is the stooped figure with ember
+- `look`: which 3D figure to use (`monsterLooks` in `src/play/play.js`; `shade` is the stooped figure with ember
   eyes).
 
 Helpers for AI: `reach` (walking distances and paths over the real movement rules), `nearestPlayer`,
@@ -723,24 +743,40 @@ is an in-memory transport used by the tests and is a template for a real one.
 
 ## Code layout
 
-- `src/state.js` — grid data model, strokes, undo/redo, JSON (de)serialization. No rendering.
-- `src/game/` — the game rules, board adapter, monsters and sessions (see above). No rendering.
-- `src/main.js` — three.js scene, tile rendering, bridges, painting, UI wiring, quality and render loop.
-- `src/water.js` — water surface shader (flow-mapped river currents, still lakes).
-- `src/props.js` — walkable/blocked props for every surface (`VARIANTS`).
-- `src/play.js` — the play demo's view: figures, animation, camera, monster looks.
-- `src/clocktower.js` — the Old Clocktower model and its hands.
-- `src/dread.js` — midnight flicker and tree sway.
-- `src/markers.js` — gameplay marker badges and icons.
-- `src/bridge.js` — steel truss bridge structures built from connected bridge cells.
-- `src/street.js` — street surfaces: lane lines, crosswalks, sidewalks, chosen from neighbouring cells.
-- `src/terrain.js` — elevation presets (one height formula each, shared by GPU and picking).
-- `src/scale.js` — metres per cell and the street cross-section.
+The code is grouped by job, so a future game build can reuse the map model, rules and 3D board with its own
+menus (`src/main.js` explains the same at the top):
+
+- `src/core/` — the map model and file formats. No rendering, runs in Node.
+  - `state.js` — the grid: cells, edges, light, movement, landmarks, strokes, undo/redo, JSON.
+  - `mapFormat.js` — map files (with optional details), version checks. `saveFormat.js` — saved games.
+  - `storage.js` — maps, saves and preferences over a swappable backend. `mapCheck.js` — Ready to play?
+  - `scale.js` — metres per cell and the street cross-section.
+- `src/game/` — the rules engine: state, actions, monsters, mystery, combat, sessions. No rendering.
+- `src/render/` — the 3D board.
+  - `scene.js` — renderer, camera, lights, sky, quality presets, shared materials.
+  - `board.js` — builds and refreshes the board from the grid. `tileLook.js` — each cell's look.
+  - `surroundings.js` — the forest ring, reference house, rain, atmosphere.
+  - `terrain.js` (elevation, road and bridge levels), `water.js`, `props.js`, `street.js`, `bridge.js`,
+    `clocktower.js`, `landmarks.js`, `markers.js`, `dread.js` (midnight), `monsterModels.js`, `discoveries.js`.
+- `src/editor/` — map-building tools: `painting.js`, `placing.js` (premade building preview), `walls.js`,
+  `moveCheck.js`, `toolbar.js` (tools, brushes and the tile menu).
+- `src/play/` — the play demo: `play.js` (figures, animation, camera), `playView.js` (HUD, dice, clock,
+  choices), `panels.js` (evidence, Casebook, Field Guide, injuries, Obolcraft, inventory),
+  `gameSettings.js`.
+- `src/app/` — the shell: `config.js` (colours, brushes, `ui` state, the grid, storage), `pointer.js` (mouse
+  and touch), `controls.js`, `panelControls.js`, `files.js` (export/import, PNG, dialogs, Ready to play?),
+  `shell.js` (shortcuts, info box, counts, autosave), `loop.js` (the frame loop), `dom.js`.
+- `src/main.js` — the entry: imports the modules and runs their start-up code in order.
 - `src/style.css` — panel styling.
 
-Tiles are a single `InstancedMesh`; each cell's look comes from `cellLook()` in `main.js`. That's the place
+Each module's start-up code sits in an exported `init()` that `src/main.js` calls in a fixed order, and a
+module that sets another module's variable does it through a setter (`__set_camTween(...)` and so on), since
+ES modules can't assign each other's variables. `npm run lint` (ESLint) flags any name that doesn't resolve,
+which is the usual way a refactor like this breaks.
+
+Tiles are a single `InstancedMesh`; each cell's look comes from `cellLook()` in `src/render/tileLook.js`. That's the place
 to swap flat colours for textures (road, hardwood, etc.) later. GLTF buildings and props (cars, streetlights)
 can be added to the scene with three's `GLTFLoader` and positioned with `cellToWorld(x, y)`.
-Bridge assets belong with the decks in `refreshWaterAndBridges()`: for each bridge cell, `grid.bridgeAxis(x, y)`
+Bridge assets belong with the decks in `refreshWaterAndBridges()` (`src/render/board.js`): for each bridge cell, `grid.bridgeAxis(x, y)`
 gives the span direction, the deck top is at `DECK_TOP`, and the water surface and bed are at `WATER_Y` and
 `BED_H`, which is where pylons would stand.

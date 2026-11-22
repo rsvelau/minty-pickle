@@ -3,7 +3,7 @@
 //   npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GridState } from '../src/state.js';
+import { GridState } from '../src/core/state.js';
 import { createBoard, boardFromJSON } from '../src/game/board.js';
 import { newGame, applyAction, defaultConfig, isMidnight } from '../src/game/rules.js';
 import { createLocalSession, createHost, createClient, loopback } from '../src/game/session.js';

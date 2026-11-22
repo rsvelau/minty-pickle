@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AREAS, TILE_CATEGORIES, LANDMARK_SUBS, GridState, isLandmark, footprintOf, defaultWalkable } from '../src/state.js';
+import { AREAS, TILE_CATEGORIES, LANDMARK_SUBS, GridState, isLandmark, footprintOf, defaultWalkable } from '../src/core/state.js';
 
 test('every tile belongs to a known menu category', () => {
   const cats = new Set(TILE_CATEGORIES.map((c) => c.id));
@@ -36,7 +36,7 @@ test('blocks() finds whole w x h blocks only', () => {
 });
 
 test('a turned building swaps its footprint and keeps its facing and flip', async () => {
-  const { landmarkDims, normalizeCell } = await import('../src/state.js');
+  const { landmarkDims, normalizeCell } = await import('../src/core/state.js');
   assert.deepEqual(landmarkDims('diner', null), [2, 3]);   // as listed (older boards)
   assert.deepEqual(landmarkDims('diner', 2), [3, 2]);      // facing south: long side along x
   assert.deepEqual(landmarkDims('diner', 1), [2, 3]);      // facing east

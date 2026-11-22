@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GridState } from '../src/state.js';
+import { GridState } from '../src/core/state.js';
 import { createBoard } from '../src/game/board.js';
 import { newGame, applyAction } from '../src/game/rules.js';
 import { RECIPES, RECIPE_BY_ID, autoPay, payFits } from '../src/game/obolcraft.js';

@@ -6,10 +6,10 @@
 // per prop kind, and rebuilt from the grid after every change.
 import * as THREE from 'three';
 import { flickerize } from './dread.js';
-import { m } from './scale.js';
+import { m } from '../core/scale.js';
 import { terrainify } from './terrain.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { isLandmark } from './state.js';
+import { isLandmark } from '../core/state.js';
 
 
 // --- geometry helpers --------------------------------------------------------

@@ -5,7 +5,7 @@
 // Towers sit on the north-west cell of each 2x2 block of clocktower cells
 // (grid.clocktowers()). Geometry is built in metres and converted with m().
 import * as THREE from 'three';
-import { m } from './scale.js';
+import { m } from '../core/scale.js';
 
 const STONE = '#77726a';
 const STONE_DARK = '#5c5750';

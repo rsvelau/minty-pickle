@@ -1,4 +1,4 @@
-import { GridState } from '../state.js';
+import { GridState } from '../core/state.js';
 
 // The board as the rules see it: a GridState plus derived data (light
 // levels, key groups) computed on demand and cached until the board changes.

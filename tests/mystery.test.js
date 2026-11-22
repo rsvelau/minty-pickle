@@ -1,7 +1,7 @@
 // The mystery: secret monster, choosing evidence, attacks, naming, secrecy.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GridState } from '../src/state.js';
+import { GridState } from '../src/core/state.js';
 import { createBoard } from '../src/game/board.js';
 import { newGame, applyAction } from '../src/game/rules.js';
 import { publicState, matchesEvidence } from '../src/game/mystery.js';

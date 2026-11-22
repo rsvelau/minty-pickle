@@ -984,3 +984,5 @@ body.playing .fps { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
 .place-btns button.on { border-color: #5fcf6a; background: rgba(95, 207, 106, 0.18); color: #dff5e2; }
 .place-btns button:disabled { opacity: 0.4; cursor: not-allowed; }
 .place-btns button[hidden] { display: none; }
+
+.file-row.single { grid-template-columns: 1fr; }

@@ -2,7 +2,7 @@
 // the camera, so it reads from the overhead view) plus a coloured ring on
 // the floor. Markers sit on top of a cell and never change it.
 import * as THREE from 'three';
-import { MARKERS } from './state.js';
+import { MARKERS } from '../core/state.js';
 
 // Badge colours and icon drawing per marker type.
 export const MARKER_STYLE = {

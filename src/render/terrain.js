@@ -8,8 +8,8 @@
 // badges). Write float literals with a decimal point (2.0, not 2) so the
 // formula is valid in both languages.
 import * as THREE from 'three';
-import { METERS_PER_CELL } from './scale.js';
-import { isLandmark } from './state.js';
+import { METERS_PER_CELL } from '../core/scale.js';
+import { isLandmark } from '../core/state.js';
 
 export const TERRAIN_PRESETS = {
   flat: {

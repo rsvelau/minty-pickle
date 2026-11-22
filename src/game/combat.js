@@ -10,7 +10,7 @@
 // - Tiers are additive; tracks are independent. Tier 3 on any track is
 //   Death's Door: one die per turn, and unblocked damage kills.
 import { INJURY_TRACKS, DEATHS_DOOR, RANGE, cellRange } from './cards/injuries.js';
-import { cellLabel } from '../state.js';
+import { cellLabel } from '../core/state.js';
 
 export const injuries = (pl) => (pl.injuries ??= { P: 0, M: 0, S: 0 });
 export const atDeathsDoor = (pl) => Object.values(injuries(pl)).some((t) => t >= DEATHS_DOOR);

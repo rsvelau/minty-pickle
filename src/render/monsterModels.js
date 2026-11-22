@@ -8,7 +8,7 @@
 // loose pack, one hound per action die.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { m } from './scale.js';
+import { m } from '../core/scale.js';
 
 export function createMonsterModels(terrainify) {
   const solid = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });

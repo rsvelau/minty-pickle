@@ -1,0 +1,86 @@
+// "Ready to play?": checks a map for what the game needs before it can be
+// played (or played well). Pure: works on a GridState, no graphics.
+//
+// Returns { ok, problems: [{ level: 'error'|'warning', code, text, cells: [index] }] }.
+// `ok` is false only when there are errors: the game can't start. Warnings
+// are things that make for a poor game (unreachable markers, too few spots).
+import { cellLabel } from './state.js';
+
+export const EVIDENCE_CARDS = 4;     // 3 observations + the lair (src/game/mystery.js)
+export const VICTIM_BUILDINGS = 3;   // monsters like the Adze target objectives in 3 buildings
+
+export function checkMap(grid) {
+  const problems = [];
+  const add = (level, code, text, cells = []) => problems.push({ level, code, text, cells });
+  const label = (i) => { const { x, y } = grid.coords(i); return cellLabel(x, y); };
+  const list = (cells) => cells.slice(0, 6).map(label).join(', ') + (cells.length > 6 ? ` and ${cells.length - 6} more` : '');
+
+  // Where the investigators start: the cell in front of the van.
+  const vans = [];
+  grid.cells.forEach((c, i) => { if (c.sub === 'start') vans.push(i); });
+  let start = -1;
+  if (!vans.length) {
+    add('error', 'no-start', 'There is no Start space (the van). Paint one on a street; players start in front of it.');
+  } else {
+    if (vans.length > 1) add('warning', 'many-starts', `There are ${vans.length} Start spaces; the game uses the first (${label(vans[0])}).`, vans);
+    start = grid.startFront(vans[0]);
+    if (start < 0) {
+      add('error', 'start-off-board', `The van at ${label(vans[0])} faces off the board, so there is nowhere to start.`, [vans[0]]);
+    } else if (!grid.cells[start].walkable) {
+      add('error', 'start-blocked', `The van at ${label(vans[0])} faces a blocked cell (${label(start)}). Turn the van or clear that cell.`, [vans[0], start]);
+      start = -1;
+    }
+  }
+
+  // Markers.
+  const byMarker = {};
+  grid.cells.forEach((c, i) => { if (c.marker) (byMarker[c.marker] ??= []).push(i); });
+  const blockedMarkers = Object.values(byMarker).flat().filter((i) => !grid.cells[i].walkable);
+  if (blockedMarkers.length) add('warning', 'marker-blocked', `Markers on blocked cells are ignored in play: ${list(blockedMarkers)}.`, blockedMarkers);
+
+  const spots = (byMarker.investigation ?? []).filter((i) => grid.cells[i].walkable);
+  if (!spots.length) {
+    add('error', 'no-investigation', `There are no Investigation spots. The mystery needs them to hide its evidence (${EVIDENCE_CARDS} or more is best).`);
+  } else if (spots.length < EVIDENCE_CARDS) {
+    add('warning', 'few-investigation', `Only ${spots.length} Investigation spot${spots.length === 1 ? '' : 's'}; the evidence deck has ${EVIDENCE_CARDS} cards, so some can never be found.`, spots);
+  }
+
+  const objectives = (byMarker.objective ?? []).filter((i) => grid.cells[i].walkable);
+  if (!objectives.length) {
+    add('warning', 'no-objectives', 'There are no Objective markers. They appear at midnight; some monsters target them.');
+  } else {
+    const buildings = new Set(objectives.map((i) => buildingOf(grid, i)));
+    if (buildings.size < VICTIM_BUILDINGS) {
+      add('warning', 'few-objective-buildings', `Objectives are in only ${buildings.size} place${buildings.size === 1 ? '' : 's'}; monsters that hunt townspeople (like the Adze) want them in ${VICTIM_BUILDINGS} separate buildings.`, objectives);
+    }
+  }
+
+  // Can every marker be reached from the start (doors, locks and keys included)?
+  if (start >= 0) {
+    const { x, y } = grid.coords(start);
+    const field = grid.moveField(x, y, { keys: true });
+    const reachable = (i) => field.dist[i] >= 0;
+    const walkableMarkers = Object.values(byMarker).flat().filter((i) => grid.cells[i].walkable);
+    const stranded = walkableMarkers.filter((i) => !reachable(i));
+    if (stranded.length) add('warning', 'unreachable', `Players can't reach these markers from the start: ${list(stranded)}.`, stranded);
+  }
+
+  return { ok: !problems.some((p) => p.level === 'error'), problems };
+}
+
+// The building a cell belongs to (connected indoor cells), or the cell itself
+// outdoors. Same grouping as the monster rules use for targets.
+export function buildingOf(grid, cell) {
+  if (grid.cells[cell].area !== 'indoor') return `cell${cell}`;
+  const seen = new Set([cell]);
+  const queue = [cell];
+  for (let q = 0; q < queue.length; q++) {
+    const { x, y } = grid.coords(queue[q]);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      if (!grid.inBounds(x + dx, y + dy)) continue;
+      const k = grid.index(x + dx, y + dy);
+      if (!seen.has(k) && grid.cells[k].area === 'indoor') { seen.add(k); queue.push(k); }
+    }
+  }
+  return `b${Math.min(...seen)}`;
+}

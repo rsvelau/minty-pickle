@@ -15,9 +15,10 @@
 // card (Seize, Lure, Pin, Drag, Trap, Exhaust, Block doors...) is shown and
 // logged but not played yet; those come with each monster's own rules.
 import { MONSTER_BY_ID } from './cards/monsters.js';
-import { cellLabel } from '../state.js';
+import { cellLabel } from '../core/state.js';
 import { applyDamage, alive, defenseValue } from './combat.js';
 import { RANGE, cellRange } from './cards/injuries.js';
+import { buildingOf } from '../core/mapCheck.js'; // the same grouping the map check uses
 
 const KIND_TO_TYPE = { physical: 'P', mental: 'M', spiritual: 'S' };
 
@@ -273,20 +274,6 @@ export function exhaust(state, pl, what, ctx, events) {
 // --- Victims (Adze): townspeople its swarms prey on ------------------------------------
 // At midnight each {n} target on the card becomes a victim placed at an
 // Objective marker, each in a different building where the map allows.
-function buildingOf(grid, cell) {
-  const seen = new Set([cell]);
-  if (grid.cells[cell].area !== 'indoor') return `cell${cell}`;
-  const queue = [cell];
-  for (let q = 0; q < queue.length; q++) {
-    const { x, y } = grid.coords(queue[q]);
-    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      if (!grid.inBounds(x + dx, y + dy)) continue;
-      const k = grid.index(x + dx, y + dy);
-      if (!seen.has(k) && grid.cells[k].area === 'indoor') { seen.add(k); queue.push(k); }
-    }
-  }
-  return `b${Math.min(...seen)}`;
-}
 export function setupVictims(state, board, monster, ctx, events) {
   const card = MONSTER_BY_ID[monster.kind];
   const targets = [];

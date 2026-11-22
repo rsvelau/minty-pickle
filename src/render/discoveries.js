@@ -9,7 +9,7 @@
 // update(list): list = [{ cell, visual, lair }] (the evidence found so far).
 // Each visual is drawn once into a canvas texture and shared.
 import * as THREE from 'three';
-import { m } from './scale.js';
+import { m } from '../core/scale.js';
 
 const S = 256; // decal texture size
 

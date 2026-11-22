@@ -26,7 +26,7 @@
 //
 // Helpers for writing AI are exported below: distances and paths over the
 // board's movement rules, the nearest player, light levels.
-import { cellLabel } from '../state.js';
+import { cellLabel } from '../core/state.js';
 import { MONSTER_BY_ID } from './cards/monsters.js';
 import { declareIntent, executeIntent, setupVictims } from './monsterTurn.js';
 import { alive } from './combat.js';

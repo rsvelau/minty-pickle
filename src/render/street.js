@@ -23,8 +23,8 @@
 //                the cell's lamp is switched on ("Lit lamp"), else it's dark
 import * as THREE from 'three';
 import { flickerize } from './dread.js';
-import { METERS_PER_CELL, m, SIDEWALK_W } from './scale.js';
-import { streetMask } from './state.js';
+import { METERS_PER_CELL, m, SIDEWALK_W } from '../core/scale.js';
+import { streetMask } from '../core/state.js';
 import { terrainify } from './terrain.js';
 export { streetMask };
 

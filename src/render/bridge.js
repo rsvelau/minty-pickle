@@ -13,7 +13,7 @@
 // get a single truss pair across their full width; irregular ones fall back
 // to one truss pair per run of cells.
 import * as THREE from 'three';
-import { m } from './scale.js';
+import { m } from '../core/scale.js';
 
 
 const TRUSS_H = m(6);        // top chord height above the deck

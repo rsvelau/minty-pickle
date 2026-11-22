@@ -11,8 +11,8 @@
 // flicker at midnight, and small idle animations.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { m, METERS_PER_CELL } from './scale.js';
-import { LANDMARK_SUBS, AREAS } from './state.js';
+import { m, METERS_PER_CELL } from '../core/scale.js';
+import { LANDMARK_SUBS, AREAS } from '../core/state.js';
 
 const CELL = METERS_PER_CELL;
 const FACES = [[0, -1], [1, 0], [0, 1], [-1, 0]]; // N E S W

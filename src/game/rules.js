@@ -15,7 +15,7 @@
 //
 // The board is read through a small adapter (see board.js) over GridState,
 // which is plain data too, so a server can rebuild it from the saved board.
-import { MARKERS, streetMask, edgeKey, cellLabel } from '../state.js';
+import { MARKERS, streetMask, edgeKey, cellLabel } from '../core/state.js';
 import { MONSTERS, spawnMonsters, monstersAct, farthestFromPlayers } from './monsters.js';
 import { turnLimits, injuries } from './combat.js';
 import { craft } from './obolcraft.js';
