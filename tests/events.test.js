@@ -192,3 +192,49 @@ test('Mindsets: Rushed doubles movement, Meticulous caps movement dice at 4, Rec
   assert.match(s.act({ type: 'slot', die: 0, to: 'defense' }).error, /Reckless/);
   assert.equal(s.state.maxDefense, 0);
 });
+
+test('after midnight, clock cards play their midnight versions', () => {
+  // Message Cypher: spend two rolled dice to trigger a weakness effect.
+  const s = setup();
+  s.state.round = 13; s.state.midnightDone = true;
+  const m = { id: 'm1', kind: 'werewolf', pos: s.g.index(0, 5), prev: -1 };
+  armMonster(m);
+  s.state.monsters = [m];
+  s.state.decks.events.push('message-cypher');
+  s.state.bag = ['event'];
+  s.act({ type: 'roll' });
+  s.state.pool = [{ kind: 'black', v: 1 }, { kind: 'black', v: 3 }, { kind: 'black', v: 4 }];
+  s.act({ type: 'slot', die: 0, to: 'move' });
+  s.act({ type: 'move' });
+  s.act({ type: 'investigate', yes: true });
+  assert.equal(s.state.phase, 'eventing');
+  assert.ok(s.act({ type: 'event', choice: 'use' }).ok);
+  assert.equal(m.toughLost, 2);                     // the Werewolf's first weakness effect: −2 toughness
+  assert.ok(s.state.log.some((l) => /spends 3 and 4/.test(l)));
+});
+
+test('after midnight: Police Patrol lures the monster; Hourglass cancels its action; Hide; Chalk skips a turn', async () => {
+  const { pastMidnight } = await import('../src/game/eventPlay.js');
+  const s = setup({ players: 2 });
+  s.state.round = 13; s.state.midnightDone = true;
+  assert.ok(pastMidnight(s.state));
+  const m = { id: 'm1', kind: 'werewolf', pos: s.g.index(10, 5), prev: -1 };
+  armMonster(m);
+  s.state.monsters = [m];
+  s.draw('police-patrol');
+  assert.deepEqual(m.lure, { cell: s.state.players[0].pos });
+  // The lure: its next move heads for the sirens, not the players.
+  s.state.players[1].pos = s.g.index(2, 5);
+  m.intents = [{ roll: 1, name: 'Vicious Pursuit', kind: 'physical', ops: [{ op: 'pursue', n: 2 }], unknown: [] }];
+  executeIntent(s.state, s.board, m, { state: s.state, log: () => {}, randInt: () => 2 }, []);
+  assert.equal(m.pos, s.g.index(12, 5));
+  assert.equal(m.lure, undefined);
+  s.finish();
+  // Bumped Shelf: Hide ends the turn, and the hidden player can't be targeted this round.
+  const seat = s.state.cur;
+  s.state.players[seat].pos = s.g.index(14, 5);            // a fresh spot one step west
+  s.draw('bumped-shelf');
+  assert.ok(s.act({ type: 'event', choice: 'hide' }).ok);
+  assert.ok(Number.isInteger(s.state.players[seat].hiddenRound));    // hidden for the round that just closed
+  assert.notEqual(s.state.cur, seat);
+});

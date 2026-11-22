@@ -26,7 +26,8 @@ function setCount(deck, id, n) {
 
 function cardDetail(deck, c) {
   if (deck === 'equipment') return abilitiesHTML(c);
-  if (deck === 'events') return `<p class="dk-text"><span class="dk-cat">${esc(EVENT_CATEGORIES[c.category].label)}</span> ${esc(c.text)}</p>`;
+  if (deck === 'events') return `<p class="dk-text"><span class="dk-cat">${esc(EVENT_CATEGORIES[c.category].label)}</span> ${esc(c.text)}</p>` +
+    (c.afterMidnight ? `<p class="dk-text"><span class="dk-cat">After midnight</span> ${esc(c.afterMidnight)}</p>` : '');
   if (deck === 'mindsets') return `<p class="dk-text">${esc(c.text)}</p>`;
   return `<p class="dk-text">${esc(c.traits.join(', '))}</p>`;
 }

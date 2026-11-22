@@ -671,6 +671,12 @@ function nextPlayer(state, board, events) {
     state.cur = (state.cur + 1) % state.players.length;
     if (state.cur === 0) endRound(state, board, events);
     if (state.players.every((pl) => pl.dead)) break;
+    // Chalk-Scrawled Narrative (after midnight): this player sits a turn out.
+    if (!curPlayer(state).dead && curPlayer(state).skipTurns > 0) {
+      curPlayer(state).skipTurns--;
+      log(state, `${who(state)} skips this turn.`);
+      continue;
+    }
     if (!curPlayer(state).dead) break;
   }
   state.stopAt = -1;

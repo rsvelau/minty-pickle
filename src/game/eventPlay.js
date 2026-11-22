@@ -25,6 +25,7 @@ import { EVENT_BY_ID } from './cards/events.js';
 import { MONSTER_BY_ID } from './cards/monsters.js';
 import { EQUIPMENT_BY_ID } from './cards/equipment.js';
 import { applyDamage, alive } from './combat.js';
+import { triggerWeakness } from './equipmentPlay.js';
 import { exhaust } from './monsterTurn.js';
 import { cellRange } from './cards/injuries.js';
 
@@ -48,7 +49,17 @@ const FOUND_HAZARDS = new Set(['flooded-out', 'flickering-lights', 'sinkhole', '
 // Traps laid by the player (only affect monsters).
 const PLAYER_TRAPS = new Set(['coil-of-razor-wire', 'rusty-bear-trap', 'deadfall-trap', 'bonfire', 'summoning-circle']);
 
+// From midnight on, cards built on the clock play their afterMidnight text.
+export const pastMidnight = (state) => state.round + (state.clockShift ?? 0) > state.config.turnsToMidnight;
+const AFTER_CHOICES = {
+  'bumped-shelf': [['hide', 'Hide (the monster can’t target you this round; your turn ends)'], ['leave', 'Try to leave (flip 🪙: tails, attacked)']],
+};
+const freeDice = (state) => state.pool.map((d, n) => ({ d, n })).filter(({ d, n }) => !d.spent && !state.slots.includes(n) && !state.defSlots.includes(n));
+
 export function choicesFor(id, state, pl) {
+  const late = pastMidnight(state);
+  if (late && AFTER_CHOICES[id]) return AFTER_CHOICES[id].map(([value, label]) => ({ value, label, ok: true }));
+  if (late && id === 'message-cypher') return [{ value: 'use', label: 'Spend two rolled dice: trigger a weakness', ok: freeDice(state).length >= 2 && state.monsters.length > 0 }, { value: 'skip', label: 'Leave it', ok: true }];
   if (CHOICES[id]) {
     return CHOICES[id].map(([value, label]) => ({ value, label, ok: choiceAllowed(id, value, state, pl) }));
   }
@@ -125,6 +136,7 @@ function runEvent(state, board, id, choice, cell, ctx, events, action = {}) {
     events.push({ type: 'survivor', outcome: s, tally: { ...state.survivors } });
   };
   if (choice === 'skip') { ctx.log(state, `${pl.name} leaves the ${src} alone.`); return; }
+  if (pastMidnight(state) && card.afterMidnight && afterMidnight(state, board, id, choice, cell, pl, ctx, events)) return;
   switch (id) {
     case 'roof-collapse': {
       const k = nearestDoor(board, cell);
@@ -458,4 +470,71 @@ function buildingDoors(board, start) {
     if (cells.has(a) || cells.has(b)) out.push(k);
   }
   return out;
+}
+
+// The afterMidnight versions (cards/events.js). Returns true if handled.
+function afterMidnight(state, board, id, choice, cell, pl, ctx, events) {
+  const card = EVENT_BY_ID[id];
+  const monster = state.monsters[0] ?? null;
+  ctx.log(state, `${card.name}, after midnight: ${card.afterMidnight}`);
+  switch (id) {
+    case 'police-patrol':
+      if ((state.survivors?.die ?? 0) > 0) { ctx.log(state, 'Survivors have died: the patrol doesn’t come.'); return true; }
+      for (const m of state.monsters) m.lure = { cell };
+      ctx.log(state, `Sirens at ${ctx.label(board, cell)}: the monster's next move heads there.`);
+      return true;
+    case 'enigmatic-hourglass': {
+      const heads = ctx.randInt(state, 2) === 0;
+      events.push({ type: 'coin', heads });
+      if (heads) {
+        if (monster?.intents?.length) {
+          const gone = monster.intents.shift();
+          ctx.log(state, `Heads: the monster's ${gone.name} is cancelled.`);
+        } else if (monster) { monster.cancelNext = true; ctx.log(state, "Heads: the monster's next action will be cancelled."); }
+      } else {
+        const bag = pl.inventory.obolcraft;
+        if (bag.length) { const [o] = bag.splice(ctx.randInt(state, bag.length), 1); ctx.log(state, `Tails: ${pl.name} loses an ${o.type} Obol.`); } else ctx.log(state, `Tails, but ${pl.name} has no Obols to lose.`);
+      }
+      return true;
+    }
+    case 'bumped-shelf':
+      if (choice !== 'hide') return false; // trying to leave is the same as before midnight
+      pl.hiddenRound = state.round;
+      state.endTurnNow = true;
+      ctx.log(state, `${pl.name} hides: the monster can't target them this round.`);
+      return true;
+    case 'message-cypher': {
+      const dice = freeDice(state).slice(0, 2);
+      for (const { d } of dice) d.spent = true;
+      ctx.log(state, `${pl.name} spends ${dice.map(({ d }) => d.v).join(' and ')}.`);
+      if (monster) triggerWeakness(state, monster, 1, ctx, events);
+      return true;
+    }
+    case 'wooden-boards':
+      state.doorBan = { cell, round: state.round };
+      state.endTurnNow = true;
+      ctx.log(state, `${pl.name} boards up the doors: the monster can't use a door within 3 spaces of ${ctx.label(board, cell)} this round.`);
+      events.push({ type: 'doors' });
+      return true;
+    case 'chalk-scrawled-narrative':
+      if (monster) triggerWeakness(state, monster, 2, ctx, events);
+      pl.skipTurns = (pl.skipTurns ?? 0) + 1;
+      ctx.log(state, `${pl.name} will skip their next turn.`);
+      return true;
+    default:
+      return false;
+  }
+}
+
+// Wooden Boards (after midnight): may the monster cross the door on this edge?
+export function monsterDoorBanned(state, board, from, to) {
+  const ban = state.doorBan;
+  if (!ban || ban.round !== state.round) return false;
+  const g = board.grid;
+  const a = g.coords(from), b = g.coords(to);
+  if (Math.abs(a.x - b.x) + Math.abs(a.y - b.y) !== 1) return false;
+  const k = a.x !== b.x ? `v${Math.max(a.x, b.x)},${a.y}` : `h${a.x},${Math.max(a.y, b.y)}`;
+  const t = g.edges.get(k);
+  if (!(t === 'door' || t === 'lockedDoor' || t?.startsWith('oneWayDoor'))) return false;
+  return cellRange(g, ban.cell, from) <= 3 || cellRange(g, ban.cell, to) <= 3;
 }

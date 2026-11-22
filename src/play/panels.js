@@ -214,8 +214,8 @@ export function showCardNow(c) {
     const card = eventCard(c.e.id);
     const mindset = card?.category === 'mindset';
     html = `<div class="pc-kind">${mindset ? `${esc(c.e.player?.name ?? '')}'s new Mindset` : `Event · ${esc(EVENT_CATEGORIES[card?.category]?.label ?? '')}`}</div><div class="pc-title">${esc(card?.name ?? '')}</div>` +
-      `<div class="pc-sub">${esc(card?.text ?? '')}</div>` +
-      `<div class="pc-note">${mindset ? 'Yours until another Mindset replaces it. Its effect is played at the table for now.' : 'Event effects are played at the table for now.'}</div>`;
+      `<div class="pc-sub">${esc(play.midnight() && card?.afterMidnight ? card.afterMidnight : card?.text ?? '')}</div>` +
+      `<div class="pc-note">${play.midnight() && card?.afterMidnight ? 'After midnight: the clock has stopped, so this is the card’s midnight version. ' : ''}${mindset ? 'Yours until another Mindset replaces it. Its effect is played at the table for now.' : 'Event effects are played at the table for now.'}</div>`;
     stay = true;
   } else if (c.kind === 'equipUse') {
     html = `<div class="pc-kind">${esc(c.e.player?.name ?? '')} uses ${esc(EQUIPMENT_BY_ID[c.e.item]?.name ?? '')}</div><div class="pc-title">${esc(c.e.ability)}</div>` +
@@ -664,7 +664,7 @@ export function renderEventChoice() {
   const pl = st.players[pe.seat];
   $('#evKind').textContent = `${EVENT_CATEGORIES[card.category]?.label ?? 'Event'} · ${pl.name} chooses`;
   $('#evTitle').textContent = card.name;
-  $('#evText').textContent = card.text;
+  $('#evText').textContent = play.midnight() && card.afterMidnight ? `After midnight: ${card.afterMidnight}` : card.text;
   const opts = choicesFor(pe.id, st, pl) ?? [];
   const host = $('#evActions');
   host.innerHTML = opts.map((o) => `<button type="button" data-ev="${o.value}" ${o.ok ? '' : 'disabled title="You can’t pay for this"'}>${esc(o.label)}</button>`).join('');

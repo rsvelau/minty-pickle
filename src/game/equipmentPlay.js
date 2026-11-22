@@ -367,3 +367,22 @@ export function hurtMonster(state, board, monster, dice, kind, rollDie, ctx, eve
   checkDefeat(state, board, monster, mcard, ctx, events);
   return through;
 }
+
+// Trigger the monster's next weakness-track effects without hits (Message
+// Cypher and Chalk-Scrawled Narrative after midnight): the next `n` numbered
+// marks it hasn't reached, in order.
+export function triggerWeakness(state, monster, n, ctx, events) {
+  const mcard = MONSTER_BY_ID[monster.kind];
+  if (!mcard) return [];
+  const out = [];
+  mcard.weaknessTrack.forEach((w, idx) => {
+    if (out.length >= n || w.hits === null || monster.trackDone.includes(idx)) return;
+    monster.trackDone.push(idx);
+    monster.mods ??= {};
+    applyTrackEffect(monster, mcard, w.text);
+    out.push(w.text);
+    events.push({ type: 'weakness', id: monster.id, text: w.text, hits: w.hits });
+  });
+  ctx.log(state, out.length ? `The ${mcard.name}'s weakness: ${out.join('; ')}.` : `The ${mcard.name} has no weakness effects left to trigger.`);
+  return out;
+}

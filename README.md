@@ -79,6 +79,13 @@ Opportunities and Cursed Objects), the turn pauses until **the drawing character
   Reckless can't slot defense; Rushed doubles movement and counts defense dice at most 3; Meticulous can
   investigate a spot twice and counts movement dice at most 4; Protective lends your defense to a teammate in
   Close range. Curious is played at the table.
+- **After midnight** the clock has stopped, so the clock cards switch to their midnight versions (shown on the
+  card and in Cards in the game): **Message Cypher** spends two rolled dice to trigger one of the monster's
+  weakness effects; **Wooden Boards** ends your turn and boards up the doors (the monster can't use a door within
+  3 spaces this round); **Bumped Shelf**'s Hide ends your turn and the monster can't target you this round;
+  **Enigmatic Hourglass** heads cancels the monster's next declared action; **Police Patrol** lures the monster's
+  next move to its spot (unless a survivor has died: then it doesn't come); **Chalk-Scrawled Narrative** triggers
+  two weakness effects, but you skip your next turn. Trap durations (⏳) count rounds and work as before.
 - Still played at the table: Hidden Passage, Peculiar Mirror, Decrepit Truck, Hiding Spot (travel).
 
 **Using equipment** (`src/game/equipmentPlay.js`): any time during your turn, open the Inventory → Equipment

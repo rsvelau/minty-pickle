@@ -24,6 +24,10 @@
 //   team's Live and Die choices are counted for other card mechanics.
 // - Mindsets are in the Event deck too: discovered like events, one per
 //   investigator, a new one replaces the old.
+// - The clock stops at midnight, so cards built on moving it have an
+//   `afterMidnight` text that replaces theirs from midnight on (designer's
+//   wording, walkthrough round 4). Durations in ⏳ (traps) count rounds and
+//   still work after midnight.
 // `lasting` marks cards whose effect stays after they resolve. Playing the
 // effects comes later; for now a drawn card is shown and logged, and a drawn
 // Global becomes the one in effect.
@@ -42,11 +46,11 @@ const E = (id, name, category, text, extra = {}) => ({ id, name, category, text,
 export const EVENT_CARDS = [
   // Page 1
   E('roof-collapse', 'Roof Collapse', 'decision', 'The nearest door becomes blocked. Take 💥 [P] to move to the opposite side this turn.'),
-  E('police-patrol', 'Police Patrol', 'event', 'Advance ⏳. If any survivors have Died, advance ⏳⏳.'),
-  E('enigmatic-hourglass', 'Enigmatic Hourglass', 'cursedObject', 'Flip 🪙. If heads, turn the clock back ⏳. If tails, lose an Obol at random.'),
+  E('police-patrol', 'Police Patrol', 'event', 'Advance ⏳. If any survivors have Died, advance ⏳⏳.', { afterMidnight: 'The patrol draws the monster: its next move heads for this spot instead of the players. If any survivors have Died, the patrol doesn’t come.' }),
+  E('enigmatic-hourglass', 'Enigmatic Hourglass', 'cursedObject', 'Flip 🪙. If heads, turn the clock back ⏳. If tails, lose an Obol at random.', { afterMidnight: 'Flip 🪙. If heads, the monster’s next declared action is cancelled. If tails, lose an Obol at random.' }),
   E('spirit-board', 'Spirit Board', 'cursedObject', 'Reveal an Evidence card and take 💥 [S].'),
   E('fall-through', 'Fall Through', 'event', 'Exhaust a defense 🎲 and investigate twice.'),
-  E('bumped-shelf', 'Bumped Shelf', 'decision', 'Choose: Hide (Advance ⏳) / Try to leave (Flip a 🪙, if tails, you are attacked).'),
+  E('bumped-shelf', 'Bumped Shelf', 'decision', 'Choose: Hide (Advance ⏳) / Try to leave (Flip a 🪙, if tails, you are attacked).', { afterMidnight: 'Choose: Hide (the monster can’t target you this round, and your turn ends) / Try to leave (Flip a 🪙, if tails, you are attacked).' }),
   E('ominous-vhs', 'Ominous VHS', 'cursedObject', 'Can expose what 3 ❓ on the map hold (players still go there to draw them), and take 💥 [M] for each Attack exposed.'),
   E('tarot-cards', 'Tarot Cards', 'cursedObject', 'Can experience 3 Event cards (collecting their Obols), then choose an Evidence card to reveal.'),
   E('injured-survivor', 'Injured Survivor', 'decision', 'Choose: Live (Pay 3 ◉ Obols to expose 2 ❓). Die (Do nothing).'),
@@ -55,8 +59,8 @@ export const EVENT_CARDS = [
   E('nailed-shut', 'Nailed Shut', 'event', 'All doors in the building are now blocked.', { lasting: true }),
   E('flooded-out', 'Flooded Out', 'hazard', 'Movement cost doubled within R[1].', { lasting: true }),
   E('flickering-lights', 'Flickering Lights', 'hazard', '💥 [P] ignores lowest defense 🎲 within R[4].', { lasting: true }),
-  E('message-cypher', 'Message Cypher', 'opportunity', 'Can advance ⏳⏳ to reveal one evidence card.'),
-  E('wooden-boards', 'Wooden Boards', 'opportunity', 'Can spend ⏳ to investigate this space again and every other space in this building this turn, ignoring Attacks (their Obols are still collected).'),
+  E('message-cypher', 'Message Cypher', 'opportunity', 'Can advance ⏳⏳ to reveal one evidence card.', { afterMidnight: 'Can spend two of your rolled 🎲 to trigger one of the monster’s weakness effects.' }),
+  E('wooden-boards', 'Wooden Boards', 'opportunity', 'Can spend ⏳ to investigate this space again and every other space in this building this turn, ignoring Attacks (their Obols are still collected).', { afterMidnight: 'Can end your turn now to board up the doors: the monster can’t use any door within 3 spaces of here this round.' }),
   E('hidden-passage', 'Hidden Passage', 'event', 'A hole opens in the floor here, and another at a chosen spot on the map. For the rest of the game, travelling through costs 5 movement (not possible with less).', { lasting: true }),
   E('bright-moon', 'Bright Moon', 'global', 'Mental and Physical damage rolls −1 (easier to defend). If the monster is identified as a Beast, Physical damage rolls +2 instead.', { lasting: true }),
   E('strong-winds', 'Strong Winds', 'global', 'Each turn, a player starting outside a building flips 🪙: HEADS, Favorable Wind (double your slotted movement); TAILS, Unfavorable Wind (lose use of one movement slot).', { lasting: true }),
@@ -75,7 +79,7 @@ export const EVENT_CARDS = [
   E('deadfall-trap', 'Deadfall Trap', 'hazard', 'Create a hazard space which does 🎲 damage to corporeal monsters and interrupts them. 1️⃣', { lasting: true }),
   E('bonfire', 'Bonfire', 'hazard', 'Create a hazard which does 🎲 🔥 to any monster crossing this space.', { lasting: true }),
   E('lockdown', 'Lockdown', 'event', 'Every door becomes a locked door until the discovering player’s next turn. If any player touches a Key space (even one already picked up), every door on the map becomes an unlocked door for good, locked and one-way doors included.'),
-  E('chalk-scrawled-narrative', 'Chalk-Scrawled Narrative', 'cursedObject', 'Can reveal all evidence cards, but the game skips straight to the end of this player’s turn on the last turn before midnight.'),
+  E('chalk-scrawled-narrative', 'Chalk-Scrawled Narrative', 'cursedObject', 'Can reveal all evidence cards, but the game skips straight to the end of this player’s turn on the last turn before midnight.', { afterMidnight: 'Can trigger two of the monster’s weakness effects, but this player skips their next turn.' }),
   E('lightning-storm', 'Lightning Storm', 'global', 'If you end your turn outside, flip a coin. On tails, take 💥 [P].', { lasting: true }),
   E('decrepit-truck', 'Decrepit Truck', 'opportunity', 'An old truck appears on the road space nearest this player. Walk to it to start it and drive up to 25 spaces (road and bridge spaces only). A monster driven into takes 🎲🎲🎲 (added) damage, and the drive stops. 1️⃣', { lasting: true }),
   E('consecrated-ash', 'Consecrated Ash', 'hazard', 'Incorporeal and semi-corporeal monsters are stunned for ⏳ when crossing this space. Players reduce spiritual injuries by 1 tier when crossing this space. 1️⃣', { lasting: true }),

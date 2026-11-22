@@ -20,7 +20,7 @@ import { applyDamage, alive, defenseValue } from './combat.js';
 import { RANGE, cellRange } from './cards/injuries.js';
 import { buildingOf } from '../core/mapCheck.js'; // the same grouping the map check uses
 import { endMonsterTurn, hurtMonster } from './equipmentPlay.js';
-import { monsterEnters } from './eventPlay.js';
+import { monsterEnters, monsterDoorBanned } from './eventPlay.js';
 
 const KIND_TO_TYPE = { physical: 'P', mental: 'M', spiritual: 'S' };
 
@@ -81,11 +81,13 @@ const describeDamage = (dmg) => (!dmg ? '?' : dmg.fixed !== undefined ? `${dmg.f
 const label = (board, i) => { const { x, y } = board.grid.coords(i); return cellLabel(x, y); };
 
 // The living player nearest the monster by walking (ties: lowest seat).
+// Bumped Shelf (after midnight): a hidden player can't be targeted this round.
+const targetable = (state) => alive(state).filter((pl) => pl.hiddenRound !== state.round);
 function nearestTarget(state, board, from) {
   const { x, y } = board.grid.coords(from);
   const field = board.grid.moveField(x, y, { keys: false });
   let best = null;
-  for (const pl of alive(state)) {
+  for (const pl of targetable(state)) {
     const d = pl.pos === from ? 0 : field.dist[pl.pos];
     if (d < 0) continue;
     if (!best || d < best.d) best = { pl, d, path: field.path(pl.pos) };
@@ -98,6 +100,13 @@ function planMovement(state, board, monster, ops, ctx) {
   let pos = monster.pos;
   const steps = [];
   for (const o of ops) {
+    if (o.op === 'pursue' && monster.lure) {
+      // Police Patrol (after midnight): this move heads for the sirens.
+      const { x, y } = board.grid.coords(pos);
+      const path = board.grid.moveField(x, y, { keys: false }).path(monster.lure.cell) ?? [];
+      for (const cell of path.slice(1, 1 + o.n)) { steps.push(cell); pos = cell; }
+      continue;
+    }
     if (o.op === 'pursue') {
       const t = nearestTarget(state, board, pos);
       if (!t) continue;
@@ -179,7 +188,7 @@ const swarmVictim = (state, path) => (path ? alive(state).find((pl) => pl.pos ==
 
 // The player a melee Attack goes for: in Close range, nearest first.
 function closeTarget(state, board, pos) {
-  const near = inClose(state, board, pos);
+  const near = inClose(state, board, pos).filter((pl) => pl.hiddenRound !== state.round);
   if (!near.length) return null;
   const t = nearestTarget(state, board, pos);
   return near.find((pl) => pl === t?.pl) ?? near[0];
@@ -236,6 +245,8 @@ export function declareIntent(state, board, monster, ctx, events) {
   if (!card) return;
   const n = Math.max(0, (card.badge | 0) - (monster.diceLost ?? 0));
   monster.intents = Array.from({ length: n }, () => actionFor(card, rollDie(ctx), monster));
+  // Enigmatic Hourglass (after midnight): the next declared action is cancelled.
+  if (monster.cancelNext && monster.intents.length) { monster.cancelNext = false; const gone = monster.intents.shift(); ctx.log(state, `The Enigmatic Hourglass cancels the ${card.name}'s ${gone.name}.`); }
   monster.danger = predictVictims(state, board, monster, monster.intents);
   const list = monster.intents.map((i) => `${i.roll}: ${i.name}${i.ability >= 0 ? ` (${i.text})` : ''}`).join('; then ');
   ctx.log(state, n
@@ -387,6 +398,7 @@ export function executeIntent(state, board, monster, ctx, events) {
         continue;
       }
       if (cut > 0) { cut--; continue; }
+      if (monsterDoorBanned(state, board, monster.pos, st)) { ctx.log(state, `The ${card.name} finds the door boarded up.`); break; }
       events.push({ type: 'monsterStep', id: monster.id, from: monster.pos, to: st });
       monster.prev = monster.pos;
       monster.pos = st;
@@ -398,6 +410,7 @@ export function executeIntent(state, board, monster, ctx, events) {
       cut += trap.cut;
     }
     if (move.steps.length) ctx.log(state, `The ${card.name} moves to ${label(board, monster.pos)}.`);
+    if (monster.lure && move.steps.length) { delete monster.lure; }
     if (monster.mods?.interrupted) { ctx.log(state, `The ${card.name} is interrupted.`); break; }
     // Then the rest in card order; `hit` = who the action is aimed at (for Exhaust).
     let hit = [];
@@ -437,7 +450,7 @@ export function executeIntent(state, board, monster, ctx, events) {
         events.push({ type: 'monsterAttack', id: monster.id, seat: t.seat, cell: t.pos, attack: type });
         applyDamage(state, board, t, type, roll(o.dmg), { log: ctx.log, source }, events);
       } else if (o.op === 'area' || o.op === 'global') {
-        const targets = alive(state).filter((pl) => o.op === 'global' || gridDist(board, monster.pos, pl.pos) <= o.radius);
+        const targets = targetable(state).filter((pl) => o.op === 'global' || gridDist(board, monster.pos, pl.pos) <= o.radius);
         if (!targets.length) { ctx.log(state, `${source} strikes at nothing.`); continue; }
         hit = targets;
         events.push({ type: 'monsterAttack', id: monster.id, seat: targets[0].seat, cell: monster.pos, area: true, attack: type });
