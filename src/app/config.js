@@ -45,6 +45,7 @@ export function init() {
     hardwood: { unlit: '#7a5338', lit: '#f0a85a', area: '#9a6a3e' },
     carpet: { unlit: '#58303a', lit: '#c4727c', area: '#8a3f52' },
     church: { unlit: '#5a4a3c', lit: '#d9a46c', area: '#6c5a8c' }, // worn oak boards
+    hospital: { unlit: '#4e5a56', lit: '#c9d6c4', area: '#5f9a94' }, // pale linoleum under fluorescents
     condemned: { unlit: '#3a3430', lit: '#8a7a68', area: '#6a4a3e' },
     clocktower: { unlit: '#46443f', lit: '#a39d8e', area: '#b08850' }, // cobbled plaza
     dock: { unlit: '#2a3a44', lit: '#6a8a94', area: '#6a5a44' },

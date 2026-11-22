@@ -98,6 +98,8 @@ export const AREAS = {
       church: { label: 'Church floor', cat: 'interiors' },
       // Condemned building: walls go up automatically round the outside of
       // the shape, with boarded-up doors and windows on the street side.
+      // Hospital: pale linoleum; a blocked cell is a ward bay (beds, screen).
+      hospital: { label: 'Hospital floor', cat: 'interiors' },
       condemned: { label: 'Condemned', walkable: false, cat: 'interiors' },
     },
   },

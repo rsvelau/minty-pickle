@@ -147,6 +147,99 @@ function buildKinds() {
         box(1.3, 0.16, 0.12, '#6e4a26', 0, -2.65, 2.3),
       );
     })(),
+    // --- Hospital (modelled at real size; see VARIANTS.hospital) ---
+    // Adjustable ward bed ~2.1 x 0.95 m along x, head at -x: wheeled steel
+    // frame, pale blue mattress raised at the head, pillow, blanket, rails.
+    hospitalBed: (() => {
+      const steel = '#b4b8b8', board = '#d6d4c8';
+      const tilt = (w, h, d, hex, x, y) => part(new THREE.BoxGeometry(m(w), m(h), m(d))
+        .rotateZ(-0.45).translate(m(x), m(y), 0), hex);
+      return merge(
+        ...[[-0.9, -0.38], [-0.9, 0.38], [0.9, -0.38], [0.9, 0.38]].flatMap(([x, z]) => [
+          box(0.1, 0.1, 0.05, '#222', x, z),                 // castor
+          box(0.05, 0.22, 0.05, steel, x, z, 0.08),          // leg
+        ]),
+        box(2.0, 0.1, 0.86, steel, 0, 0, 0.3),               // frame
+        box(1.3, 0.16, 0.84, '#a6c2c8', 0.32, 0, 0.4),       // mattress (flat part)
+        tilt(0.75, 0.16, 0.84, '#a6c2c8', -0.62, 0.66),      // mattress (raised head)
+        tilt(0.32, 0.12, 0.6, '#ecebe4', -0.72, 0.84),       // pillow
+        box(1.1, 0.05, 0.88, '#7d9cab', 0.38, 0, 0.53),      // blanket
+        box(0.05, 1.0, 0.94, board, -1.04, 0, 0.22),         // headboard
+        box(0.05, 0.7, 0.94, board, 1.04, 0, 0.22),          // footboard
+        box(0.04, 0.12, 0.3, '#7a8a90', 1.08, 0, 0.62),      // chart clipboard
+        box(0.9, 0.04, 0.03, steel, 0.15, 0.47, 0.72),       // side rails
+        box(0.9, 0.04, 0.03, steel, 0.15, -0.47, 0.72),
+        box(0.04, 0.3, 0.03, steel, -0.27, 0.47, 0.44),
+        box(0.04, 0.3, 0.03, steel, 0.57, 0.47, 0.44),
+        box(0.04, 0.3, 0.03, steel, -0.27, -0.47, 0.44),
+        box(0.04, 0.3, 0.03, steel, 0.57, -0.47, 0.44),
+      );
+    })(),
+    // Wheeled stretcher ~2 x 0.6 m along x, a folded sheet on top.
+    gurney: (() => {
+      const steel = '#a8acac';
+      return merge(
+        ...[[-0.85, -0.24], [-0.85, 0.24], [0.85, -0.24], [0.85, 0.24]].flatMap(([x, z]) => [
+          box(0.09, 0.09, 0.04, '#222', x, z),
+          box(0.04, 0.72, 0.04, steel, x, z, 0.08),
+        ]),
+        box(1.9, 0.06, 0.6, steel, 0, 0, 0.8),
+        box(1.85, 0.08, 0.56, '#2c4a52', 0, 0, 0.86),        // vinyl pad
+        box(0.5, 0.06, 0.5, '#e4e2da', 0.55, 0, 0.94),       // folded sheet
+        box(1.6, 0.03, 0.03, steel, 0, 0.32, 0.98),          // rails
+        box(1.6, 0.03, 0.03, steel, 0, -0.32, 0.98),
+      );
+    })(),
+    // IV drip stand ~1.95 m tall: five-legged base, pole, hook bar, a bag.
+    ivStand: merge(
+      ...[0, 1, 2, 3, 4].map((k) => part(new THREE.BoxGeometry(m(0.3), m(0.03), m(0.04))
+        .translate(m(0.15), m(0.06), 0).rotateY(k * Math.PI * 2 / 5), '#9a9e9e')),
+      part(new THREE.CylinderGeometry(m(0.015), m(0.015), m(1.85), 6).translate(0, m(0.08 + 0.925), 0), '#c4c8c8'),
+      box(0.36, 0.02, 0.02, '#c4c8c8', 0, 0, 1.88),
+      box(0.12, 0.2, 0.05, '#d4e4dc', 0.15, 0, 1.62),      // bag
+      box(0.01, 0.6, 0.01, '#d4e4dc', 0.15, 0, 1.02),       // line
+    ),
+    // Folding privacy screen ~2.4 m wide, 1.8 m tall along x: three pale
+    // green fabric panels on a steel tube frame with castors.
+    screen: (() => {
+      const tube = '#c0c4c4', fabric = '#86a89a';
+      const out = [];
+      for (let k = 0; k < 3; k++) {
+        const x = -0.8 + k * 0.8, tw = (k - 1) * 0.12; // panels zig-zag a little
+        out.push(part(new THREE.BoxGeometry(m(0.72), m(1.4), m(0.02)).rotateY(tw)
+          .translate(m(x), m(0.3 + 0.7), 0), fabric));
+      }
+      for (const x of [-1.2, -0.4, 0.4, 1.2]) {
+        out.push(box(0.035, 1.75, 0.035, tube, x, 0, 0.06), box(0.08, 0.06, 0.08, '#222', x, 0));
+      }
+      out.push(box(2.44, 0.03, 0.03, tube, 0, 0, 1.78), box(2.44, 0.03, 0.03, tube, 0, 0, 0.26));
+      return merge(...out);
+    })(),
+    // Vital-signs monitor on a wheeled cart, green trace on the screen.
+    monitorCart: merge(
+      box(0.5, 0.06, 0.42, '#5a5e5e', 0, 0, 0.06),
+      box(0.04, 0.72, 0.04, '#a8acac', 0, 0, 0.12),
+      box(0.48, 0.05, 0.4, '#c8cac4', 0, 0, 0.84),
+      box(0.44, 0.34, 0.3, '#d2d0c6', 0, 0, 0.89),           // monitor case
+      box(0.34, 0.24, 0.01, '#123a26', 0, 0.152, 0.94),      // screen
+      box(0.28, 0.03, 0.012, '#3fd88a', 0, 0.155, 1.04),     // trace
+      box(0.08, 0.06, 0.012, '#d8483c', 0.1, 0.155, 0.97),   // alarm readout
+    ),
+    // Folding wheelchair, facing +z.
+    wheelchair: (() => {
+      const frame = '#8c9090', vinyl = '#2a2c30';
+      const wheel = (x) => part(new THREE.CylinderGeometry(m(0.3), m(0.3), m(0.03), 14)
+        .rotateZ(Math.PI / 2).translate(m(x), m(0.3), -m(0.08)), '#1e1f22');
+      return merge(
+        wheel(-0.29), wheel(0.29),
+        box(0.06, 0.08, 0.06, '#1e1f22', -0.2, 0.26), box(0.06, 0.08, 0.06, '#1e1f22', 0.2, 0.26),
+        box(0.03, 0.4, 0.03, frame, -0.2, 0.24, 0.08), box(0.03, 0.4, 0.03, frame, 0.2, 0.24, 0.08),
+        box(0.46, 0.05, 0.44, vinyl, 0, 0.02, 0.48),           // seat
+        box(0.46, 0.42, 0.03, vinyl, 0, -0.2, 0.56),           // back
+        box(0.03, 0.5, 0.03, frame, -0.24, -0.22, 0.5), box(0.03, 0.5, 0.03, frame, 0.24, -0.22, 0.5),
+        box(0.36, 0.03, 0.12, frame, 0, 0.38, 0.12),           // footrest
+      );
+    })(),
     // Used early-80s full-size van, ~4.8 m long, 2 m wide, 2.1 m tall, along
     // x with the front at +x: two-tone cream and brown with an orange stripe,
     // rust spots, chrome bumpers, a spare on the back door.
@@ -257,6 +350,12 @@ function scatter(rnd, n, wobble, make) {
     }
   }
   return out;
+}
+// Turn a whole layout (offsets and headings) by angle `a` about the cell
+// centre, so a room's furniture follows the way the room runs.
+function turn(list, a) {
+  const c = Math.cos(a), sn = Math.sin(a);
+  return list.map(([kind, x, z, rot = 0, ...rest]) => [kind, x * c + z * sn, -x * sn + z * c, rot + a, ...rest]);
 }
 // Mostly plain headstones, some round-topped, the odd cross.
 const smallMarker = (r) => { const v = r(); return v < 0.5 ? 'headstone' : v < 0.85 ? 'roundstone' : 'cross'; };
@@ -379,6 +478,29 @@ const VARIANTS = {
       ['armchair', -0.33, 0, along + Math.PI / 2],
       ['armchair', 0.33, 0, along - Math.PI / 2],
     ],
+  },
+  // Hospital: pale linoleum. Walkable cells are mostly clear with the odd
+  // parked wheelchair, drip stand or gurney against an edge; a blocked cell
+  // is a ward bay: two beds with a privacy screen between them, drip stands,
+  // a monitor cart, and a gurney left across the front.
+  hospital: {
+    walkable: ({ along, rnd }) => {
+      const v = rnd(), e = 0.36, s = rnd() < 0.5 ? 1 : -1;
+      if (v < 0.4) return [];
+      if (v < 0.65) return turn([['wheelchair', jit(rnd, 0.4), e * s, s > 0 ? Math.PI : 0]], along);
+      if (v < 0.85) return turn([['ivStand', e * s, jit(rnd, 0.5), rnd() * 6]], along);
+      return turn([['gurney', jit(rnd, 0.2), e * s, jit(rnd, 0.08)]], along);
+    },
+    blocked: ({ along, rnd }) => turn([
+      ['hospitalBed', -0.2, -0.08, -Math.PI / 2],
+      ['hospitalBed', 0.2, -0.08, -Math.PI / 2],
+      ['screen', 0, -0.06, Math.PI / 2],
+      ['ivStand', -0.34, -0.28, rnd() * 6],
+      ['ivStand', 0.07, -0.3, rnd() * 6],
+      ['monitorCart', 0.36, -0.3, jit(rnd, 0.4)],
+      ['gurney', -0.12, 0.33, jit(rnd, 0.12)],
+      ['wheelchair', 0.3, 0.3, rnd() * 6],
+    ], along + (rnd() < 0.5 ? 0 : Math.PI)),
   },
   // Water: a ford of stepping stones when walkable; open water otherwise.
   lake: { walkable: (ctx) => ford(ctx) },

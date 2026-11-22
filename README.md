@@ -143,7 +143,7 @@ the edges between cells.
 | Category | Subcategories |
 |----------|---------------|
 | Outdoor | Ground (default), Street, Start space, Old Clocktower\*, Path, Cemetery, Cemetery path, Forest cemetery\*, Forest\*, Brambles\* |
-| Indoor | Hardwood (default), Carpet, Church floor, Condemned\* |
+| Indoor | Hardwood (default), Carpet, Church floor, Hospital floor, Condemned\* |
 | Water | Lake, River (always start blocked), Fishing dock & boathouse\* |
 | Outdoor landmarks | 26 ready-made blocked landmarks (see **Landmarks** below) |
 
@@ -208,6 +208,14 @@ kneeler) facing the pulpit; a **blocked** church cell (use the Blocked brush) is
 dais with a red runner and front step, a carved octagonal pulpit with an open Bible, an altar with
 candlesticks, and a tall wooden cross. The pulpit faces its congregation, and every pew in the same church
 faces back along that line like a nave, so pews beside the pulpit still face the front.
+
+### Hospital floor
+
+An indoor tile for the hospital, pale linoleum. **Walkable** (the default) cells are mostly clear, with the
+odd parked wheelchair, IV drip stand or gurney against one edge. A **blocked** hospital cell (use the
+Blocked brush) is a **ward bay**: two wheeled beds with a folding privacy screen between them, drip stands,
+a vital-signs monitor cart, a gurney left across the front and a wheelchair. The bay lines up with the way
+the room runs.
 
 ### Old Clocktower
 
