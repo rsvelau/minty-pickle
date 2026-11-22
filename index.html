@@ -213,6 +213,11 @@
         <button id="askYes" type="button" class="on">Yes</button>
       </div>
     </div>
+    <!-- An Event card that needs a choice (src/play/panels.js renderEventChoice). -->
+    <div id="eventChoice" class="ask-card event-choice" hidden role="dialog" aria-labelledby="evTitle">
+      <div class="ask-top"><div><span class="ev-kind" id="evKind"></span><b id="evTitle"></b><p class="ask-sub" id="evText"></p></div></div>
+      <div class="ev-actions" id="evActions"></div>
+    </div>
     <!-- Evidence Obol: choose one of the face-down Evidence cards. -->
     <div id="revealSheet" class="reveal-sheet" hidden role="dialog" aria-labelledby="revealTitle">
       <b id="revealTitle">Evidence found</b>

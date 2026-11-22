@@ -9,10 +9,14 @@ import { GridState } from '../core/state.js';
 export function createBoard(grid) {
   let light = null;
   let keyGroups = null;
+  let powerOut = false;
   return {
     grid,
-    // Light level per cell (0..1).
-    get light() { return (light ??= grid.lightLevels()); },
+    // Light level per cell (0..1). With the power out (Power Outage), only
+    // vehicle headlights shine.
+    get light() { return (light ??= grid.lightLevels(null, { powerOut })); },
+    setPowerOut(on) { if (on !== powerOut) { powerOut = on; light = null; } },
+    get powerOut() { return powerOut; },
     keyGroups() { return (keyGroups ??= grid.keyGroups()); },
     // Players start on the cell in front of the van (-1: no Start space).
     startCell() {

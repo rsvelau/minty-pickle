@@ -17,21 +17,26 @@
 // which is plain data too, so a server can rebuild it from the saved board.
 import { MARKERS, streetMask, edgeKey, cellLabel } from '../core/state.js';
 import { MONSTERS, spawnMonsters, monstersAct, farthestFromPlayers } from './monsters.js';
-import { turnLimits, injuries } from './combat.js';
+import { turnLimits, injuries, applyDamage } from './combat.js';
 import { craft } from './obolcraft.js';
 import { refreshThreat, onPlayerEnters } from './monsterTurn.js';
 import { setupMystery, evidenceObol, revealEvidence, attackObol, nameMonster, revealMonster } from './mystery.js';
 import { setupDecks, drawEquipment, drawCard, eventCard, isMindset } from './decks.js';
 import { useEquipment, armMonster, achieveObjective, discardForWeakness } from './equipmentPlay.js';
 import { EVENT_CATEGORIES } from './cards/events.js';
+import {
+  resolveEvent, answerEvent, runQueue, doorOverride, startOfTurn, keyTouched, playerStepCost, playerEnters, summon,
+} from './eventPlay.js';
 
 // 2: card decks (state.decks; Equipment and Event Obols draw cards).
 // 3: equipment in play (monster health/toughness/weakness track, 'use').
 // 4: Mindsets in the Event deck; objectives decide the win.
-export const RULES_VERSION = 4;
+// 5: Events in play (choices, hazards, doors, the clock moving, survivors).
+export const RULES_VERSION = 5;
 
 // Bring a saved state from an older version up to date (saveFormat.readSave
 // calls this). One step per version.
+const pick = (o, keys) => Object.fromEntries(keys.filter((k) => o[k] !== undefined).map((k) => [k, o[k]]));
 export function migrateState(state) {
   let v = Number.isInteger(state.version) ? state.version : 1;
   if (v < 2) {
@@ -54,6 +59,12 @@ export function migrateState(state) {
     for (let i = state.decks.events.length - 1; i > 0; i--) { const j = randInt(state, i + 1); [state.decks.events[i], state.decks.events[j]] = [state.decks.events[j], state.decks.events[i]]; }
     state.objectiveDone ??= false;
     v = 4;
+  }
+  if (v < 5) {
+    Object.assign(state, { hazards: [], doors: {}, lockdown: null, allDoorsOpen: false, clockShift: 0, survivors: { live: 0, die: 0 },
+      exposed: {}, flags: {}, pendingEvent: null, eventQueue: [], ...pick(state, ['hazards', 'doors', 'survivors']) });
+    state.midnightDone = isMidnight(state);
+    v = 5;
   }
   state.version = v;
   return state;
@@ -126,9 +137,12 @@ export function formatClock(min) {
   return `${h12}:${String(mm).padStart(2, '0')} ${h24 < 12 ? 'AM' : 'PM'}`;
 }
 export const startMinutes = (state) => MIDNIGHT - state.config.turnMinutes * state.config.turnsToMidnight;
-// The clock stops at midnight: after it, the fight happens outside time.
-export const clockMinutes = (state) => Math.min(MIDNIGHT, startMinutes(state) + (state.round - 1) * state.config.turnMinutes);
-export const isMidnight = (state) => state.round > state.config.turnsToMidnight;
+// The turn the clock shows: the round, moved by cards (Police Patrol, the
+// Enigmatic Hourglass...). The clock stops at midnight: after it, the fight
+// happens outside time.
+export const clockTurn = (state) => state.round + (state.clockShift ?? 0);
+export const clockMinutes = (state) => Math.min(MIDNIGHT, startMinutes(state) + (clockTurn(state) - 1) * state.config.turnMinutes);
+export const isMidnight = (state) => clockTurn(state) > state.config.turnsToMidnight;
 
 // --- randomness ----------------------------------------------------------------
 // mulberry32: small, fast, good enough for dice; the state is one uint32.
@@ -185,9 +199,12 @@ export function newGame(board, setup = {}) {
     mystery: null,          // the secret monster and its evidence (mystery.js)
     npcs: [],               // townspeople a monster preys on (the Adze's victims)
     global: null,           // the Global event in effect: { id, since }
+    // Events in play (eventPlay.js)
+    hazards: [], doors: {}, lockdown: null, allDoorsOpen: false, clockShift: 0,
+    survivors: { live: 0, die: 0 }, exposed: {}, flags: {}, pendingEvent: null, eventQueue: [], midnightDone: false,
     log: [],
   };
-  if (state.startMode === 'midnight') state.round = config.turnsToMidnight + 1;
+  if (state.startMode === 'midnight') { state.round = config.turnsToMidnight + 1; state.midnightDone = true; }
   setupDecks(state, randInt);
   const events = [{ type: 'start' }];
   if (start >= 0) {
@@ -214,9 +231,10 @@ export function newGame(board, setup = {}) {
 
 // --- actions ------------------------------------------------------------------------
 // Every action: { type, seat? }. Returns { ok, error?, events }.
-export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective'];
+export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective', 'event'];
 
 export function applyAction(state, board, action) {
+  board.setPowerOut?.(state.global?.id === 'power-outage');
   const events = [];
   const fail = (error) => ({ ok: false, error, events: [] });
   if (!action || !ACTIONS.includes(action.type)) return fail('unknown action');
@@ -231,11 +249,20 @@ export function applyAction(state, board, action) {
       pl.defenseUsed = 0;                            // ...and what attacks wore off it
       pl.mods = {};
       state.moveBonus = 0;
+      state.windDouble = false;
+      startOfTurn(state, eventCtx(state));
       state.pool = Array.from({ length: lim.dice }, () => ({ kind: 'black', v: d6(state) }));
       state.slots = [];
       state.defSlots = [];
       state.lit = lim.lit;
       state.maxSlots = lim.move;
+      // Strong Winds (Global): starting outside, flip a coin.
+      if (state.global?.id === 'strong-winds' && board.grid.cells[pl.pos]?.area !== 'indoor') {
+        const heads = randInt(state, 2) === 0;
+        events.push({ type: 'coin', heads });
+        if (heads) { state.windDouble = true; log(state, `Strong Winds: heads, a Favorable Wind (${who(state)}'s slotted movement is doubled).`); }
+        else { state.maxSlots = Math.max(0, state.maxSlots - 1); log(state, `Strong Winds: tails, an Unfavorable Wind (${who(state)} loses a movement slot).`); }
+      }
       state.maxDefense = lim.defense;
       state.deathsDoor = lim.deathsDoor;
       state.disabledDice = Math.max(0, state.blackCount - lim.dice);
@@ -257,6 +284,7 @@ export function applyAction(state, board, action) {
       if (!state.pool[n] || !turnPhases.includes(state.phase)) return fail('no such die');
       if (to === 'slots' && state.phase !== 'slotting') return fail('finish moving first');
       if (state.pool[n].spent) return fail('that die has been used to move');
+      if (to === 'defSlots' && curPlayer(state).mindset === 'reckless' && state.defSlots.indexOf(n) < 0) return fail('Reckless: you cannot pre-slot defensive dice');
       const other = to === 'slots' ? 'defSlots' : 'slots';
       const at = state[to].indexOf(n);
       if (at >= 0) { state[to].splice(at, 1); syncDefense(state); break; }
@@ -292,7 +320,12 @@ export function applyAction(state, board, action) {
       const fresh = state.slots.filter((n) => !state.pool[n].spent).map((n) => state.pool[n]);
       if (!fresh.length) { endTurn(state, board, events); break; }
       for (const d of fresh) d.spent = true;
-      state.roll = fresh.reduce((a, d) => a + d.v, 0) + (state.moveBonus ?? 0);
+      const mind = curPlayer(state).mindset;
+      // Meticulous: movement dice count at most 4. Rushed / Favorable Wind: doubled.
+      let base = fresh.reduce((a, d) => a + (mind === 'meticulous' ? Math.min(4, d.v) : d.v), 0);
+      if (mind === 'rushed') base *= 2;
+      if (state.windDouble) base *= 2;
+      state.roll = base + (state.moveBonus ?? 0);
       state.moveBonus = 0;
       state.steps = state.roll;
       curPlayer(state).prev = -1;
@@ -353,6 +386,15 @@ export function applyAction(state, board, action) {
       if (err) return fail(err);
       break;
     }
+    case 'event': {
+      // The drawing character answers an Event card (they choose alone).
+      if (state.phase !== 'eventing') return fail('no event to answer');
+      const err = answerEvent(state, board, action, eventCtx(state), events);
+      if (err) return fail(err);
+      state.phase = 'moving';
+      advance(state, board, events);
+      break;
+    }
     case 'discard': {
       // Discard an item for a monster's ∞ weakness effect: any time on your turn.
       if (!['idle', 'slotting'].includes(state.phase)) return fail('finish moving first');
@@ -381,6 +423,15 @@ export function applyAction(state, board, action) {
 // --- helpers -------------------------------------------------------------------------
 export const curPlayer = (state) => state.players[state.cur];
 const mysteryCtx = (state) => ({ log, randInt, random, cellLabel, time: () => formatClock(clockMinutes(state)) });
+// What the Event cards need from the rules (eventPlay.js).
+const eventCtx = () => ({
+  log, randInt, curPlayer, isMidnight, label,
+  revealEvidence: (state, board, cell) => evidenceObol(state, board, cell, mysteryCtx(state)),
+  flipEvidence: (state, board, n, cell, events) => { state.mystery.pendingReveal = { cell }; revealEvidence(state, board, n, mysteryCtx(state), events); },
+  attack: (state, board, cell, events) => attackObol(state, board, cell, mysteryCtx(state), events),
+  investigateAgain: (state, board, cell, events) => investigate(state, board, cell, events, { again: true }),
+  drawEvent: (state, board, cell, events) => drawEventCard(state, board, curPlayer(state), cell, events),
+});
 const who = (state) => curPlayer(state)?.name ?? '';
 const label = (board, i) => { const { x, y } = board.grid.coords(i); return cellLabel(x, y); };
 export function log(state, msg) {
@@ -420,11 +471,15 @@ export function nextOptions(state, board) {
   const { x, y } = grid.coords(pl.pos);
   const sides = roadSides(state, board, x, y);
   const unlocked = unlockedFn(state, board);
+  const override = doorOverride(state);
   const all = [];
   for (const [dx, dy, name, bit] of DIRS) {
     if (sides !== null && !(sides & bit)) continue;
-    if (!grid.canStep(x, y, dx, dy, unlocked)) continue;
-    all.push({ i: grid.index(x + dx, y + dy), dx, dy, name });
+    if (!grid.canStep(x, y, dx, dy, unlocked, override)) continue;
+    const i = grid.index(x + dx, y + dy);
+    const cost = playerStepCost(state, board, i, state.cur);
+    if (cost !== Infinity && cost > state.steps) continue; // a Sinkhole needs 5 moves left
+    all.push({ i, dx, dy, name });
   }
   const forward = all.filter((o) => o.i !== pl.prev);
   return forward.length ? forward : all;
@@ -436,6 +491,7 @@ function enter(state, board, i, events) {
   const m = board.grid.cells[i].marker;
   if (!m || !MARKERS[m]) return;
   if (m === 'objective' && !isMidnight(state)) return; // not there yet
+  if (m === 'key') keyTouched(state, eventCtx(state)); // Lockdown: any Key space opens every door
   if (state.config.stopAtMarkers) state.stopAt = i;
   if (isUsed(state, i)) {
     state.stopReason = `${MARKERS[m].label} (already collected)`;
@@ -482,11 +538,21 @@ function enter(state, board, i, events) {
 }
 
 // Investigate a spot: draw a random Obol from the bag for the current player.
-function investigate(state, board, i, events) {
-  state.used.push(i);
+function investigate(state, board, i, events, { again = false } = {}) {
   const pl = curPlayer(state);
+  // Meticulous: a spot can be investigated twice.
+  if (!again) {
+    if (pl.mindset === 'meticulous' && !(state.meticulous ??= []).includes(i)) state.meticulous.push(i);
+    else state.used.push(i);
+  }
   let type = null;
-  if (state.bag.length) {
+  const exposed = !again && state.exposed?.[i] !== undefined;
+  if (exposed) {
+    type = state.exposed[i];
+    delete state.exposed[i];
+    if (type) pl.inventory.obolcraft.push({ type, at: label(board, i), time: formatClock(clockMinutes(state)), turn: state.round });
+    log(state, type ? `${who(state)} investigated ${label(board, i)} and took the exposed ${OBOLS[type].label} Obol.` : `${who(state)} investigated ${label(board, i)}: nothing, as exposed.`);
+  } else if (state.bag.length) {
     type = state.bag.splice(randInt(state, state.bag.length), 1)[0];
     pl.inventory.obolcraft.push({ type, at: label(board, i), time: formatClock(clockMinutes(state)), turn: state.round });
     log(state, `${who(state)} investigated ${label(board, i)} and drew an ${OBOLS[type].label} Obol (${state.bag.length} left in the bag).`);
@@ -497,15 +563,25 @@ function investigate(state, board, i, events) {
   events.push({ type: 'obol', seat: state.cur, cell: i, obol: type, left: state.bag.length });
   // The mystery: evidence to choose, or the monster strikes.
   if (type === 'evidence') evidenceObol(state, board, i, mysteryCtx(state));
-  if (type === 'attack') attackObol(state, board, i, mysteryCtx(state), events);
+  if (type === 'attack') {
+    if (state.flags?.ignoreAttack) log(state, 'The attack is ignored (Wooden Boards).');
+    else if (state.flags?.negateAttackCards === state.round) log(state, 'The attack is negated (Distant Gunshots).');
+    else attackObol(state, board, i, mysteryCtx(state), events);
+  }
   if (type === 'equipment') {
     const card = drawEquipment(state, pl, 'Investigation');
     log(state, card ? `${who(state)} found equipment: ${card.name}.` : 'The Equipment deck is empty.');
     if (card) events.push({ type: 'card', deck: 'equipment', id: card.id, seat: state.cur, cell: i });
   }
-  if (type === 'event') {
+  if (type === 'event') drawEventCard(state, board, pl, i, events);
+  events.push({ type: 'collect', seat: state.cur, cell: i, marker: 'investigation', text: type ? `${OBOLS[type].label} Obol` : 'Investigation', keyGroup: -1 });
+}
+
+// Draw the top Event card and resolve it (Mindsets and Globals included).
+function drawEventCard(state, board, pl, i, events) {
+  {
     const id = drawCard(state, 'events');
-    const card = id && eventCard(id);
+    const card = id && (eventCard(id) ?? (id === 'portrait-curse' ? { name: 'The Haunted Portrait’s curse', category: 'cursedObject', text: 'Whoever draws this dies.' } : null));
     log(state, card ? `${who(state)} drew an event: ${card.name} (${EVENT_CATEGORIES[card.category].label}). ${card.text}` : 'The Event deck is empty.');
     if (card) events.push({ type: 'card', deck: 'events', id, seat: state.cur, cell: i });
     // A Mindset is yours until another one replaces it (one at a time).
@@ -518,10 +594,12 @@ function investigate(state, board, i, events) {
     if (card?.category === 'global') {
       const old = state.global && eventCard(state.global.id);
       state.global = { id, since: state.round };
+      board.setPowerOut?.(id === 'power-outage');
       log(state, old ? `${card.name} replaces ${old.name} as the Global event.` : `${card.name} is now in effect across the map.`);
+      events.push({ type: 'global', id });
     }
+    if (card && !isMindset(id)) resolveEvent(state, board, id, i, eventCtx(state), events);
   }
-  events.push({ type: 'collect', seat: state.cur, cell: i, marker: 'investigation', text: type ? `${OBOLS[type].label} Obol` : 'Investigation', keyGroup: -1 });
 }
 
 // Decide the next step: move on, ask, or finish.
@@ -535,7 +613,10 @@ function advance(state, board, events) {
       return;
     }
     if (state.ask) { state.phase = 'asking'; state.options = []; return; }
+    if (state.pendingEvent) { state.phase = 'eventing'; state.options = []; return; }
     if (state.mystery?.pendingReveal) { state.phase = 'revealing'; state.options = []; return; }
+    if (state.eventQueue?.length) { runQueue(state, board, eventCtx(state), events); if (state.pendingEvent || state.mystery?.pendingReveal || state.eventQueue.length) continue; }
+    if (state.endTurnNow) { state.endTurnNow = false; state.steps = 0; endTurn(state, board, events); return; }
     if (state.steps <= 0) {
       state.stopAt = -1;
       state.stopReason = '';
@@ -569,8 +650,11 @@ function takeStep(state, board, o, events) {
   const from = pl.pos;
   pl.prev = from;
   pl.pos = o.i;
-  state.steps--;
+  const cost = playerStepCost(state, board, o.i, state.cur);
+  state.steps = cost === Infinity ? 0 : state.steps - cost;
+  if (cost === Infinity) log(state, `${who(state)} is caught in the brambles: that's all the movement for this turn.`);
   events.push({ type: 'step', seat: state.cur, from, to: o.i });
+  playerEnters(state, pl, o.i, eventCtx(state));
   enter(state, board, o.i, events);
   if (state.monsters.length) onPlayerEnters(state, board, pl, o.i, { state, log, randInt }, events);
 }
@@ -615,6 +699,13 @@ export function unusedDice(state) {
 function endTurn(state, board, events) {
   const pl = curPlayer(state);
   syncDefense(state);
+  // Lightning Storm (Global): ending the turn outside, flip a coin; tails, 💥 [P].
+  if (state.global?.id === 'lightning-storm' && !pl.dead && board.grid.cells[pl.pos]?.area !== 'indoor') {
+    const heads = randInt(state, 2) === 0;
+    events.push({ type: 'coin', heads });
+    log(state, `Lightning Storm: ${who(state)} ends the turn outside and flips a coin: ${heads ? 'heads, the lightning misses' : 'tails'}.`);
+    if (!heads) applyDamage(state, board, pl, 'P', 1 + randInt(state, 6), { log, source: 'The lightning' }, events);
+  }
   const left = unusedDice(state);
   pl.lastMove = state.pool.filter((d) => d.spent).map((d) => ({ ...d })); // for Exhaust (Movement die)
   const back = state.pool.filter((d) => d.resonant).length;
@@ -636,7 +727,9 @@ function endRound(state, board, events) {
   // Monsters already out carry out the action they declared, and declare the next.
   if (was && state.monsters.length) monstersAct(state, board, events, random, log);
   state.round++;
-  if (isMidnight(state) && !was) {
+  summon(state, eventCtx(state), events);
+  if (isMidnight(state) && !state.midnightDone) {
+    state.midnightDone = true;
     log(state, 'Midnight. The clocktower strikes twelve, and the objectives appear.');
     events.push({ type: 'midnight' });
     revealMonster(state, board, mysteryCtx(state), events);

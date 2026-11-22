@@ -19,7 +19,8 @@ import { cellLabel } from '../core/state.js';
 import { applyDamage, alive, defenseValue } from './combat.js';
 import { RANGE, cellRange } from './cards/injuries.js';
 import { buildingOf } from '../core/mapCheck.js'; // the same grouping the map check uses
-import { endMonsterTurn } from './equipmentPlay.js';
+import { endMonsterTurn, hurtMonster } from './equipmentPlay.js';
+import { monsterEnters } from './eventPlay.js';
 
 const KIND_TO_TYPE = { physical: 'P', mental: 'M', spiritual: 'S' };
 
@@ -360,6 +361,8 @@ export function executeIntent(state, board, monster, ctx, events) {
     monster.intents = null; monster.danger = []; endMonsterTurn(monster);
     return;
   }
+  // Traps (Rusty Bear Trap, Summoning Circle...): immobilized for whole turns.
+  if ((monster.immobileRounds ?? 0) > 0) { mods.immobile = true; monster.immobileRounds--; }
   if (mods.immobile) ctx.log(state, `The ${card.name} is held in place this turn.`);
   for (const intent of monster.intents) {
     if (!alive(state).length) break;
@@ -376,17 +379,26 @@ export function executeIntent(state, board, monster, ctx, events) {
       move.steps = move.steps.filter((st) => (typeof st === 'object' ? true : ++w <= allowed));
     }
     if (mods.immobile) move.steps = [];
+    let cut = 0;
     for (const st of move.steps) {
       if (typeof st === 'object') {
         events.push({ type: 'monsterTeleport', id: monster.id, from: monster.pos, to: st.teleport });
         monster.pos = st.teleport;
-      } else {
-        events.push({ type: 'monsterStep', id: monster.id, from: monster.pos, to: st });
-        monster.prev = monster.pos;
-        monster.pos = st;
+        continue;
       }
+      if (cut > 0) { cut--; continue; }
+      events.push({ type: 'monsterStep', id: monster.id, from: monster.pos, to: st });
+      monster.prev = monster.pos;
+      monster.pos = st;
+      // Traps and Hazards on the way.
+      const trap = monsterEnters(state, board, monster, st, ctx, events,
+        (dice, kind) => hurtMonster(state, board, monster, dice, kind, () => rollDie(ctx), ctx, events));
+      if (!state.monsters.includes(monster)) return; // destroyed (or the night is won)
+      if (trap.stop) break;
+      cut += trap.cut;
     }
     if (move.steps.length) ctx.log(state, `The ${card.name} moves to ${label(board, monster.pos)}.`);
+    if (monster.mods?.interrupted) { ctx.log(state, `The ${card.name} is interrupted.`); break; }
     // Then the rest in card order; `hit` = who the action is aimed at (for Exhaust).
     let hit = [];
     for (const o of intent.ops) {

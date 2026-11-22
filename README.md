@@ -44,8 +44,42 @@ dice; they are part of the saved game. An **Equipment Obol** draws an Equipment 
 inventory, and the Obolcraft "Draw an Equipment card" recipe draws from the same deck. An **Event Obol** draws
 an Event card, shown and logged; a **Global** event becomes the one in effect (shown beside the clock) until
 another Global replaces it. **Mindsets** are shuffled into the Event deck: drawing one gives it to that
-investigator (shown in their Inventory title), replacing any Mindset they had. Event and Mindset effects are
-played at the table for now.
+investigator (shown in their Inventory title), replacing any Mindset they had.
+
+**Events in play** (`src/game/eventPlay.js`). The card pops up; if it needs a choice (Decisions, optional "Can"
+Opportunities and Cursed Objects), the turn pauses until **the drawing character** chooses (alone):
+- **Survivors** (Injured, Huddled, Insane Survivor): Live or Die must be chosen (a Live you can't pay for is
+  greyed out). The team's choices are tallied (Casebook); **Police Patrol** advances the clock ⏳, or ⏳⏳ once
+  any survivor has died.
+- **The clock** moves forward or back (Police Patrol, Bumped Shelf's Hide, Enigmatic Hourglass, Message Cypher,
+  Wooden Boards); never from midnight on. **Chalk-Scrawled Narrative** reveals all evidence and ends the turn on
+  the last turn before midnight.
+- **Hazards** appear on the space where they were found (a token on the board) and affect players and monsters,
+  but not the player who found them until they move off: **Sinkhole** (entering costs 5 moves), **Flooded Out**
+  (moves cost double within 1), **Overgrown Brambles** (entering ends your movement), **Flickering Lights**
+  (Physical damage within 4 ignores your lowest defense die), **Consecrated Ash** (eases a player's Spiritual
+  injury; stuns Incorporeal and Semi-Corporeal monsters).
+- **Traps** laid by players only affect monsters crossing them: Coil of Razor Wire, Rusty Bear Trap (optional;
+  Corporeal immobilized a turn, Fae two), Deadfall Trap, Bonfire (🔥), Summoning Circle (pulls a Demon in and
+  binds it). Monster damage goes through toughness and counts weakness hits.
+- **Doors**: Nailed Shut blocks the building's doors; Roof Collapse blocks the nearest (take 💥 [P] to get
+  through it this turn); **Lockdown** locks every door until the drawer's next turn, and touching any Key space
+  meanwhile unlocks every door for good.
+- **Globals** (one at a time, shown beside the clock): **Power Outage** turns every light off, the clocktower
+  included (vehicle headlights stay on; the board goes dark, and lit slots follow); Bright Moon (Mental and
+  Physical rolls −1; +2 Physical against a Beast); Strong Winds (starting outside: heads doubles your movement,
+  tails costs a movement slot); Lightning Storm (ending your turn outside: tails, 💥 [P]).
+- Others: Spirit Board, Insane Survivor and Message Cypher reveal Evidence; Ominous VHS and Injured Survivor
+  expose what Investigation spots hold (investigating there takes it); Tarot Cards play three more events then an
+  Evidence card; Haunted Portrait clears your injuries but shuffles in a curse that kills whoever draws it; Fall
+  Through, Huddled Survivors and Wooden Boards investigate again; Distant Gunshots negates Attack cards and
+  Distant Screams avoids attacks for the rest of the turn.
+- 💥 [P]/[M]/[S] on a card is one die of that type, defended as usual.
+- **Mindsets**: Reckless and Mighty double your equipment damage (Mighty: a weapon breaks after one use);
+  Reckless can't slot defense; Rushed doubles movement and counts defense dice at most 3; Meticulous can
+  investigate a spot twice and counts movement dice at most 4; Protective lends your defense to a teammate in
+  Close range. Curious is played at the table.
+- Still played at the table: Hidden Passage, Peculiar Mirror, Decrepit Truck, Hiding Spot (travel).
 
 **Using equipment** (`src/game/equipmentPlay.js`): any time during your turn, open the Inventory → Equipment
 and tap **Use** on a skill. Pick its dice from your free rolled dice (their total must meet the bracket), and a
@@ -83,7 +117,7 @@ game settings (`deckCounts`: only the changes from one copy each).
 **Glossary** (Cards in the game → Glossary): the card shorthand as the designer defined it (`cards/keywords.js`).
 
 Saved games from older versions still load: `migrateState` in `src/game/rules.js` gives them decks (minus
-equipment already held) and arms their monsters. Rules version 3.
+equipment already held) and arms their monsters. Rules version 5.
 
 ## The board
 The board is a whole town: a 20 × 26 grid by default (columns **A–T**, rows **1–26**), resizable from 4 to 60

@@ -5,6 +5,7 @@ import { setLightSeeds } from './dread.js';
 import { BASE, BED_H, DECK_TOP, FLOOR_H, PALETTE, SUB_LOOK, TILE, WATER_Y, grid, ui } from '../app/config.js';
 import { N, glowAttr, heights, jitter, pools, refreshWaterAndBridges, targetHeights, tiles } from './board.js';
 import { cellToWorld, scene } from './scene.js';
+import { refreshPropsAndWalls } from './board.js';
 
 // Module state: assigned by init() below, in the same order as before the split.
 export let tmpColor, tmpMatrix, tmpPos, tmpQuat, tmpScale, ZERO;
@@ -39,17 +40,27 @@ export function init() {
   scene.add(hoverBox);
 }
 
+// Power Outage (a Global event in a game): every light off except vehicle
+// headlights. Set by the play view; the editor never sees it.
+export let powerOut = false;
+export function setPowerOut(on) {
+  if (on === powerOut) return;
+  powerOut = on;
+  refreshAll();
+  refreshPropsAndWalls();
+}
 export function recomputeLight() {
   const src = new Int32Array(grid.cells.length);
-  lightLevels = grid.lightLevels(src);
+  lightLevels = grid.lightLevels(src, { powerOut });
   setLightSeeds(grid.cols, grid.rows, src); // which light each cell flickers with
-  lampsOn = Uint8Array.from(grid.cells, (_, i) => (grid.lampOn(i) ? 1 : 0));
+  lampsOn = Uint8Array.from(grid.cells, (_, i) => (!powerOut && grid.lampOn(i) ? 1 : 0));
 }
 
 export const mixHex = (a, b, t) => tmpColor2.set(a).lerp(new THREE.Color(b), t).getHex();
 
 export function cellLook(cell, level = 0, lamp = false) {
   // Returns { color, glow, height (tile top), pool: hexOrNull, poolY, poolScale }
+  if (powerOut && cell.lit) cell = { ...cell, lit: false };
   const blocked = !cell.walkable;
   const isWater = cell.area === 'water';
   const look = SUB_LOOK[cell.sub] ?? {};

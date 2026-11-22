@@ -12,6 +12,7 @@ import { N, clocktowers, heights, landmarks, markers, props, targetHeights, tile
 import { FOG, QUALITY_KEY, SKY, __set_camTween, applyQuality, camTween, camera, cellToWorld, clampTarget, controls, hemi, moon, quality, qualityName, renderer, scene, wake, wakeUntil } from '../render/scene.js';
 import { HOUSE_D, HOUSE_W, atmos, ghostHouse, houseWindow, porchLight, updateRain, updateTreeFade } from '../render/surroundings.js';
 import { hoverBox, tmpPos, writeTileMatrix } from '../render/tileLook.js';
+import { powerOut } from '../render/tileLook.js';
 
 // Module state: assigned by init() below, in the same order as before the split.
 export let TINT, clock, fpsMeter;
@@ -174,7 +175,7 @@ export function updateDread(dt) {
   // The dials sputter two or three times as they die, then stay dark.
   const p = towerOut;
   const sputter = p > 0 && p < 0.85 ? (Math.sin(p * Math.PI * 7) > 0.2 ? 1 : 0.35) : 1;
-  clocktowers.setGlow(Math.max(0, 1 - p) * sputter);
+  clocktowers.setGlow(powerOut ? 0 : Math.max(0, 1 - p) * sputter); // Power Outage: the clocktower goes dark too
   // Darker, closer night, and the cold blue turns a muted, bloody red.
   hemi.intensity = 2.4 - 0.5 * dread;
   hemi.color.copy(TINT.sky).lerp(TINT.skyRed, dread);

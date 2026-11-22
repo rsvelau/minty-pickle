@@ -8,12 +8,13 @@ import { cellLabel } from '../core/state.js';
 import { WATER_Y, grid, ui } from '../app/config.js';
 import { toast } from '../app/files.js';
 import { $ } from '../app/dom.js';
-import { craftUI, dmgIcon, hitText, injuryPips, markCaseNew, obolHTML, renderAsk, renderCasebook, renderIntent, renderInventory, renderRevealSheet, showCard, showObol } from './panels.js';
+import { craftUI, dmgIcon, hitText, injuryPips, markCaseNew, obolHTML, renderAsk, renderCasebook, renderIntent, renderInventory, renderRevealSheet, showCard, showObol, renderEventChoice } from './panels.js';
 import { __set_markerHidden, __set_markerUsed, markers, refreshMarkers, refreshPropsAndWalls, visibleTop } from '../render/board.js';
 import { camera, cellToWorld, controls, scene, wake } from '../render/scene.js';
 import { lightLevels } from '../render/tileLook.js';
 import { onGameUpdate } from '../app/gameShell.js';
 import { EVENT_BY_ID } from '../game/cards/events.js';
+import { setPowerOut } from '../render/tileLook.js';
 
 // Module state: assigned by init() below, in the same order as before the split.
 export let PIPS, choiceButtons, projTmp, gameConfig, play;
@@ -68,7 +69,7 @@ export function init() {
     },
     grid, scene, camera, controls, cellToWorld, terrainify, cellLabel,
     cellTop: (i) => Math.max(visibleTop(i), WATER_Y) + 0.01,
-    onChange: () => { wake(); renderPlay(); onGameUpdate(); },
+    onChange: () => { wake(); renderPlay(); onGameUpdate(); syncPowerOut(); },
     onUsed: () => { refreshMarkers(); refreshPropsAndWalls(); },
     onCollect: (i, type, text) => {
       const { x, y } = grid.coords(i);
@@ -103,6 +104,7 @@ export function renderPlay() {
     slotting: `Slot dice into up to <b>${s.maxSlots}</b> movement slots${s.lit ? ' (in light: extra slot open)' : ''}, then Move.`,
     asking: `Investigation spot. Investigate? <b>${s.steps}</b> move${s.steps === 1 ? '' : 's'} left.`,
     revealing: 'Evidence! Choose a face-down card to turn over.',
+    eventing: 'An event: make your choice.',
     over: 'Everyone is dead. The night wins. Press Restart to play again.',
     moving: s.fast ? `Fast-forward ⏩ <b>${s.steps}</b> left` : `Running… <b>${s.steps}</b> left (press and hold the board to fast-forward)`,
     choosing: `${s.stopReason ? `Stopped at <b>${s.stopReason}</b>. ` : ''}Choose a direction: <b>${s.steps}</b> move${s.steps === 1 ? '' : 's'} left (${s.options.map((o) => o.name).join(', ')})`,
@@ -134,6 +136,7 @@ export function renderPlay() {
   renderTray();
   renderClock();
   renderAsk();
+  renderEventChoice();
   renderIntent();
   renderRevealSheet();
   if (!$('#casebook').hidden) renderCasebook();
@@ -151,6 +154,7 @@ export function renderPlay() {
     choosing: `${s.stopReason ? `<b>${s.stopReason}</b> · ` : ''}Tap an arrow · <b>${s.steps}</b> left`,
     asking: `Investigate? · <b>${s.steps}</b> left`,
     revealing: 'Evidence! Choose a card',
+    eventing: 'An event: make your choice',
     over: 'Everyone is dead. Restart to play again.',
     done: `On <b>${here}</b>. Roll again.`,
   }[s.phase] ?? '');
@@ -226,7 +230,7 @@ export function renderClock() {
   const el = $('#gameClock');
   el.hidden = ui.tool !== 'play' || play.state.phase === 'nostart';
   if (el.hidden) return;
-  const r = play.state.round;
+  const r = play.state.round + (play.session.state?.clockShift ?? 0); // cards can move the clock
   const t = formatClock(play.clockMinutes());
   el.classList.toggle('midnight', play.midnight());
   const turns = play.state.cfg.turnsToMidnight;
@@ -297,3 +301,8 @@ export function renderTray() {
       : (s.pool.some((d) => d.kind === 'white') ? 'Rolled white dice are discarded after this turn' : 'Tap dice to slot them');
 }
 export let trayTarget = 'move';
+
+// Power Outage (Global) darkens the board while it's in effect in the game.
+export function syncPowerOut() {
+  setPowerOut(ui.tool === 'play' && play.session.state?.global?.id === 'power-outage');
+}

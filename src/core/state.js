@@ -575,7 +575,8 @@ export class GridState {
   // `src` (optional Int32Array, one per cell) receives the cell index of the
   // strongest light source reaching each cell (-1 for none), so a light's
   // whole pool can be animated together (the midnight flicker).
-  lightLevels(src = null) {
+  // `powerOut` (Power Outage): every light is off except vehicle headlights.
+  lightLevels(src = null, { powerOut = false } = {}) {
     const out = new Float32Array(this.cells.length);
     const best = src ? new Float32Array(this.cells.length) : null;
     if (src) src.fill(-1);
@@ -586,7 +587,7 @@ export class GridState {
     };
     this.cells.forEach((c, i) => {
       const lamp = this.lampOn(i);
-      if (!c.lit && !lamp) return;
+      if ((!c.lit && !lamp) || powerOut) return;
       from = i;
       const r = lamp ? Math.max(LAMP_SOURCE.radius, c.lit ? c.radius : 0) : c.radius;
       const bright = (d) => (lamp
@@ -762,10 +763,12 @@ export class GridState {
   // (x + dx, y + dy)?
   // `unlocked(edgeKey)` (optional) says whether a key you carry has
   // unlocked that edge's door: unlocked locked/one-way doors pass both ways.
-  canCross(x, y, dx, dy, unlocked) {
+  // `override(edgeKey, type)` (optional) changes what a door is during a game
+  // (blocked, locked down, opened: src/game/eventPlay.js doorOverride).
+  canCross(x, y, dx, dy, unlocked, override) {
     const [o, ex, ey] = dx ? ['v', dx > 0 ? x + 1 : x, y] : ['h', x, dy > 0 ? y + 1 : y];
     const k = edgeKey(o, ex, ey);
-    const t = this.edgeAt(k);
+    const t = override ? override(k, this.edgeAt(k)) : this.edgeAt(k);
     if (!t || t === 'door') return true;
     if ((t === 'lockedDoor' || t.startsWith('oneWayDoor')) && unlocked?.(k)) return true;
     if (t === 'oneWayDoor+') return dx > 0 || dy > 0;
@@ -777,12 +780,12 @@ export class GridState {
 
   // One move from (x, y) by (dx, dy). Diagonal moves need both ways round
   // the corner to be clear, so you can't squeeze between two walls.
-  canStep(x, y, dx, dy, unlocked) {
+  canStep(x, y, dx, dy, unlocked, override) {
     const nx = x + dx, ny = y + dy;
     if (!this.canEnter(nx, ny)) return false;
-    if (!dx || !dy) return this.canCross(x, y, dx, dy, unlocked);
-    const viaX = this.canEnter(x + dx, y) && this.canCross(x, y, dx, 0, unlocked) && this.canCross(x + dx, y, 0, dy, unlocked);
-    const viaY = this.canEnter(x, y + dy) && this.canCross(x, y, 0, dy, unlocked) && this.canCross(x, y + dy, dx, 0, unlocked);
+    if (!dx || !dy) return this.canCross(x, y, dx, dy, unlocked, override);
+    const viaX = this.canEnter(x + dx, y) && this.canCross(x, y, dx, 0, unlocked, override) && this.canCross(x + dx, y, 0, dy, unlocked, override);
+    const viaY = this.canEnter(x, y + dy) && this.canCross(x, y, 0, dy, unlocked, override) && this.canCross(x, y + dy, dx, 0, unlocked, override);
     return viaX && viaY;
   }
 

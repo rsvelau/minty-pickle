@@ -80,7 +80,7 @@ test('decks: dealt from the settings, drawn without repeats, saved with the game
   delete old.decks; delete old.config.deckCounts; old.version = 1;
   old.players[0].inventory.equipment.push({ id: 'crowbar', label: 'Crowbar' });
   migrateState(old);
-  assert.equal(old.version, 4);
+  assert.equal(old.version, 5);
   assert.equal(old.decks.equipment.length, 43);
   assert.ok(!old.decks.equipment.includes('crowbar'));
 });

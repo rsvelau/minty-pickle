@@ -203,7 +203,8 @@ export function useEquipment(state, board, pl, action, ctx, events) {
   // Limits: 1️⃣ until refreshed; 🔗 the card breaks.
   if (a.limit === 'once') item.spent = [...new Set([...(item.spent ?? []), k])];
   let broke = false;
-  if (a.limit === 'breaks') { pl.inventory.equipment.splice(action.item | 0, 1); broke = true; }
+  // 🔗 breaks; Mighty: any weapon breaks after a single use.
+  if (a.limit === 'breaks' || (pl.mindset === 'mighty' && fx.dmg !== undefined)) { pl.inventory.equipment.splice(action.item | 0, 1); broke = true; }
 
   const text = `${who} uses ${card.name}: ${a.name}${values.length ? ` (${values.join(' + ')})` : ''}${monster ? ` on the ${MONSTER_BY_ID[monster.kind].name}` : ''}${ally && ally !== pl ? ` on ${ally.name}` : ''}. ${parts.filter(Boolean).join('; ')}.${broke ? ` The ${card.name} is spent and discarded.` : ''}`;
   ctx.log(state, text);
@@ -214,7 +215,8 @@ export function useEquipment(state, board, pl, action, ctx, events) {
 function damageMonster(state, monster, mcard, fx, a, values, pl) {
   let dmg = fx.dmg === 'die' ? values[0] ?? 0 : fx.dmg === 'sum' ? values.reduce((x, y) => x + y, 0) : fx.dmg;
   if (monster.mods.bonusNext) { dmg += monster.mods.bonusNext; monster.mods.bonusNext = 0; }
-  if (pl.mods?.doubleAttack) dmg *= 2;
+  if (pl.mods?.doubleAttack) dmg *= 2;                                  // Bless
+  if (pl.mindset === 'reckless' || pl.mindset === 'mighty') dmg *= 2;    // Mindsets: double attacking damage
   const tough = fx.ignoreToughness ? 0 : toughnessOf(monster);
   const through = tough === Infinity ? 0 : Math.max(0, dmg - tough);
   if (monster.hp === null) return `${dmg} damage, but the ${mcard.name} cannot be worn down by damage`;
@@ -346,4 +348,22 @@ export function endMonsterTurn(monster) {
     if (v === true) continue;
     if (v <= 1) delete monster.disabled[name]; else monster.disabled[name] = v - 1;
   }
+}
+
+// Damage to a monster from something other than equipment (traps, the
+// Bonfire, the Decrepit Truck): `dice` dice of an element (or none), through
+// toughness, counting a weakness hit. Returns the health lost.
+export function hurtMonster(state, board, monster, dice, kind, rollDie, ctx, events) {
+  const mcard = MONSTER_BY_ID[monster.kind];
+  if (!mcard || monster.hp === undefined) return 0;
+  if (kind && mcard.immune.includes(kind)) { ctx.log(state, `The ${mcard.name} is immune to ${DAMAGE_KINDS[kind].label}.`); return 0; }
+  let dmg = 0;
+  for (let k = 0; k < dice; k++) dmg += rollDie();
+  const tough = toughnessOf(monster);
+  const through = tough === Infinity ? 0 : Math.max(0, dmg - tough);
+  if (monster.hp !== null) monster.hp = Math.max(0, monster.hp - through);
+  ctx.log(state, `The ${mcard.name} takes ${dmg}${tough && tough !== Infinity ? ` − toughness ${tough}` : ''}: ${through} gets through${monster.hp === null ? '' : ` (${monster.hp}/${monster.maxHp})`}.`);
+  if (kind && mcard.weakness.includes(kind)) weaknessHit(state, monster, mcard, ctx, events);
+  checkDefeat(state, board, monster, mcard, ctx, events);
+  return through;
 }

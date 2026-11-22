@@ -13,6 +13,7 @@ import { play, renderPlay } from '../play/playView.js';
 import { refreshKeyHighlight, refreshMarkers, refreshPropsAndWalls } from '../render/board.js';
 import { __set_camTween, camera, cellToWorld, controls } from '../render/scene.js';
 import { hoverBox } from '../render/tileLook.js';
+import { syncPowerOut } from '../play/playView.js';
 
 // Run once at startup (called from src/main.js, in order).
 export function init() {
@@ -165,6 +166,7 @@ export function setTool(tool, start) {
     }
   }
   play.setActive(tool === 'play');
+  syncPowerOut(); // a game's Power Outage never reaches the editor
   refreshMarkers();
   refreshPropsAndWalls();
   renderPlay();

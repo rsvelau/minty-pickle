@@ -17,6 +17,7 @@ import { EVENT_CATEGORIES } from '../game/cards/events.js';
 import { targetsFor, actionRoll, abilityReady, killObjective, discardOptions } from '../game/equipmentPlay.js';
 import { checkRequirement } from '../game/cards/requirements.js';
 import { eventCard } from '../game/decks.js';
+import { choicesFor } from '../game/eventPlay.js';
 
 // Module state: assigned by init() below, in the same order as before the split.
 export let OBOL_GLYPHS, DMG_SVG, ATTACK_GLYPH, cardQueue, caseUI, craftUI;
@@ -254,6 +255,7 @@ export function hideCard() {
   $('#cardPop').hidden = true;
   clearTimeout(cardTimer);
   if (cardQueue.length) setTimeout(() => showCardNow(cardQueue.shift()), 120);
+  else renderEventChoice(); // a pending event's choice comes up once its card is read
 }
 
 // What's been found, in the shape matchesEvidence wants.
@@ -335,6 +337,7 @@ export function casebookHTML(my) {
     `<p class="case-note">${fits.length === 1 ? 'Only <b>one</b> monster fits' : `<b>${fits.length}</b> of ${pool.length} monsters fit`} the evidence so far.</p>` +
     `<p class="case-note">${status}</p>` +
     objectiveHTML(my) +
+    mapEffectsHTML() +
     `<div class="case-actions"><button type="button" class="ink" id="openGuide">Open the Field Guide</button></div>`;
 }
 
@@ -647,4 +650,40 @@ function discardHTML(pl) {
   return `<div class="eq-discards"><p class="use-label">The monster’s weakness lets you discard:</p>${opts.map((o) =>
     `<button type="button" class="eq-discard" data-discard='${JSON.stringify({ item: o.item, track: o.track, monster: o.monster })}'>` +
     `${esc(EQUIPMENT_BY_ID[pl.inventory.equipment[o.item].id].name)} → ${esc(o.text)}</button>`).join('')}</div>`;
+}
+
+// --- Events that need a choice (the drawing character chooses alone) ---------------------
+export function renderEventChoice() {
+  const st = play.session.state;
+  const pe = st?.pendingEvent;
+  // Wait for the drawn card to be read (its card pops up first).
+  const show = ui.tool === 'play' && play.state.phase === 'eventing' && !!pe && $('#cardPop').hidden;
+  $('#eventChoice').hidden = !show;
+  if (!show) return;
+  const card = eventCard(pe.id);
+  const pl = st.players[pe.seat];
+  $('#evKind').textContent = `${EVENT_CATEGORIES[card.category]?.label ?? 'Event'} · ${pl.name} chooses`;
+  $('#evTitle').textContent = card.name;
+  $('#evText').textContent = card.text;
+  const opts = choicesFor(pe.id, st, pl) ?? [];
+  const host = $('#evActions');
+  host.innerHTML = opts.map((o) => `<button type="button" data-ev="${o.value}" ${o.ok ? '' : 'disabled title="You can’t pay for this"'}>${esc(o.label)}</button>`).join('');
+  host.querySelectorAll('[data-ev]').forEach((b) => { b.onclick = () => play.session.dispatch({ type: 'event', choice: b.dataset.ev, seat: st.cur }); });
+}
+
+// Events on the map and the survivors tally.
+function mapEffectsHTML() {
+  const st = play.session.state;
+  if (!st) return '';
+  const bits = [];
+  const sv = st.survivors ?? { live: 0, die: 0 };
+  if (sv.live || sv.die) bits.push(`Survivors: <b>${sv.live}</b> lived, <b>${sv.die}</b> died.`);
+  if (st.global) bits.push(`Global: <b>${esc(eventCard(st.global.id)?.name ?? '')}</b>.`);
+  const hz = (st.hazards ?? []).filter((h) => !h.used);
+  if (hz.length) bits.push(`On the map: ${hz.map((h) => `${esc(eventCard(h.id)?.name ?? h.id)} at ${placeLabel(h.cell)}${h.by === 'player' ? ' (trap)' : ''}`).join(', ')}.`);
+  const blocked = Object.values(st.doors ?? {}).filter((v) => v === 'blocked').length;
+  if (blocked) bits.push(`${blocked} door${blocked === 1 ? '' : 's'} blocked.`);
+  if (st.lockdown) bits.push('<b>Lockdown</b>: every door is locked. Touch a Key space to open them all for good.');
+  if (st.allDoorsOpen) bits.push('Every door is unlocked for good.');
+  return bits.length ? `<p class="case-note">${bits.join(' ')}</p>` : '';
 }

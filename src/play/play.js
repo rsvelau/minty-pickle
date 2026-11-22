@@ -529,7 +529,47 @@ export function createPlay({
   // --- evidence on the board ----------------------------------------------------------
   const discoveries = createDiscoveries(group, { cellToWorld, cellTop, terrainify });
   discoveries.setGrid(grid);
+  // Hazards and traps from Event cards: a token on the cell.
+  const HAZARD_ICONS = {
+    sinkhole: '🕳', 'flooded-out': '🌊', 'flickering-lights': '💡', 'overgrown-brambles': '🌿', 'consecrated-ash': '✝',
+    'coil-of-razor-wire': '➰', 'rusty-bear-trap': '⚙', 'deadfall-trap': '🪵', bonfire: '🔥', 'summoning-circle': '⛧',
+  };
+  const hazardTokens = new Map(); // cell:id -> mesh
+  const hazardTex = {};
+  function hazardTexture(id, trap) {
+    const key = `${id}${trap}`;
+    if (hazardTex[key]) return hazardTex[key];
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const x = c.getContext('2d');
+    x.fillStyle = trap ? '#3a2f22' : '#3a1414';
+    x.beginPath(); x.arc(64, 64, 60, 0, Math.PI * 2); x.fill();
+    x.lineWidth = 8; x.strokeStyle = trap ? '#c8a060' : '#e05040'; x.stroke();
+    x.font = '64px system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
+    x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText(HAZARD_ICONS[id] ?? '!', 64, 70);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return (hazardTex[key] = t);
+  }
+  function syncHazards() {
+    const want = new Map((g()?.hazards ?? []).filter((h) => !h.used).map((h) => [`${h.cell}:${h.id}`, h]));
+    for (const [k, mesh] of hazardTokens) if (!want.has(k)) { group.remove(mesh); hazardTokens.delete(k); }
+    for (const [k, h] of want) {
+      if (hazardTokens.has(k) || !inBoard(h.cell)) continue;
+      const mat = new THREE.MeshBasicMaterial({ map: hazardTexture(h.id, h.by === 'player'), transparent: true, depthWrite: false });
+      terrainify(mat, { bridge: true });
+      const mesh = new THREE.Mesh(new THREE.CircleGeometry(0.28, 32).rotateX(-Math.PI / 2), mat);
+      const at = centreOf(h.cell);
+      mesh.position.set(at.x + 0.22, at.y + 0.02, at.z + 0.22);
+      mesh.renderOrder = 3;
+      group.add(mesh);
+      hazardTokens.set(k, mesh);
+    }
+  }
+
   function refreshDiscoveries() {
+    syncHazards();
     const my = g()?.mystery;
     const list = (my?.found ?? []).slice(0, view.shownFinds).map((f) => ({
       cell: f.cell, visual: evidenceVisual(f.kind, f.code), lair: f.kind === 'lair',
@@ -590,6 +630,11 @@ export function createPlay({
           break;
         case 'won':
           onGameOver({ won: true });
+          break;
+        case 'hazard':
+        case 'trap':
+        case 'doors':
+          refreshDiscoveries();
           break;
         case 'card':
           attachToArrival(view.actors[e.seat], e.cell, () => onCard({ ...e, player: state.players[e.seat] }));

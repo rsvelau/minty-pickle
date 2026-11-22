@@ -13,6 +13,8 @@
 //   Death's Door: one die per turn, and unblocked damage kills.
 import { INJURY_TRACKS, DEATHS_DOOR, RANGE, cellRange } from './cards/injuries.js';
 import { cellLabel } from '../core/state.js';
+import { MONSTER_BY_ID } from './cards/monsters.js';
+import { flickeringNear } from './eventPlay.js';
 
 export const injuries = (pl) => (pl.injuries ??= { P: 0, M: 0, S: 0 });
 export const atDeathsDoor = (pl) => Object.values(injuries(pl)).some((t) => t >= DEATHS_DOOR);
@@ -53,7 +55,8 @@ export function turnLimits(state, board, pl) {
 export function defenseValue(pl, type = null) {
   if (type && pl.mods?.noDefense === type) return 0;       // Ominous Illumination
   const doomed = injuries(pl).S >= 1;
-  const dice = (pl.defense ?? []).reduce((a, d) => a + (doomed && d.v === 6 ? 1 : d.v), 0);
+  const rushed = pl.mindset === 'rushed';                  // Rushed: defense dice count at most 3
+  const dice = (pl.defense ?? []).reduce((a, d) => a + Math.min(rushed ? 3 : 99, doomed && d.v === 6 ? 1 : d.v), 0);
   const bonus = (pl.bonusDefense ?? []).filter((b) => !b.type || !type || b.type === type).reduce((a, b) => a + b.v, 0);
   return dice + bonus;
 }
@@ -68,12 +71,30 @@ export function applyDamage(state, board, pl, type, amount, { log, source = 'An 
     events.push({ type: 'damage', seat: pl.seat, cell: pl.pos, attack: type, amount, defense: amount, source, outcome: 'blocked' });
     return 'blocked';
   }
-  const block = Math.max(0, defenseValue(pl, type) - (pl.defenseUsed ?? 0));
+  // Distant Screams: attacks are avoided for the rest of the turn.
+  if (state.flags?.avoidAttacks === state.round && !/Distant Screams/.test(source)) {
+    log(state, `${source} would hit ${pl.name}, but the attack is avoided (Distant Screams).`);
+    events.push({ type: 'damage', seat: pl.seat, cell: pl.pos, attack: type, amount, defense: amount, source, outcome: 'blocked' });
+    return 'blocked';
+  }
+  // Bright Moon (Global): Mental and Physical rolls −1; against a Beast, Physical +2.
+  if (state.global?.id === 'bright-moon' && (type === 'P' || type === 'M')) {
+    const beast = state.monsters?.some((m) => MONSTER_BY_ID[m.kind]?.traits.includes('Beast'));
+    amount = Math.max(0, amount + (type === 'P' && beast ? 2 : -1));
+  }
+  let own = Math.max(0, defenseValue(pl, type) - (pl.defenseUsed ?? 0));
+  // Flickering Lights (Hazard): Physical damage within 4 ignores the lowest defense die.
+  if (type === 'P' && board && flickeringNear(state, board, pl) && pl.defense?.length) own = Math.max(0, own - Math.min(...pl.defense.map((d) => d.v)));
+  // Protective: a teammate in Close range can lend their defense.
+  const guard = board && state.players.find((o) => o !== pl && !o.dead && o.mindset === 'protective'
+    && cellRange(board.grid, o.pos, pl.pos) <= RANGE.close && Math.max(0, defenseValue(o, type) - (o.defenseUsed ?? 0)) > own);
+  const block = guard ? Math.max(0, defenseValue(guard, type) - (guard.defenseUsed ?? 0)) : own;
+  const user = guard ?? pl;
   const track = INJURY_TRACKS[type];
   const base = { type: 'damage', seat: pl.seat, cell: pl.pos, attack: type, amount, defense: block, source };
-  pl.defenseUsed = (pl.defenseUsed ?? 0) + Math.min(block, amount); // attacks wear the defense down
+  user.defenseUsed = (user.defenseUsed ?? 0) + Math.min(block, amount); // attacks wear the defense down
   if (block >= amount) {
-    log(state, `${source} hits ${pl.name} for ${amount} ${track.label}: blocked by defense ${block} (${block - amount} left).`);
+    log(state, `${source} hits ${pl.name} for ${amount} ${track.label}: blocked by ${guard ? `${guard.name}'s defense (Protective)` : 'defense'} ${block} (${block - amount} left).`);
     events.push({ ...base, outcome: 'blocked' });
     return 'blocked';
   }

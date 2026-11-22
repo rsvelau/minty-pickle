@@ -33,6 +33,7 @@ function playTurn(state, act) {
   for (let guard = 0; guard < 50 && state.phase !== 'idle'; guard++) {
     if (state.phase === 'choosing') assert.ok(act({ type: 'choose', cell: state.options[0].i }).ok);
     else if (state.phase === 'asking') assert.ok(act({ type: 'investigate', yes: true }).ok);
+    else if (state.phase === 'eventing') assert.ok(['die', 'stay', 'hide', 'skip'].some((choice) => act({ type: 'event', choice }).ok));
     else if (state.phase === 'revealing') assert.ok(act({ type: 'reveal', card: state.mystery.deck.findIndex((c, k) => !state.mystery.flipped.includes(k)) }).ok);
     else if (state.phase === 'slotting') assert.ok(act({ type: 'end' }).ok);
     else assert.fail(`unexpected phase ${state.phase}`);
