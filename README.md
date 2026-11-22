@@ -28,8 +28,10 @@ return to the map editor. The editor's **Play demo** still test-plays the editor
 **My maps** (File section of the editor): name the current board and save it; saved maps appear in New game.
 **Open** puts a saved map on the editor's board (Undo puts your previous board back).
 
-The built-in map is built by `tools/build-hawthorn-bend.mjs` (run it with Node after editing it); the script
-refuses to write a map that doesn't pass the Ready to play? check cleanly.
+The built-in map is the designer's own board: `maps-src/hawthorn-bend.export.json` is the file exported from
+the editor (File → Export JSON). To update it, export the board again, replace that file, and run
+`node tools/import-hawthorn-bend.mjs` (or pass the exported file's path); it writes `src/maps/hawthorn-bend.json`
+with the built-in name and prints the Ready to play? report.
 
 ## Cards
 
