@@ -64,7 +64,7 @@ test('decks: dealt from the settings, drawn without repeats, saved with the game
   assert.equal(state.decks.equipment.length, 44 - 1 + 2);
   assert.ok(!state.decks.equipment.includes('crowbar'));
   assert.equal(state.decks.equipment.filter((id) => id === 'kitchen-knife').length, 3);
-  assert.equal(state.decks.events.length, 36);
+  assert.equal(state.decks.events.length, 36 + 6); // Mindsets are in the Event deck
   assert.equal(deckList({}, 'mindsets').length, 6);
 
   // Drawing empties the deck: every card once (well, 3 knives), then nothing.
@@ -80,7 +80,7 @@ test('decks: dealt from the settings, drawn without repeats, saved with the game
   delete old.decks; delete old.config.deckCounts; old.version = 1;
   old.players[0].inventory.equipment.push({ id: 'crowbar', label: 'Crowbar' });
   migrateState(old);
-  assert.equal(old.version, 3);
+  assert.equal(old.version, 4);
   assert.equal(old.decks.equipment.length, 43);
   assert.ok(!old.decks.equipment.includes('crowbar'));
 });
@@ -108,4 +108,34 @@ test('the clock stops at midnight, and only one Global is in effect', async () =
   assert.equal(formatClock(clockMinutes(state)), '11:00 PM');
   state.round = 13; assert.equal(formatClock(clockMinutes(state)), '12:00 AM');
   state.round = 20; assert.equal(formatClock(clockMinutes(state)), '12:00 AM');
+});
+
+test('a Mindset drawn from the Event deck replaces the old one', async () => {
+  const { GridState } = await import('../src/core/state.js');
+  const { createBoard } = await import('../src/game/board.js');
+  const { newGame, applyAction } = await import('../src/game/rules.js');
+  const g = new GridState(20, 10);
+  for (let x = 0; x < 20; x++) g.apply(g.index(x, 5), { area: 'outdoor', sub: 'street' }, { silent: true });
+  g.apply(g.index(19, 5), { area: 'outdoor', sub: 'start', walkable: false, facing: 3 }, { silent: true });
+  for (let x = 2; x < 18; x++) g.apply(g.index(x, 5), { marker: 'investigation' }, { silent: true });
+  const board = createBoard(g);
+  const { state } = newGame(board, { seed: 2, config: { players: 1, monster: 'none', obols: { attack: 0, event: 20, equipment: 0, evidence: 0 } } });
+  const lines = [];
+  const realLog = state.log;
+  state.log = new Proxy(realLog, { get: (t, k) => (k === 'unshift' ? (m) => { lines.push(m); return t.unshift(m); } : t[k]), set: (t, k, v) => { t[k] = v; return true; } });
+  state.decks.events = ['sinkhole', 'reckless', 'mighty'];     // top is last: Mighty, then Reckless, then Sinkhole
+  for (let t = 0; t < 3; t++) {
+    applyAction(state, board, { type: 'roll' });
+    state.pool = [{ kind: 'black', v: 1 }];
+    applyAction(state, board, { type: 'slot', die: 0, to: 'move' });
+    applyAction(state, board, { type: 'move' });
+    for (let k = 0; k < 10 && state.phase !== 'idle'; k++) {
+      if (state.phase === 'asking') applyAction(state, board, { type: 'investigate', yes: true });
+      else if (state.phase === 'choosing') applyAction(state, board, { type: 'choose', cell: Math.min(...state.options.map((o) => o.i)) });
+      else applyAction(state, board, { type: 'end' });
+    }
+    if (t === 0) assert.equal(state.players[0].mindset, 'mighty');
+  }
+  assert.equal(state.players[0].mindset, 'reckless');
+  assert.ok(lines.some((l) => /Reckless Mindset replaces Mighty/.test(l)));
 });

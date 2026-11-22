@@ -8,10 +8,11 @@
 //
 // In the game state:
 //   state.decks = { equipment: [ids, top last], events: [...], eventDiscard: [...] }
+// Mindsets are shuffled into the Event deck: they are discovered like events.
 // Drawing takes from the top; a card drawn is out of the deck (one copy = once
 // per game), except where a card says it goes back (Haunted Portrait, later).
 import { EQUIPMENT_CARDS, EQUIPMENT_BY_ID } from './cards/equipment.js';
-import { EVENT_CARDS, EVENT_BY_ID, MINDSET_CARDS } from './cards/events.js';
+import { EVENT_CARDS, EVENT_BY_ID, MINDSET_CARDS, MINDSET_BY_ID } from './cards/events.js';
 import { MONSTER_CARDS } from './cards/monsters.js';
 
 export const DECKS = {
@@ -45,7 +46,7 @@ export function setupDecks(state, randInt, owned = []) {
   for (const id of owned) { const k = equipment.indexOf(id); if (k >= 0) equipment.splice(k, 1); }
   state.decks = {
     equipment: shuffle(equipment, randInt, state),
-    events: shuffle(deckList(state.config, 'events'), randInt, state),
+    events: shuffle([...deckList(state.config, 'events'), ...deckList(state.config, 'mindsets')], randInt, state),
     eventDiscard: [],
   };
 }
@@ -67,4 +68,5 @@ export function drawEquipment(state, pl, from) {
   return card;
 }
 
-export const eventCard = (id) => EVENT_BY_ID[id] ?? null;
+export const eventCard = (id) => EVENT_BY_ID[id] ?? (MINDSET_BY_ID[id] ? { ...MINDSET_BY_ID[id], category: 'mindset' } : null);
+export const isMindset = (id) => !!MINDSET_BY_ID[id];

@@ -5,8 +5,10 @@
 //   committed until that player's next turn, so they protect against the
 //   monster's action at the end of the round and anything mid-turn.
 // - Damage (from a monster's attack, an Attack Obol, an Event...) is compared
-//   with the total of the slotted defense dice: at least the damage → blocked;
-//   less → one tier of injury on that damage type's track.
+//   with the slotted defense that is left: at least the damage → blocked, and
+//   the damage is subtracted from the defense (a second attack faces what's
+//   left); less → one tier of injury on that damage type's track, and the
+//   defense is used up.
 // - Tiers are additive; tracks are independent. Tier 3 on any track is
 //   Death's Door: one die per turn, and unblocked damage kills.
 import { INJURY_TRACKS, DEATHS_DOOR, RANGE, cellRange } from './cards/injuries.js';
@@ -66,11 +68,12 @@ export function applyDamage(state, board, pl, type, amount, { log, source = 'An 
     events.push({ type: 'damage', seat: pl.seat, cell: pl.pos, attack: type, amount, defense: amount, source, outcome: 'blocked' });
     return 'blocked';
   }
-  const block = defenseValue(pl, type);
+  const block = Math.max(0, defenseValue(pl, type) - (pl.defenseUsed ?? 0));
   const track = INJURY_TRACKS[type];
   const base = { type: 'damage', seat: pl.seat, cell: pl.pos, attack: type, amount, defense: block, source };
+  pl.defenseUsed = (pl.defenseUsed ?? 0) + Math.min(block, amount); // attacks wear the defense down
   if (block >= amount) {
-    log(state, `${source} hits ${pl.name} for ${amount} ${track.label}: blocked by defense ${block}.`);
+    log(state, `${source} hits ${pl.name} for ${amount} ${track.label}: blocked by defense ${block} (${block - amount} left).`);
     events.push({ ...base, outcome: 'blocked' });
     return 'blocked';
   }

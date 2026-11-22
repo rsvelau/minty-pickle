@@ -125,7 +125,7 @@ export const EQUIPMENT_CARDS = [
     A('close', null, 'Attach', 1, '6', 'Reduce a Demon’s toughness to 0 this turn.', { target: 'monster', demonToughnessZero: true }, 'breaks'),
   ] },
   { id: 'medical-kit', name: 'Medical Kit', abilities: [
-    A('self', null, 'Dress Wound', 1, 'Any', 'Heal all Physical injury tiers', { target: 'self', heal: { P: 'all' } }),
+    A('self', null, 'Dress Wound', 1, 'Any', 'Heal all Physical injury tiers (yours, or a teammate’s in your space)', { target: 'ally', heal: { P: 'all' } }),
   ] },
   { id: 'compact-boombox', name: 'Compact Boombox', abilities: [
     A('mid', null, 'Distract', 1, 'Any', 'The Monster must use movement to approach a selected space this turn', { manual: true }, 'breaks'),

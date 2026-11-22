@@ -21,13 +21,14 @@ import { turnLimits, injuries } from './combat.js';
 import { craft } from './obolcraft.js';
 import { refreshThreat, onPlayerEnters } from './monsterTurn.js';
 import { setupMystery, evidenceObol, revealEvidence, attackObol, nameMonster, revealMonster } from './mystery.js';
-import { setupDecks, drawEquipment, drawCard, eventCard } from './decks.js';
-import { useEquipment, armMonster } from './equipmentPlay.js';
+import { setupDecks, drawEquipment, drawCard, eventCard, isMindset } from './decks.js';
+import { useEquipment, armMonster, achieveObjective, discardForWeakness } from './equipmentPlay.js';
 import { EVENT_CATEGORIES } from './cards/events.js';
 
 // 2: card decks (state.decks; Equipment and Event Obols draw cards).
 // 3: equipment in play (monster health/toughness/weakness track, 'use').
-export const RULES_VERSION = 3;
+// 4: Mindsets in the Event deck; objectives decide the win.
+export const RULES_VERSION = 4;
 
 // Bring a saved state from an older version up to date (saveFormat.readSave
 // calls this). One step per version.
@@ -44,6 +45,15 @@ export function migrateState(state) {
     for (const m of state.monsters ?? []) if (m.hp === undefined) armMonster(m);
     state.global ??= null;
     v = 3;
+  }
+  if (v < 4) {
+    // Mindsets join what's left of the Event deck.
+    const have = new Set([...state.decks.events, ...state.decks.eventDiscard]);
+    state.decks.events.push(...['reckless', 'rushed', 'meticulous', 'protective', 'curious', 'mighty']
+      .filter((id) => !have.has(id) && state.config.deckCounts?.[`mindsets:${id}`] !== 0));
+    for (let i = state.decks.events.length - 1; i > 0; i--) { const j = randInt(state, i + 1); [state.decks.events[i], state.decks.events[j]] = [state.decks.events[j], state.decks.events[i]]; }
+    state.objectiveDone ??= false;
+    v = 4;
   }
   state.version = v;
   return state;
@@ -204,7 +214,7 @@ export function newGame(board, setup = {}) {
 
 // --- actions ------------------------------------------------------------------------
 // Every action: { type, seat? }. Returns { ok, error?, events }.
-export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use'];
+export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective'];
 
 export function applyAction(state, board, action) {
   const events = [];
@@ -218,6 +228,7 @@ export function applyAction(state, board, action) {
       const lim = turnLimits(state, board, pl);
       pl.defense = [];                               // last turn's defense is spent
       pl.bonusDefense = [];                          // ...and equipment's "this turn" effects
+      pl.defenseUsed = 0;                            // ...and what attacks wore off it
       pl.mods = {};
       state.moveBonus = 0;
       state.pool = Array.from({ length: lim.dice }, () => ({ kind: 'black', v: d6(state) }));
@@ -339,6 +350,18 @@ export function applyAction(state, board, action) {
       // Equipment: any time during your own turn.
       if (!['idle', 'slotting'].includes(state.phase)) return fail('finish moving first');
       const err = useEquipment(state, board, curPlayer(state), action, { log }, events);
+      if (err) return fail(err);
+      break;
+    }
+    case 'discard': {
+      // Discard an item for a monster's ∞ weakness effect: any time on your turn.
+      if (!['idle', 'slotting'].includes(state.phase)) return fail('finish moving first');
+      const err = discardForWeakness(state, curPlayer(state), action, { log }, events);
+      if (err) return fail(err);
+      break;
+    }
+    case 'objective': {
+      const err = achieveObjective(state, { log }, events);
       if (err) return fail(err);
       break;
     }
@@ -485,6 +508,12 @@ function investigate(state, board, i, events) {
     const card = id && eventCard(id);
     log(state, card ? `${who(state)} drew an event: ${card.name} (${EVENT_CATEGORIES[card.category].label}). ${card.text}` : 'The Event deck is empty.');
     if (card) events.push({ type: 'card', deck: 'events', id, seat: state.cur, cell: i });
+    // A Mindset is yours until another one replaces it (one at a time).
+    if (card && isMindset(id)) {
+      const old = pl.mindset && eventCard(pl.mindset);
+      pl.mindset = id;
+      log(state, old ? `${who(state)}'s ${card.name} Mindset replaces ${old.name}.` : `${who(state)} takes on the ${card.name} Mindset.`);
+    }
     // A Global covers the whole map until the next Global replaces it.
     if (card?.category === 'global') {
       const old = state.global && eventCard(state.global.id);

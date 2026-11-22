@@ -13,9 +13,10 @@ import { $ } from '../app/dom.js';
 import { dieHTML, play } from './playView.js';
 import { __set_camTween, camera, cellToWorld, controls } from '../render/scene.js';
 import { EQUIPMENT_BY_ID } from '../game/cards/equipment.js';
-import { EVENT_BY_ID, EVENT_CATEGORIES } from '../game/cards/events.js';
-import { targetsFor, actionRoll, abilityReady } from '../game/equipmentPlay.js';
+import { EVENT_CATEGORIES } from '../game/cards/events.js';
+import { targetsFor, actionRoll, abilityReady, killObjective, discardOptions } from '../game/equipmentPlay.js';
 import { checkRequirement } from '../game/cards/requirements.js';
+import { eventCard } from '../game/decks.js';
 
 // Module state: assigned by init() below, in the same order as before the split.
 export let OBOL_GLYPHS, DMG_SVG, ATTACK_GLYPH, cardQueue, caseUI, craftUI;
@@ -209,10 +210,11 @@ export function showCardNow(c) {
       (card ? abilitiesHTML(card) : '');
     stay = true;
   } else if (c.kind === 'event') {
-    const card = EVENT_BY_ID[c.e.id];
-    html = `<div class="pc-kind">Event · ${esc(EVENT_CATEGORIES[card?.category]?.label ?? '')}</div><div class="pc-title">${esc(card?.name ?? '')}</div>` +
+    const card = eventCard(c.e.id);
+    const mindset = card?.category === 'mindset';
+    html = `<div class="pc-kind">${mindset ? `${esc(c.e.player?.name ?? '')}'s new Mindset` : `Event · ${esc(EVENT_CATEGORIES[card?.category]?.label ?? '')}`}</div><div class="pc-title">${esc(card?.name ?? '')}</div>` +
       `<div class="pc-sub">${esc(card?.text ?? '')}</div>` +
-      '<div class="pc-note">Card effects arrive after the rules walkthrough: for now, play this one at the table.</div>';
+      `<div class="pc-note">${mindset ? 'Yours until another Mindset replaces it. Its effect is played at the table for now.' : 'Event effects are played at the table for now.'}</div>`;
     stay = true;
   } else if (c.kind === 'equipUse') {
     html = `<div class="pc-kind">${esc(c.e.player?.name ?? '')} uses ${esc(EQUIPMENT_BY_ID[c.e.item]?.name ?? '')}</div><div class="pc-title">${esc(c.e.ability)}</div>` +
@@ -291,6 +293,11 @@ export function renderCasebook() {
     __set_camTween({ t: 0, fromPos: camera.position.clone(), fromTarget: controls.target.clone(), toPos: p.clone().add(offset), toTarget: p });
   }));
   body.querySelector('#openGuide')?.addEventListener('click', () => { caseUI.tab = 'guide'; renderCasebook(); });
+  body.querySelector('#objDone')?.addEventListener('click', (ev) => {
+    if (!ev.currentTarget.dataset.confirm) { ev.currentTarget.dataset.confirm = '1'; ev.currentTarget.textContent = 'Tap again to confirm'; return; }
+    play.session.dispatch({ type: 'objective', seat: play.state.cur });
+    renderCasebook();
+  });
   body.querySelector('#guideAll')?.addEventListener('change', (e) => { caseUI.showAll = e.target.checked; renderCasebook(); });
   body.querySelectorAll('[data-name]').forEach((b) => b.addEventListener('click', (e) => {
     e.preventDefault();
@@ -327,6 +334,7 @@ export function casebookHTML(my) {
     `</div>` +
     `<p class="case-note">${fits.length === 1 ? 'Only <b>one</b> monster fits' : `<b>${fits.length}</b> of ${pool.length} monsters fit`} the evidence so far.</p>` +
     `<p class="case-note">${status}</p>` +
+    objectiveHTML(my) +
     `<div class="case-actions"><button type="button" class="ink" id="openGuide">Open the Field Guide</button></div>`;
 }
 
@@ -493,7 +501,9 @@ export function renderInventory() {
   const s = play.state;
   const pl = s.players[inv.player] ?? s.players[0];
   if (!pl) return;
-  $('#invTitle').textContent = `${pl.name}'s inventory`;
+  const ms = pl.mindset ? eventCard(pl.mindset) : null;
+  $('#invTitle').textContent = `${pl.name}'s inventory${ms ? ` · ${ms.name}` : ''}`;
+  $('#invTitle').title = ms ? `Mindset: ${ms.text}` : '';
   const host = $('#invPlayers');
   host.innerHTML = s.players.map((p, k) =>
     `<button type="button" role="tab" data-k="${k}" class="${k === inv.player ? 'on' : ''}" aria-selected="${k === inv.player}">` +
@@ -530,7 +540,13 @@ export function renderInventory() {
       const card = EQUIPMENT_BY_ID[e.id];
       return `<div class="eq-card"><b>${esc(e.label ?? card?.name ?? 'Item')}</b>${card ? abilitiesHTML(card, mine ? { item: e, i } : null) : ''}` +
         `${e.from ? `<small class="eq-from">From ${esc(e.from)}</small>` : ''}</div>`;
-    }).join('')}</div>` + (mine ? '' : `<p class="inv-empty" style="padding:8px 4px">${inv.player === s.cur ? 'Equipment can be used during your turn: roll first if a skill needs dice.' : 'Only usable on this investigator’s own turn.'}</p>`);
+    }).join('')}</div>` + (mine ? discardHTML(pl) : '') + (mine ? '' : `<p class="inv-empty" style="padding:8px 4px">${inv.player === s.cur ? 'Equipment can be used during your turn: roll first if a skill needs dice.' : 'Only usable on this investigator’s own turn.'}</p>`);
+    body.querySelectorAll('[data-discard]').forEach((b) => { b.onclick = () => {
+      if (!b.dataset.confirm) { b.dataset.confirm = '1'; b.textContent = 'Tap again to discard'; return; }
+      const o = JSON.parse(b.dataset.discard);
+      const r = play.session.dispatch({ type: 'discard', ...o, seat: s.cur });
+      if (r.ok) closeInventory(); else { b.textContent = r.error; }
+    }; });
     body.querySelectorAll('[data-use]').forEach((b) => { b.onclick = () => { const [i, k] = b.dataset.use.split(':').map(Number); Object.assign(useUI, { item: i, ability: k, dice: [], target: null, raise: [], error: '' }); renderInventory(); }; });
   }
 }
@@ -607,4 +623,28 @@ function renderUseSheet(body, pl, items) {
     useUI.item = null;
     closeInventory();
   };
+}
+
+// The monster's objective (from midnight): what wins the game.
+function objectiveHTML(my) {
+  if (!my.revealed) return '';
+  const card = MONSTER_BY_ID[my.monster];
+  if (!card) return '';
+  const st = play.session.state;
+  const kill = killObjective(card);
+  const done = st?.objectiveDone;
+  return `<p class="case-note"><b>Objective:</b> ${esc(card.objective)}. ` +
+    (kill ? 'Destroy it to win.'
+      : done ? `Achieved.${st.monsters.length ? ' Now destroy it one more time.' : ''}`
+        : 'Achieve it to win (play it at the table, then mark it here). Until then, destroying it only sends it back to its Lair.') + '</p>' +
+    (!kill && !done && !st?.won ? '<div class="case-actions"><button type="button" class="ink" id="objDone">Objective achieved</button></div>' : '');
+}
+
+// "Discard [element]" weakness effects the current monster offers.
+function discardHTML(pl) {
+  const opts = discardOptions(play.session.state, pl);
+  if (!opts.length) return '';
+  return `<div class="eq-discards"><p class="use-label">The monster’s weakness lets you discard:</p>${opts.map((o) =>
+    `<button type="button" class="eq-discard" data-discard='${JSON.stringify({ item: o.item, track: o.track, monster: o.monster })}'>` +
+    `${esc(EQUIPMENT_BY_ID[pl.inventory.equipment[o.item].id].name)} → ${esc(o.text)}</button>`).join('')}</div>`;
 }

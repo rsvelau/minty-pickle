@@ -25,6 +25,8 @@ import { RANGE, cellRange, INJURY_TRACKS } from './cards/injuries.js';
 import { injuries } from './combat.js';
 
 const REACH = { close: RANGE.close, mid: RANGE.mid, long: Infinity, self: 0, all: Infinity };
+// Long only reaches 3 spaces or more (not Close or Mid).
+const MIN_REACH = { long: RANGE.mid + 1 };
 
 // Give a newly spawned card monster its fighting state.
 export function armMonster(monster) {
@@ -59,7 +61,11 @@ export function targetsFor(state, board, pl, ability) {
   const fx = ability.fx ?? {};
   const reach = REACH[ability.range] ?? RANGE.close;
   if (fx.target === 'monster') {
-    return state.monsters.filter((m) => MONSTER_BY_ID[m.kind] && cellRange(board.grid, pl.pos, m.pos) <= reach)
+    const min = MIN_REACH[ability.range] ?? 0;
+    return state.monsters.filter((m) => {
+      const d = cellRange(board.grid, pl.pos, m.pos);
+      return MONSTER_BY_ID[m.kind] && d <= reach && d >= min;
+    })
       .map((m) => ({ monster: m.id, name: MONSTER_BY_ID[m.kind].name }));
   }
   if (fx.target === 'ally') {
@@ -258,26 +264,79 @@ function applyTrackEffect(monster, mcard, text) {
   if (/Interrupt this turn/.test(text)) monster.mods.interrupted = true;
 }
 
-// Out of health: defeated (Hellhounds: the pack goes back to the Lair, whole).
+// Achieving the monster's objective wins. A plain "Kill" objective is achieved
+// by destroying it. Any other objective (Escape, Disrupt Ritual, Destroy
+// Anchors...) is marked achieved by the players (the 'objective' action); until
+// then, destroying the monster only sends it back to its Lair at full health.
+// Once achieved, a monster with health must still be destroyed one more time;
+// one with ∞ health is beaten by the objective alone.
+export const killObjective = (mcard) => /^kill\b/i.test(mcard.objective ?? '') && !/^kill with/i.test(mcard.objective ?? '');
+
 function checkDefeat(state, board, monster, mcard, ctx, events) {
   if (monster.hp === null || monster.hp > 0) return;
-  if (mcard.id === 'hellhounds' && state.mystery?.spawnCell >= 0) {
+  if (!killObjective(mcard) && !state.objectiveDone && state.mystery?.spawnCell >= 0) {
     monster.pos = state.mystery.spawnCell;
     monster.hp = monster.maxHp;
     monster.intents = null;
-    ctx.log(state, `The Hellhound falls, and the whole pack is driven back to the Lair. Only its weakness can thin the pack.`);
+    ctx.log(state, `The ${mcard.name} falls, and rises again at its Lair. Its objective (${mcard.objective}) must be achieved before it can be finished.`);
     events.push({ type: 'monsterTeleport', id: monster.id, to: monster.pos });
     return;
   }
   state.monsters = state.monsters.filter((m) => m !== monster);
   ctx.log(state, `The ${mcard.name} is destroyed!`);
   events.push({ type: 'monsterDefeated', id: monster.id, kind: monster.kind });
-  if (!state.monsters.length) {
-    state.won = true;
-    state.phase = 'over';
-    ctx.log(state, 'The night is survived. The investigators win.');
-    events.push({ type: 'won' });
+  if (!state.monsters.length) win(state, ctx, events);
+}
+
+function win(state, ctx, events) {
+  state.won = true;
+  state.phase = 'over';
+  ctx.log(state, 'The objective is achieved and the night is survived. The investigators win.');
+  events.push({ type: 'won' });
+}
+
+// The players mark the monster's objective achieved (objectives other than Kill
+// are played at the table for now).
+export function achieveObjective(state, ctx, events) {
+  const m = state.monsters.find((x) => MONSTER_BY_ID[x.kind]);
+  const mcard = m && MONSTER_BY_ID[m.kind];
+  if (!mcard) return 'the monster has not appeared';
+  if (killObjective(mcard)) return 'this monster’s objective is to destroy it';
+  if (state.objectiveDone) return 'already achieved';
+  state.objectiveDone = true;
+  ctx.log(state, `Objective achieved: ${mcard.objective}.${m.hp === null ? '' : ` The ${mcard.name} can now be destroyed for good.`}`);
+  events.push({ type: 'objective', kind: mcard.id });
+  if (m.hp === null) { state.monsters = state.monsters.filter((x) => x !== m); win(state, ctx, events); }
+  return null;
+}
+
+// ∞ weakness effects that discard an item: "Discard Silver to …". Any time on
+// your turn, discard an Equipment card with a skill of that element.
+const ELEMENT_WORDS = { silver: 'silver', holy: 'holy', fire: 'fire', crystal: 'crystal', salt: 'salt', iron: 'iron' };
+export function discardOptions(state, pl) {
+  const out = [];
+  for (const m of state.monsters) {
+    const mcard = MONSTER_BY_ID[m.kind];
+    mcard?.weaknessTrack.forEach((w, t) => {
+      if (w.hits !== null) return;
+      const word = /Discard (\w+)/i.exec(w.text)?.[1]?.toLowerCase();
+      const kind = ELEMENT_WORDS[word];
+      if (!kind) return;
+      pl.inventory.equipment.forEach((item, i) => {
+        if (EQUIPMENT_BY_ID[item.id]?.abilities.some((a) => a.kind === kind)) out.push({ item: i, monster: m.id, track: t, text: w.text, kind });
+      });
+    });
   }
+  return out;
+}
+export function discardForWeakness(state, pl, action, ctx, events) {
+  const opt = discardOptions(state, pl).find((o) => o.item === (action.item | 0) && o.track === (action.track | 0) && o.monster === action.monster);
+  if (!opt) return 'that card can’t be discarded for this';
+  const [item] = pl.inventory.equipment.splice(opt.item, 1);
+  const mcard = MONSTER_BY_ID[state.monsters.find((m) => m.id === opt.monster).kind];
+  ctx.log(state, `${pl.name} discards the ${EQUIPMENT_BY_ID[item.id].name} against the ${mcard.name}: ${opt.text}. (Resolve its effect at the table.)`);
+  events.push({ type: 'weaknessDiscard', seat: pl.seat, item: item.id, text: opt.text });
+  return null;
 }
 
 // After the monster acts: this turn's effects end; timed disables count down.

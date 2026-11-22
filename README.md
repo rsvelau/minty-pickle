@@ -43,11 +43,14 @@ All the cards from the card PDF are in the game as data (`src/game/cards/`): **4
 dice; they are part of the saved game. An **Equipment Obol** draws an Equipment card into the investigator's
 inventory, and the Obolcraft "Draw an Equipment card" recipe draws from the same deck. An **Event Obol** draws
 an Event card, shown and logged; a **Global** event becomes the one in effect (shown beside the clock) until
-another Global replaces it. Event effects are not played yet. Mindsets are listed but not dealt yet.
+another Global replaces it. **Mindsets** are shuffled into the Event deck: drawing one gives it to that
+investigator (shown in their Inventory title), replacing any Mindset they had. Event and Mindset effects are
+played at the table for now.
 
 **Using equipment** (`src/game/equipmentPlay.js`): any time during your turn, open the Inventory → Equipment
 and tap **Use** on a skill. Pick its dice from your free rolled dice (their total must meet the bracket), and a
-target if it needs one (monsters within the skill's range; teammates for heals). Obol costs (◉) take any colour.
+target if it needs one (monsters within the skill's range: Close 1, Mid up to 2, Long 3 or more only;
+teammates in your space for heals like the Medical Kit). Obol costs (◉) take any colour.
 - Damage: the slotted die, the dice added, or a fixed number, minus the monster's **toughness** (unless the skill
   ignores it); the rest comes off its **health**. A monster immune to the skill's element is not affected at all.
 - **Weakness track**: every hit with one of the monster's weakness elements counts; at each number on its card
@@ -58,7 +61,15 @@ target if it needs one (monsters within the skill's range; teammates for heals).
 - On yourself: healing, bonus defense (typed, until your next turn), refreshed dice (back with a new value,
   ready to slot), raising other dice, +movement, Purity Seal.
 - **1️⃣** once until refreshed (Retrieval refreshes Piercing Tip); **🔗 breaks**: the card is discarded.
-- A destroyed monster ends the game in the investigators' favour (Hellhounds: the pack goes back to the Lair).
+- **Winning is the monster's objective.** "Kill": destroy it. Any other objective (Escape, Disrupt Ritual,
+  Destroy Anchors…) is played at the table and marked in the Casebook (**Objective achieved**); until then,
+  destroying the monster only sends it back to its Lair at full health. Once achieved, a monster with health
+  must still be destroyed one more time; one with ∞ health is beaten by the objective alone.
+- **Discard weaknesses** (the purple ∞ on some monster cards, like "Discard Silver to avoid Swoop damage"):
+  when that monster is in the game, the Inventory offers to discard any of your Equipment with a skill of that
+  element, any time on your turn (the effect is resolved at the table).
+- **Defense wears down**: each attack subtracts from your slotted defense, so a second attack faces what's left.
+- Doubling (Bless) applies before toughness.
 - Skills marked ✋ (doors, Salt Circle, Distract, Rally, Spiritual Backlash, Wrathful Penance, Weeping
   Barrier, Sacrifice, Camouflage, Brace, Lucky, Toss, Drink, Lunge) are paid for and logged, and resolved at the
   table for now.

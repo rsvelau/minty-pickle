@@ -110,3 +110,58 @@ test('Blind and Seal change the monster’s attack; immobilized monsters stay pu
   assert.deepEqual(s.monster.mods, {});              // this turn's effects are over
   void MONSTER_BY_ID;
 });
+
+test('attacks wear defense down', async () => {
+  const { applyDamage } = await import('../src/game/combat.js');
+  const s = setup('werewolf');
+  s.pl.defense = [{ v: 6 }, { v: 4 }];               // 10 defense
+  const ev = [];
+  const log = () => {};
+  assert.equal(applyDamage(s.state, s.board, s.pl, 'P', 6, { log }, ev), 'blocked');  // 4 left
+  assert.equal(applyDamage(s.state, s.board, s.pl, 'P', 5, { log }, ev), 'injured');  // 5 > 4
+  assert.equal(applyDamage(s.state, s.board, s.pl, 'M', 1, { log }, ev), 'injured');  // nothing left
+});
+
+test('Long only reaches 3+; Medical Kit heals a teammate in your space; Bless doubles before toughness', () => {
+  const s = setup('werewolf', { items: ['hunting-rifle', 'medical-kit', 'witch-hunters-sword', 'kitchen-knife'], pool: [6, 6, 6, 1, 3, 4, 6] });
+  assert.match(s.use(0, 0, [0, 1, 2]).error, /no monster in range/);   // adjacent: too close for Long
+  s.state.players[1].pos = s.pl.pos;
+  s.state.players[1].injuries = { P: 2, M: 0, S: 0 };
+  assert.ok(s.use(1, 0, [3], { target: { seat: 1 } }).ok);
+  assert.equal(s.state.players[1].injuries.P, 0);
+  assert.ok(s.use(2, 2, [4, 5], { target: { seat: 0 } }).ok);         // Bless [7]: 3 + 4
+  assert.ok(s.use(3, 0, [6]).ok);                                      // 6 doubled = 12, − toughness 4
+  assert.equal(s.monster.hp, 12);
+});
+
+test('objectives decide the win', () => {
+  // Kill: destroying wins.
+  const k = setup('redcap', { items: ['hunting-rifle'], pool: [6, 6, 6] });   // 9 health
+  k.monster.pos = k.g.index(14, 5);
+  assert.ok(k.use(0, 0, [0, 1, 2]).ok);                                // 18 damage ignoring toughness
+  assert.equal(k.state.won, true);
+  // Disrupt Ritual (Hellhounds): back to the Lair until the objective is done.
+  const h = setup('hellhounds', { items: ['hunting-rifle', 'hunting-rifle'], pool: [6, 6, 6, 6, 6, 6] });
+  h.state.mystery = { spawnCell: h.g.index(2, 5) };
+  h.monster.pos = h.g.index(14, 5);
+  assert.ok(h.use(0, 0, [0, 1, 2]).ok);
+  assert.equal(h.state.won, undefined);
+  assert.equal(h.monster.pos, h.g.index(2, 5));
+  assert.equal(h.monster.hp, 3);
+  assert.ok(applyAction(h.state, h.board, { type: 'objective' }).ok);
+  h.monster.pos = h.g.index(14, 5);
+  assert.ok(h.use(0, 0, [3, 4, 5]).ok);
+  assert.equal(h.state.won, true);
+  // ∞ health (Barghest, Escape): the objective alone wins.
+  const b = setup('barghest');
+  assert.ok(applyAction(b.state, b.board, { type: 'objective' }).ok);
+  assert.equal(b.state.won, true);
+});
+
+test('discarding an item of the right element for an ∞ weakness effect', () => {
+  const s = setup('banshee', { items: ['kitchen-knife', 'heavy-silver-chain'] }); // ∞: Discard Silver to avoid Swoop damage
+  const r = applyAction(s.state, s.board, { type: 'discard', item: 1, track: 2, monster: 'm1' });
+  assert.ok(r.ok, r.error);
+  assert.deepEqual(s.pl.inventory.equipment.map((e) => e.id), ['kitchen-knife']);
+  assert.ok(!applyAction(s.state, s.board, { type: 'discard', item: 0, track: 2, monster: 'm1' }).ok); // not silver
+});

@@ -1122,3 +1122,6 @@ body.mode-game .editor-only, body.mode-game #info, body.mode-game .help { displa
 .dk-glossary { margin: 8px 0 0; display: grid; gap: 4px; }
 .dk-glossary dt { margin-top: 8px; color: var(--text); font-weight: 600; }
 .dk-glossary dd { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
+
+.eq-discards { margin-top: 10px; display: grid; gap: 6px; }
+.eq-discard { min-height: 40px; padding: 6px 10px; border-radius: 9px; border: 1px solid #8a5ac8; background: rgba(138, 90, 200, 0.15); color: var(--text); text-align: left; cursor: pointer; }
