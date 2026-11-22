@@ -549,9 +549,12 @@ export function createPlay({
   function handleEvents(state, events) {
     for (const e of events) {
       switch (e.type) {
+        case 'loaded':
         case 'start':
-          view.shownUsed = new Set();
-          view.shownKeys = 0;
+          // A loaded game shows what had already happened: markers used,
+          // doors unlocked, evidence found, monsters where they stood.
+          view.shownUsed = new Set(e.type === 'loaded' ? state.used ?? [] : []);
+          view.shownKeys = e.type === 'loaded' ? state.keys ?? 0 : 0;
           view.rollT = ROLL_TIME;
           view.pan = true;
           for (const [, mv] of view.monsters) group.remove(mv.fig);
@@ -560,6 +563,7 @@ export function createPlay({
           syncNpcs(true);
           view.actors = [];
           placeAll(true);
+          if (e.type === 'loaded') { syncMonsters(true); refreshDiscoveries(); }
           onUsed();
           break;
         case 'rolled':
@@ -759,6 +763,14 @@ export function createPlay({
       followStreets: view.followStreets,
       seed: (Math.random() * 2 ** 32) >>> 0,
     });
+  }
+  // Saved games: the full rules state out, and back in.
+  function saveState() { return session.snapshot(); }
+  function loadState(saved) {
+    view.startMode = saved.startMode === 'midnight' ? 'midnight' : 'standard';
+    view.followStreets = saved.followStreets ?? true;
+    stale = false;
+    session.load(saved);
   }
   function setStartMode(mode) {
     view.startMode = mode === 'midnight' ? 'midnight' : 'standard';
@@ -1028,7 +1040,7 @@ export function createPlay({
   return {
     // Game settings changed outside a game: the next game starts fresh with them.
     invalidate: () => { stale = true; },
-    state, session, board, roll, reset, setStartMode, answerInvestigate, choose, chooseByKey, tick, setActive,
+    state, session, board, roll, reset, setStartMode, saveState, loadState, answerInvestigate, choose, chooseByKey, tick, setActive,
     boardChanged, setPlayers, toggleSlot, confirmMove, endTurn, unusedCount, slotTotal, rollWhite, busy, revealCard, nameMonster, craft,
     clockMinutes: () => (g() ? rulesClockMinutes(g()) : rulesStartMinutesFor(cfg)),
     startMinutes: () => (g() ? rulesStartMinutes(g()) : rulesStartMinutesFor(cfg)),

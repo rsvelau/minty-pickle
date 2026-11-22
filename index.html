@@ -13,14 +13,15 @@
 
     <aside id="panel" class="panel">
       <header class="panel-head">
-        <h1>Grid Planner</h1>
+        <h1 id="panelTitle">Grid Planner</h1>
+        <button id="toTitle" class="icon-btn editor-only" title="Title screen" aria-label="Title screen">⌂</button>
         <button id="collapse" class="icon-btn" title="Hide panel" aria-label="Hide panel">–</button>
       </header>
 
       <div class="panel-body">
         <section>
-          <h2>Paint</h2>
-          <div class="seg tool-seg" role="group" aria-label="Tool">
+          <h2 class="editor-only">Paint</h2>
+          <div class="seg tool-seg editor-only" role="group" aria-label="Tool">
             <button data-tool="cells" class="on">Spaces</button>
             <button data-tool="walls">Walls &amp; doors</button>
             <button data-tool="move">Movement <kbd>M</kbd></button>
@@ -65,7 +66,7 @@
           </div>
 
           <div id="playTools" hidden>
-            <div class="seg" role="group" aria-label="Players" id="playCount">
+            <div class="seg editor-only" role="group" aria-label="Players" id="playCount">
               <span class="row-label">Players</span>
               <button data-players="1">1</button>
               <button data-players="2">2</button>
@@ -83,7 +84,7 @@
             <div class="play-board" id="playBoard"></div>
             <ol class="play-log" id="playLog"></ol>
             <div class="file-row">
-              <button id="playReset">Restart</button>
+              <button id="playReset" class="editor-only">Restart</button>
               <label class="check play-follow"><input type="checkbox" id="playFollow" checked /> Follow camera</label>
             </div>
             <div class="file-row">
@@ -133,13 +134,13 @@
             </div>
             <p class="note">Drag along grid lines to draw. Click an edge to place or remove one piece; doors and storefront windows sit centred between two cells. For a one-way door, click on the side people come from (click from the other side to flip it). Walls, locked and one-way doors block light; unlocked doors and windows let it through. Rectangle draws a room outline (Erase clears everything inside it).</p>
           </div>
-          <div class="seg" role="group" aria-label="Paint shape">
+          <div class="seg editor-only" role="group" aria-label="Paint shape">
             <button data-shape="brush" class="on">Freehand</button>
             <button data-shape="rect">Rectangle <kbd>R</kbd></button>
           </div>
         </section>
 
-        <section>
+        <section class="editor-only">
           <h2>Board size</h2>
           <div class="size-row">
             <label for="sizeCols">Columns</label>
@@ -153,13 +154,13 @@
           <label class="check"><input type="checkbox" id="optGhost" /> Show small home (9 × 8 m) at cursor</label>
         </section>
 
-        <section>
+        <section class="editor-only">
           <h2>Elevation</h2>
           <div class="seg" role="group" aria-label="Elevation preset" id="terrainPresets"></div>
           <p class="note" id="terrainNote"></p>
         </section>
 
-        <section>
+        <section class="editor-only">
           <h2>File</h2>
           <div class="file-row">
             <button id="undo" title="Ctrl/Cmd+Z">Undo</button>
@@ -171,7 +172,8 @@
             <button id="import">Import JSON</button>
             <button id="png">Save PNG</button>
           </div>
-          <div class="file-row single">
+          <div class="file-row two">
+            <button id="myMaps" title="Save this board to My maps, or open one (saved maps can be played from New game)">My maps</button>
             <button id="checkMap" title="Check this map has what the game needs: a start, investigation spots, reachable markers">Ready to play?</button>
           </div>
           <input type="file" id="importFile" accept="application/json,.json" hidden />
@@ -347,6 +349,10 @@
         </div>
       </div>
     </nav>
+
+    <!-- Game shell (src/app/gameShell.js): title, new game, load/save, in-game menu. -->
+    <div id="screen" class="screen" hidden role="dialog" aria-modal="true"></div>
+    <button id="gameMenuBtn" class="game-menu-btn" type="button" hidden aria-label="Game menu" title="Menu (Esc)">☰</button>
 
     <div id="placeBar" class="place-bar" hidden>
       <div id="placeName" class="place-name"></div>

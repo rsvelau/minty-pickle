@@ -1,6 +1,37 @@
-# Board Grid Planner
+# Midnight Shift: game and Board Grid Planner
 
-A 3D planning board for a night-time, 90s Pacific Northwest board game.
+A 3D planning board for a night-time, 90s Pacific Northwest board game, and the start of the game itself.
+
+## Title screen and game modes
+
+The app opens on the **title screen** (`src/app/gameShell.js`):
+
+- **Continue**: the most recent game, from its autosave.
+- **New game**: pick a map (the built-in **Hawthorn Bend**, any of **My maps**, or whatever is in the map
+  editor now), 1 to 4 investigators, the monster (random from a pool, or a specific one) and an 11 PM or
+  Midnight start. The map is checked as you pick it, the same check as **Ready to play?**: a map with
+  errors can't be started, and the list says what to fix.
+- **Load game**: the autosave and 3 save slots.
+- **Map editor**: the planner described below, exactly as before (⌂ in its panel goes back to the title).
+- **Game settings**: the rules settings (Obols, slots, turn length...), the defaults for new games.
+
+In a game the editor's tools are hidden; the side panel shows the investigators and the log, and **☰** (or
+Esc) opens the game menu: **Resume, Save game** (3 slots), **Load game, Restart this map, Quit to title**.
+The game **autosaves at the start of every turn**. A save holds the whole game state (including the dice's
+random-number state, so it continues exactly) and a copy of the map, so it still loads after the map is
+edited or deleted.
+
+**Your editor board is never touched by a game.** A game's map is loaded onto the board only while you play;
+the editor's own board is set aside (it is autosaved in this browser as always) and comes back when you
+return to the map editor. The editor's **Play demo** still test-plays the editor's board directly.
+
+**My maps** (File section of the editor): name the current board and save it; saved maps appear in New game.
+**Open** puts a saved map on the editor's board (Undo puts your previous board back).
+
+The built-in map is built by `tools/build-hawthorn-bend.mjs` (run it with Node after editing it); the script
+refuses to write a map that doesn't pass the Ready to play? check cleanly.
+
+## The board
 The board is a whole town: a 20 × 26 grid by default (columns **A–T**, rows **1–26**), resizable from 4 to 60
 cells per side. Every cell has an area (category + subcategory), light and movement; walls and doors sit on
 the edges between cells.
@@ -765,7 +796,11 @@ menus (`src/main.js` explains the same at the top):
   `gameSettings.js`.
 - `src/app/` — the shell: `config.js` (colours, brushes, `ui` state, the grid, storage), `pointer.js` (mouse
   and touch), `controls.js`, `panelControls.js`, `files.js` (export/import, PNG, dialogs, Ready to play?),
-  `shell.js` (shortcuts, info box, counts, autosave), `loop.js` (the frame loop), `dom.js`.
+  `shell.js` (shortcuts, info box, counts, autosave), `loop.js` (the frame loop), `dom.js`,
+  `gameShell.js` (title screen, New game, save/load, the game menu, My maps; `ui.mode` is
+  `'title' | 'editor' | 'game'`, mirrored as `mode-*` classes on `<body>`; `.editor-only` elements hide in
+  a game).
+- `src/maps/` — built-in maps (map files), made by scripts in `tools/`.
 - `src/main.js` — the entry: imports the modules and runs their start-up code in order.
 - `src/style.css` — panel styling.
 

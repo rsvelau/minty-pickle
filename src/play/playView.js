@@ -12,6 +12,7 @@ import { craftUI, dmgIcon, hitText, injuryPips, markCaseNew, obolHTML, renderAsk
 import { __set_markerHidden, __set_markerUsed, markers, refreshMarkers, refreshPropsAndWalls, visibleTop } from '../render/board.js';
 import { camera, cellToWorld, controls, scene, wake } from '../render/scene.js';
 import { lightLevels } from '../render/tileLook.js';
+import { onGameUpdate } from '../app/gameShell.js';
 
 // Module state: assigned by init() below, in the same order as before the split.
 export let PIPS, choiceButtons, projTmp, gameConfig, play;
@@ -64,7 +65,7 @@ export function init() {
     },
     grid, scene, camera, controls, cellToWorld, terrainify, cellLabel,
     cellTop: (i) => Math.max(visibleTop(i), WATER_Y) + 0.01,
-    onChange: () => { wake(); renderPlay(); },
+    onChange: () => { wake(); renderPlay(); onGameUpdate(); },
     onUsed: () => { refreshMarkers(); refreshPropsAndWalls(); },
     onCollect: (i, type, text) => {
       const { x, y } = grid.coords(i);

@@ -158,3 +158,22 @@ test('Ready to play: unreachable markers, too few spots, blocked start', () => {
   assert.equal(r.ok, false);
   assert.ok(r.problems.some((p) => p.code === 'start-blocked'));
 });
+
+test('a local session saves and loads a game in progress', async () => {
+  const { createLocalSession } = await import('../src/game/session.js');
+  const board = createBoard(town());
+  const seen = [];
+  const a = createLocalSession({ board, onUpdate: (_s, events) => seen.push(...events.map((e) => e.type)) });
+  a.start({ seed: 9, config: { players: 3 } });
+  a.dispatch({ type: 'roll' });
+  const snap = a.snapshot();
+  assert.ok(snap.rng, 'the snapshot keeps the dice generator (secrets included)');
+  assert.equal(a.state.rng, 0, 'what the screen sees never has it');
+  const b = createLocalSession({ board });
+  b.load(JSON.parse(JSON.stringify(makeSave({ map: board.grid, state: snap }).state)));
+  assert.deepEqual(b.snapshot(), snap);
+  assert.ok(seen.includes('start'));
+  // Both continue identically.
+  for (const s of [a, b]) { s.dispatch({ type: 'slot', die: 0, to: 'move' }); s.dispatch({ type: 'move' }); }
+  assert.deepEqual(b.snapshot(), a.snapshot());
+});

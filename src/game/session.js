@@ -49,8 +49,11 @@ export function createLocalSession({ board, onUpdate = () => {} }) {
       if (r.ok) publish(r.events);
       return r;
     },
+    // The whole state, secrets included, for a saved game (local play only:
+    // a multiplayer host keeps this to itself).
+    snapshot() { return full ? structuredClone(full) : null; },
     // Load a saved game (secrets included).
-    load(saved) { full = saved; publish([{ type: 'start' }]); },
+    load(saved) { full = structuredClone(saved); publish([{ type: 'loaded' }]); },
   };
 }
 

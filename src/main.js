@@ -27,6 +27,7 @@ import * as filesModule from './app/files.js';
 import * as shellModule from './app/shell.js';
 import * as texturesModule from './render/textures.js';
 import * as loopModule from './app/loop.js';
+import * as gameShellModule from './app/gameShell.js';
 
 // Start-up, in the original order of the code (each module's init() runs
 // the statements that used to sit at that point in the one big file).
@@ -49,3 +50,4 @@ shellModule.init();
 filesModule.init2();
 texturesModule.init();
 loopModule.init();
+gameShellModule.init(); // the title screen comes up last, over the finished board

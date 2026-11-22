@@ -462,6 +462,10 @@ export class GridState {
     this.redoStack.length = 0;
   }
 
+  // Forget undo/redo (when a different board is loaded: a game's map, or the
+  // editor's board coming back).
+  clearHistory() { this.undoStack.length = 0; this.redoStack.length = 0; }
+
   undo() { return this.#replay(this.undoStack, this.redoStack, 'before'); }
   redo() { return this.#replay(this.redoStack, this.undoStack, 'after'); }
 

@@ -120,6 +120,7 @@ export function init() {
   grid = new GridState(COLS, ROWS);
   ui = {
     brush: 'indoor:hardwood',
+    mode: 'title',       // 'title' | 'editor' | 'game' (src/app/gameShell.js)
     tool: 'cells',       // 'cells' | 'walls'
     edgeBrush: 'wall',   // 'wall' | 'door' | 'erase'
     lowWalls: false,  // full-height walls by default; Low walls in the view menu cuts them away

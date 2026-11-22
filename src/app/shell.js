@@ -18,6 +18,7 @@ import { play } from '../play/playView.js';
 import { markerHidden, markerUsed } from '../render/board.js';
 import { buildingSeeds, buildingStyle, focusHovered, interiorStyle, renderer, setCamera } from '../render/scene.js';
 import { lampsOn, lightLevels } from '../render/tileLook.js';
+import { editorBoardShown } from './gameShell.js';
 
 // Run once at startup (called from src/main.js, in order).
 export function init() {
@@ -33,6 +34,7 @@ export function init() {
     if (!panelOpen && !viewOpen) return;
     const t = ev.target;
     const inside = (sel) => t instanceof Element && !!t.closest(sel);
+    if (ui.mode === 'title' || inside('#screen') || inside('#gameMenuBtn')) return; // the game shell's screens
     if (inside('#dialog') || inside('#settings') || inside('#inventory') || inside('#playHud') || inside('#playChoices') || inside('#playTray')
       || inside('#askCard') || inside('#obolReveal') || inside('#revealSheet') || inside('#cardPop') || inside('#casebook') || inside('#intentBanner') || inside('#endConfirm')) return;
     let closed = false;
@@ -84,6 +86,8 @@ export function init() {
     }
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
     const mod = e.ctrlKey || e.metaKey;
+    // Outside the editor, only camera and view keys (no tools, brushes or undo).
+    if (ui.mode !== 'editor' && (mod || !['v', 't', 'a', ' '].includes(e.key.toLowerCase()))) return;
     if (mod && e.key.toLowerCase() === 'z') {
       e.preventDefault();
       e.shiftKey ? grid.redo() : grid.undo();
@@ -207,8 +211,10 @@ export function updateCounts() {
 
 export let saveTimer = 0;
 export function scheduleSave() {
+  if (!editorBoardShown()) return; // a game's map is on the board: never save it over the editor's
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
+    if (!editorBoardShown()) return; // a game started meanwhile
     $('#saveNote').textContent = storage.plannerBoard.set(grid.toJSON())
       ? `Autosaved ${new Date().toLocaleTimeString()}.`
       : 'Autosave unavailable here — use Export JSON.';
