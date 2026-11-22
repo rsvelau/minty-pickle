@@ -46,10 +46,14 @@ export function turnLimits(state, board, pl) {
   };
 }
 
-// The total a player's committed defense dice block (Doomed: 6s count as 1).
-export function defenseValue(pl) {
+// The total a player's committed defense dice block (Doomed: 6s count as 1),
+// plus equipment's bonus defense for that damage type (or any type).
+export function defenseValue(pl, type = null) {
+  if (type && pl.mods?.noDefense === type) return 0;       // Ominous Illumination
   const doomed = injuries(pl).S >= 1;
-  return (pl.defense ?? []).reduce((a, d) => a + (doomed && d.v === 6 ? 1 : d.v), 0);
+  const dice = (pl.defense ?? []).reduce((a, d) => a + (doomed && d.v === 6 ? 1 : d.v), 0);
+  const bonus = (pl.bonusDefense ?? []).filter((b) => !b.type || !type || b.type === type).reduce((a, b) => a + b.v, 0);
+  return dice + bonus;
 }
 
 const where = (board, i) => { const { x, y } = board.grid.coords(i); return cellLabel(x, y); };
@@ -57,7 +61,12 @@ const where = (board, i) => { const { x, y } = board.grid.coords(i); return cell
 // Deal `amount` damage of `type` (P/M/S) to a player. Returns the outcome.
 export function applyDamage(state, board, pl, type, amount, { log, source = 'An attack' }, events) {
   if (pl.dead) return 'dead';
-  const block = defenseValue(pl);
+  if (pl.mods?.negateAll) {                                // Purity Seal
+    log(state, `${source} hits ${pl.name} for ${amount}, but the Purity Seal negates it.`);
+    events.push({ type: 'damage', seat: pl.seat, cell: pl.pos, attack: type, amount, defense: amount, source, outcome: 'blocked' });
+    return 'blocked';
+  }
+  const block = defenseValue(pl, type);
   const track = INJURY_TRACKS[type];
   const base = { type: 'damage', seat: pl.seat, cell: pl.pos, attack: type, amount, defense: block, source };
   if (block >= amount) {

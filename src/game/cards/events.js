@@ -1,13 +1,23 @@
 // Event cards and Mindsets, transcribed from midnight_shift_cards.pdf (pages 1-5).
 //
 // The category is the word printed sideways on the card's left edge. Text is
-// word for word, with the card's icons kept:
-//   ⏳ the clock (a turn)   🪙 a coin   ❓ an Investigation space   🎲 a die
-//   💥 [P]/[M]/[S] an attack of that type   🔥 fire   1️⃣ once   🔗 chain
+// as printed, reworded where the designer clarified it (rules walkthrough,
+// round 1). Icons (see KEYWORDS in cards/keywords.js):
+//   ⏳ one turn on the clock   🪙 a coin flip   ◉ an Obol (any colour)   ❓ an Investigation space
+//   🎲 a die   💥 [P]/[M]/[S] damage of that type (defended as usual)   R[n] radius in spaces
 //
-// `lasting` marks cards whose effect stays after they resolve (most Hazards
-// change the map for the rest of the game). Playing the effects comes after the
-// rules walkthrough; for now a drawn card is shown and logged.
+// Categories behave differently:
+// - Global: affects the whole map and every player until another Global
+//   replaces it (only one at a time), or for as long as its text says.
+// - Cursed Object: the drawing player reads it, then chooses to use it or not.
+// - Hazard: lasting change to a space. Hazards laid by players (traps) only
+//   affect monsters; discovered Hazards affect players and monsters.
+// ⏳ effects (moving the clock forward or back) do nothing from midnight on:
+// the clock stops at midnight.
+//
+// `lasting` marks cards whose effect stays after they resolve. Playing the
+// effects comes later; for now a drawn card is shown and logged, and a drawn
+// Global becomes the one in effect.
 export const EVENT_CATEGORIES = {
   event: { label: 'Event', note: 'Happens at once' },
   decision: { label: 'Decision', note: 'Choose one' },
@@ -23,32 +33,32 @@ export const EVENT_CARDS = [
   // Page 1
   E('roof-collapse', 'Roof Collapse', 'decision', 'The nearest door becomes blocked. Take 💥 [P] to move to the opposite side this turn.'),
   E('police-patrol', 'Police Patrol', 'event', 'Advance ⏳. If any survivors have Died, advance ⏳⏳.'),
-  E('enigmatic-hourglass', 'Enigmatic Hourglass', 'cursedObject', 'Flip 🪙. If heads, reduce ⏳. If tails, lose 🪙.'),
+  E('enigmatic-hourglass', 'Enigmatic Hourglass', 'cursedObject', 'Flip 🪙. If heads, turn the clock back ⏳. If tails, lose an Obol at random.'),
   E('spirit-board', 'Spirit Board', 'cursedObject', 'Reveal an Evidence card and take 💥 [S].'),
   E('fall-through', 'Fall Through', 'event', 'Exhaust a defense 🎲 and investigate twice.'),
   E('bumped-shelf', 'Bumped Shelf', 'decision', 'Choose: Hide (Advance ⏳) / Try to leave (Flip a 🪙, if tails, you are attacked).'),
-  E('ominous-vhs', 'Ominous VHS', 'cursedObject', 'Can reveal 3 ❓ on the map and take 💥 [M] for each Attack revealed.'),
-  E('tarot-cards', 'Tarot Cards', 'cursedObject', 'Can draw 3 Event cards, Reveal 1 Evidence card.'),
-  E('injured-survivor', 'Injured Survivor', 'decision', 'Choose: Live (Pay 3 🪙 to reveal 2 ❓). Die (Do nothing).'),
+  E('ominous-vhs', 'Ominous VHS', 'cursedObject', 'Can expose what 3 ❓ on the map hold (players still go there to draw them), and take 💥 [M] for each Attack exposed.'),
+  E('tarot-cards', 'Tarot Cards', 'cursedObject', 'Can experience 3 Event cards (collecting their Obols), then choose an Evidence card to reveal.'),
+  E('injured-survivor', 'Injured Survivor', 'decision', 'Choose: Live (Pay 3 ◉ Obols to expose 2 ❓). Die (Do nothing).'),
   // Page 2
-  E('haunted-portrait', 'Haunted Portrait', 'cursedObject', 'Can heal all of your injuries. Shuffle back into event deck. If drawn again, the drawing player dies.'),
+  E('haunted-portrait', 'Haunted Portrait', 'cursedObject', 'Can reset all of your injury tiers to 0. If you do, it is shuffled back into the Event deck; whoever draws it again dies instantly.'),
   E('nailed-shut', 'Nailed Shut', 'event', 'All doors in the building are now blocked.', { lasting: true }),
   E('flooded-out', 'Flooded Out', 'hazard', 'Movement cost doubled within R[1].', { lasting: true }),
   E('flickering-lights', 'Flickering Lights', 'hazard', '💥 [P] ignores lowest defense 🎲 within R[4].', { lasting: true }),
   E('message-cypher', 'Message Cypher', 'opportunity', 'Can advance ⏳⏳ to reveal one evidence card.'),
-  E('wooden-boards', 'Wooden Boards', 'opportunity', 'Can exchange ⏳ to investigate. If an attack is drawn, ignore damage and reveal an evidence card instead.'),
-  E('hidden-passage', 'Hidden Passage', 'event', 'Pick ❓ within 10 spaces. Enable travel between them for the rest of the game. Costs all remaining movement to use.', { lasting: true }),
-  E('bright-moon', 'Bright Moon', 'global', '[M/P-1]. If target is identified as a beast [P+2] instead.', { lasting: true }),
+  E('wooden-boards', 'Wooden Boards', 'opportunity', 'Can spend ⏳ to investigate this space again and every other space in this building this turn, ignoring Attacks (their Obols are still collected).'),
+  E('hidden-passage', 'Hidden Passage', 'event', 'A hole opens in the floor here, and another at a chosen spot on the map. For the rest of the game, travelling through costs 5 movement (not possible with less).', { lasting: true }),
+  E('bright-moon', 'Bright Moon', 'global', 'Mental and Physical damage rolls −1 (easier to defend). If the monster is identified as a Beast, Physical damage rolls +2 instead.', { lasting: true }),
   E('strong-winds', 'Strong Winds', 'global', 'Flip 🪙 every turn. If outside: HEADS (2X a movement roll) TAILS (Exhaust lowest movement roll).', { lasting: true }),
   // Page 3
   E('distant-gunshots', 'Distant Gunshots', 'event', 'For the rest of this turn, the team negates Attack cards.'),
-  E('power-outage', 'Power Outage', 'global', 'No map light bonuses. Darkness [+2].', { lasting: true }),
-  E('distant-screams', 'Distant Screams', 'event', 'All players roll 🎲 [M-2] and attacks are avoided for the remainder of the turn.'),
+  E('power-outage', 'Power Outage', 'global', 'All lights on the map go out at once, the clocktower light included. Vehicle lights stay on (they have their own power).', { lasting: true }),
+  E('distant-screams', 'Distant Screams', 'event', 'All players take 💥 [M] rolled with −2, and attacks are avoided for the rest of the turn.'),
   E('sinkhole', 'Sinkhole', 'hazard', 'This space costs 5 movement to cross for the rest of the game.', { lasting: true }),
-  E('huddled-survivors', 'Huddled Survivors', 'decision', 'Choose: Live (Can discard 1 Weapon and 1 Intel 🎲 to investigate twice). Die (Do nothing).'),
+  E('huddled-survivors', 'Huddled Survivors', 'decision', 'Choose: Live (Can discard 1 Weapon and 1 white 🎲 to investigate twice). Die (Do nothing).'),
   E('insane-survivor', 'Insane Survivor', 'decision', 'Choose: Live (Take 💥 [P] and reveal an evidence card). Die (Do nothing).'),
   E('overgrown-brambles', 'Overgrown Brambles', 'hazard', 'Crossing this space costs ⏳. Can be destroyed with 🔥 or specific weapons.', { lasting: true }),
-  E('coil-of-razor-wire', 'Coil of Razor Wire', 'hazard', 'Create a hazard space which only affects corporeal monsters. They lose 5M and take 🎲 damage when crossed. 1️⃣', { lasting: true }),
+  E('coil-of-razor-wire', 'Coil of Razor Wire', 'hazard', 'Create a hazard space which only affects corporeal monsters. Crossing it costs them 5 movement this turn and 🎲 damage. 1️⃣', { lasting: true }),
   E('rusty-bear-trap', 'Rusty Bear Trap', 'hazard', 'Create a hazard space which immobilizes corporeal monsters for ⏳ and Fae for ⏳⏳. 1️⃣', { lasting: true }),
   // Page 4
   E('summoning-circle', 'Summoning Circle', 'hazard', 'Create a hazard space which summons revealed Demonic monsters next turn and binds them for ⏳⏳. 1️⃣', { lasting: true }),
@@ -61,7 +71,7 @@ export const EVENT_CARDS = [
   E('consecrated-ash', 'Consecrated Ash', 'hazard', 'Incorporeal and semi-corporeal monsters are stunned for ⏳ when crossing this space. Players reduce spiritual injuries by 1 tier when crossing this space. 1️⃣', { lasting: true }),
   E('hiding-spot', 'Hiding Spot', 'opportunity', 'Can remain immobile and become immune from all interactions for up to ⏳⏳. Cannot assist teammates.'),
   // Page 5
-  E('peculiar-mirror', 'Peculiar Mirror', 'cursedObject', 'Choose any ❓. Can use the object to travel in between without losing movement. Flip a 🪙. If tails, lose it.', { lasting: true }),
+  E('peculiar-mirror', 'Peculiar Mirror', 'cursedObject', 'A blue-glowing mirror appears. Link two spots: travelling between them costs no movement (other effects may still apply). Flip 🪙: if tails, lose it.', { lasting: true }),
 ];
 
 // Mindsets (page 5): a lasting trait for an investigator.

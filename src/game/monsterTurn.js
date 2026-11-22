@@ -19,6 +19,7 @@ import { cellLabel } from '../core/state.js';
 import { applyDamage, alive, defenseValue } from './combat.js';
 import { RANGE, cellRange } from './cards/injuries.js';
 import { buildingOf } from '../core/mapCheck.js'; // the same grouping the map check uses
+import { endMonsterTurn } from './equipmentPlay.js';
 
 const KIND_TO_TYPE = { physical: 'P', mental: 'M', spiritual: 'S' };
 
@@ -184,10 +185,12 @@ function closeTarget(state, board, pos) {
 }
 
 // One action from one die: the card ability whose roll range includes it.
-function actionFor(card, roll) {
+function actionFor(card, roll, monster = null) {
   const idx = card.abilities.findIndex((a) => { const r = rollRange(a.roll); return r && roll >= r[0] && roll <= r[1]; });
   if (idx < 0) return { roll, ability: -1, name: 'Waits', text: 'Nothing on its card for this roll', ops: [], unknown: [] };
   const a = card.abilities[idx];
+  // Disabled by its weakness track.
+  if (monster?.disabled?.[a.name]) return { roll, ability: -1, name: `${a.name} (disabled)`, text: 'Disabled by its weakness', ops: [], unknown: [] };
   const { ops, unknown } = parseAbility(a.text);
   return { roll, ability: idx, name: a.name, kind: a.kind, text: a.text, ops, unknown };
 }
@@ -230,8 +233,8 @@ function predictVictims(state, board, monster, intents) {
 export function declareIntent(state, board, monster, ctx, events) {
   const card = MONSTER_BY_ID[monster.kind];
   if (!card) return;
-  const n = Math.max(0, card.badge | 0);
-  monster.intents = Array.from({ length: n }, () => actionFor(card, rollDie(ctx)));
+  const n = Math.max(0, (card.badge | 0) - (monster.diceLost ?? 0));
+  monster.intents = Array.from({ length: n }, () => actionFor(card, rollDie(ctx), monster));
   monster.danger = predictVictims(state, board, monster, monster.intents);
   const list = monster.intents.map((i) => `${i.roll}: ${i.name}${i.ability >= 0 ? ` (${i.text})` : ''}`).join('; then ');
   ctx.log(state, n
@@ -338,12 +341,41 @@ function attackVictim(state, board, monster, card, intent, o, ctx, events) {
 export function executeIntent(state, board, monster, ctx, events) {
   const card = MONSTER_BY_ID[monster.kind];
   if (!card || !monster.intents) return;
+  const mods = monster.mods ?? {};
+  // Equipment effects on the monster this turn (equipmentPlay.js).
+  const roll = (dmg) => {
+    let total = 0;
+    for (let k = 0; k < (dmg?.dice ?? 0); k++) {
+      let v = rollDie(ctx);
+      if (mods.blind) v = 1;                       // Blind: its next attack rolls 1
+      if (mods.capDie) v = Math.min(v, mods.capDie); // Powerful Flashlight
+      total += v;
+    }
+    if (dmg?.dice && mods.blind) { mods.blind = false; ctx.log(state, `The ${card.name} is blinded: its attack rolls 1.`); }
+    total += dmg?.fixed ?? 0;
+    return mods.halve ? Math.floor(total / 2) : total;
+  };
+  if (mods.interrupted) {
+    ctx.log(state, `The ${card.name} is interrupted and does nothing this turn.`);
+    monster.intents = null; monster.danger = []; endMonsterTurn(monster);
+    return;
+  }
+  if (mods.immobile) ctx.log(state, `The ${card.name} is held in place this turn.`);
   for (const intent of monster.intents) {
     if (!alive(state).length) break;
     const type = KIND_TO_TYPE[intent.kind] ?? card.evidence.attack;
     const source = `The ${card.name}'s ${intent.name}`;
-    // Move first.
+    // Move first (less if Bound, not at all if immobilized).
     const move = planMovement(state, board, monster, intent.ops, ctx);
+    if (mods.moveDown) {
+      // Bind / Gaffe: this turn's movement is reduced by the total.
+      const walk = move.steps.filter((st) => typeof st !== 'object').length;
+      const allowed = Math.max(0, walk - (mods.moveDownLeft ?? mods.moveDown));
+      mods.moveDownLeft = Math.max(0, (mods.moveDownLeft ?? mods.moveDown) - walk);
+      let w = 0;
+      move.steps = move.steps.filter((st) => (typeof st === 'object' ? true : ++w <= allowed));
+    }
+    if (mods.immobile) move.steps = [];
     for (const st of move.steps) {
       if (typeof st === 'object') {
         events.push({ type: 'monsterTeleport', id: monster.id, from: monster.pos, to: st.teleport });
@@ -368,7 +400,7 @@ export function executeIntent(state, board, monster, ctx, events) {
         ctx.log(state, `${source}: with no victims left, the swarms fall on everyone.`);
         events.push({ type: 'monsterAttack', id: monster.id, seat: alive(state)[0].seat, cell: monster.pos, area: true, attack: type });
         hit = alive(state);
-        for (const pl of hit) applyDamage(state, board, pl, type, rollDamage(ctx, o.dmg), { log: ctx.log, source }, events);
+        for (const pl of hit) applyDamage(state, board, pl, type, roll(o.dmg), { log: ctx.log, source }, events);
         continue;
       }
       if (o.op === 'attack' && card.actsBy === 'swarm') {
@@ -377,7 +409,7 @@ export function executeIntent(state, board, monster, ctx, events) {
         if (!v) { ctx.log(state, `${source}: the swarm finds no one.`); continue; }
         events.push({ type: 'monsterSwarm', id: monster.id, seat: v.seat, path, attack: type });
         hit = [v];
-        applyDamage(state, board, v, type, rollDamage(ctx, o.dmg), { log: ctx.log, source: `${source} (fly swarm)` }, events);
+        applyDamage(state, board, v, type, roll(o.dmg), { log: ctx.log, source: `${source} (fly swarm)` }, events);
         continue;
       }
       if (o.op === 'exhaust') {
@@ -391,13 +423,13 @@ export function executeIntent(state, board, monster, ctx, events) {
         if (!t) { ctx.log(state, `${source} finds no one in reach.`); continue; }
         hit = [t];
         events.push({ type: 'monsterAttack', id: monster.id, seat: t.seat, cell: t.pos, attack: type });
-        applyDamage(state, board, t, type, rollDamage(ctx, o.dmg), { log: ctx.log, source }, events);
+        applyDamage(state, board, t, type, roll(o.dmg), { log: ctx.log, source }, events);
       } else if (o.op === 'area' || o.op === 'global') {
         const targets = alive(state).filter((pl) => o.op === 'global' || gridDist(board, monster.pos, pl.pos) <= o.radius);
         if (!targets.length) { ctx.log(state, `${source} strikes at nothing.`); continue; }
         hit = targets;
         events.push({ type: 'monsterAttack', id: monster.id, seat: targets[0].seat, cell: monster.pos, area: true, attack: type });
-        for (const pl of targets) applyDamage(state, board, pl, type, rollDamage(ctx, o.dmg), { log: ctx.log, source }, events);
+        for (const pl of targets) applyDamage(state, board, pl, type, roll(o.dmg), { log: ctx.log, source }, events);
       } else if (o.op === 'heal') {
         ctx.log(state, `The ${card.name} heals ${o.n}.`);
       }
@@ -406,6 +438,7 @@ export function executeIntent(state, board, monster, ctx, events) {
   }
   monster.intents = null;
   monster.danger = [];
+  endMonsterTurn(monster);
 }
 
 // Constant effects that fire when a player steps onto a cell, e.g. the

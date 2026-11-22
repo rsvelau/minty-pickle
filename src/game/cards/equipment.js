@@ -1,188 +1,195 @@
-// Equipment cards, transcribed from midnight_shift_cards.pdf (pages 5-10).
+// Equipment cards, transcribed from midnight_shift_cards.pdf (pages 5-10), with
+// the designer's clarifications (rules walkthrough, round 1) folded in.
 //
 // Each card has 1-3 abilities, printed as
 //   <range> <damage icon> Name | <cost> [requirement] effect <limit>
 //
-//   range   'close' | 'mid' | 'long' | 'self' | 'all' (src/game/cards/injuries.js has the distances)
+//   range   'close' | 'mid' | 'long' | 'self' | 'all' (distances: cards/injuries.js RANGE)
 //   kind    damage kind from DAMAGE_KINDS (cards/monsters.js): silver ☾, salt ⛰, holy ✺,
 //           crystal ◆, iron ⚔ (the crossed tools), fire 🔥; null = the plain circle (untyped)
 //   dice    how many rolled dice you slot into it (0 = free)
-//   coins   how many 🪙 it costs instead (Weeping Barrier, Wrathful Penance, Sacrifice, Toss)
-//   req     the bracket, as printed: '4+', '12', '11-', '1,2', '2-3', '2, 5+', 'Any', '2x Target's'.
-//           checkRequirement() (cards/requirements.js) reads it.
-//   limit   'once' for 1️⃣ (one use, until something refreshes it), 'chain' for 🔗, or null
-//   text    the effect, word for word
+//   obols   Obols it costs, any colour (printed as 🪙 [n] on the card)
+//   req     the bracket: the slotted dice ADDED TOGETHER must equal it ('12'), reach it
+//           ('4+', '11-'), fall in it ('2-3', '1,2'), or ('2, 5+') one die each; see
+//           cards/requirements.js. '2x Target’s': twice the target's action roll this turn.
+//   limit   'once' 1️⃣: one use until something refreshes it (Retrieval)
+//           'breaks' 🔗: the card is discarded after this skill is used (out of ammo, snapped)
+//   text    the effect (reworded only where the designer clarified it)
+//   fx      what the game plays (cards/../equipmentPlay.js); `manual` = shown and paid
+//           for, but resolved at the table for now
 //
-// These are data only so far: drawing a card puts it in your inventory and its
-// abilities are listed there. Playing them comes after the rules walkthrough.
-const A = (range, kind, name, dice, req, text, limit = null, coins = 0) => ({ range, kind, name, dice, req, text, limit, coins });
+// Damage: 'die' = the slotted die, 'sum' = the slotted dice added, or a number.
+// It is reduced by the monster's toughness (unless ignoreToughness) and the rest
+// comes off its health. An immune kind does nothing at all to that monster.
+const A = (range, kind, name, dice, req, text, fx, limit = null, obols = 0) => ({ range, kind, name, dice, req, text, fx, limit, obols });
+const HIT = (dmg, more = {}) => ({ target: 'monster', dmg, ...more });
 
 export const EQUIPMENT_CARDS = [
   { id: 'witch-hunters-sword', name: 'Witch Hunter’s Sword', abilities: [
-    A('close', 'holy', 'Smite', 1, '4+', 'Deal 🎲 damage'),
-    A('mid', 'crystal', 'Bind', 2, '10', 'Reduce target’s movement by 5 this turn'),
-    A('mid', 'holy', 'Bless', 2, '7', 'Double target’s attack this turn'),
+    A('close', 'holy', 'Smite', 1, '4+', 'Deal 🎲 damage', HIT('die')),
+    A('mid', 'crystal', 'Bind', 2, '10', 'Reduce target’s movement by 5 this turn', { target: 'monster', moveDown: 5 }),
+    A('mid', 'holy', 'Bless', 2, '7', 'Double target’s attack this turn', { target: 'ally', doubleAttack: true }),
   ] },
   { id: 'rock-salt-shotgun', name: 'Rock Salt Shotgun', abilities: [
-    A('close', 'salt', 'Salt Shot', 2, '12', 'Deal 6 damage and Blind', 'once'),
-    A('close', null, 'Bludgeon', 1, '3+', 'Deal 🎲 damage'),
+    A('close', 'salt', 'Salt Shot', 2, '12', 'Deal 6 damage and Blind (its next attack rolls 1)', HIT(6, { blind: true }), 'once'),
+    A('close', null, 'Bludgeon', 1, '3+', 'Deal 🎲 damage', HIT('die')),
   ] },
   { id: 'heavy-silver-crucifix', name: 'Heavy Silver Crucifix', abilities: [
-    A('close', 'holy', 'Smite', 1, '4+', 'Deal 🎲 damage'),
-    A('close', 'silver', 'Seal', 2, '2', 'Halve target’s attack damage this turn (round down)'),
+    A('close', 'holy', 'Smite', 1, '4+', 'Deal 🎲 damage', HIT('die')),
+    A('close', 'silver', 'Seal', 2, '2', 'Halve target’s attack damage this turn (round down)', { target: 'monster', halve: true }),
   ] },
   { id: 'cursebreaker-dagger', name: 'Cursebreaker Dagger', abilities: [
-    A('close', 'silver', 'Pierce', 1, '4+', 'Deal 🎲 damage'),
-    A('close', 'silver', 'Seal', 2, '2', 'Halve target’s attack damage this turn (round down)'),
-    A('mid', 'crystal', 'Bind', 2, '10', 'Reduce target’s movement by 5 this turn'),
+    A('close', 'silver', 'Pierce', 1, '4+', 'Deal 🎲 damage', HIT('die')),
+    A('close', 'silver', 'Seal', 2, '2', 'Halve target’s attack damage this turn (round down)', { target: 'monster', halve: true }),
+    A('mid', 'crystal', 'Bind', 2, '10', 'Reduce target’s movement by 5 this turn', { target: 'monster', moveDown: 5 }),
   ] },
   { id: 'dragons-breath-shotgun', name: 'Dragon’s Breath Shotgun', abilities: [
-    A('close', 'fire', 'Incendiary Shot', 2, '8+', 'Deal 6 damage, ignore toughness.', 'once'),
-    A('close', null, 'Stock Strike', 1, '2', 'Add 3 damage to another attack this turn'),
-    A('close', null, 'Breach', 2, '2+', 'Destroy an adjacent door.', 'once'),
+    A('close', 'fire', 'Incendiary Shot', 2, '8+', 'Deal 6 damage, ignore toughness.', HIT(6, { ignoreToughness: true }), 'once'),
+    A('close', null, 'Stock Strike', 1, '2', 'The next attack against the target this turn deals 3 more damage', { target: 'monster', bonusNext: 3 }),
+    A('close', null, 'Breach', 2, '2+', 'Destroy an adjacent door.', { manual: true }, 'once'),
   ] },
   { id: 'cut-spike', name: 'Cut Spike', abilities: [
-    A('close', 'iron', 'Pierce', 1, '4+', 'Deal 🎲 damage'),
-    A('close', null, 'Nail Shut', 2, '2+', 'Block an adjacent door.', 'chain'),
+    A('close', 'iron', 'Pierce', 1, '4+', 'Deal 🎲 damage', HIT('die')),
+    A('close', null, 'Nail Shut', 2, '2+', 'Block an adjacent door.', { manual: true }, 'breaks'),
   ] },
   { id: 'compact-revolver', name: 'Compact Revolver', abilities: [
-    A('mid', null, 'Controlled Shots', 3, '12+', 'Deal 🎲 damage', 'chain'),
-    A('mid', null, 'Hip Fire', 3, '11-', 'Deal 8 damage.', 'chain'),
+    A('mid', null, 'Controlled Shots', 3, '12+', 'Deal 🎲 damage (the three dice added)', HIT('sum'), 'breaks'),
+    A('mid', null, 'Hip Fire', 3, '11-', 'Deal 8 damage.', HIT(8), 'breaks'),
   ] },
   { id: 'hunting-rifle', name: 'Hunting Rifle', abilities: [
-    A('long', null, 'Sniper Shots', 3, '18', 'Deal 18 damage ignore toughness.', 'chain'),
-    A('mid', null, 'Center Shots', 3, '12+', 'A deal 🎲 damage.', 'chain'),
+    A('long', null, 'Sniper Shots', 3, '18', 'Deal 18 damage, ignore toughness.', HIT(18, { ignoreToughness: true }), 'breaks'),
+    A('mid', null, 'Center Shots', 3, '12+', 'Deal 🎲 damage (the three dice added)', HIT('sum'), 'breaks'),
   ] },
   { id: 'eccentric-crossbow', name: 'Eccentric Crossbow', abilities: [
-    A('mid', null, 'Piercing Tip', 2, '10', 'Deal 5 damage, ignore toughness.', 'once'),
-    A('self', null, 'Retrieval', 1, '3+', 'Refresh Piercing Tip'),
+    A('mid', null, 'Piercing Tip', 2, '10', 'Deal 5 damage, ignore toughness.', HIT(5, { ignoreToughness: true }), 'once'),
+    A('self', null, 'Retrieval', 1, '3+', 'Refresh Piercing Tip', { target: 'self', refresh: 'Piercing Tip' }),
   ] },
   { id: 'firemans-axe', name: 'Fireman’s Axe', abilities: [
-    A('close', null, 'Chop', 1, '4+', 'Deal 🎲 damage and reduce target’s toughness by 1 this turn'),
-    A('close', null, 'Breach', 2, '2+', 'Destroy an adjacent door'),
+    A('close', null, 'Chop', 1, '4+', 'Reduce target’s toughness by 1 this turn, then deal 🎲 damage', HIT('die', { toughDown: 1 })),
+    A('close', null, 'Breach', 2, '2+', 'Destroy an adjacent door', { manual: true }),
   ] },
   { id: 'flare-gun', name: 'Flare Gun', abilities: [
-    A('mid', 'fire', 'Direct Impact', 2, '7', 'Reduce target’s toughness by 2 this turn, then deal 7 damage.', 'chain'),
-    A('self', null, 'Illuminate', 1, 'Any', 'Increase two 🎲 to 6.', 'chain'),
+    A('mid', 'fire', 'Direct Impact', 2, '7', 'Reduce target’s toughness by 2 this turn, then deal 7 damage.', HIT(7, { toughDown: 2 }), 'breaks'),
+    A('self', null, 'Illuminate', 1, 'Any', 'Increase two other 🎲 to 6.', { target: 'dice', raise: 2, to: 6 }, 'breaks'),
   ] },
   { id: 'weathered-machete', name: 'Weathered Machete', abilities: [
-    A('close', null, 'Chop', 1, '4+', 'Deal 🎲 damage and reduce target’s toughness by 1 this turn'),
+    A('close', null, 'Chop', 1, '4+', 'Reduce target’s toughness by 1 this turn, then deal 🎲 damage', HIT('die', { toughDown: 1 })),
   ] },
   { id: 'salt-lick', name: 'Salt Lick', abilities: [
-    A('close', 'salt', 'Bludgeon', 1, '3+', 'Deal 🎲 damage'),
-    A('self', 'salt', 'Salt Circle', 1, 'Any', 'Prevent Monster from crossing this space for 1 turn.', 'chain'),
+    A('close', 'salt', 'Bludgeon', 1, '3+', 'Deal 🎲 damage', HIT('die')),
+    A('self', 'salt', 'Salt Circle', 1, 'Any', 'Prevent Monster from crossing this space for 1 turn.', { manual: true }, 'breaks'),
   ] },
   { id: 'improvised-spear', name: 'Improvised Spear', abilities: [
-    A('close', 'iron', 'Pierce', 1, '4+', 'Deal 🎲 damage'),
-    A('mid', 'iron', 'Javelin', 2, '7', 'Deal 10 damage.', 'chain'),
+    A('close', 'iron', 'Pierce', 1, '4+', 'Deal 🎲 damage', HIT('die')),
+    A('mid', 'iron', 'Javelin', 2, '7', 'Deal 10 damage.', HIT(10), 'breaks'),
   ] },
   { id: 'molotov-cocktail', name: 'Molotov Cocktail', abilities: [
-    A('mid', 'fire', 'Immolate', 2, '6', 'Reduce target’s toughness by 3 this turn, then deal 3 damage.', 'chain'),
+    A('mid', 'fire', 'Immolate', 2, '6', 'Reduce target’s toughness by 3 this turn, then deal 3 damage.', HIT(3, { toughDown: 3 }), 'breaks'),
   ] },
   { id: 'makeshift-torch', name: 'Makeshift Torch', abilities: [
-    A('close', 'fire', 'Bludgeon', 1, '3+', 'Deal 🎲 damage'),
-    A('self', null, 'Torchlight', 1, 'Any', 'Increase one 🎲 to 6.'),
+    A('close', 'fire', 'Bludgeon', 1, '3+', 'Deal 🎲 damage', HIT('die')),
+    A('self', null, 'Torchlight', 1, 'Any', 'Increase one other 🎲 to 6.', { target: 'dice', raise: 1, to: 6 }),
   ] },
   { id: 'iron-chain', name: 'Iron Chain', abilities: [
-    A('close', 'iron', 'Choke', 2, '2x Target’s', 'Immobilize target. Deal 3 damage ignoring toughness'),
-    A('close', null, 'Lock', 2, 'Any', 'Lock an adjacent door.'),
+    A('close', 'iron', 'Choke', 2, '2x Target’s', 'Immobilize target. Deal 3 damage ignoring toughness', HIT(3, { ignoreToughness: true, immobile: true })),
+    A('close', null, 'Lock', 2, 'Any', 'Lock an adjacent door.', { manual: true }),
   ] },
   { id: 'heavy-silver-chain', name: 'Heavy Silver Chain', abilities: [
-    A('close', 'silver', 'Choke', 2, '2x Target’s', 'Immobilize target. Deal 3 damage ignoring toughness'),
-    A(null, null, 'Lock', 2, 'Any', 'Lock an adjacent door.'), // no range printed on the card
+    A('close', 'silver', 'Choke', 2, '2x Target’s', 'Immobilize target. Deal 3 damage ignoring toughness', HIT(3, { ignoreToughness: true, immobile: true })),
+    A('close', null, 'Lock', 2, 'Any', 'Lock an adjacent door.', { manual: true }),
   ] },
   { id: 'railroad-hammer', name: 'Railroad Hammer', abilities: [
-    A('close', 'iron', 'Bludgeon', 1, '3+', 'Deal 🎲 damage'),
+    A('close', 'iron', 'Bludgeon', 1, '3+', 'Deal 🎲 damage', HIT('die')),
   ] },
   { id: 'baseball-bat', name: 'Baseball Bat', abilities: [
-    A('close', null, 'Bludgeon', 1, '3+', 'Deal 🎲 damage'),
-    A('close', null, 'Shatter', 1, '6', 'Deal 10 damage', 'chain'),
+    A('close', null, 'Bludgeon', 1, '3+', 'Deal 🎲 damage', HIT('die')),
+    A('close', null, 'Shatter', 1, '6', 'Deal 10 damage', HIT(10), 'breaks'),
   ] },
   { id: 'crowbar', name: 'Crowbar', abilities: [
-    A('close', 'iron', 'Bludgeon', 1, '3+', 'Deal 🎲 damage'),
-    A('close', null, 'Breach', 2, '2+', 'Destroy an adjacent door'),
+    A('close', 'iron', 'Bludgeon', 1, '3+', 'Deal 🎲 damage', HIT('die')),
+    A('close', null, 'Breach', 2, '2+', 'Destroy an adjacent door', { manual: true }),
   ] },
   { id: 'kitchen-knife', name: 'Kitchen Knife', abilities: [
-    A('close', null, 'Pierce', 1, '4+', 'Deal 🎲 damage'),
+    A('close', null, 'Pierce', 1, '4+', 'Deal 🎲 damage', HIT('die')),
   ] },
   { id: 'powerful-flashlight', name: 'Powerful Flashlight', abilities: [
-    A('self', null, 'Illuminate', 1, 'Any', 'Change this 🎲 to 6 and refresh it'),
-    A('close', null, 'Blind', 1, '6', 'Target’s damage 🎲 in excess of 3 are reduced to 3 this turn'),
+    A('self', null, 'Illuminate', 1, 'Any', 'Change this 🎲 to 6 and refresh it', { target: 'self', refreshAs: 6 }),
+    A('close', null, 'Blind', 1, '6', 'Target’s damage 🎲 in excess of 3 are reduced to 3 this turn', { target: 'monster', capDie: 3 }),
   ] },
   { id: 'singing-bowl', name: 'Singing Bowl', abilities: [
-    A('self', null, 'Pacifying Song', 1, '1,2', 'Change this 🎲 to 6 and set as bonus Mental defense this turn'),
-    A('mid', null, 'Ethereal Tap', 2, '2', 'Reduce Mental ailment tier by 1 for self and allies'),
+    A('self', null, 'Pacifying Song', 1, '1,2', 'Change this 🎲 to 6 and set as bonus Mental defense this turn', { target: 'self', bonusDefense: { type: 'M', v: 6 } }),
+    A('mid', null, 'Ethereal Tap', 2, '2', 'Reduce Mental injury tier by 1 for self and allies', { target: 'self', healAround: { M: 1 } }),
   ] },
   { id: 'ornamental-crucifix', name: 'Ornamental Crucifix', abilities: [
-    A('self', null, 'Invoke', 1, '1,2', 'Change this 🎲 to 6 and set as bonus Spiritual defense this turn'),
-    A('close', null, 'Attach', 1, '6', 'Reduce a Demon’s toughness to 0 this turn.', 'chain'),
+    A('self', null, 'Invoke', 1, '1,2', 'Change this 🎲 to 6 and set as bonus Spiritual defense this turn', { target: 'self', bonusDefense: { type: 'S', v: 6 } }),
+    A('close', null, 'Attach', 1, '6', 'Reduce a Demon’s toughness to 0 this turn.', { target: 'monster', demonToughnessZero: true }, 'breaks'),
   ] },
   { id: 'medical-kit', name: 'Medical Kit', abilities: [
-    A('self', null, 'Dress Wound', 1, 'Any', 'Reduce Physical injury tier for target and recover 🎲 HP'),
+    A('self', null, 'Dress Wound', 1, 'Any', 'Heal all Physical injury tiers', { target: 'self', heal: { P: 'all' } }),
   ] },
   { id: 'compact-boombox', name: 'Compact Boombox', abilities: [
-    A('mid', null, 'Distract', 1, 'Any', 'The Monster must use movement to approach a selected space this turn', 'chain'),
-    A('mid', null, 'Rally', 1, 'Any', 'You and all allies can turn a 🎲 into a 4 bonus mental defense this turn'),
+    A('mid', null, 'Distract', 1, 'Any', 'The Monster must use movement to approach a selected space this turn', { manual: true }, 'breaks'),
+    A('mid', null, 'Rally', 1, 'Any', 'You and all allies can turn a 🎲 into a 4 bonus Mental defense this turn', { manual: true }),
   ] },
   { id: 'bronze-skull-lantern', name: 'Bronze Skull Lantern', abilities: [
-    A('self', null, 'Ominous Illumination', 1, 'Any', 'Double this 🎲 and refresh. Cannot defend against Spiritual damage this turn'),
-    A('mid', null, 'Spiritual Backlash', 1, '6', 'Redirect all incoming Spiritual damage to a target'),
+    A('self', null, 'Ominous Illumination', 1, 'Any', 'Double this 🎲 and refresh. Cannot defend against Spiritual damage this turn', { target: 'self', refreshAs: 'double', noDefense: 'S' }),
+    A('mid', null, 'Spiritual Backlash', 1, '6', 'The target (a monster or a teammate) takes the Spiritual damage you would have taken this turn instead (untyped to monsters)', { manual: true }),
   ] },
   { id: 'mourning-veil', name: 'Mourning Veil', abilities: [
-    A('self', null, 'Weeping Barrier', 0, '1', 'Spiritual damage heals you this turn', null, 1),
+    A('self', null, 'Weeping Barrier', 0, null, 'Spiritual damage heals you this turn', { manual: true }, null, 1),
   ] },
   { id: 'blessed-scapular', name: 'Blessed Scapular', abilities: [
-    A('mid', 'holy', 'Wrathful Penance', 0, '2', 'Reflect Spiritual damage as ✺ this turn', null, 1),
-    A('self', null, 'Protective Faith', 1, '2-', 'Change this 🎲 to 6 and set as bonus Spiritual defense this turn'),
+    A('mid', 'holy', 'Wrathful Penance', 0, null, 'Spiritual damage you would take this turn is reflected back at the monster as ✺ Holy damage', { manual: true }, null, 2),
+    A('self', null, 'Protective Faith', 1, '2-', 'Change this 🎲 to 6 and set as bonus Spiritual defense this turn', { target: 'self', bonusDefense: { type: 'S', v: 6 } }),
   ] },
   { id: 'mala-beads', name: 'Mala Beads', abilities: [
-    A('self', null, 'Fervent Prayer', 2, 'Any', 'Change this 🎲 to 6 and set as bonus Spiritual defense this turn'),
+    A('self', null, 'Fervent Prayer', 2, 'Any', 'Change this 🎲 to 6 and set as bonus Spiritual defense this turn', { target: 'self', bonusDefense: { type: 'S', v: 6 } }),
   ] },
   { id: 'glowing-salt-lamp', name: 'Glowing Salt Lamp', abilities: [
-    A('self', null, 'Illuminate', 2, 'Any', 'Change both 🎲 to 4s and refresh'),
-    A('close', 'salt', 'Salt Circle', 1, 'Any', 'Prevent Monster from crossing this space for 1 turn', 'chain'),
+    A('self', null, 'Illuminate', 2, 'Any', 'Change both 🎲 to 4s and refresh', { target: 'self', refreshAs: 4 }),
+    A('close', 'salt', 'Salt Circle', 1, 'Any', 'Prevent Monster from crossing this space for 1 turn', { manual: true }, 'breaks'),
   ] },
   { id: 'purity-seal', name: 'Purity Seal', abilities: [
-    A('self', null, 'Sacrificial Seal', 0, null, 'Completely negate all damage taken this turn', 'chain'),
+    A('self', null, 'Sacrificial Seal', 0, null, 'Completely negate all damage taken this turn', { target: 'self', negateAll: true }, 'breaks'),
   ] },
   { id: 'calming-tonic', name: 'Calming Tonic', abilities: [
-    A('self', null, 'Sip', 0, null, 'Reduce Mental injury tier by 1', 'chain'),
-    A('self', null, 'Overdose', 0, null, 'Set Mental injury tier to 0 and Physical injury tier to 1', 'chain'),
+    A('self', null, 'Sip', 0, null, 'Reduce Mental injury tier by 1', { target: 'self', heal: { M: 1 } }, 'breaks'),
+    A('self', null, 'Overdose', 0, null, 'Set Mental injury tier to 0 and Physical injury tier to 1', { target: 'self', setInjury: { M: 0, P: 1 } }, 'breaks'),
   ] },
   { id: 'marlin-spike', name: 'Marlin Spike', abilities: [
-    A('close', null, 'Bludgeon', 1, '3+', 'Deal 🎲 damage'),
-    A('close', null, 'Pierce', 1, '2-3', 'Deal 5 damage'),
+    A('close', null, 'Bludgeon', 1, '3+', 'Deal 🎲 damage', HIT('die')),
+    A('close', null, 'Pierce', 1, '2-3', 'Deal 5 damage', HIT(5)),
   ] },
   { id: 'log-peavey', name: 'Log Peavey', abilities: [
-    A('close', null, 'Gaffe', 2, '2, 5+', 'Deal 5 damage and reduce monster movement by 5'),
+    A('close', null, 'Gaffe', 2, '2, 5+', 'Deal 5 damage and reduce monster movement by 5', HIT(5, { moveDown: 5 })),
   ] },
   { id: 'ice-axe', name: 'Ice Axe', abilities: [
-    A('close', null, 'Chop', 1, '4+', 'Deal 🎲 damage and reduce target’s toughness by 1 this turn'),
-    A('self', null, 'Brace', 1, '4+', 'Immune to being moved this turn'),
+    A('close', null, 'Chop', 1, '4+', 'Reduce target’s toughness by 1 this turn, then deal 🎲 damage', HIT('die', { toughDown: 1 })),
+    A('self', null, 'Brace', 1, '4+', 'Immune to being moved this turn', { manual: true }),
   ] },
   { id: 'sacrificial-fetish', name: 'Sacrificial Fetish', abilities: [
-    A('all', null, 'Sacrifice', 0, '1', 'When you or a teammate is killed, instead remove all injuries from that player', 'chain', 1),
+    A('all', null, 'Sacrifice', 0, null, 'When you or a teammate is killed, instead remove all injuries from that player', { manual: true }, 'breaks', 1),
   ] },
   { id: 'viper-hood', name: 'Viper Hood', abilities: [
-    A('self', null, 'Camouflage', 1, '2-', 'Cannot be approached this turn. Cannot move'),
+    A('self', null, 'Camouflage', 1, '2-', 'Cannot be approached this turn. Cannot move', { manual: true }),
   ] },
   { id: 'good-luck-charm', name: 'Good Luck Charm', abilities: [
-    A('self', null, 'Lucky', 0, null, 'Select values for all of your 🎲 this turn', 'chain'),
+    A('self', null, 'Lucky', 0, null, 'Select values for all of your 🎲 this turn', { manual: true }, 'breaks'),
   ] },
   { id: 'worry-stone', name: 'Worry Stone', abilities: [
-    A('self', null, 'Rub', 1, '1', 'Reduce Mental injury tier by 1'),
-    A('self', null, 'Toss', 0, '1', 'Suppress the effects of all injuries until damaged', 'chain', 1),
+    A('self', null, 'Rub', 1, '1', 'Reduce Mental injury tier by 1', { target: 'self', heal: { M: 1 } }),
+    A('self', null, 'Toss', 0, null, 'Suppress the effects of all injuries until damaged', { manual: true }, 'breaks', 1),
   ] },
   { id: 'crystal-talisman', name: 'Crystal Talisman', abilities: [
-    A('self', null, 'Barrier', 1, '1', 'Gain 6 additional defense this turn'),
-    A('mid', 'crystal', 'Bind', 2, '10', 'Reduce monster movement by 5 this turn'),
+    A('self', null, 'Barrier', 1, '1', 'Gain 6 additional defense this turn', { target: 'self', bonusDefense: { type: null, v: 6 } }),
+    A('mid', 'crystal', 'Bind', 2, '10', 'Reduce monster movement by 5 this turn', { target: 'monster', moveDown: 5 }),
   ] },
   { id: 'questionable-stimulant', name: 'Questionable Stimulant', abilities: [
-    A('self', null, 'Drink', 0, null, 'Double movement and ignore physical injuries this turn.', 'chain'),
+    A('self', null, 'Drink', 0, null, 'Double movement and ignore physical injuries this turn.', { manual: true }, 'breaks'),
   ] },
   { id: 'fencing-shoes', name: 'Fencing Shoes', abilities: [
-    A('self', null, 'Lunge', 0, null, 'Close range melee attacks can hit from Mid range.'),
-    A('self', null, 'Close Gap', 1, 'Any', 'Gain 4 additional movement this turn.'),
+    A('self', null, 'Lunge', 0, null, 'Close range melee attacks can hit from Mid range.', { manual: true }),
+    A('self', null, 'Close Gap', 1, 'Any', 'Gain 4 additional movement this turn.', { target: 'self', move: 4 }),
   ] },
 ];
 
@@ -190,10 +197,8 @@ export const EQUIPMENT_BY_ID = Object.fromEntries(EQUIPMENT_CARDS.map((c) => [c.
 // Kept for anything that still wants just the names.
 export const EQUIPMENT_NAMES = EQUIPMENT_CARDS.map((c) => c.name);
 
-// One line per ability, as printed (for logs, lists and tooltips).
-export function abilityLine(a) {
-  const cost = a.coins ? `${'🪙'.repeat(a.coins)}` : '🎲'.repeat(a.dice);
-  const req = a.req ? ` [${a.req}]` : '';
-  const limit = a.limit === 'once' ? ' 1️⃣' : a.limit === 'chain' ? ' 🔗' : '';
-  return `${a.name}${cost || req ? ` | ${cost}${req}` : ''} ${a.text}${limit}`;
+// The cost as shown: dice, or Obols (◉, any colour; 🪙 stays for coin flips).
+export const OBOL_COST = '◉';
+export function costText(a) {
+  return a.obols ? `${a.obols} Obol${a.obols === 1 ? '' : 's'}` : '🎲'.repeat(a.dice);
 }

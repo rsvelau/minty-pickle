@@ -1,13 +1,14 @@
 // The die requirement in square brackets on an Equipment ability.
 //
-// How each form reads (my reading, to confirm in the rules walkthrough). With
-// several dice, a plain number is about their TOTAL:
+// How each form reads (confirmed by the designer): the slotted dice are ADDED
+// TOGETHER and the total must match. The one exception is a list with
+// conditions ('2, 5+'): one condition per die.
 //   '4+'          total 4 or more
 //   '12'          total exactly 12 (Salt Shot 🎲🎲 [12] = double six)
 //   '11-'         total 11 or less
-//   '1,2'         one die showing 1 or 2 (a list of allowed faces)
-//   '2-3'         one die showing 2 or 3 (a range of faces)
-//   '2-'          one die showing 2 or less  (same as '11-' but for one die)
+//   '1,2'         total is 1 or 2
+//   '2-3'         total is 2 or 3
+//   '2-'          total is 2 or less
 //   '2, 5+'       two dice: one shows 2, the other 5 or more (one condition per die, any order)
 //   'Any'         any value
 //   '2x Target’s' total at least twice the target's die (the monster's current die)
@@ -29,14 +30,10 @@ export function checkRequirement(req, values, { targetDie = null } = {}) {
       : values.some((v, k) => !used.has(k) && fits(left[0], v) && permute(left.slice(1), new Set([...used, k]))));
     return permute(conds, new Set());
   }
-  // A list of allowed faces ('1,2'): every die must show one of them.
-  if (r.includes(',')) {
-    const faces = r.split(',').map((p) => Number(p.trim()));
-    return values.length > 0 && values.every((v) => faces.includes(v));
-  }
-  // A range of faces ('2-3'): every die within it.
+  // A list of allowed totals ('1,2'), or a range ('2-3'): the dice added together.
+  if (r.includes(',')) return values.length > 0 && r.split(',').map((p) => Number(p.trim())).includes(total);
   const range = /^(\d+)\s*-\s*(\d+)$/.exec(r);
-  if (range) return values.length > 0 && values.every((v) => v >= Number(range[1]) && v <= Number(range[2]));
+  if (range) return values.length > 0 && total >= Number(range[1]) && total <= Number(range[2]);
   return single(r, total);
 }
 

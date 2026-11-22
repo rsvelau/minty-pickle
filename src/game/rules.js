@@ -22,10 +22,12 @@ import { craft } from './obolcraft.js';
 import { refreshThreat, onPlayerEnters } from './monsterTurn.js';
 import { setupMystery, evidenceObol, revealEvidence, attackObol, nameMonster, revealMonster } from './mystery.js';
 import { setupDecks, drawEquipment, drawCard, eventCard } from './decks.js';
+import { useEquipment, armMonster } from './equipmentPlay.js';
 import { EVENT_CATEGORIES } from './cards/events.js';
 
 // 2: card decks (state.decks; Equipment and Event Obols draw cards).
-export const RULES_VERSION = 2;
+// 3: equipment in play (monster health/toughness/weakness track, 'use').
+export const RULES_VERSION = 3;
 
 // Bring a saved state from an older version up to date (saveFormat.readSave
 // calls this). One step per version.
@@ -37,6 +39,11 @@ export function migrateState(state) {
     const owned = state.players.flatMap((p) => p.inventory.equipment.map((e) => e.id).filter(Boolean));
     setupDecks(state, randInt, owned);
     v = 2;
+  }
+  if (v < 3) {
+    for (const m of state.monsters ?? []) if (m.hp === undefined) armMonster(m);
+    state.global ??= null;
+    v = 3;
   }
   state.version = v;
   return state;
@@ -109,7 +116,8 @@ export function formatClock(min) {
   return `${h12}:${String(mm).padStart(2, '0')} ${h24 < 12 ? 'AM' : 'PM'}`;
 }
 export const startMinutes = (state) => MIDNIGHT - state.config.turnMinutes * state.config.turnsToMidnight;
-export const clockMinutes = (state) => startMinutes(state) + (state.round - 1) * state.config.turnMinutes;
+// The clock stops at midnight: after it, the fight happens outside time.
+export const clockMinutes = (state) => Math.min(MIDNIGHT, startMinutes(state) + (state.round - 1) * state.config.turnMinutes);
 export const isMidnight = (state) => state.round > state.config.turnsToMidnight;
 
 // --- randomness ----------------------------------------------------------------
@@ -166,6 +174,7 @@ export function newGame(board, setup = {}) {
     monsters: [],
     mystery: null,          // the secret monster and its evidence (mystery.js)
     npcs: [],               // townspeople a monster preys on (the Adze's victims)
+    global: null,           // the Global event in effect: { id, since }
     log: [],
   };
   if (state.startMode === 'midnight') state.round = config.turnsToMidnight + 1;
@@ -195,7 +204,7 @@ export function newGame(board, setup = {}) {
 
 // --- actions ------------------------------------------------------------------------
 // Every action: { type, seat? }. Returns { ok, error?, events }.
-export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft'];
+export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use'];
 
 export function applyAction(state, board, action) {
   const events = [];
@@ -208,6 +217,9 @@ export function applyAction(state, board, action) {
       const pl = curPlayer(state);
       const lim = turnLimits(state, board, pl);
       pl.defense = [];                               // last turn's defense is spent
+      pl.bonusDefense = [];                          // ...and equipment's "this turn" effects
+      pl.mods = {};
+      state.moveBonus = 0;
       state.pool = Array.from({ length: lim.dice }, () => ({ kind: 'black', v: d6(state) }));
       state.slots = [];
       state.defSlots = [];
@@ -269,7 +281,8 @@ export function applyAction(state, board, action) {
       const fresh = state.slots.filter((n) => !state.pool[n].spent).map((n) => state.pool[n]);
       if (!fresh.length) { endTurn(state, board, events); break; }
       for (const d of fresh) d.spent = true;
-      state.roll = fresh.reduce((a, d) => a + d.v, 0);
+      state.roll = fresh.reduce((a, d) => a + d.v, 0) + (state.moveBonus ?? 0);
+      state.moveBonus = 0;
       state.steps = state.roll;
       curPlayer(state).prev = -1;
       log(state, `${who(state)} moves ${state.roll} (${fresh.map((d) => `${d.kind} ${d.v}`).join(' + ')}).`);
@@ -319,6 +332,13 @@ export function applyAction(state, board, action) {
       // Obolcraft: on your own turn, before rolling or while slotting.
       if (!['idle', 'slotting'].includes(state.phase)) return fail('finish moving first');
       const err = craft(state, curPlayer(state), action, { log, randInt }, events);
+      if (err) return fail(err);
+      break;
+    }
+    case 'use': {
+      // Equipment: any time during your own turn.
+      if (!['idle', 'slotting'].includes(state.phase)) return fail('finish moving first');
+      const err = useEquipment(state, board, curPlayer(state), action, { log }, events);
       if (err) return fail(err);
       break;
     }
@@ -465,6 +485,12 @@ function investigate(state, board, i, events) {
     const card = id && eventCard(id);
     log(state, card ? `${who(state)} drew an event: ${card.name} (${EVENT_CATEGORIES[card.category].label}). ${card.text}` : 'The Event deck is empty.');
     if (card) events.push({ type: 'card', deck: 'events', id, seat: state.cur, cell: i });
+    // A Global covers the whole map until the next Global replaces it.
+    if (card?.category === 'global') {
+      const old = state.global && eventCard(state.global.id);
+      state.global = { id, since: state.round };
+      log(state, old ? `${card.name} replaces ${old.name} as the Global event.` : `${card.name} is now in effect across the map.`);
+    }
   }
   events.push({ type: 'collect', seat: state.cur, cell: i, marker: 'investigation', text: type ? `${OBOLS[type].label} Obol` : 'Investigation', keyGroup: -1 });
 }

@@ -14,6 +14,8 @@ import { dieHTML, play } from './playView.js';
 import { __set_camTween, camera, cellToWorld, controls } from '../render/scene.js';
 import { EQUIPMENT_BY_ID } from '../game/cards/equipment.js';
 import { EVENT_BY_ID, EVENT_CATEGORIES } from '../game/cards/events.js';
+import { targetsFor, actionRoll, abilityReady } from '../game/equipmentPlay.js';
+import { checkRequirement } from '../game/cards/requirements.js';
 
 // Module state: assigned by init() below, in the same order as before the split.
 export let OBOL_GLYPHS, DMG_SVG, ATTACK_GLYPH, cardQueue, caseUI, craftUI;
@@ -212,6 +214,12 @@ export function showCardNow(c) {
       `<div class="pc-sub">${esc(card?.text ?? '')}</div>` +
       '<div class="pc-note">Card effects arrive after the rules walkthrough: for now, play this one at the table.</div>';
     stay = true;
+  } else if (c.kind === 'equipUse') {
+    html = `<div class="pc-kind">${esc(c.e.player?.name ?? '')} uses ${esc(EQUIPMENT_BY_ID[c.e.item]?.name ?? '')}</div><div class="pc-title">${esc(c.e.ability)}</div>` +
+      `<div class="pc-sub">${esc(c.e.text.replace(/^[^:]*: [^.(]*(\([^)]*\))?( on [^.]*)?\. /, ''))}</div>`;
+  } else if (c.kind === 'won') {
+    html = '<div class="pc-kind">Dawn, at last</div><div class="pc-glyph">☀</div><div class="pc-title">The monster is destroyed</div><div class="pc-sub">The investigators survive the night.</div>';
+    stay = true;
   } else if (c.kind === 'over') {
     html = '<div class="pc-kind">The night wins</div><div class="pc-glyph">☠</div><div class="pc-title">Everyone is dead</div>' +
       '<div class="pc-sub">Restart to try again.</div>';
@@ -340,7 +348,7 @@ export function guideDetails(c, found, open) {
     dmg(c.weakness, 'weak', 'Weak to') + dmg(c.immune, 'imm', 'Immune to') +
     `<p>${esc(c.note)}</p><p><b>Objective:</b> ${esc(c.objective)}</p>` +
     c.abilities.map((a) => `<p class="ge-abil ${a.kind}">${kindType(a.kind) ? dmgIcon(kindType(a.kind)) + ' ' : ''}<b>${esc(a.name)}</b> <i>[${esc(a.roll)}]</i> ${esc(a.text)}</p>`).join('') +
-    (c.wounds.length ? `<p><b>When wounded:</b> ${c.wounds.map((w) => `${w.at === null ? '∞' : w.at}: ${esc(w.text)}`).join(' · ')}</p>` : '') +
+    (c.weaknessTrack.length ? `<p><b>Weakness track</b> (hits by its weakness): ${c.weaknessTrack.map((w) => `${w.hits === null ? '∞' : w.hits}: ${esc(w.text)}`).join(' · ')}</p>` : '') +
     `</div>`;
 }
 
@@ -515,11 +523,15 @@ export function renderInventory() {
     wireObolcraft(body, pl);
     return;
   } else {
-    body.innerHTML = `<div class="eq-list">${items.map((e) => {
+    const mine = inv.player === s.cur && ['idle', 'slotting'].includes(s.phase);
+    if (useUI.item !== null && mine && items[useUI.item]) { renderUseSheet(body, pl, items); return; }
+    useUI.item = null;
+    body.innerHTML = `<div class="eq-list">${items.map((e, i) => {
       const card = EQUIPMENT_BY_ID[e.id];
-      return `<div class="eq-card"><b>${esc(e.label ?? card?.name ?? 'Item')}</b>${card ? abilitiesHTML(card) : ''}` +
+      return `<div class="eq-card"><b>${esc(e.label ?? card?.name ?? 'Item')}</b>${card ? abilitiesHTML(card, mine ? { item: e, i } : null) : ''}` +
         `${e.from ? `<small class="eq-from">From ${esc(e.from)}</small>` : ''}</div>`;
-    }).join('')}</div>`;
+    }).join('')}</div>` + (mine ? '' : `<p class="inv-empty" style="padding:8px 4px">${inv.player === s.cur ? 'Equipment can be used during your turn: roll first if a skill needs dice.' : 'Only usable on this investigator’s own turn.'}</p>`);
+    body.querySelectorAll('[data-use]').forEach((b) => { b.onclick = () => { const [i, k] = b.dataset.use.split(':').map(Number); Object.assign(useUI, { item: i, ability: k, dice: [], target: null, raise: [], error: '' }); renderInventory(); }; });
   }
 }
 export function openInventory(k = play.state.cur) {
@@ -532,13 +544,67 @@ export function closeInventory() { $('#inventory').hidden = true; }
 // An Equipment card's abilities, as printed: range, damage kind, name, cost
 // [requirement], effect, and its 1️⃣ / 🔗 limit.
 const RANGE_LABEL = { close: 'Close', mid: 'Mid', long: 'Long', self: 'Self', all: 'All' };
-export function abilitiesHTML(card) {
+// With `use` ({ item, i }): a Use button per ability that is ready.
+export function abilitiesHTML(card, use = null) {
   return `<ul class="eq-abilities">${card.abilities.map((a) => {
     const kind = a.kind ? DAMAGE_KINDS[a.kind] : null;
-    const cost = a.coins ? '🪙'.repeat(a.coins) : '🎲'.repeat(a.dice);
-    const limit = a.limit === 'once' ? ' <span title="Once (until refreshed)">1️⃣</span>' : a.limit === 'chain' ? ' <span title="Chain">🔗</span>' : '';
+    const cost = a.obols ? `${a.obols} ◉` : '🎲'.repeat(a.dice);
+    const limit = a.limit === 'once' ? ' <span title="Once, until refreshed">1️⃣</span>' : a.limit === 'breaks' ? ' <span title="Breaks: the card is discarded after this skill">🔗</span>' : '';
+    const manual = a.fx?.manual ? ' <span class="eq-manual" title="Played at the table for now">✋</span>' : '';
     return `<li><span class="eq-range">${RANGE_LABEL[a.range] ?? '—'}</span>` +
       `<span class="eq-kind" title="${kind ? esc(kind.label) : 'Untyped'}">${kind ? kind.icon : '◯'}</span>` +
-      `<span><b>${esc(a.name)}</b>${cost || a.req ? ` · ${cost}${a.req ? ` [${esc(a.req)}]` : ''}` : ''} ${esc(a.text)}${limit}</span></li>`;
+      `<span><b>${esc(a.name)}</b>${cost || a.req ? ` · ${cost}${a.req ? ` [${esc(a.req)}]` : ''}` : ''} ${esc(a.text)}${limit}${manual}</span>` +
+      (use ? `<button type="button" class="eq-use" data-use="${use.i}:${card.abilities.indexOf(a)}" ${abilityReady(use.item, card.abilities.indexOf(a)) ? '' : 'disabled title="Used up until refreshed"'}>Use</button>` : '') + '</li>';
   }).join('')}</ul>`;
+}
+
+// --- Using equipment: choose dice (and a target), then Use. -----------------------------
+export const useUI = { item: null, ability: 0, dice: [], target: null, raise: [], error: '' };
+function renderUseSheet(body, pl, items) {
+  const s = play.state;
+  const item = items[useUI.item];
+  const card = EQUIPMENT_BY_ID[item.id];
+  const a = card.abilities[useUI.ability];
+  const fx = a.fx ?? {};
+  const free = s.pool.map((d, n) => ({ ...d, n })).filter((d) => !d.spent && !s.defSlots.includes(d.n) && !s.slots.includes(d.n));
+  const targets = targetsFor(play.session.state, play.board, pl, a);
+  const values = useUI.dice.map((n) => s.pool[n]?.v ?? 0);
+  const mon = fx.target === 'monster' ? play.session.state.monsters.find((m) => m.id === (useUI.target?.monster ?? targets[0]?.monster)) : null;
+  const reqOk = useUI.dice.length === a.dice && checkRequirement(a.req, values, { targetDie: mon ? actionRoll(mon) : null });
+  const needTarget = (fx.target === 'monster' || fx.target === 'ally') && targets.length > 1;
+  const dieChip = (d, on, attr) => `<button type="button" class="use-die${on ? ' on' : ''}" ${attr}="${d.n}">${d.v}<small>${d.kind === 'white' ? 'white' : ''}</small></button>`;
+  body.innerHTML = `<div class="use-sheet">
+    <button type="button" class="screen-back use-back">‹ Equipment</button>
+    <b class="use-title">${esc(card.name)} · ${esc(a.name)}</b>
+    ${abilitiesHTML({ abilities: [a] })}
+    ${a.dice ? `<p class="use-label">Slot ${a.dice === 1 ? 'one die' : `${a.dice} dice`}${a.req ? ` · total [${esc(a.req)}]${mon && /2x/.test(a.req) ? ` = at least ${2 * actionRoll(mon)}` : ''}` : ''}</p>
+      <div class="use-dice">${free.map((d) => dieChip(d, useUI.dice.includes(d.n), 'data-die')).join('') || '<span class="inv-empty">No free dice: roll first, or unslot one.</span>'}</div>` : ''}
+    ${a.obols ? `<p class="use-label">Costs ${a.obols} Obol${a.obols === 1 ? '' : 's'} (any colour): you have ${pl.inventory.obolcraft.length}.</p>` : ''}
+    ${fx.raise ? `<p class="use-label">Raise ${fx.raise === 1 ? 'one other die' : `${fx.raise} other dice`} to ${fx.to}</p>
+      <div class="use-dice">${free.filter((d) => !useUI.dice.includes(d.n)).map((d) => dieChip(d, useUI.raise.includes(d.n), 'data-raise')).join('')}</div>` : ''}
+    ${(fx.target === 'monster' || fx.target === 'ally') ? `<p class="use-label">Target</p>
+      <div class="use-targets">${targets.map((t) => `<button type="button" class="${(useUI.target ? (t.monster ?? t.seat) === (useUI.target.monster ?? useUI.target.seat) : t === targets[0]) ? 'on' : ''}" data-target='${JSON.stringify(t.monster ? { monster: t.monster } : { seat: t.seat })}'>${esc(t.name)}</button>`).join('') || `<span class="inv-empty">${fx.target === 'monster' ? `No monster in ${RANGE_LABEL[a.range]} range.` : 'No one in range.'}</span>`}</div>` : ''}
+    ${fx.manual ? '<p class="use-label">✋ Paid for and logged here; resolve its effect at the table.</p>' : ''}
+    <p class="use-status ${reqOk ? 'ok' : ''}">${useUI.error ? esc(useUI.error) : a.dice ? (reqOk ? '✓ Ready' : useUI.dice.length === a.dice ? '✕ These dice don’t meet the requirement' : '') : ''}</p>
+    <button type="button" class="use-go" ${(a.dice && !reqOk) || ((fx.target === 'monster' || fx.target === 'ally') && !targets.length) || (needTarget && false) ? 'disabled' : ''}>Use ${esc(a.name)}</button>
+  </div>`;
+  body.querySelector('.use-back').onclick = () => { useUI.item = null; renderInventory(); };
+  body.querySelectorAll('[data-die]').forEach((b) => { b.onclick = () => {
+    const n = Number(b.dataset.die);
+    useUI.dice = useUI.dice.includes(n) ? useUI.dice.filter((x) => x !== n) : [...useUI.dice, n].slice(-a.dice);
+    useUI.raise = useUI.raise.filter((x) => !useUI.dice.includes(x));
+    useUI.error = ''; renderInventory();
+  }; });
+  body.querySelectorAll('[data-raise]').forEach((b) => { b.onclick = () => {
+    const n = Number(b.dataset.raise);
+    useUI.raise = useUI.raise.includes(n) ? useUI.raise.filter((x) => x !== n) : [...useUI.raise, n].slice(-fx.raise);
+    renderInventory();
+  }; });
+  body.querySelectorAll('[data-target]').forEach((b) => { b.onclick = () => { useUI.target = JSON.parse(b.dataset.target); renderInventory(); }; });
+  body.querySelector('.use-go').onclick = () => {
+    const r = play.useEquipment({ item: useUI.item, ability: useUI.ability, dice: useUI.dice, target: useUI.target ?? (targets[0] ? (targets[0].monster ? { monster: targets[0].monster } : { seat: targets[0].seat }) : null), raise: useUI.raise });
+    if (!r.ok) { useUI.error = r.error ? r.error[0].toUpperCase() + r.error.slice(1) + '.' : 'That can’t be used now.'; renderInventory(); return; }
+    useUI.item = null;
+    closeInventory();
+  };
 }

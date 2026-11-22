@@ -18,7 +18,7 @@ test('the card list matches the PDF', () => {
     for (const a of c.abilities) {
       assert.ok(a.kind === null || DAMAGE_KINDS[a.kind], `${c.name} ${a.name}: kind ${a.kind}`);
       assert.ok([null, 'close', 'mid', 'long', 'self', 'all'].includes(a.range), `${c.name} ${a.name}: range`);
-      assert.ok([null, 'once', 'chain'].includes(a.limit));
+      assert.ok([null, 'once', 'breaks'].includes(a.limit));
     }
   }
 });
@@ -80,7 +80,7 @@ test('decks: dealt from the settings, drawn without repeats, saved with the game
   delete old.decks; delete old.config.deckCounts; old.version = 1;
   old.players[0].inventory.equipment.push({ id: 'crowbar', label: 'Crowbar' });
   migrateState(old);
-  assert.equal(old.version, 2);
+  assert.equal(old.version, 3);
   assert.equal(old.decks.equipment.length, 43);
   assert.ok(!old.decks.equipment.includes('crowbar'));
 });
@@ -100,4 +100,12 @@ test('monsters taken out of the game leave the random pool', async () => {
     assert.equal(state.mystery.monster, 'wendigo');
     assert.deepEqual(state.mystery.pool, ['wendigo']);
   }
+});
+
+test('the clock stops at midnight, and only one Global is in effect', async () => {
+  const { clockMinutes, formatClock, defaultConfig } = await import('../src/game/rules.js');
+  const state = { config: defaultConfig(), round: 1 };
+  assert.equal(formatClock(clockMinutes(state)), '11:00 PM');
+  state.round = 13; assert.equal(formatClock(clockMinutes(state)), '12:00 AM');
+  state.round = 20; assert.equal(formatClock(clockMinutes(state)), '12:00 AM');
 });

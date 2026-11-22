@@ -1095,3 +1095,30 @@ body.mode-game .editor-only, body.mode-game #info, body.mode-game .help { displa
 .deck-screen { z-index: 70; }
 .screen-card .dk-tabs { grid-template-columns: repeat(4, 1fr); }
 .screen-card .dk-tabs button { font-size: 13px; padding: 6px 2px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+.game-clock .glob { color: #f0c870; }
+.eq-manual { opacity: 0.7; }
+
+/* Using equipment */
+.eq-abilities li { grid-template-columns: 38px 18px 1fr auto; }
+.eq-use { align-self: center; min-height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid #5fcf6a; background: rgba(95, 207, 106, 0.16); color: #dff5e2; font: 600 13px system-ui, sans-serif; cursor: pointer; }
+.eq-use:disabled { opacity: 0.35; border-color: var(--line); background: none; color: var(--muted); }
+.use-sheet { display: grid; gap: 8px; padding: 4px 2px; }
+.use-title { color: var(--text); font-size: 15px; }
+.use-back { justify-self: start; min-height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); background: none; color: var(--text); cursor: pointer; }
+.use-label { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+.use-dice, .use-targets { display: flex; flex-wrap: wrap; gap: 6px; }
+.use-die { width: 48px; height: 48px; border-radius: 10px; border: 1px solid var(--line); background: #e9e4d6; color: #151515; font: 700 20px system-ui, sans-serif; cursor: pointer; display: grid; place-items: center; line-height: 1; }
+.use-die small { font: 500 9px system-ui, sans-serif; color: #666; }
+.use-die.on { outline: 3px solid #5fcf6a; outline-offset: 1px; }
+.use-targets button { min-height: 40px; padding: 0 14px; border-radius: 9px; border: 1px solid var(--line); background: rgba(255,255,255,0.05); color: var(--text); cursor: pointer; }
+.use-targets button.on { border-color: var(--accent); background: rgba(217, 164, 106, 0.18); }
+.use-status { margin: 0; min-height: 18px; font-size: 13px; color: #ff9a8a; }
+.use-status.ok { color: #7fd88a; }
+.use-go { min-height: 48px; border-radius: 10px; border: 1px solid #5fcf6a; background: rgba(95, 207, 106, 0.2); color: #e9f7eb; font: 600 16px system-ui, sans-serif; cursor: pointer; }
+.use-go:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.screen-card .dk-tabs { grid-template-columns: repeat(5, 1fr); }
+.dk-glossary { margin: 8px 0 0; display: grid; gap: 4px; }
+.dk-glossary dt { margin-top: 8px; color: var(--text); font-weight: 600; }
+.dk-glossary dd { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.4; }

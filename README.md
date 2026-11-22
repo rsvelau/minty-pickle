@@ -41,17 +41,38 @@ All the cards from the card PDF are in the game as data (`src/game/cards/`): **4
 
 **Decks** (`src/game/decks.js`): each new game shuffles an Equipment and an Event deck with the game's seeded
 dice; they are part of the saved game. An **Equipment Obol** draws an Equipment card into the investigator's
-inventory (the Inventory lists each card's abilities), and the Obolcraft "Draw an Equipment card" recipe
-draws from the same deck. An **Event Obol** draws an Event card, shown and logged. Cards come out once each
-(one copy = once per game). *Card effects are not played by the game yet*: they are being worked out with the
-designer card by card, and come next. Mindsets are listed but not dealt yet.
+inventory, and the Obolcraft "Draw an Equipment card" recipe draws from the same deck. An **Event Obol** draws
+an Event card, shown and logged; a **Global** event becomes the one in effect (shown beside the clock) until
+another Global replaces it. Event effects are not played yet. Mindsets are listed but not dealt yet.
+
+**Using equipment** (`src/game/equipmentPlay.js`): any time during your turn, open the Inventory → Equipment
+and tap **Use** on a skill. Pick its dice from your free rolled dice (their total must meet the bracket), and a
+target if it needs one (monsters within the skill's range; teammates for heals). Obol costs (◉) take any colour.
+- Damage: the slotted die, the dice added, or a fixed number, minus the monster's **toughness** (unless the skill
+  ignores it); the rest comes off its **health**. A monster immune to the skill's element is not affected at all.
+- **Weakness track**: every hit with one of the monster's weakness elements counts; at each number on its card
+  the effect happens once. The game plays −toughness, −die, −HP and Disable [ability]; others are announced.
+- Effects on the monster last until it has acted at the end of the round: toughness down, Bind / Gaffe
+  (−5 movement), Choke (immobilized; needs twice its action roll), Seal (attack halved), Blind (next attack
+  rolls 1), Powerful Flashlight (damage dice above 3 count as 3), Stock Strike (+3 to the next attack on it).
+- On yourself: healing, bonus defense (typed, until your next turn), refreshed dice (back with a new value,
+  ready to slot), raising other dice, +movement, Purity Seal.
+- **1️⃣** once until refreshed (Retrieval refreshes Piercing Tip); **🔗 breaks**: the card is discarded.
+- A destroyed monster ends the game in the investigators' favour (Hellhounds: the pack goes back to the Lair).
+- Skills marked ✋ (doors, Salt Circle, Distract, Rally, Spiritual Backlash, Wrathful Penance, Weeping
+  Barrier, Sacrifice, Camouflage, Brace, Lucky, Toss, Drink, Lunge) are paid for and logged, and resolved at the
+  table for now.
+
+**The clock stops at midnight**: from then on it shows 12:00 AM · Midnight, and ⏳ effects do nothing.
 
 **Cards in the game** (Game settings → Cards → Choose…): pick which Equipment, Events and Mindsets new games
 use, 0-3 copies of each, and which Monsters the random mystery can be. Search, All in / All out. Saved with the
 game settings (`deckCounts`: only the changes from one copy each).
 
-Saved games from before decks existed still load: `migrateState` in `src/game/rules.js` gives them decks
-(minus equipment already held). Rules version 2.
+**Glossary** (Cards in the game → Glossary): the card shorthand as the designer defined it (`cards/keywords.js`).
+
+Saved games from older versions still load: `migrateState` in `src/game/rules.js` gives them decks (minus
+equipment already held) and arms their monsters. Rules version 3.
 
 ## The board
 The board is a whole town: a 20 × 26 grid by default (columns **A–T**, rows **1–26**), resizable from 4 to 60

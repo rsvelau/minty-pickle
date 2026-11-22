@@ -56,7 +56,7 @@ export function createPlay({
   grid, scene, camera, controls, cellToWorld, cellTop, terrainify, cellLabel, onChange,
   onUsed = () => {}, onCollect = () => {}, onObol = () => {}, onAttack = () => {}, onMonster = () => {},
   onEvidence = () => {}, onAttacked = () => {}, onNamed = () => {}, onMonsterRevealed = () => {},
-  onDamage = () => {}, onIntent = () => {}, onGameOver = () => {}, onNpc = () => {}, onExhaust = () => {}, onCraft = () => {}, onCard = () => {},
+  onDamage = () => {}, onIntent = () => {}, onGameOver = () => {}, onNpc = () => {}, onExhaust = () => {}, onCraft = () => {}, onCard = () => {}, onEquip = () => {},
   config = defaultConfig(),
 }) {
   const cfg = config; // live: Game settings edits this object; used at the next new game
@@ -585,6 +585,12 @@ export function createPlay({
         case 'obol':
           onObol({ player: state.players[e.seat], type: e.obol, left: e.left });
           break;
+        case 'equipUse':
+          onEquip({ ...e, player: state.players[e.seat] });
+          break;
+        case 'won':
+          onGameOver({ won: true });
+          break;
         case 'card':
           attachToArrival(view.actors[e.seat], e.cell, () => onCard({ ...e, player: state.players[e.seat] }));
           break;
@@ -717,6 +723,12 @@ export function createPlay({
   function answerInvestigate(yes) { act({ type: 'investigate', yes: !!yes }); }
   function choose(i) { return g()?.phase === 'choosing' && act({ type: 'choose', cell: i }); }
   function craft(recipe, pay, target) { return act({ type: 'craft', recipe, pay, target }); }
+  // Equipment: returns { ok, error } so the sheet can say why not.
+  function useEquipment(use) {
+    const s = g();
+    if (!s) return { ok: false, error: 'no game' };
+    return session.dispatch({ type: 'use', ...use, seat: s.cur });
+  }
   function revealCard(n) { return act({ type: 'reveal', card: n }); }
   function nameMonster(id) { return act({ type: 'name', monster: id }); }
   // Pips on dice slotted into Movement but not yet moved.
@@ -1043,7 +1055,7 @@ export function createPlay({
   return {
     // Game settings changed outside a game: the next game starts fresh with them.
     invalidate: () => { stale = true; },
-    state, session, board, roll, reset, setStartMode, saveState, loadState, answerInvestigate, choose, chooseByKey, tick, setActive,
+    state, session, board, roll, reset, setStartMode, saveState, loadState, useEquipment, answerInvestigate, choose, chooseByKey, tick, setActive,
     boardChanged, setPlayers, toggleSlot, confirmMove, endTurn, unusedCount, slotTotal, rollWhite, busy, revealCard, nameMonster, craft,
     clockMinutes: () => (g() ? rulesClockMinutes(g()) : rulesStartMinutesFor(cfg)),
     startMinutes: () => (g() ? rulesStartMinutes(g()) : rulesStartMinutesFor(cfg)),

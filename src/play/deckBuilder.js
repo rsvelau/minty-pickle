@@ -4,6 +4,7 @@
 // games deal their decks from it (src/game/decks.js).
 import { DECKS, copiesOf, deckList, MAX_COPIES } from '../game/decks.js';
 import { EVENT_CATEGORIES } from '../game/cards/events.js';
+import { KEYWORDS } from '../game/cards/keywords.js';
 import { $ } from '../app/dom.js';
 import { gameConfig, saveConfig } from './playView.js';
 import { markSettingsDirty } from './gameSettings.js';
@@ -30,8 +31,23 @@ function cardDetail(deck, c) {
   return `<p class="dk-text">${esc(c.traits.join(', '))}</p>`;
 }
 
+const tabsHTML = () => Object.entries(DECKS).map(([id, d]) => `<button data-tab="${id}" class="${id === tab ? 'on' : ''}">${esc(d.label)}<small>${deckList(gameConfig, id).length}</small></button>`).join('')
+  + `<button data-tab="glossary" class="${tab === 'glossary' ? 'on' : ''}">Glossary<small>${KEYWORDS.length}</small></button>`;
+
 export function openDecks() {
   const el = $('#deckScreen');
+  if (tab === 'glossary') {
+    el.innerHTML = `<div class="screen-card dk-card">
+      <button class="screen-back" data-back>‹ Back</button>
+      <h2 class="screen-title">Cards in the game</h2>
+      <div class="seg dk-tabs">${tabsHTML()}</div>
+      <dl class="dk-glossary">${KEYWORDS.map((k) => `<dt>${esc(k.term)}</dt><dd>${esc(k.text)}</dd>`).join('')}</dl>
+    </div>`;
+    el.hidden = false;
+    el.querySelector('[data-back]').onclick = () => { el.hidden = true; el.innerHTML = ''; };
+    el.querySelectorAll('[data-tab]').forEach((b) => { b.onclick = () => { tab = b.dataset.tab; query = ''; openDecks(); }; });
+    return;
+  }
   const deck = DECKS[tab];
   const max = deck.maxCopies ?? MAX_COPIES;
   const q = query.trim().toLowerCase();
@@ -40,7 +56,7 @@ export function openDecks() {
     <button class="screen-back" data-back>‹ Back</button>
     <h2 class="screen-title">Cards in the game</h2>
     <p class="screen-note">Choose which cards new games use${max > 1 ? ' and how many copies of each' : ''}. Games already started keep their decks.</p>
-    <div class="seg dk-tabs">${Object.entries(DECKS).map(([id, d]) => `<button data-tab="${id}" class="${id === tab ? 'on' : ''}">${esc(d.label)}<small>${deckList(gameConfig, id).length}</small></button>`).join('')}</div>
+    <div class="seg dk-tabs">${tabsHTML()}</div>
     <div class="dk-tools">
       <input type="search" class="screen-input" id="dkFind" placeholder="Find a card" value="${esc(query)}" />
       <button data-all="1">All in</button><button data-all="0">All out</button>

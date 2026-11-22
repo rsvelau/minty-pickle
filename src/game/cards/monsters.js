@@ -6,8 +6,10 @@
 // Each card:
 //   id, name, hp, toughness (null = ∞), badge (the number in the top-right
 //   corner), traits, note (the rules text under the name), objective,
-//   weakness / immune (damage kinds, see DAMAGE_KINDS), wounds (the arrows on
-//   the art: what happens when its health track reaches each mark), abilities
+//   weakness / immune (damage kinds, see DAMAGE_KINDS), weaknessTrack (the
+//   arrows on the art: after `hits` attacks with a weapon of a weakness element,
+//   that effect happens, once; hits null = the purple ∞, an effect that can
+//   happen any number of times, usually by discarding that kind of item), abilities
 //   (the rows at the bottom: kind = physical | mental | spiritual | none,
 //   roll = which die faces trigger it), and evidence:
 //     attack: 'P' | 'M' | 'S'   the Attack card (Physical, Mental, Spiritual)
@@ -26,7 +28,7 @@ export const DAMAGE_KINDS = {
   fire: { label: 'Fire', icon: '🔥' },
 };
 
-const A = (kind, name, roll, text) => ({ kind, name, roll, text });
+const A = (kind, name, roll, text, tags = {}) => ({ kind, name, roll, text, ...tags });
 
 export const MONSTER_CARDS = [
   {
@@ -35,7 +37,7 @@ export const MONSTER_CARDS = [
     note: 'Half speed indoors.',
     objective: 'Kill',
     weakness: ['silver'], immune: [],
-    wounds: [{ at: 2, text: '−2 toughness' }, { at: 4, text: '−1 die' }, { at: 6, text: 'Disable Terrifying Howl' }],
+    weaknessTrack: [{ hits: 2, text: '−2 toughness' }, { hits: 4, text: '−1 die' }, { hits: 6, text: 'Disable Terrifying Howl' }],
     abilities: [
       A('physical', 'Vicious Pursuit', '1-3', 'Pursue (8) and Attack (4)'),
       A('mental', 'Terrifying Howl', '4-5', 'Area Attack (4, Rad 3)'),
@@ -49,7 +51,7 @@ export const MONSTER_CARDS = [
     note: 'Start: Town Entrance. Can’t enter buildings. Midnight: all players Corrupted. Cleanse at {9}.',
     objective: 'Escape (to the start point)',
     weakness: ['salt', 'holy'], immune: ['crystal', 'iron', 'fire', 'silver'],
-    wounds: [{ at: 1, text: 'Disable Death Gaze for ⌛' }, { at: 2, text: 'Disable Death Gaze for ⌛' }, { at: 4, text: 'Disable Shadow Trap' }],
+    weaknessTrack: [{ hits: 1, text: 'Disable Death Gaze for ⌛' }, { hits: 2, text: 'Disable Death Gaze for ⌛' }, { hits: 4, text: 'Disable Shadow Trap' }],
     abilities: [
       A('mental', 'Death Gaze', 'Persistent', 'At end of turn, LoS Attack (10)'),
       A('none', 'Stalk', '1-4', 'Pursue (5)'),
@@ -66,7 +68,7 @@ export const MONSTER_CARDS = [
     note: 'Respawns at Lair when killed. Pinned players cannot move.',
     objective: 'Disrupt Ritual ({9} → Lair)',
     weakness: ['holy', 'crystal'], immune: ['fire'],
-    wounds: [{ at: 1, text: '−1 die' }, { at: 3, text: '−1 die' }, { at: 5, text: '−1 die' }],
+    weaknessTrack: [{ hits: 1, text: '−1 die' }, { hits: 3, text: '−1 die' }, { hits: 5, text: '−1 die' }],
     abilities: [
       A('none', 'Demonic Fire', 'Persistent', 'Ignores lowest defensive die'),
       A('physical', 'Harrow', '1-4', 'Pursue (5) and Attack (3)'),
@@ -80,7 +82,7 @@ export const MONSTER_CARDS = [
     note: 'Avoids traps. When the first player reaches the Lair, stun Skinwalker and reduce its toughness to 0 for ⌛.',
     objective: 'Kill',
     weakness: ['crystal', 'holy'], immune: ['silver'],
-    wounds: [{ at: 1, text: 'Reset Curseblood Ritual' }, { at: 3, text: '−2 toughness' }, { at: 6, text: 'Disable Curseblood Ritual' }],
+    weaknessTrack: [{ hits: 1, text: 'Reset Curseblood Ritual' }, { hits: 3, text: '−2 toughness' }, { hits: 6, text: 'Disable Curseblood Ritual' }],
     abilities: [
       A('physical', 'Wolf Prowl', '1-3', 'Outflank (15) and Attack (die)'),
       A('physical', 'Bear Maul', '4-5', 'Pursue (5) and Drag (die, 5M into nearest building)'),
@@ -94,7 +96,7 @@ export const MONSTER_CARDS = [
     note: 'Avoids traps. Consume heals equal to damage. Lure causes players to move towards Wendigo.',
     objective: 'Kill',
     weakness: ['fire'], immune: ['iron', 'silver'],
-    wounds: [{ at: 1, text: 'Disable Regeneration until Wendigo feeds' }, { at: 3, text: 'Disable Regeneration until Wendigo feeds' }, { at: 5, text: 'Disable Regeneration permanently' }],
+    weaknessTrack: [{ hits: 1, text: 'Disable Regeneration until Wendigo feeds' }, { hits: 3, text: 'Disable Regeneration until Wendigo feeds' }, { hits: 5, text: 'Disable Regeneration permanently' }],
     abilities: [
       A('none', 'Regeneration', 'Persistent', 'At end of turn Heal (4)'),
       A('physical', 'Inhuman Speed', '1-3', 'Outflank (20) Attack (die)'),
@@ -108,7 +110,7 @@ export const MONSTER_CARDS = [
     note: 'While on rooftops, Banshee is outside Close range.',
     objective: 'Kill',
     weakness: ['iron', 'silver'], immune: [],
-    wounds: [{ at: 1, text: 'Grounded until next Perch' }, { at: 3, text: 'Grounded until next Perch' }, { at: null, text: 'Discard Silver to avoid Swoop damage' }],
+    weaknessTrack: [{ hits: 1, text: 'Grounded until next Perch' }, { hits: 3, text: 'Grounded until next Perch' }, { hits: null, text: 'Discard Silver to avoid Swoop damage' }],
     abilities: [
       A('none', 'Perch', 'Persistent', 'Move to the rooftop nearest the player closest to the heirloom'),
       A('mental', 'Keen', '1-4', 'Area Attack (2 dice, R5). Only affects outdoor spaces'),
@@ -122,7 +124,7 @@ export const MONSTER_CARDS = [
     note: 'End of turn: Move (10) toward Lair. Ignores walls; can’t cross salt. Seized players are at Death’s Door. Carried to Lair = killed.',
     objective: 'Kill',
     weakness: ['salt', 'holy'], immune: [],
-    wounds: [{ at: 1, text: '−1 toughness and drop player' }, { at: 2, text: '−1 toughness and drop player' }, { at: 3, text: '−1 toughness and drop player' }],
+    weaknessTrack: [{ hits: 1, text: '−1 toughness and drop player' }, { hits: 2, text: '−1 toughness and drop player' }, { hits: 3, text: '−1 toughness and drop player' }],
     abilities: [
       A('physical', 'Abduct', '1-3', 'Pursue (10) and Seize player'),
       A('physical', 'Run Down', '4-5', 'Trample (die, 5)'),
@@ -136,7 +138,7 @@ export const MONSTER_CARDS = [
     note: 'Piercing attacks can damage Redcap, but can’t land the killing blow.',
     objective: 'Kill',
     weakness: ['iron', 'holy'], immune: [],
-    wounds: [{ at: 1, text: '−3 HP, +1 die' }, { at: 4, text: '−3 HP, +1 die' }, { at: 8, text: '−3 HP' }],
+    weaknessTrack: [{ hits: 1, text: '−3 HP, +1 die' }, { hits: 4, text: '−3 HP, +1 die' }, { hits: 8, text: '−3 HP' }],
     abilities: [
       A('physical', 'Chase', '1-3', 'Pursue (6) Attack (10)'),
       A('physical', 'Route', '4-6', 'Outflank (10) Attack (6)'),
@@ -149,7 +151,7 @@ export const MONSTER_CARDS = [
     note: 'Has no physical body. Discard salt items inside targeted buildings to trigger its weakness.',
     objective: 'Destroy Anchors (Lair + 4 POI, die [6])',
     weakness: ['salt', 'iron'], immune: [],
-    wounds: [{ at: 1, text: 'Interrupt this turn' }, { at: 2, text: 'Interrupt this turn' }, { at: 3, text: 'Interrupt this turn' }],
+    weaknessTrack: [{ hits: 1, text: 'Interrupt this turn' }, { hits: 2, text: 'Interrupt this turn' }, { hits: 3, text: 'Interrupt this turn' }],
     abilities: [
       A('mental', 'Torment', '1-3', 'Area Attack (die, nearest occupied building to Lair)'),
       A('physical', 'Heave', '4-6', 'Target (nearest player to Lair) and Pin (5)'),
@@ -162,7 +164,7 @@ export const MONSTER_CARDS = [
     note: 'If no occupied building is targeted, uses Infatuation (ignore die).',
     objective: 'Perform Ceremony ({3}, {7}, Lair → {9} + 3 ⌛)',
     weakness: ['salt', 'fire'], immune: ['iron'],
-    wounds: [{ at: 1, text: 'Trigger Regret' }, { at: 3, text: 'Trigger Regret' }, { at: 6, text: 'Trigger Regret, disable Wrath' }],
+    weaknessTrack: [{ hits: 1, text: 'Trigger Regret' }, { hits: 3, text: 'Trigger Regret' }, { hits: 6, text: 'Trigger Regret, disable Wrath' }],
     abilities: [
       A('none', 'Infatuation', '1-3', 'Target & appear inside (occupied building nearest {9}), Block (all doors)'),
       A('physical', 'Wrath', '4-5', 'Target (least injured player inside), Attack (3 dice)'),
@@ -176,7 +178,7 @@ export const MONSTER_CARDS = [
     note: 'Only damaged by the Blessed Cosor (Piercing die). Always targets the Cosor holder.',
     objective: 'Kill with the Blessed Cosor (Lair → {13} → {9} → Lair)',
     weakness: ['holy'], immune: [],
-    wounds: [{ at: null, text: 'Discard Holy to prevent Exhaust' }],
+    weaknessTrack: [{ hits: null, text: 'Discard Holy to prevent Exhaust' }],
     abilities: [
       A('spiritual', 'Drain', '1-3', 'Exhaust (defensive die) and Attack (die)'),
       A('spiritual', 'Charm', '4-5', 'Exhaust (movement die) and Attack (6)'),
@@ -193,7 +195,7 @@ export const MONSTER_CARDS = [
     note: 'Attacks target only NPCs. NPCs are Frail and can be Defended. On NPC death: Global Attack (die × ☠). No NPCs left: attacks are Global.',
     objective: 'Kill Nest (Lair)',
     weakness: ['fire', 'holy'], immune: ['crystal', 'salt', 'iron', 'silver'],
-    wounds: [{ at: 1, text: '−1 toughness' }, { at: 3, text: '−1 toughness' }, { at: 5, text: '−1 die' }],
+    weaknessTrack: [{ hits: 1, text: '−1 toughness' }, { hits: 3, text: '−1 toughness' }, { hits: 5, text: '−1 die' }],
     abilities: [
       A('spiritual', 'Hotel Victim', '1-2', 'Attack ({1}, die) and Exhaust (defensive die)'),
       A('spiritual', 'Bar Victim', '3-4', 'Attack ({5}, die) and Exhaust (defensive die)'),
@@ -210,9 +212,9 @@ export const MONSTER_CARDS = [
     note: 'Has no singular body. Attacks erupt from lit spaces. Dark spaces smother lit objects. All defensive dice are exhausted upon use.',
     objective: 'Light the Dark Room ({11} → Lair × 4)',
     weakness: ['fire', 'crystal'], immune: ['salt', 'holy', 'iron', 'silver'],
-    wounds: [{ at: null, text: 'Discard Fire & avoid 1 attack' }, { at: null, text: 'Discard Fire & keep candle lit' }, { at: null, text: 'Discard Crystal & no light for ⌛' }],
+    weaknessTrack: [{ hits: null, text: 'Discard Fire & avoid 1 attack' }, { hits: null, text: 'Discard Fire & keep candle lit' }, { hits: null, text: 'Discard Crystal & no light for ⌛' }],
     abilities: [
-      A('physical', 'Umbral Stab', 'Persistent', 'Attack (die) any player each time they enter a lit space'),
+      A('physical', 'Umbral Stab', 'Persistent', 'Attack (die) any player each time they enter a lit space', { darkness: true }),
       A('none', 'Suffocating Darkness', 'Persistent', 'A player with a lit candle who stops in the dark flips a coin. Tails: extinguish'),
     ],
     evidence: { attack: 'M', observations: ['CS', 'FW', 'US'], lair: 'UD' },

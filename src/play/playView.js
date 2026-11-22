@@ -13,6 +13,7 @@ import { __set_markerHidden, __set_markerUsed, markers, refreshMarkers, refreshP
 import { camera, cellToWorld, controls, scene, wake } from '../render/scene.js';
 import { lightLevels } from '../render/tileLook.js';
 import { onGameUpdate } from '../app/gameShell.js';
+import { EVENT_BY_ID } from '../game/cards/events.js';
 
 // Module state: assigned by init() below, in the same order as before the split.
 export let PIPS, choiceButtons, projTmp, gameConfig, play;
@@ -48,11 +49,12 @@ export function init() {
     onNamed: (e) => showCard({ kind: 'named', monster: e.monster, correct: e.correct }),
     onDamage: (e) => showCard({ kind: 'hurt', code: e.attack, e }),
     onIntent: () => renderIntent(),
-    onGameOver: () => showCard({ kind: 'over' }),
+    onGameOver: (e) => showCard({ kind: e?.won ? 'won' : 'over' }),
     onNpc: (e) => showCard({ kind: 'npc', e }),
     onExhaust: (e) => showCard({ kind: 'exhaust', e }),
     onCraft: (e) => { craftUI.recipe = null; showCard({ kind: 'craft', e }); },
     onCard: (e) => showCard({ kind: e.deck === 'events' ? 'event' : 'equipment', e }),
+    onEquip: (e) => showCard({ kind: 'equipUse', e }),
     onMonsterRevealed: (e) => showCard({ kind: 'monster', monster: e.monster, correct: e.correct }),
     // A monster strikes: a brief, soft flash at the screen edges, in the colour
     // of its damage type (red, blue or green).
@@ -228,9 +230,12 @@ export function renderClock() {
   const t = formatClock(play.clockMinutes());
   el.classList.toggle('midnight', play.midnight());
   const turns = play.state.cfg.turnsToMidnight;
-  el.innerHTML = r <= turns
+  // The clock stops at midnight; after it, the fight happens outside time.
+  const glob = play.session.state?.global ? EVENT_BY_ID[play.session.state.global.id] : null;
+  el.innerHTML = (r <= turns
     ? `${t}<span class="sep">·</span><span class="turn-word">Turn </span>${r}/${turns}`
-    : `${t}<span class="sep">·</span>${r === turns + 1 ? 'Midnight' : `Turn ${r}`}`;
+    : `${t}<span class="sep">·</span>Midnight`)
+    + (glob ? `<span class="sep">·</span><span class="glob" title="${glob.text.replace(/"/g, '&quot;')}">${glob.name}</span>` : '');
 }
 
 // Dice tray: tap rolled dice into movement slots, then Move.

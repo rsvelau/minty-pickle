@@ -30,6 +30,7 @@ import { cellLabel } from '../core/state.js';
 import { MONSTER_BY_ID } from './cards/monsters.js';
 import { declareIntent, executeIntent, setupVictims } from './monsterTurn.js';
 import { alive } from './combat.js';
+import { armMonster } from './equipmentPlay.js';
 
 // --- AI helpers ---------------------------------------------------------------
 
@@ -132,6 +133,7 @@ export function spawnMonsters(state, board, events, random, log) {
   const cell = def.spawn(ctx);
   if (cell < 0) return;
   const monster = { id: `m${state.monsters.length + 1}`, kind, pos: cell, prev: -1, revealed: true };
+  armMonster(monster); // health, toughness, weakness track (equipmentPlay.js)
   state.monsters.push(monster);
   log(state, `Something stirs at ${label(board, cell)}.`);
   events.push({ type: 'monsterSpawn', id: monster.id, kind: monster.kind, cell });
