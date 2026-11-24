@@ -39,20 +39,24 @@ Ready to play? flags them. Capping the size is what lets the whole board be in v
 | Forest (blocked) 60 × 60 | close-up | 60 (58) | 853k | 41 | +3,438k* | ≥ 1.9× |
 | Forest (blocked) 35 × 35 | whole board | 55 (43) | 1,281k | 233 | +1,180k | 1.4× |
 | Forest (blocked) 35 × 35 | close-up | 60 (59) | 682k | 41 | +904k | ≥ 2.0× |
+| Forest (blocked) 35 × 35, fewer shadow redraws | whole board | 54 (42) | 1,281k | 233 | +1,180k (0.5/s) | 1.4× |
+| Forest (blocked) 35 × 35, fewer shadow redraws | close-up | 60 (58) | 682k | 41 | +904k (0.5/s) | ≥ 1.9× |
 
 \* Before the shadow window: the same view's shadow redraw is now about 1.0M triangles (counted in the
 browser; the 35 × 35 close-up's +904k on the phone confirms it). The 60 × 60 rows predate the size cap;
 they're kept because they found the ceiling.
 
-**The 35 × 35 forest whole board** averages 55 fps (~18 ms, ~1.8×) but its slowest 10% is 43 fps (1.4×): the
-slow frames were the shadow safety refresh (every 250 ms, +1.18M triangles), which ran even when nothing on
-screen moved. It now runs every 2 s, or 4 a second only near a moving swing or merry-go-round, which should
-bring this board to ~1.8×. **To measure:** this board again.
+**The 35 × 35 forest whole board** averages 54–55 fps but its slowest 10% is 42–43 fps (1.4×). It isn't the
+shadows: cutting the shadow redraws from 4 to 0.5 a second changed nothing. The board costs ~18 ms a frame,
+just over the 16.7 ms a 60 Hz screen allows, so some frames miss their slot and wait for the next one (shown
+at 30 fps); the slowest 10% catch those. Hence the per-map budget of **1.1M**: a board that size draws in
+under ~16 ms and keeps its 60 Hz slot, which is 1.5× or better.
 
 What follows from it:
 
-- **About 12 ns per triangle** (3.4M triangles at ~42 ms a frame): ~80M triangles a second. 33 ms holds
-  ~2.7M triangles; with 1.5× headroom, **~1.5M triangles a frame** in view.
+- **About 12–14 ns per triangle** (3.4M triangles at ~42 ms; 1.28M at ~18 ms): 70–80M triangles a second.
+- **Keep a frame under ~16 ms**: past it, a 60 Hz screen shows some frames at 30 fps, which is what the
+  slowest 10% measures. That's **~1.2M triangles in view**.
 - **Draw calls are cheap on this phone**: 642 held 60 fps. Keep under ~650 until a test shows more is fine.
 - **Frame rate stops at 60** (the screen), so at 60 fps the stress test reports headroom as "at least".
   Its synced "frame cost" (waiting for the GPU each frame) errs high on this phone: it said 36 ms for a board
@@ -65,23 +69,23 @@ What follows from it:
 
 | | Limit |
 |---|---|
-| Triangles in view | ≤ 1.5M |
-| Triangles in a shadow redraw | ≤ 1.25M |
+| Triangles in view | ≤ 1.2M |
+| Triangles in a shadow redraw | ≤ 1.1M |
 | Draw calls | ≤ 650 |
 
 ### Per map: what the board draws, seen whole
 
-**≤ 1.25M triangles**: everything on the board (tiles, ground, walls, streets, props, buildings), not the
-forest ring. 1.25M plus the ring is the 1.5M frame budget. **Ready to play?** in the editor shows the board's
+**≤ 1.1M triangles**: everything on the board (tiles, ground, walls, streets, props, buildings), not the
+forest ring (seen whole, the fog hides most of it: ~60k more). A 1.22M board measured 1.4×; 1.1M keeps 1.5×. **Ready to play?** in the editor shows the board's
 count against it and warns when a map goes over.
 
 | Map | Board triangles |
 |---|---|
 | Hawthorn Bend (26 × 20) | 0.24M |
-| Blocked forest, all 35 × 35 | 1.22M (just inside) |
+| Blocked forest, all 35 × 35 | 1.22M (over: up to ~90% of a full-size map) |
 | Hospital ward bays, all 35 × 35 | 1.84M (over: fine in a building, not a whole map) |
 
-So a full-size map averages up to **~1,000 triangles a space**, and a map can mix a few heavy showpieces with
+So a full-size map averages up to **~900 triangles a space**, and a map can mix a few heavy showpieces with
 lighter ground. Zoomed out while something moves, the shadow redraw covers the whole board too: that frame
 can dip to around 30 fps for the moment it lasts. Far versions would fix that if it ever matters.
 
@@ -135,7 +139,7 @@ Simple props (crates, boxes) can stay as code-built geometry in `src/render/prop
 
 | Date | Asset | Triangles | Close-up headroom | Whole board headroom | Notes |
 |---|---|---|---|---|---|
-| 2026-11-24 | Forest (blocked), code-built | 872 per space | ≥ 2.0× (35 × 35) | 1.4× (35 × 35) | slowest frames are shadow safety refreshes |
+| 2026-11-24 | Forest (blocked), code-built | 872 per space | ≥ 1.9× (35 × 35) | 1.4× (35 × 35) | board 1.22M, over the 1.1M map budget when it fills a whole map |
 | 2026-11-24 | Hawthorn Bend (map) | 0.24M on the board | ≥ 1.9× | ≥ 1.9× | reference map |
 
 ## Later, if needed

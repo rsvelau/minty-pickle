@@ -11,8 +11,9 @@ export const VICTIM_BUILDINGS = 3;   // monsters like the Adze target objectives
 
 // Triangles the board itself may draw (everything on it, not the forest
 // ring): the whole board in view must still hold 30 fps with 1.5x headroom on
-// the reference phone. See docs/ASSET_BUDGET.md.
-export const MAP_TRIANGLE_BUDGET = 1_250_000;
+// the reference phone (a 1.22M-triangle board measured 1.4x on a Pixel 10a).
+// See docs/ASSET_BUDGET.md.
+export const MAP_TRIANGLE_BUDGET = 1_100_000;
 
 // `triangles`: what the board draws, when the caller has it rendered (the
 // editor does); adds a warning over MAP_TRIANGLE_BUDGET.

@@ -747,7 +747,7 @@ half-loaded, and a saved game pasted into Import is recognised and turned away.
 (4 or more, one per evidence card), Objective markers in 3 separate buildings for monsters that hunt
 townspeople, markers on blocked cells, and markers players can't reach from the start (doors, locks and
 keys counted), maps over 35 × 35, and (in the editor, where the board is drawn) the board's triangle count
-against the phone budget of 1.25M, warning when it's over. The future game will run the same check before
+against the phone budget of 1.1M, warning when it's over. The future game will run the same check before
 letting a custom map be played.
 
 **Saved games** (`src/core/saveFormat.js`, used by the game build to come) hold the rules state, which is
