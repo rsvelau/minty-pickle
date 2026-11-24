@@ -181,3 +181,10 @@ test('a Semi-Corporeal monster leaves the door alone when it will teleport later
   ev = t.round();
   assert.ok(ev.some((e) => e.type === 'doorBash'), 'no teleport coming: it bashes like a Corporeal one');
 });
+
+test('a one-way door stops a Corporeal monster from its closed side, and gets bashed', () => {
+  const s = hunt('werewolf', { doorType: 'oneWayDoor+' });   // opens only southward: out of the building
+  s.round();
+  assert.equal(s.monster.pos, s.g.index(6, 5), 'stuck outside');
+  assert.equal(s.state.doorHp[s.door], 6, 'bashed for 4');
+});

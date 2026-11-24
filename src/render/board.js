@@ -592,7 +592,9 @@ export function refreshPropsAndWalls() {
     const oneWay = type.startsWith('oneWayDoor');
     const sign = type.endsWith('-') ? -1 : 1;
     // An unlocked door is thrown wide open (further than a plain door).
-    const swing = unlockedDoor ? 1.45 : type === 'door' ? 1.2 : oneWay ? 0.5 * sign : 0;
+    // A one-way door a monster is bashing (from its closed side) is drawn shut.
+    const underAttack = bashed.has(k) && (type === 'lockedDoor' || oneWay);
+    const swing = unlockedDoor ? 1.45 : type === 'door' ? 1.2 : oneWay && !underAttack ? 0.5 * sign : 0;
     const leafH = Math.min(DOOR_H, H) * 0.98;
     const hingeAlong = -DOOR_W / 2;
     const hx = vertical ? cx : cx + hingeAlong;
@@ -646,7 +648,7 @@ export function refreshPropsAndWalls() {
       }
     }
     // Only a shut door shows it (an open or ajar one is never bashed).
-    if (bashed.has(k) && type === 'lockedDoor') damage(k, cx, cz, vertical, DOOR_W, 0, Math.min(DOOR_H, H), bashed.get(k));
+    if (underAttack) damage(k, cx, cz, vertical, DOOR_W, 0, Math.min(DOOR_H, H), bashed.get(k));
     if (!unlockedDoor && type !== 'lockedDoor' && !oneWay) {
       // Threshold plate across the opening so doors read from any angle.
       tmpMatrix.compose(
