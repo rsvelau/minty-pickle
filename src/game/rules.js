@@ -393,9 +393,22 @@ function applyActionNow(state, board, action) {
     case 'investigate': {
       // The answer to "Investigate?": yes draws an Obol; no runs on through.
       if (state.phase !== 'asking' || !state.ask) return fail('nothing to investigate');
-      const { i } = state.ask;
+      const { i, curious } = state.ask;
       state.ask = null;
-      if (action.yes) investigate(state, board, i, events);
+      if (curious) {
+        // Curious: another Obol at the same spot, for a Defense die.
+        if (action.yes) {
+          const n = state.defSlots.reduce((a, k) => (a < 0 || state.pool[k].v < state.pool[a].v ? k : a), -1);
+          if (n >= 0) {
+            state.defSlots.splice(state.defSlots.indexOf(n), 1);
+            state.pool[n].spent = true;
+            state.pool[n].usedFor = 'Curious';
+            syncDefense(state);
+            log(state, `${who(state)} is Curious: a Defense die (${state.pool[n].v}) for another look at ${label(board, i)}.`);
+            investigate(state, board, i, events, { again: true });
+          }
+        }
+      } else if (action.yes) investigate(state, board, i, events);
       else {
         log(state, `${who(state)} passes the investigation spot at ${label(board, i)}.`);
         state.stopAt = -1;
@@ -778,7 +791,10 @@ function investigate(state, board, i, events, { again = false } = {}) {
     log(state, card ? `${who(state)} found equipment: ${card.name}.` : 'The Equipment deck is empty.');
     if (card) events.push({ type: 'card', deck: 'equipment', id: card.id, seat: state.cur, cell: i });
   }
-  if (type === 'event') drawEventCard(state, board, pl, i, events);
+  if (type === 'event') {
+    drawEventCard(state, board, pl, i, events);
+    if (pl.mindset === 'curious') state.curiousAt = i;   // offered once the event is resolved (advance)
+  }
   events.push({ type: 'collect', seat: state.cur, cell: i, marker: 'investigation', text: type ? `${OBOLS[type].label} Obol` : 'Investigation', keyGroup: -1 });
 }
 
@@ -830,7 +846,15 @@ function advance(state, board, events) {
     if (state.pendingEvent) { state.phase = 'eventing'; state.options = []; return; }
     if (state.mystery?.pendingReveal) { state.phase = 'revealing'; state.options = []; return; }
     if (state.eventQueue?.length) { runQueue(state, board, eventCtx(state), events); if (state.pendingEvent || state.mystery?.pendingReveal || state.eventQueue.length) continue; }
-    if (state.endTurnNow) { state.endTurnNow = false; state.steps = 0; endTurn(state, board, events); return; }
+    if (state.endTurnNow) { state.curiousAt = -1; state.endTurnNow = false; state.steps = 0; endTurn(state, board, events); return; }
+    // Curious (Mindset): the investigation's Event is resolved; keep
+    // investigating the same spot for a Defense die?
+    if (state.curiousAt >= 0) {
+      const i = state.curiousAt;
+      state.curiousAt = -1;
+      const pl = curPlayer(state);
+      if (pl.mindset === 'curious' && !pl.dying && state.defSlots.length && state.bag.length) { state.ask = { i, curious: true }; continue; }
+    }
     if (state.steps <= 0) {
       state.stopAt = -1;
       state.stopReason = '';

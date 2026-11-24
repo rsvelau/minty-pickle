@@ -97,8 +97,13 @@ export function renderAsk() {
   if (!show) return;
   const cur = s.players[s.cur];
   const { x, y } = grid.coords(s.ask.i);
+  const curious = !!s.ask.curious;
+  $('#askTitle').textContent = curious ? 'Keep investigating?' : 'Investigate?';
+  const low = curious ? Math.min(...s.defSlots.map((n) => s.pool[n].v)) : 0;
   $('#askSub').innerHTML = `<b style="color:${cur.colour}">${cur.name}</b> at ${cellLabel(x, y)} · ` +
-    `${s.bag.length ? `draw an Obol (${s.bag.length} in the bag)` : 'the Obol bag is empty'}`;
+    (curious ? `Curious: another Obol here for your Defense ${low}` : '') +
+    (curious ? '' : `${s.bag.length ? `draw an Obol (${s.bag.length} in the bag)` : 'the Obol bag is empty'}`);
+  if (curious) { $('#askDefense').hidden = true; return; }
   // Last chance to brace before drawing: unused rolled dice and white dice
   // in reserve can go into Defense (an Attack Obol strikes at once).
   const free = s.pool.map((d, n) => ({ d, n })).filter(({ d, n }) => !d.spent && !s.slots.includes(n) && !s.defSlots.includes(n));

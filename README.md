@@ -80,7 +80,9 @@ Opportunities and Cursed Objects), the turn pauses until **the drawing character
 - **Mindsets**: Reckless and Mighty double your equipment damage (Mighty: a weapon breaks after one use);
   Reckless can't slot defense; Rushed doubles movement and counts defense dice at most 3; Meticulous can
   investigate a spot twice and counts movement dice at most 4; Protective lends your defense to a teammate in
-  Close range. Curious is played at the table.
+  Close range. Curious: once an Event drawn while investigating is resolved, "Keep investigating?" asks
+  (when you have a Defense die and the bag isn't empty); yes spends your lowest Defense die and draws another
+  Obol at the same spot (another Event asks again).
 - **After midnight** the clock has stopped, so the clock cards switch to their midnight versions (shown on the
   card and in Cards in the game): **Message Cypher** spends two rolled dice to trigger one of the monster's
   weakness effects; **Wooden Boards** ends your turn and boards up the doors (the monster can't use a door within
@@ -997,7 +999,7 @@ is an in-memory transport used by the tests and is a template for a real one.
 ## Backlog
 
 `docs/BACKLOG.md` lists every effect that is in the game as data but not played yet (✋ equipment skills,
-travel events, the Curious Mindset, monster ability keywords, some weakness effects, discard weaknesses,
+travel events, monster ability keywords, the weakness effects waiting on Perch and the candle,
 objectives other than Kill), grouped by mechanic with the open rules questions.
 
 ## Code layout

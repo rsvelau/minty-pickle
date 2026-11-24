@@ -239,3 +239,38 @@ test('after midnight: Police Patrol lures the monster; Hourglass cancels its act
   assert.ok(Number.isInteger(s.state.players[seat].hiddenRound));    // hidden for the round that just closed
   assert.notEqual(s.state.cur, seat);
 });
+
+test('Curious: after the event, keep investigating the same spot for a Defense die (lowest goes)', () => {
+  const s = setup();
+  const pl = s.state.players[0];
+  pl.mindset = 'curious';
+  s.state.decks.events.push('police-patrol');
+  s.state.bag = ['event', 'attack', 'evidence'];
+  assert.ok(s.act({ type: 'roll' }).ok);
+  s.state.pool = [{ kind: 'black', v: 1 }, { kind: 'black', v: 5 }, { kind: 'black', v: 2 }];
+  s.state.maxDefense = 2;
+  s.act({ type: 'slot', die: 1, to: 'defense' });
+  s.act({ type: 'slot', die: 2, to: 'defense' });
+  s.act({ type: 'slot', die: 0, to: 'move' });
+  s.act({ type: 'move' });
+  const spot = s.state.ask.i;
+  // Rig the bag: the event (drawn at random from two), then equipment.
+  s.state.bag = ['event', 'event'];
+  s.act({ type: 'investigate', yes: true });
+  assert.equal(s.state.phase, 'asking', 'asked again');
+  assert.ok(s.state.ask.curious);
+  assert.equal(s.state.ask.i, spot);
+  s.state.bag = ['equipment'];
+  s.state.decks.equipment ??= [];
+  assert.ok(s.act({ type: 'investigate', yes: true }).ok);
+  assert.deepEqual(pl.defense.map((d) => d.v), [5], 'the 2 was paid');
+  assert.equal(s.state.bag.length, 0, 'another Obol drawn');
+  assert.notEqual(s.state.phase, 'asking', 'not an event this time: no more asking');
+});
+
+test('Curious: no Defense die, no asking', () => {
+  const s = setup();
+  s.state.players[0].mindset = 'curious';
+  s.draw('police-patrol');
+  assert.notEqual(s.state.phase, 'asking');
+});

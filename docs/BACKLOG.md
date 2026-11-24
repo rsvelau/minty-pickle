@@ -46,10 +46,10 @@ Toss and Drink used mid-turn give back the slots and dice the injuries took (a l
   the mirror disappears, or you lose something else? Truck: can other players ride along? Is it
   reusable (1️⃣ says once)?
 
-## 6. Mindset
-- [ ] **Curious** — Can continue investigating after resolving any event at the cost of a defensive 🎲.
-- Question: "continue investigating" = draw another Obol at the same spot? And "a defensive die" = one
-  that's slotted in Defense (it's spent), or one exhausted for good?
+## ~~6. Mindset~~ — done (2026-11-24)
+Curious: after an Event drawn while investigating is resolved, the player is asked to keep investigating
+(only with a die in Defense and Obols in the bag); yes spends the lowest Defense die and draws another Obol
+at the same spot.
 
 ## 7. Monster abilities not played yet (logged as "not played yet")
 Keywords in the monster cards' abilities the monster turn doesn't do yet. Each monster's rules
@@ -103,6 +103,6 @@ need going through with the designer.
 ---
 
 ### Suggested order
-~~1~~ → ~~2~~ → ~~3~~ → ~~4~~ · ~~9 and 8~~ (Perch and the candle wait for the objective rework) (small, per monster) ·
-6 · 5 (new movement) · 7 and 10 together, one monster at a time.
+~~1~~ → ~~2~~ → ~~3~~ → ~~4~~ · ~~9 and 8~~ (Perch and the candle wait for the objective rework) ·
+~~6~~ · 5 (new movement) · 7 and 10 together, one monster at a time.
 
