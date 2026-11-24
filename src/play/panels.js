@@ -443,7 +443,7 @@ export function obolcraftHTML(pl) {
   const summary = `<div class="inv-summary">${OBOL_TYPES.map((t) =>
     `<span class="obol-count${counts[t] ? '' : ' zero'}">${obolHTML(t)}${OBOLS[t].label} ${counts[t]}</span>`).join('')}</div>`;
   const recipes = RECIPES.map((r) => {
-    const why = craftBlocked(s, pl, r);
+    const why = craftBlocked(play.session.state ?? s, pl, r); // the game state itself: it holds the decks
     // Which named colours are short, to dim them.
     const have = { ...counts };
     const cost = r.cost.map((c) => {

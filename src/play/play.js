@@ -1075,6 +1075,7 @@ export function createPlay({
     get disabledDice() { return g()?.disabledDice ?? 0; },
     get lit() { return !!g()?.lit; },
     get bag() { return g()?.bag ?? []; },
+    get decks() { return g()?.decks ?? null; }, // the card decks (Obolcraft's Draw an Equipment card reads them)
     get ask() { return g()?.ask ?? null; },
     get keys() { return g()?.keys ?? 0; },
     get turn() { return g()?.turn ?? 0; },
