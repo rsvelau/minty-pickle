@@ -107,7 +107,7 @@ export function renderPlay() {
     eventing: 'An event: make your choice.',
     over: 'Everyone is dead. The night wins. Press Restart to play again.',
     moving: s.fast ? `Fast-forward ⏩ <b>${s.steps}</b> left` : `Running… <b>${s.steps}</b> left (press and hold the board to fast-forward)`,
-    choosing: `${s.stopReason ? `Stopped at <b>${s.stopReason}</b>. ` : ''}Choose a direction: <b>${s.steps}</b> move${s.steps === 1 ? '' : 's'} left (${s.options.map((o) => o.name).join(', ')})`,
+    choosing: `${s.stopReason ? `Stopped at <b>${s.stopReason}</b>. ` : ''}Choose a direction: <b>${s.steps}</b> move${s.steps === 1 ? '' : 's'} left (${s.options.map((o) => o.name).join(', ')}). You can also roll and slot dice, use equipment or Obolcraft.`,
     done: `On <b>${here}</b>. Roll again.`,
   }[s.phase] ?? '');
   // The pawn's light: whatever lights its cell (at the start, the van's headlights).
@@ -151,7 +151,7 @@ export function renderPlay() {
     rolling: 'Rolling…',
     slotting: s.pool.some((d) => d.spent) ? 'Slot more, adjust defense, or end turn' : `Slot dice · move <b>${play.slotTotal()}</b>`,
     moving: s.fast ? `Fast-forward ⏩ <b>${s.steps}</b> left` : `Running… <b>${s.steps}</b> left · hold to fast-forward`,
-    choosing: `${s.stopReason ? `<b>${s.stopReason}</b> · ` : ''}Tap an arrow · <b>${s.steps}</b> left`,
+    choosing: `${s.stopReason ? `<b>${s.stopReason}</b> · ` : ''}Tap an arrow · <b>${s.steps}</b> left${play.slotTotal() ? ` +${play.slotTotal()}` : ''}`,
     asking: `Investigate? · <b>${s.steps}</b> left`,
     revealing: 'Evidence! Choose a card',
     eventing: 'An event: make your choice',
@@ -249,9 +249,18 @@ export function dieHTML(d, extra = '') {
 }
 export function renderTray() {
   const s = play.state;
-  const show = ui.tool === 'play' && (s.phase === 'slotting' || s.phase === 'rolling');
+  // Out of moves ('slotting') or stopped at a fork / every step in Tactical
+  // movement ('choosing'): the tray stays up so dice can be rolled and slotted.
+  const show = ui.tool === 'play' && ['slotting', 'choosing', 'rolling'].includes(s.phase);
+  const choosing = s.phase === 'choosing';
+  // Folded at a stop mid-move until Dice opens it; folds again after each step.
+  if (!choosing || s.pos !== trayOpenAt) trayOpen = false;
+  $('#playTray').classList.toggle('compact', choosing && !trayOpen);
+  $('#trayDice').hidden = !choosing;
+  $('#trayDice').textContent = trayOpen ? 'Dice ▾' : 'Dice ▴';
+  $('#trayDice').setAttribute('aria-expanded', String(trayOpen));
   $('#playTray').hidden = !show;
-  if (s.phase !== 'slotting') $('#endConfirm').hidden = true;
+  if (!['slotting', 'choosing'].includes(s.phase)) $('#endConfirm').hidden = true;
   if (!show) return;
   const rolling = s.phase === 'rolling';
   // While rolling, every die tumbles.
@@ -291,16 +300,25 @@ export function renderTray() {
   const moved = s.pool.some((d) => d.spent);
   $('#trayTotal').textContent = rolling ? '…' : play.slotTotal();
   $('#trayMove').disabled = rolling;
-  $('#trayMove').hidden = !play.slotTotal();
+  // At a fork the arrows move: dice slotted now join the move.
+  $('#trayMove').hidden = !play.slotTotal() || choosing;
   $('#trayMove').textContent = `Move ${play.slotTotal()}`;
   $('#trayEnd').disabled = rolling;
-  $('#trayEnd').textContent = moved || s.defSlots.length ? 'End turn' : 'Stay put & end turn';
+  $('#trayEnd').textContent = choosing ? 'Stop here & end turn' : moved || s.defSlots.length ? 'End turn' : 'Stay put & end turn';
   $('#trayHint').textContent = rolling ? 'Rolling…' : s.deathsDoor ? "Death's Door: one die only"
+    : choosing ? (play.slotTotal() ? `+${play.slotTotal()} joins your ${s.steps} move${s.steps === 1 ? '' : 's'}` : trayOpen ? 'Slotted Movement dice join the move' : `${s.steps} move${s.steps === 1 ? '' : 's'} left`)
     : trayTarget === 'defense' ? 'Defense lasts until your next turn'
       : moved ? 'Slot more dice, adjust defense, or end your turn'
       : (s.pool.some((d) => d.kind === 'white') ? 'Rolled white dice are discarded after this turn' : 'Tap dice to slot them');
 }
 export let trayTarget = 'move';
+// The tray opened at a stop (and where): it folds again once the pawn moves.
+let trayOpen = false, trayOpenAt = -1;
+export function toggleTrayOpen() {
+  trayOpen = !trayOpen;
+  trayOpenAt = play.state.pos;
+  renderTray();
+}
 
 // Power Outage (Global) darkens the board while it's in effect in the game.
 export function syncPowerOut() {

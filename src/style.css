@@ -1175,3 +1175,7 @@ body.stress-on #info { display: none !important; }
 .sp-dl dt { color: var(--muted); }
 .sp-dl dd { margin: 0; }
 .stress-panel .good { color: #7fe08a; } .stress-panel .ok { color: #e8c76a; } .stress-panel .bad { color: #ff8a7a; }
+
+/* At a stop mid-move the tray folds down to one line (so the board, the pawn
+   and every arrow stay in view); Dice opens it. */
+.play-tray.compact .tray-row:not(.tray-actions), .play-tray.compact .tray-target { display: none; }

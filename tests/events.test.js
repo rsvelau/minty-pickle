@@ -55,6 +55,7 @@ test('a Decision pauses for the drawing character; survivors are tallied; Police
   s.finish();
   const before = formatClock(clockMinutes(s.state));
   s.draw('police-patrol');                      // a survivor has died: ⏳⏳
+  s.finish();                                   // holding an Obol, the turn waits for End turn
   assert.equal(before, '11:05 PM');
   assert.equal(formatClock(clockMinutes(s.state)), '11:20 PM');
 });

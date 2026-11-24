@@ -88,6 +88,8 @@ export const SEATS = [
 //   markers stay hidden until midnight.
 // - Markers: `stopAtMarkers` stops the runner on every marker to choose a
 //   way on; `askInvestigate` asks "Investigate?" on Investigation spaces.
+// - movement: 'quick' runs the pawn on its own until a fork, a marker or the
+//   end of its moves; 'tactical' asks for a direction at every step.
 // - Obols: the bag investigators draw from, by type.
 // - monster: 'mystery' (a secret monster from `monsterPool`, found out through
 //   evidence; see mystery.js), 'stalker' (the test monster) or 'none'.
@@ -102,6 +104,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   turnsToMidnight: 12,
   stopAtMarkers: true,
   askInvestigate: true,
+  movement: 'quick',
   obols: Object.freeze({ attack: 7, event: 7, equipment: 7, evidence: 7 }),
   monster: 'mystery',
   monsterPool: 'all',
@@ -230,6 +233,12 @@ export function newGame(board, setup = {}) {
 }
 
 // --- actions ------------------------------------------------------------------------
+// Stopped mid-turn: out of moves ('slotting'), at a fork or marker, or at every
+// step in Tactical movement ('choosing'), or asked "Investigate?" ('asking').
+// At every stop the player can roll white dice, slot dice (Movement dice
+// slotted mid-move add to the move when a direction is picked), and use
+// equipment and Obolcraft.
+const STOPPED = ['slotting', 'choosing', 'asking'];
 // Every action: { type, seat? }. Returns { ok, error?, events }.
 export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective', 'event'];
 
@@ -280,9 +289,9 @@ export function applyAction(state, board, action) {
       // or take it out again (tap it where it is).
       const n = action.die | 0;
       const to = action.to === 'defense' ? 'defSlots' : 'slots';
-      const turnPhases = ['slotting', 'choosing', 'asking', 'revealing'];
+      const turnPhases = [...STOPPED, 'revealing'];
       if (!state.pool[n] || !turnPhases.includes(state.phase)) return fail('no such die');
-      if (to === 'slots' && state.phase !== 'slotting') return fail('finish moving first');
+      if (to === 'slots' && !STOPPED.includes(state.phase)) return fail('finish moving first');
       if (state.pool[n].spent) return fail('that die has been used to move');
       if (to === 'defSlots' && curPlayer(state).mindset === 'reckless' && state.defSlots.indexOf(n) < 0) return fail('Reckless: no defense slots (equipment defense bonuses still count)');
       const other = to === 'slots' ? 'defSlots' : 'slots';
@@ -299,8 +308,8 @@ export function applyAction(state, board, action) {
     case 'rollWhite': {
       // Take a white die out of reserve and roll it: usable this turn only.
       const pl = curPlayer(state);
-      // While slotting, or at the "Investigate?" prompt (last chance to brace).
-      if (!['slotting', 'asking'].includes(state.phase) || pl.white <= 0) return fail('no white dice');
+      // At any stop, the "Investigate?" prompt included (last chance to brace).
+      if (!STOPPED.includes(state.phase) || pl.white <= 0) return fail('no white dice');
       if (state.deathsDoor) return fail("at Death's Door: one die only");
       pl.white--;
       const v = d6(state);
@@ -317,25 +326,22 @@ export function applyAction(state, board, action) {
       // turn carries on afterwards: slot more dice, adjust defense, move
       // again, or end it. With nothing new slotted, this ends the turn.
       if (state.phase !== 'slotting') return fail('not slotting');
-      const fresh = state.slots.filter((n) => !state.pool[n].spent).map((n) => state.pool[n]);
-      if (!fresh.length) { endTurn(state, board, events); break; }
-      for (const d of fresh) d.spent = true;
-      const mind = curPlayer(state).mindset;
-      // Meticulous: movement dice count at most 4. Rushed / Favorable Wind: doubled.
-      let base = fresh.reduce((a, d) => a + (mind === 'meticulous' ? Math.min(4, d.v) : d.v), 0);
-      if (mind === 'rushed') base *= 2;
-      if (state.windDouble) base *= 2;
-      state.roll = base + (state.moveBonus ?? 0);
-      state.moveBonus = 0;
+      const fresh = commitFresh(state);
+      if (!fresh) { endTurn(state, board, events); break; }
+      state.roll = fresh.total;
       state.steps = state.roll;
       curPlayer(state).prev = -1;
-      log(state, `${who(state)} moves ${state.roll} (${fresh.map((d) => `${d.kind} ${d.v}`).join(' + ')}).`);
+      log(state, `${who(state)} moves ${state.roll} (${fresh.dice}).`);
       state.phase = 'moving';
       advance(state, board, events);
       break;
     }
     case 'end': {
-      if (state.phase !== 'slotting') return fail('finish moving first');
+      // Stopped with moves left, ending the turn gives them up.
+      if (!['slotting', 'choosing'].includes(state.phase)) return fail('finish moving first');
+      if (state.phase === 'choosing' && state.steps > 0) log(state, `${who(state)} stops with ${state.steps} move${state.steps === 1 ? '' : 's'} unused.`);
+      state.steps = 0;
+      state.options = [];
       endTurn(state, board, events);
       break;
     }
@@ -343,6 +349,13 @@ export function applyAction(state, board, action) {
       if (state.phase !== 'choosing') return fail('not choosing');
       const o = state.options.find((p) => p.i === action.cell);
       if (!o) return fail('not an option');
+      // Movement dice slotted while stopped join the move now.
+      const fresh = commitFresh(state);
+      if (fresh) {
+        state.steps += fresh.total;
+        state.roll += fresh.total;
+        log(state, `${who(state)} adds ${fresh.total} to the move (${fresh.dice}): ${state.steps} left.`);
+      }
       step(state, board, o, events);
       break;
     }
@@ -373,17 +386,19 @@ export function applyAction(state, board, action) {
       break;
     }
     case 'craft': {
-      // Obolcraft: on your own turn, before rolling or while slotting.
-      if (!['idle', 'slotting'].includes(state.phase)) return fail('finish moving first');
+      // Obolcraft: on your own turn, before rolling or at any stop.
+      if (!['idle', ...STOPPED].includes(state.phase)) return fail('finish moving first');
       const err = craft(state, curPlayer(state), action, { log, randInt }, events);
       if (err) return fail(err);
+      restop(state, board, events);
       break;
     }
     case 'use': {
       // Equipment: any time during your own turn.
-      if (!['idle', 'slotting'].includes(state.phase)) return fail('finish moving first');
+      if (!['idle', ...STOPPED].includes(state.phase)) return fail('finish moving first');
       const err = useEquipment(state, board, curPlayer(state), action, { log }, events);
       if (err) return fail(err);
+      restop(state, board, events);
       break;
     }
     case 'event': {
@@ -397,9 +412,10 @@ export function applyAction(state, board, action) {
     }
     case 'discard': {
       // Discard an item for a monster's ∞ weakness effect: any time on your turn.
-      if (!['idle', 'slotting'].includes(state.phase)) return fail('finish moving first');
+      if (!['idle', ...STOPPED].includes(state.phase)) return fail('finish moving first');
       const err = discardForWeakness(state, curPlayer(state), action, { log }, events);
       if (err) return fail(err);
+      restop(state, board, events);
       break;
     }
     case 'objective': {
@@ -463,9 +479,10 @@ function roadSides(state, board, x, y) {
   return mask || null;
 }
 
-// Cells the pawn can step to next (not back where it came from, unless
-// that's the only way).
-export function nextOptions(state, board) {
+// Cells the pawn can step to next. Running on, not back where it came from
+// (unless that's the only way); stopped (`back`), every reachable side,
+// doubling back included.
+export function nextOptions(state, board, { back = false } = {}) {
   const grid = board.grid;
   const pl = curPlayer(state);
   const { x, y } = grid.coords(pl.pos);
@@ -481,8 +498,45 @@ export function nextOptions(state, board) {
     if (cost !== Infinity && cost > state.steps) continue; // a Sinkhole needs 5 moves left
     all.push({ i, dx, dy, name });
   }
+  if (back) return all;
   const forward = all.filter((o) => o.i !== pl.prev);
   return forward.length ? forward : all;
+}
+
+// Movement dice slotted but not yet moved: spend them and say what they add.
+// Meticulous: each counts at most 4. Rushed / Favorable Wind: doubled. Any
+// equipment move bonus joins in.
+function commitFresh(state) {
+  const fresh = state.slots.filter((n) => !state.pool[n].spent).map((n) => state.pool[n]);
+  if (!fresh.length) return null;
+  for (const d of fresh) d.spent = true;
+  const mind = curPlayer(state).mindset;
+  let base = fresh.reduce((a, d) => a + (mind === 'meticulous' ? Math.min(4, d.v) : d.v), 0);
+  if (mind === 'rushed') base *= 2;
+  if (state.windDouble) base *= 2;
+  const total = base + (state.moveBonus ?? 0);
+  state.moveBonus = 0;
+  return { total, dice: fresh.map((d) => `${d.kind} ${d.v}`).join(' + ') };
+}
+
+// After equipment, Obolcraft or a discard at a fork: the pawn may have moved,
+// died or been told to stop, so look at the ways on again.
+function restop(state, board, events) {
+  if (state.phase !== 'choosing') return;
+  if (curPlayer(state).dead || state.endTurnNow || state.pendingEvent || state.mystery?.pendingReveal || state.ask) {
+    state.phase = 'moving';
+    advance(state, board, events);
+    return;
+  }
+  state.options = nextOptions(state, board, { back: true });
+  if (!state.options.length) { state.phase = 'moving'; advance(state, board, events); }
+}
+
+// Anything left to do once the moves run out? Then the turn waits for End
+// turn; otherwise it ends by itself.
+function canStillAct(state) {
+  const pl = curPlayer(state);
+  return unusedDice(state).length > 0 || pl.white > 0 || pl.inventory.equipment.length > 0 || pl.inventory.obolcraft.length > 0;
 }
 
 // Entering a cell: touching a marker collects / uses it (event 'collect'),
@@ -621,12 +675,13 @@ function advance(state, board, events) {
       state.stopAt = -1;
       state.stopReason = '';
       log(state, `${who(state)} stops on ${label(board, curPlayer(state).pos)}.`);
-      // Dice left to use (or white dice to roll)? The turn carries on.
-      if (unusedDice(state).length || curPlayer(state).white > 0) { state.phase = 'slotting'; state.options = []; return; }
+      // Dice, equipment or Obols left to use? The turn waits for End turn.
+      if (canStillAct(state)) { state.phase = 'slotting'; state.options = []; return; }
       endTurn(state, board, events);
       return;
     }
     const opts = nextOptions(state, board);
+    const tactical = state.config.movement === 'tactical';
     if (!opts.length) {
       log(state, `Stuck at ${label(board, curPlayer(state).pos)} with ${state.steps} move${state.steps === 1 ? '' : 's'} left.`);
       state.steps = 0;
@@ -635,10 +690,12 @@ function advance(state, board, events) {
     // Stop on every marker the pawn steps onto: always ask, even with one way on.
     const markerStop = state.stopAt === curPlayer(state).pos;
     state.stopAt = -1;
-    if (opts.length === 1 && !markerStop) { takeStep(state, board, opts[0], events); continue; }
+    // Quick movement runs on where there's only one way; Tactical asks at every step.
+    if (opts.length === 1 && !markerStop && !tactical) { takeStep(state, board, opts[0], events); continue; }
     if (!markerStop) state.stopReason = '';
+    // Stopped: every way is open, back the way it came included.
     state.phase = 'choosing';
-    state.options = opts;
+    state.options = nextOptions(state, board, { back: true });
     return;
   }
 }

@@ -170,6 +170,12 @@ function showNewGame() {
     <div class="seg" id="ngPlayers">${[1, 2, 3, 4].map((n) => `<button data-n="${n}" class="${gameConfig.players === n ? 'on' : ''}">${n}</button>`).join('')}</div>
     <h3 class="screen-sub">Monster</h3>
     <select id="ngMonster" class="screen-select">${monsterOptions}</select>
+    <h3 class="screen-sub">Movement</h3>
+    <div class="seg" id="ngMove">
+      <button data-move="quick" class="${gameConfig.movement === 'tactical' ? '' : 'on'}">Quick</button>
+      <button data-move="tactical" class="${gameConfig.movement === 'tactical' ? 'on' : ''}">Tactical</button>
+    </div>
+    <p class="screen-note" id="ngMoveNote"></p>
     <h3 class="screen-sub">Start</h3>
     <div class="seg" id="ngStart">
       <button data-start="standard" class="on">11 PM</button>
@@ -180,6 +186,14 @@ function showNewGame() {
     el.querySelector('#ngMonster').value = current;
     let players = gameConfig.players ?? 1;
     let startMode = 'standard';
+    let movement = gameConfig.movement === 'tactical' ? 'tactical' : 'quick';
+    const moveNote = () => { el.querySelector('#ngMoveNote').textContent = movement === 'tactical' ? 'Choose a direction at every step.' : 'Run on by yourself to the next fork or marker.'; };
+    moveNote();
+    el.querySelectorAll('#ngMove button').forEach((b) => b.addEventListener('click', () => {
+      movement = b.dataset.move;
+      el.querySelectorAll('#ngMove button').forEach((x) => x.classList.toggle('on', x === b));
+      moveNote();
+    }));
     let chosen = null;
     const recheck = () => {
       newGameChoice = el.querySelector('input[name="map"]:checked')?.value;
@@ -215,15 +229,16 @@ function showNewGame() {
     el.querySelector('#ngGo').addEventListener('click', () => {
       if (!chosen) return;
       const [kind, id] = el.querySelector('#ngMonster').value.split(':');
-      startGame({ map: chosen.file, name: chosen.name, players, startMode, monster: { kind, id } });
+      startGame({ map: chosen.file, name: chosen.name, players, startMode, movement, monster: { kind, id } });
     });
     recheck();
   });
 }
 
-function startGame({ map, name, players, startMode, monster }) {
+function startGame({ map, name, players, startMode, movement = 'quick', monster }) {
   // The choices also become the defaults for the play demo and next time.
   gameConfig.players = players;
+  gameConfig.movement = movement;
   gameConfig.monster = 'mystery'; // the real game: a secret monster found out through evidence
   if (monster.kind === 'pick') gameConfig.monsterPick = monster.id;
   else { gameConfig.monsterPick = 'random'; gameConfig.monsterPool = monster.id; }

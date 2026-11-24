@@ -439,7 +439,7 @@ export function obolcraftHTML(pl) {
   const obols = pl.inventory.obolcraft;
   const counts = obolCounts(pl);
   const mine = s.players[s.cur] === pl;
-  const canAct = mine && ['idle', 'slotting'].includes(s.phase);
+  const canAct = mine && ['idle', 'slotting', 'choosing', 'asking'].includes(s.phase); // before rolling or at any stop
   const summary = `<div class="inv-summary">${OBOL_TYPES.map((t) =>
     `<span class="obol-count${counts[t] ? '' : ' zero'}">${obolHTML(t)}${OBOLS[t].label} ${counts[t]}</span>`).join('')}</div>`;
   const recipes = RECIPES.map((r) => {
@@ -536,7 +536,7 @@ export function renderInventory() {
     wireObolcraft(body, pl);
     return;
   } else {
-    const mine = inv.player === s.cur && ['idle', 'slotting'].includes(s.phase);
+    const mine = inv.player === s.cur && ['idle', 'slotting', 'choosing', 'asking'].includes(s.phase); // before rolling or at any stop
     if (useUI.item !== null && mine && items[useUI.item]) { renderUseSheet(body, pl, items); return; }
     useUI.item = null;
     body.innerHTML = `<div class="eq-list">${items.map((e, i) => {

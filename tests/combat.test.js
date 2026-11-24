@@ -316,5 +316,8 @@ test('at the Investigate? prompt you can still brace: slot dice and roll white d
   assert.ok(act({ type: 'rollWhite' }).ok);
   assert.ok(act({ type: 'slot', die: 2, to: 'defense' }).ok);
   assert.equal(pl.defense.length, 2, 'defense is live before the draw');
-  assert.equal(act({ type: 'slot', die: 1, to: 'move' }).ok, false, 'no new movement mid-move');
+  // Stopped at the prompt, a die can go into Movement too: it joins the move
+  // when a direction is picked.
+  assert.ok(act({ type: 'slot', die: 1, to: 'defense' }).ok, 'take it back out of Defense');
+  assert.ok(act({ type: 'slot', die: 1, to: 'move' }).ok, 'movement can be slotted at a stop');
 });

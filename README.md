@@ -410,7 +410,7 @@ markers** in View hides them. Marker art lives in `src/render/markers.js`; the l
   finds nothing.
 - **Game settings** (the ⚙ button under the play buttons) adjust the mechanics: number of characters
   (1 to 4; 1 plays solo, and the clock moves on after each of your turns), starting black dice,
-  movement slots, slots when starting in light, the light level that counts as lit, minutes per turn, turns
+  movement slots, Quick or Tactical movement, slots when starting in light, the light level that counts as lit, minutes per turn, turns
   until midnight, stopping on every marker, asking before investigating, and the number of each Obol. They're
   saved on this device (`DEFAULT_CONFIG` in `src/play/play.js`), and changing them restarts a game in progress.
 - **Running and the camera.** Runners jog at ~3.2 m/s, flashlights held steady and sweeping slowly, (hold the board to fast-forward), and the camera
@@ -437,10 +437,20 @@ markers** in View hides them. Marker art lives in `src/render/markers.js`; the l
   building's doors for everyone.
 - The pawn starts on the **Start space** (paint one first).
 - **Roll black die** (or `Enter`) rolls a d6; the pawn then moves one cell per pip with a little hop.
-- It keeps going while there's only one way forward, and never doubles back unless it hits a dead end.
-  At a fork, and at the start of every move, it stops and puts big round arrow buttons on the cells it can
-  go to: tap or click one (a tap near one on the board works too), or use the **arrow keys** (relative to
-  the camera).
+- **Two movement modes** (chosen on the New game screen, or Game settings → Movement):
+  - **Quick** (the default): the pawn runs on by itself while there's only one way forward, and stops at a
+    fork, a marker, the start of every move, and when its moves run out.
+  - **Tactical**: it stops at **every step** and asks which way to go.
+- **Every stop is a stop.** Stopped anywhere (out of moves, at a fork or marker, at each step in Tactical, at
+  the Investigate? prompt), the player can roll white dice, slot dice into Movement or Defense, use equipment
+  and Obolcraft. Movement dice slotted mid-move join the move when a direction is picked ("+2 joins your 3
+  moves"). Stopped, **every reachable way is offered, back the way it came included**; only Quick movement's
+  running between stops keeps going forward. Big round arrow buttons sit on the cells it can go to: tap or
+  click one (a tap near one on the board works too), or use the **arrow keys** (relative to the camera).
+  At a stop mid-move the dice tray folds down to one line so the board and every arrow stay in view; **Dice**
+  opens it. **Stop here & end turn** gives up the moves left (it asks first).
+- **When the moves run out** the turn waits for **End turn** while there's anything left to use (dice, white
+  dice, equipment or Obols); with nothing left, it ends by itself.
 - **Follow streets** (on by default): on a street, the start space or a bridge, the pawn only goes where the
   road goes (two ways on a straight street, three at a T, and so on), plus through any door beside it.
 - **Phones:** a floating bar at the bottom holds the die, the status and a big **Roll** button, so the panel

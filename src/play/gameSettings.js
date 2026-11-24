@@ -9,7 +9,7 @@ import { setEdgeBrush } from '../editor/moveCheck.js';
 import { setOrbitMode, setShape, setView } from '../editor/toolbar.js';
 import { $, $$ } from '../app/dom.js';
 import { obolHTML } from './panels.js';
-import { gameConfig, play, saveConfig } from './playView.js';
+import { gameConfig, play, saveConfig, toggleTrayOpen } from './playView.js';
 import { setCamera } from '../render/scene.js';
 import { openDecks } from './deckBuilder.js';
 import { deckList } from '../game/decks.js';
@@ -28,6 +28,8 @@ export function init() {
     { key: 'startBlack', label: 'Starting black dice', note: 'Everyone; renew each turn', min: 1, max: 6 },
     { key: 'moveSlots', label: 'Movement slots', min: 1, max: 4 },
     { key: 'litSlots', label: 'Slots when starting in light', min: 1, max: 5 },
+    { key: 'movement', label: 'Movement', note: 'Quick: run on to the next fork or marker. Tactical: choose every step',
+      choice: [['quick', 'Quick'], ['tactical', 'Tactical']] },
     { key: 'litThreshold', label: 'Light that counts as lit', min: 0.1, max: 1, step: 0.1, fmt: (v) => `${Math.round(v * 100)}%` },
     { section: 'Clock' },
     { key: 'turnMinutes', label: 'Minutes per turn', min: 1, max: 15, fmt: (v) => `${v} min` },
@@ -60,6 +62,7 @@ export function init() {
   });
   $('#trayMove').addEventListener('click', () => play.confirmMove());
   $('#trayEnd').addEventListener('click', requestEndTurn);
+  $('#trayDice').addEventListener('click', toggleTrayOpen);
   $('#endNo').addEventListener('click', () => { $('#endConfirm').hidden = true; });
   $('#endYes').addEventListener('click', () => { $('#endConfirm').hidden = true; play.endTurn(); });
   $('#hudRoll').addEventListener('click', () => play.roll());
@@ -190,8 +193,12 @@ export function closeSettings() {
 // Ending the turn with rolled dice unused asks first.
 export function requestEndTurn() {
   const n = play.unusedCount();
-  if (!n) { play.endTurn(); return; }
-  $('#endSub').textContent = `You have ${n} rolled ${n === 1 ? 'die' : 'dice'} not slotted into Movement or Defense. Unused dice are lost.`;
+  const left = play.state.phase === 'choosing' ? play.state.steps : 0;
+  if (!n && !left) { play.endTurn(); return; }
+  $('#endSub').textContent = [
+    left ? `You have ${left} move${left === 1 ? '' : 's'} left; stopping here gives ${left === 1 ? 'it' : 'them'} up.` : '',
+    n ? `You have ${n} rolled ${n === 1 ? 'die' : 'dice'} not slotted into Movement or Defense. Unused dice are lost.` : '',
+  ].filter(Boolean).join(' ');
   $('#endConfirm').hidden = false;
 }
 // The panel's player buttons and Game settings share one setting.
