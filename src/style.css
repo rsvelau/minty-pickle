@@ -1146,7 +1146,7 @@ body.mode-title .stress-panel, body.mode-game .stress-panel { display: none !imp
 .sp-x { width: 36px; height: 36px; border-radius: 9px; border: 1px solid var(--line); background: rgba(255,255,255,0.05); color: var(--text); cursor: pointer; }
 .sp-field { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
 .sp-field select { min-height: 40px; border-radius: 9px; border: 1px solid var(--line); background: #0d1014; color: var(--text); padding: 0 8px; font-size: 14px; }
-.sp-sizes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0; }
+.sp-sizes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin: 8px 0; }
 .sp-sizes[hidden], .sp-check[hidden] { display: none; }
 .sp-sizes button, .sp-btns button {
   min-height: 42px; border-radius: 9px; border: 1px solid var(--line); background: rgba(255,255,255,0.05);

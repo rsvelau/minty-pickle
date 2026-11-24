@@ -4,14 +4,28 @@
 // Returns { ok, problems: [{ level: 'error'|'warning', code, text, cells: [index] }] }.
 // `ok` is false only when there are errors: the game can't start. Warnings
 // are things that make for a poor game (unreachable markers, too few spots).
-import { cellLabel } from './state.js';
+import { MAX_SIZE, cellLabel } from './state.js';
 
 export const EVIDENCE_CARDS = 4;     // 3 observations + the lair (src/game/mystery.js)
 export const VICTIM_BUILDINGS = 3;   // monsters like the Adze target objectives in 3 buildings
 
-export function checkMap(grid) {
+// Triangles the board itself may draw (everything on it, not the forest
+// ring): the whole board in view must still hold 30 fps with 1.5x headroom on
+// the reference phone. See docs/ASSET_BUDGET.md.
+export const MAP_TRIANGLE_BUDGET = 1_250_000;
+
+// `triangles`: what the board draws, when the caller has it rendered (the
+// editor does); adds a warning over MAP_TRIANGLE_BUDGET.
+export function checkMap(grid, { triangles = null } = {}) {
   const problems = [];
   const add = (level, code, text, cells = []) => problems.push({ level, code, text, cells });
+  if (grid.cols > MAX_SIZE || grid.rows > MAX_SIZE) {
+    add('warning', 'too-big', `This map is ${grid.cols} × ${grid.rows}; maps are meant to be at most ${MAX_SIZE} × ${MAX_SIZE}, so it may run slowly on phones. Shrink it under Board size.`);
+  }
+  if (triangles !== null && triangles > MAP_TRIANGLE_BUDGET) {
+    const k = (n) => `${(n / 1e6).toFixed(2)}M`;
+    add('warning', 'too-heavy', `The board draws ${k(triangles)} triangles, over the ${k(MAP_TRIANGLE_BUDGET)} budget: seen whole it may drop below 30 fps on phones. Use lighter tiles (blocked forest and ward bays are the heaviest) or a smaller board.`);
+  }
   const label = (i) => { const { x, y } = grid.coords(i); return cellLabel(x, y); };
   const list = (cells) => cells.slice(0, 6).map(label).join(', ') + (cells.length > 6 ? ` and ${cells.length - 6} more` : '');
 

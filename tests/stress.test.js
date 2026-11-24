@@ -37,3 +37,22 @@ test('premade buildings repeat as whole blocks', () => {
   const [w, h] = landmarkDims('diner', 2);
   assert.equal(g.landmarkBlocks('diner').length, Math.floor(20 / w) * Math.floor(20 / h));
 });
+
+test('maps are capped at 35 x 35, but older bigger maps still open and are flagged', async () => {
+  const { checkMap, MAP_TRIANGLE_BUDGET } = await import('../src/core/mapCheck.js');
+  const { MAX_LOAD_SIZE } = await import('../src/core/state.js');
+  assert.equal(MAX_SIZE, 35);
+  const g = new GridState(10, 10);
+  assert.equal(g.resize(50, 50), true);
+  assert.equal(g.cols, 35, 'the editor stops at 35');
+  const old = new GridState(4, 4);
+  old.load(old.parse({ cols: 50, rows: 48, cells: [] }));
+  assert.equal(old.cols, 50, 'a saved 50 x 48 map opens whole');
+  assert.ok(MAX_LOAD_SIZE >= 50);
+  assert.ok(checkMap(old).problems.some((p) => p.code === 'too-big' && p.level === 'warning'));
+  assert.ok(!checkMap(g).problems.some((p) => p.code === 'too-big'));
+  // The triangle budget is checked only when the caller knows the count.
+  assert.ok(!checkMap(g).problems.some((p) => p.code === 'too-heavy'));
+  assert.ok(!checkMap(g, { triangles: MAP_TRIANGLE_BUDGET }).problems.some((p) => p.code === 'too-heavy'));
+  assert.ok(checkMap(g, { triangles: MAP_TRIANGLE_BUDGET + 1 }).problems.some((p) => p.code === 'too-heavy' && p.level === 'warning'));
+});

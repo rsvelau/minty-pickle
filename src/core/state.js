@@ -4,10 +4,14 @@ export const COLS = 20;
 export const ROWS = 26;
 export const FORMAT_VERSION = 3;
 export const MIN_SIZE = 4;
-export const MAX_SIZE = 60;
-const clampSize = (n, fallback) => {
+// The editor makes boards up to MAX_SIZE a side: bigger maps cost too much on
+// phones (docs/ASSET_BUDGET.md). Maps saved before the limit (up to 60) still
+// open, so no one loses work; Ready to play? flags them.
+export const MAX_SIZE = 35;
+export const MAX_LOAD_SIZE = 60;
+const clampSize = (n, fallback, max = MAX_SIZE) => {
   const v = Math.round(Number(n));
-  return Number.isFinite(v) ? Math.min(MAX_SIZE, Math.max(MIN_SIZE, v)) : fallback;
+  return Number.isFinite(v) ? Math.min(max, Math.max(MIN_SIZE, v)) : fallback;
 };
 
 // Ready-made landmarks: blocked, fully dressed tiles. `footprint` [w, h]
@@ -1088,8 +1092,8 @@ export class GridState {
   // files (indoor: true/false) are converted to areas.
   parse(data) {
     if (!data || !Array.isArray(data.cells)) throw new Error('Not a grid file: missing "cells".');
-    const cols = clampSize(data.cols ?? COLS, COLS);
-    const rows = clampSize(data.rows ?? ROWS, ROWS);
+    const cols = clampSize(data.cols ?? COLS, COLS, MAX_LOAD_SIZE);
+    const rows = clampSize(data.rows ?? ROWS, ROWS, MAX_LOAD_SIZE);
     const cells = Array.from({ length: cols * rows }, defaultCell);
     data.cells.forEach((c, n) => {
       const x = Number.isInteger(c.x) ? c.x : n % cols;

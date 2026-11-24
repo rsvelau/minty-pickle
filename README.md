@@ -129,8 +129,9 @@ Saved games from older versions still load: `migrateState` in `src/game/rules.js
 equipment already held) and arms their monsters. Rules version 5.
 
 ## The board
-The board is a whole town: a 20 × 26 grid by default (columns **A–T**, rows **1–26**), resizable from 4 to 60
-cells per side. Every cell has an area (category + subcategory), light and movement; walls and doors sit on
+The board is a whole town: a 20 × 26 grid by default (columns **A–T**, rows **1–26**), resizable from 4 to 35
+cells per side (bigger maps cost too much on phones: see [`docs/ASSET_BUDGET.md`](docs/ASSET_BUDGET.md); maps
+saved bigger, up to 60, still open, and Ready to play? flags them). Every cell has an area (category + subcategory), light and movement; walls and doors sit on
 the edges between cells.
 
 | Attribute | Values | How it shows |
@@ -652,7 +653,7 @@ npm test           # headless rules tests (plain Node: no browser, no three.js)
   of 630k, and on a 60 × 60 forest about 0.8 million instead of 3.8 million.
 - **Asset budget**: what a tile, building or character may cost, measured on a Pixel 10a:
   [`docs/ASSET_BUDGET.md`](docs/ASSET_BUDGET.md).
-- **Stress test** (editor: File → Stress test). Fills a board (26 × 20, 40 × 40 or the largest, 60 × 60)
+- **Stress test** (editor: File → Stress test). Fills a board (26 × 20, or the largest, 35 × 35)
   with any tile, walkable or blocked, or any premade building, or takes the map as it is, then measures
   the whole board and a close-up, 6 s each: frames per second (average and the slowest 10%), triangles
   and draw calls per frame, the extra triangles in a shadow redraw, and the **frame cost**: for the last 2 s
@@ -743,7 +744,9 @@ half-loaded, and a saved game pasted into Import is recognised and turned away.
 (`src/core/mapCheck.js`): a Start space whose front cell is open (errors stop play), Investigation spots
 (4 or more, one per evidence card), Objective markers in 3 separate buildings for monsters that hunt
 townspeople, markers on blocked cells, and markers players can't reach from the start (doors, locks and
-keys counted). The future game will run the same check before letting a custom map be played.
+keys counted), maps over 35 × 35, and (in the editor, where the board is drawn) the board's triangle count
+against the phone budget of 1.25M, warning when it's over. The future game will run the same check before
+letting a custom map be played.
 
 **Saved games** (`src/core/saveFormat.js`, used by the game build to come) hold the rules state, which is
 plain JSON including the seeded random-number state, so a loaded game continues exactly as it would have,

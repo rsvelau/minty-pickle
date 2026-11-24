@@ -1,8 +1,8 @@
 # Asset budget
 
-What a 3D asset (a tile's props, a premade building, a character) may cost, so maps of any size stay
-playable on phones. The limits come from measurements, not guesses: re-measure and update this file when
-the renderer or the reference phone changes.
+What a 3D asset (a tile's props, a premade building, a character) may cost, so every map stays playable on
+phones. The limits come from measurements, not guesses: re-measure and update this file when the renderer,
+the map size limit or the reference phone changes.
 
 **Reference device:** Google Pixel 10a, in the Claude app (Android WebView, Chrome 157), screen 411 × 741 at
 1.5×, quality **Medium**, midnight effects on.
@@ -10,19 +10,22 @@ the renderer or the reference phone changes.
 ~22 ms), measured with automatic resolution off. The headroom covers weaker phones, heat over a long game, and
 what a real game adds (figures, dice, markers, panels). Automatic resolution is the safety net, not part of
 the budget.
+**Largest map: 35 × 35** (1,225 spaces). The editor stops there; maps saved bigger (up to 60) still open, and
+Ready to play? flags them. Capping the size is what lets the whole board be in view without far versions.
 
 ## How the renderer spends its time (why the budget looks like this)
 
-- **Culling chunks.** Heavy props are drawn in batches of 6 × 6 spaces; batches off screen aren't drawn. So
-  what costs is what is **in view**, not the whole map.
-- **No far versions yet.** Zoomed out, the whole board is in view. Until assets have simpler far versions
-  (planned, see below), a big map seen whole is the worst case.
+- **The whole board can be in view.** Zoomed out, everything is drawn. With maps capped at 35 × 35 that worst
+  case fits the frame budget, so the budget is set **per map** (what the whole board draws) and per asset
+  (what one tile may cost where it's used).
+- **Culling chunks.** Heavy props are drawn in batches of 6 × 6 spaces; batches off screen aren't drawn, so a
+  close-up costs a fraction of the whole board.
 - **Shadows on demand.** The shadow map is redrawn only while something moves (figures, dice, tiles easing)
-  or every 250 ms, never for camera moves. During a move it's redrawn every frame, so its cost still counts.
-- **Shadow window.** Shadows cover only the ground in view plus a margin, so a shadow redraw costs about as
-  much as the view (a bit more), not the whole board.
+  or every 250 ms, never for camera moves. During a move it's redrawn every frame, so its cost counts then.
+- **Shadow window.** Shadows cover only the ground in view plus a margin, so a shadow redraw costs about what
+  the view does; zoomed out, that's the whole board.
 - **Automatic resolution** lowers the pixel count when frames are slow. It helps with pixel-heavy work
-  (transparency, overdraw) but not with triangles or draw calls: those are what this budget limits.
+  (transparency, overdraw), not with triangles or draw calls: those are what this budget limits.
 
 ## Measurements (Pixel 10a, Medium, midnight)
 
@@ -33,8 +36,9 @@ the budget.
 | Forest (blocked) 60 × 60 | whole board | 24 (19) | 3,379k | 450 | +3,181k | 0.6× |
 | Forest (blocked) 60 × 60 | close-up | 60 (58) | 853k | 41 | +3,438k* | ≥ 1.9× |
 
-\* Before the shadow window. The same view's shadow redraw is now about 1.0M triangles (counted in the
-browser; re-measure on the phone).
+\* Before the shadow window: the same view's shadow redraw is now about 1.0M triangles (counted in the
+browser). The 60 × 60 rows predate the size cap; they're kept because they found the ceiling.
+**To measure:** Forest (blocked) at 35 × 35, which should land near the per-map budget.
 
 What follows from it:
 
@@ -44,44 +48,51 @@ What follows from it:
 - **Frame rate stops at 60** (the screen), so at 60 fps the stress test reports headroom as "at least".
   Its synced "frame cost" (waiting for the GPU each frame) errs high on this phone: it said 36 ms for a board
   running at 58 fps. Use it only as a worst case.
-- **A close-up takes in ~900–1,000 spaces** (the chunks along its edges, and towards the horizon), not the
-  ~200 a glance suggests.
+- **Fixed costs**: the forest ring round the town, ~250k triangles at Medium, less where the fog hides it.
 
 ## The budget
 
-### Per frame (in view, on the reference phone)
+### Per frame (on the reference phone)
 
 | | Limit |
 |---|---|
 | Triangles in view | ≤ 1.5M |
-| Triangles in a shadow redraw | ≤ 1M |
+| Triangles in a shadow redraw | ≤ 1.25M |
 | Draw calls | ≤ 650 |
 
-Fixed costs already in every view: the forest ring and ground (~150k triangles), walls, streets and
-landmarks on a town map like Hawthorn Bend (~100k).
+### Per map: what the board draws, seen whole
+
+**≤ 1.25M triangles**: everything on the board (tiles, ground, walls, streets, props, buildings), not the
+forest ring. 1.25M plus the ring is the 1.5M frame budget. **Ready to play?** in the editor shows the board's
+count against it and warns when a map goes over.
+
+| Map | Board triangles |
+|---|---|
+| Hawthorn Bend (26 × 20) | 0.24M |
+| Blocked forest, all 35 × 35 | 1.22M (just inside) |
+| Hospital ward bays, all 35 × 35 | 1.84M (over: fine in a building, not a whole map) |
+
+So a full-size map averages up to **~1,000 triangles a space**, and a map can mix a few heavy showpieces with
+lighter ground. Zoomed out while something moves, the shadow redraw covers the whole board too: that frame
+can dip to around 30 fps for the moment it lasts. Far versions would fix that if it ever matters.
 
 ### Per asset
 
-| Asset | Near version | Far version (when LOD exists) | Shadow-casting part |
-|---|---|---|---|
-| Tile you can paint anywhere | ≤ 1,500 triangles per space | ≤ 300 per space | ≤ half its triangles |
-| Premade building | ≤ 2,000 per space of footprint | ≤ 300 per space of footprint | ≤ half |
-| Investigator | ≤ 2,500, one material | – | a ~500-triangle stand-in or the body only |
-| Monster | ≤ 6,000, ≤ ~30 bones, one material | – | a ~500-triangle stand-in or the body only |
+| Asset | Limit | Shadow-casting part |
+|---|---|---|
+| Tile you can paint anywhere | ≤ 2,000 triangles per space | ≤ half its triangles |
+| Premade building | ≤ 2,500 per space of footprint | ≤ half |
+| Investigator | ≤ 2,500, one material | a ~500-triangle stand-in, or the body only |
+| Monster | ≤ 6,000, ≤ ~30 bones, one material | a ~500-triangle stand-in, or the body only |
 
-Why these numbers: a close-up sees up to ~1,000 spaces, and ~1.5M triangles minus ~250k of fixed costs over
-1,000 spaces is ~1,250 a space if the same asset filled the view; real maps mix heavy and light tiles, so 1,500
-leaves room. A far version at 300 a space keeps a 60 × 60 board (3,600 spaces) at ~1.1M seen whole. Figures
-move, so their shadows are redrawn every frame while they do: keep the shadow-casting part small.
+Why these numbers: 2,000 a space is what one tile filling a close-up can cost (a close-up takes in a few
+hundred to ~1,000 spaces), and maps mix heavy and light tiles, so the per-map limit is what really binds.
+Buildings come few to a map, so they may be denser. Figures move, so their shadows are redrawn every frame
+while they do: keep the shadow-casting part small.
 
-For comparison (measured in the browser, per space): a blocked hospital ward bay 1,384 (just inside); a
-blocked forest space 872 (nine firs at 88 plus a shrub); a blocked cemetery 452; a cluttered living room
-(blocked carpet) 168; a church pew 120; a walkable hospital floor 69 on average (most are empty).
-
-### Per map (until far versions exist)
-
-The whole map's props should total **≤ 1.5M triangles**, so the worst case (the whole board in view)
-still fits. Hawthorn Bend is at ~0.6M. *(Planned: the Ready to play? check adds this up and warns.)*
+For comparison (measured in the browser, per space): a blocked hospital ward bay 1,384; a blocked forest
+space 872 (nine firs at 88 plus a shrub); a blocked cemetery 452; a cluttered living room (blocked carpet)
+168; a church pew 120; a walkable hospital floor 69 on average (most are empty).
 
 ## Rules for every asset
 
@@ -101,24 +112,22 @@ Simple props (crates, boxes) can stay as code-built geometry in `src/render/prop
 
 ## Checking an asset
 
-1. **In Blender**: report the near and far triangle counts, materials, the shadow-casting share and the file
-   size. Over budget: simplify before exporting.
-2. **In the game**: editor → File → **Stress test** → the asset, **60 × 60**, Medium, midnight on. Run it on the
+1. **In Blender**: report the triangle count, materials, the shadow-casting share and the file size. Over
+   budget: simplify before exporting.
+2. **In the game**: editor → File → **Stress test** → the asset, **35 × 35**, Medium, midnight on. Run it on the
    reference phone and **Copy results**.
-3. **Pass**: the close-up keeps **≥ 1.5× headroom** in the slowest 10% of frames. Once far versions exist, the
-   whole board must too.
+3. **Pass**: the close-up keeps **≥ 1.5× headroom** in the slowest 10% of frames. The whole board should too if
+   the asset is one a map could be covered in (ground, forest, floors); a building only has to fit its map.
 4. **Log it** below, with the date.
 
 ## Asset log
 
-| Date | Asset | Near / far triangles | Close-up headroom | Whole board headroom | Notes |
+| Date | Asset | Triangles | Close-up headroom | Whole board headroom | Notes |
 |---|---|---|---|---|---|
-| 2026-11-24 | Forest (blocked), code-built | ~870 per space / – | ≥ 1.9× | 0.6× (24 fps) | the heaviest tile today; whole board needs LOD |
-| 2026-11-24 | Hawthorn Bend (map) | ~0.6M total | ≥ 1.9× | ≥ 1.9× | reference map |
+| 2026-11-24 | Forest (blocked), code-built | 872 per space | ≥ 1.9× (60 × 60) | 0.6× at 60 × 60 | re-measure at 35 × 35 |
+| 2026-11-24 | Hawthorn Bend (map) | 0.24M on the board | ≥ 1.9× | ≥ 1.9× | reference map |
 
-## Still to build
+## Later, if needed
 
-- **Far versions (LOD)**: swap each asset for its far version when its chunk is far from the camera or the
-  view is zoomed out. Needed before big maps can be seen whole at 30 fps.
-- **Map budget check** in Ready to play?: add up the map's triangles; warn over 1.5M.
-- **Re-measure** the shadow redraw on the phone now the shadow window is in.
+- **Far versions (LOD)**: simpler stand-ins for far chunks. No longer needed to fit the budget at 35 × 35;
+  worth it if models get richer, or to keep the zoomed-out view smooth while things move.

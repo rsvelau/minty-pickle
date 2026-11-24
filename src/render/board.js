@@ -649,3 +649,18 @@ export function visibleTop(i) {
   if (c.area === 'water' && water.mesh.visible) return WATER_Y;
   return heights[i];
 }
+
+// Triangles the board draws with everything in view (instances counted, the
+// forest ring and figures left out): what Ready to play? holds against the
+// map budget.
+export function boardTriangles() {
+  let tris = 0;
+  boardGroup.traverse((o) => {
+    if (!o.isMesh || !o.visible) return;
+    for (let p = o.parent; p; p = p.parent) if (!p.visible) return;
+    const g = o.geometry;
+    const per = (g.index ? g.index.count : g.attributes.position.count) / 3;
+    tris += per * (o.isInstancedMesh ? o.count : 1);
+  });
+  return Math.round(tris);
+}

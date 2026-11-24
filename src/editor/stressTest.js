@@ -1,7 +1,7 @@
 // Editor → File → Stress test: how heavy is a tile, a premade building, or
 // this map, on this device?
 //
-// Fills a board (up to the largest, 60 x 60) with one subject, or takes the
+// Fills a board (up to the largest, 35 x 35) with one subject, or takes the
 // map as it is, then measures two views for a few seconds each at full frame
 // rate: the whole board (the most there can ever be on screen) and a close-up
 // (what play usually looks like). Reports frames per second (average and the
@@ -23,12 +23,12 @@ import { autoRes, frameLog, setDreadOverride } from '../app/loop.js';
 import { __set_camTween, camera, controls, qualityName, renderer, resScale, setCamera, setResScale, wake } from '../render/scene.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const SIZES = [[26, 20, 'Hawthorn Bend size'], [40, 40, ''], [MAX_SIZE, MAX_SIZE, 'largest']];
+const SIZES = [[26, 20, 'Hawthorn Bend size'], [MAX_SIZE, MAX_SIZE, 'largest']];
 const SETTLE_MS = 1500;   // shaders compile, the camera settles
 const MEASURE_MS = 4000;  // per view
 const SYNC_MS = 2000;     // per view, waiting for the GPU every frame
 
-let opts = { subject: 'map', size: 2, midnight: true, rooms: true };
+let opts = { subject: 'map', size: 1, midnight: true, rooms: true };
 let borrowed = false;
 let running = false;
 let last = null; // the last results

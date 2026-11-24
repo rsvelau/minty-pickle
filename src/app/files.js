@@ -8,7 +8,9 @@ import { $ } from './dom.js';
 import { camera, renderer, scene } from '../render/scene.js';
 import { hoverBox } from '../render/tileLook.js';
 import { readMap } from '../core/mapFormat.js';
-import { checkMap } from '../core/mapCheck.js';
+import { MAP_TRIANGLE_BUDGET, checkMap } from '../core/mapCheck.js';
+import { MAX_SIZE } from '../core/state.js';
+import { boardTriangles } from '../render/board.js';
 
 // Module state: assigned by init() below, in the same order as before the split.
 export let dlg, claudeDownloads;
@@ -149,7 +151,8 @@ export const stamp = () => new Date().toISOString().slice(0, 16).replace(/[:T]/g
 
 // "Ready to play?": what the game needs from this map (src/core/mapCheck.js).
 export function showMapCheck() {
-  const { ok, problems } = checkMap(grid);
+  const triangles = boardTriangles();
+  const { ok, problems } = checkMap(grid, { triangles });
   const errors = problems.filter((p) => p.level === 'error');
   const warnings = problems.filter((p) => p.level === 'warning');
   const text = !problems.length ? 'Yes: this map has everything the game needs.'
@@ -158,7 +161,8 @@ export function showMapCheck() {
   openDialog({
     title: 'Ready to play?',
     text,
-    area: problems.length ? [...errors.map((p) => `✕  ${p.text}`), ...warnings.map((p) => `!  ${p.text}`)].join('\n\n') : null,
+    area: [...errors.map((p) => `✕  ${p.text}`), ...warnings.map((p) => `!  ${p.text}`),
+      `Board: ${(triangles / 1e6).toFixed(2)}M of ${(MAP_TRIANGLE_BUDGET / 1e6).toFixed(2)}M triangles (phone budget), ${grid.cols} × ${grid.rows} of ${MAX_SIZE} × ${MAX_SIZE}.`].join('\n\n'),
   });
 }
 
