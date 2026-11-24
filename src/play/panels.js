@@ -590,7 +590,10 @@ function renderUseSheet(body, pl, items) {
   const values = useUI.dice.map((n) => s.pool[n]?.v ?? 0);
   const mon = fx.target === 'monster' ? play.session.state.monsters.find((m) => m.id === (useUI.target?.monster ?? targets[0]?.monster)) : null;
   const reqOk = useUI.dice.length === a.dice && checkRequirement(a.req, values, { targetDie: mon ? actionRoll(mon) : null });
-  const needTarget = (fx.target === 'monster' || fx.target === 'ally') && targets.length > 1;
+  const targeted = fx.target === 'monster' || fx.target === 'ally' || !!fx.door;
+  // A target's id and what the rules expect for it.
+  const tid = (t) => t.monster ?? t.seat ?? t.edge;
+  const tpay = (t) => (t.monster ? { monster: t.monster } : t.edge ? { edge: t.edge } : { seat: t.seat });
   const dieChip = (d, on, attr) => `<button type="button" class="use-die${on ? ' on' : ''}" ${attr}="${d.n}">${d.v}<small>${d.kind === 'white' ? 'white' : ''}</small></button>`;
   body.innerHTML = `<div class="use-sheet">
     <button type="button" class="screen-back use-back">‹ Equipment</button>
@@ -601,11 +604,11 @@ function renderUseSheet(body, pl, items) {
     ${a.obols ? `<p class="use-label">Costs ${a.obols} Obol${a.obols === 1 ? '' : 's'} (any colour): you have ${pl.inventory.obolcraft.length}.</p>` : ''}
     ${fx.raise ? `<p class="use-label">Raise ${fx.raise === 1 ? 'one other die' : `${fx.raise} other dice`} to ${fx.to}</p>
       <div class="use-dice">${free.filter((d) => !useUI.dice.includes(d.n)).map((d) => dieChip(d, useUI.raise.includes(d.n), 'data-raise')).join('')}</div>` : ''}
-    ${(fx.target === 'monster' || fx.target === 'ally') ? `<p class="use-label">Target</p>
-      <div class="use-targets">${targets.map((t) => `<button type="button" class="${(useUI.target ? (t.monster ?? t.seat) === (useUI.target.monster ?? useUI.target.seat) : t === targets[0]) ? 'on' : ''}" data-target='${JSON.stringify(t.monster ? { monster: t.monster } : { seat: t.seat })}'>${esc(t.name)}</button>`).join('') || `<span class="inv-empty">${fx.target === 'monster' ? `No monster in ${RANGE_LABEL[a.range]} range.` : 'No one in range.'}</span>`}</div>` : ''}
+    ${targeted ? `<p class="use-label">${fx.door ? 'Door' : 'Target'}</p>
+      <div class="use-targets">${targets.map((t) => `<button type="button" class="${(useUI.target ? tid(t) === (useUI.target.monster ?? useUI.target.seat ?? useUI.target.edge) : t === targets[0]) ? 'on' : ''}" data-target='${JSON.stringify(tpay(t))}'>${esc(t.name)}</button>`).join('') || `<span class="inv-empty">${fx.door ? (fx.door === 'breach' ? 'No door next to you to breach.' : 'No door next to you to shut.') : fx.target === 'monster' ? `No monster in ${RANGE_LABEL[a.range]} range.` : 'No one in range.'}</span>`}</div>` : ''}
     ${fx.manual ? '<p class="use-label">✋ Paid for and logged here; resolve its effect at the table.</p>' : ''}
     <p class="use-status ${reqOk ? 'ok' : ''}">${useUI.error ? esc(useUI.error) : a.dice ? (reqOk ? '✓ Ready' : useUI.dice.length === a.dice ? '✕ These dice don’t meet the requirement' : '') : ''}</p>
-    <button type="button" class="use-go" ${(a.dice && !reqOk) || ((fx.target === 'monster' || fx.target === 'ally') && !targets.length) || (needTarget && false) ? 'disabled' : ''}>Use ${esc(a.name)}</button>
+    <button type="button" class="use-go" ${(a.dice && !reqOk) || (targeted && !targets.length) ? 'disabled' : ''}>Use ${esc(a.name)}</button>
   </div>`;
   body.querySelector('.use-back').onclick = () => { useUI.item = null; renderInventory(); };
   body.querySelectorAll('[data-die]').forEach((b) => { b.onclick = () => {
@@ -621,7 +624,7 @@ function renderUseSheet(body, pl, items) {
   }; });
   body.querySelectorAll('[data-target]').forEach((b) => { b.onclick = () => { useUI.target = JSON.parse(b.dataset.target); renderInventory(); }; });
   body.querySelector('.use-go').onclick = () => {
-    const r = play.useEquipment({ item: useUI.item, ability: useUI.ability, dice: useUI.dice, target: useUI.target ?? (targets[0] ? (targets[0].monster ? { monster: targets[0].monster } : { seat: targets[0].seat }) : null), raise: useUI.raise });
+    const r = play.useEquipment({ item: useUI.item, ability: useUI.ability, dice: useUI.dice, target: useUI.target ?? (targets[0] ? tpay(targets[0]) : null), raise: useUI.raise });
     if (!r.ok) { useUI.error = r.error ? r.error[0].toUpperCase() + r.error.slice(1) + '.' : 'That can’t be used now.'; renderInventory(); return; }
     useUI.item = null;
     closeInventory();

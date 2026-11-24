@@ -28,6 +28,7 @@ import { applyDamage, alive } from './combat.js';
 import { triggerWeakness } from './equipmentPlay.js';
 import { exhaust } from './monsterTurn.js';
 import { cellRange } from './cards/injuries.js';
+import { blockDoor } from './doors.js';
 
 export const PORTRAIT_CURSE = 'portrait-curse'; // shuffled in by Haunted Portrait
 
@@ -139,8 +140,8 @@ function runEvent(state, board, id, choice, cell, ctx, events, action = {}) {
   if (pastMidnight(state) && card.afterMidnight && afterMidnight(state, board, id, choice, cell, pl, ctx, events)) return;
   switch (id) {
     case 'roof-collapse': {
-      const k = nearestDoor(board, cell);
-      if (k) { (state.doors ??= {})[k] = 'blocked'; ctx.log(state, `${src}: the nearest door is blocked.`); events.push({ type: 'doors' }); }
+      const k = nearestDoor(board, cell, state);
+      if (k) { blockDoor(state, k); ctx.log(state, `${src}: the nearest door is blocked.`); events.push({ type: 'doors' }); }
       if (choice === 'pass' && k) {
         hit(state, board, pl, 'P', ctx, events, src);
         state.doorPass = { edge: k, seat: pl.seat, turn: state.turn };
@@ -228,8 +229,8 @@ function runEvent(state, board, id, choice, cell, ctx, events, action = {}) {
       break;
     }
     case 'nailed-shut': {
-      const doors = buildingDoors(board, nearestIndoor(board, cell));
-      for (const k of doors) (state.doors ??= {})[k] = 'blocked';
+      // A breached doorway has no door left to nail.
+      const doors = buildingDoors(board, nearestIndoor(board, cell)).filter((k) => blockDoor(state, k));
       ctx.log(state, `${src}: ${doors.length} door${doors.length === 1 ? '' : 's'} in the building ${doors.length === 1 ? 'is' : 'are'} blocked.`);
       events.push({ type: 'doors' });
       break;
@@ -302,8 +303,9 @@ export function doorOverride(state) {
   const pass = state.doorPass?.turn === state.turn && state.doorPass.seat === state.cur ? state.doorPass.edge : null;
   if (!Object.keys(doors).length && !lock && !state.allDoorsOpen && !pass) return undefined;
   return (k, t) => {
-    if (!t || t === 'wall' || t === 'window') return t;
+    if (!t || t === 'wall' || t === 'window' || t === 'boardedWindow') return t;
     if (k === pass) return 'door';
+    if (doors[k] === 'breached') return 'door';   // an open doorway for good, Lockdown or not
     if (doors[k] === 'blocked') return 'wall';
     if (state.allDoorsOpen || doors[k] === 'open') return 'door';
     if (lock) return 'lockedDoor';
@@ -423,12 +425,13 @@ function exposeSpots(state, board, pl, n, ctx) {
     return { cell, type, label: ctx.label(board, cell) };
   });
 }
-function nearestDoor(board, from) {
+function nearestDoor(board, from, state) {
   const g = board.grid;
   const a = g.coords(from);
   let best = null, bd = Infinity;
   for (const [k, t] of g.edges) {
     if (!(t === 'door' || t === 'lockedDoor' || t.startsWith('oneWayDoor'))) continue;
+    if (state?.doors?.[k] === 'breached') continue; // nothing left to block
     const [o, x, y] = [k[0], ...k.slice(1).split(',').map(Number)];
     const cx = o === 'v' ? x - 0.5 : x, cy = o === 'h' ? y - 0.5 : y;
     const d = Math.hypot(cx - a.x, cy - a.y);

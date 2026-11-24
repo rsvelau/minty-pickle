@@ -115,7 +115,14 @@ teammates in your space for heals like the Medical Kit). Obol costs (◉) take a
   (slot a 6, block a 3, and a 4 then hits the 3 that's left), until your next turn. Defending a townsperson
   wears it down the same way. The dice tray and the Investigate? prompt show what's left ("3/6").
 - Doubling (Bless) applies before toughness.
-- Skills marked ✋ (doors, Salt Circle, Distract, Rally, Spiritual Backlash, Wrathful Penance, Weeping
+- **Doors** (Breach: Dragon's Breath Shotgun, Fireman's Axe, Crowbar; Nail Shut: Cut Spike; Lock: Iron Chain,
+  Heavy Silver Chain): pick a door on a side of your space in the Use sheet. **Breach** smashes any door in
+  (plain, locked, one-way, boarded, nailed or chained): an open doorway for good, for everyone; the leaf lies
+  on the floor inside. **Nail Shut** and **Lock** work the same: the door is boarded over, a wall to everyone,
+  the monster included, until someone Breaches it; the spike and the chain are left on the door (the card is
+  lost). Doors the Nailed Shut and Roof Collapse events block also stop the monster now, and are drawn boarded.
+  A breached doorway can't be shut again (Lockdown and Nailed Shut pass it by). `src/game/doors.js`.
+- Skills marked ✋ (Salt Circle, Distract, Rally, Spiritual Backlash, Wrathful Penance, Weeping
   Barrier, Sacrifice, Camouflage, Brace, Lucky, Toss, Drink, Lunge) are paid for and logged, and resolved at the
   table for now.
 

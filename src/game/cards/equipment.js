@@ -16,7 +16,9 @@
 //           'breaks' 🔗: the card is discarded after this skill is used (out of ammo, snapped)
 //   text    the effect (reworded only where the designer clarified it)
 //   fx      what the game plays (cards/../equipmentPlay.js); `manual` = shown and paid
-//           for, but resolved at the table for now
+//           for, but resolved at the table for now. `door`: 'breach' destroys an
+//           adjacent door (an open doorway for good), 'block' nails or chains it
+//           shut (a wall to everyone, monsters too, until breached): game/doors.js
 //
 // Damage: 'die' = the slotted die, 'sum' = the slotted dice added, or a number.
 // It is reduced by the monster's toughness (unless ignoreToughness) and the rest
@@ -46,11 +48,11 @@ export const EQUIPMENT_CARDS = [
   { id: 'dragons-breath-shotgun', name: 'Dragon’s Breath Shotgun', abilities: [
     A('close', 'fire', 'Incendiary Shot', 2, '8+', 'Deal 6 damage, ignore toughness.', HIT(6, { ignoreToughness: true }), 'once'),
     A('close', null, 'Stock Strike', 1, '2', 'The next attack against the target this turn deals 3 more damage', { target: 'monster', bonusNext: 3 }),
-    A('close', null, 'Breach', 2, '2+', 'Destroy an adjacent door.', { manual: true }, 'once'),
+    A('close', null, 'Breach', 2, '2+', 'Destroy an adjacent door.', { door: 'breach' }, 'once'),
   ] },
   { id: 'cut-spike', name: 'Cut Spike', abilities: [
     A('close', 'iron', 'Pierce', 1, '4+', 'Deal 🎲 damage', HIT('die')),
-    A('close', null, 'Nail Shut', 2, '2+', 'Block an adjacent door.', { manual: true }, 'breaks'),
+    A('close', null, 'Nail Shut', 2, '2+', 'Block an adjacent door.', { door: 'block', how: 'nailed shut' }, 'breaks'),
   ] },
   { id: 'compact-revolver', name: 'Compact Revolver', abilities: [
     A('mid', null, 'Controlled Shots', 3, '12+', 'Deal 🎲 damage (the three dice added)', HIT('sum'), 'breaks'),
@@ -66,7 +68,7 @@ export const EQUIPMENT_CARDS = [
   ] },
   { id: 'firemans-axe', name: 'Fireman’s Axe', abilities: [
     A('close', null, 'Chop', 1, '4+', 'Reduce target’s toughness by 1 this turn, then deal 🎲 damage', HIT('die', { toughDown: 1 })),
-    A('close', null, 'Breach', 2, '2+', 'Destroy an adjacent door', { manual: true }),
+    A('close', null, 'Breach', 2, '2+', 'Destroy an adjacent door', { door: 'breach' }),
   ] },
   { id: 'flare-gun', name: 'Flare Gun', abilities: [
     A('mid', 'fire', 'Direct Impact', 2, '7', 'Reduce target’s toughness by 2 this turn, then deal 7 damage.', HIT(7, { toughDown: 2 }), 'breaks'),
@@ -92,11 +94,11 @@ export const EQUIPMENT_CARDS = [
   ] },
   { id: 'iron-chain', name: 'Iron Chain', abilities: [
     A('close', 'iron', 'Choke', 2, '2x Target’s', 'Immobilize target. Deal 3 damage ignoring toughness', HIT(3, { ignoreToughness: true, immobile: true })),
-    A('close', null, 'Lock', 2, 'Any', 'Lock an adjacent door.', { manual: true }),
+    A('close', null, 'Lock', 2, 'Any', 'Lock an adjacent door. The chain stays on it: the card is lost.', { door: 'block', how: 'chained shut' }, 'breaks'),
   ] },
   { id: 'heavy-silver-chain', name: 'Heavy Silver Chain', abilities: [
     A('close', 'silver', 'Choke', 2, '2x Target’s', 'Immobilize target. Deal 3 damage ignoring toughness', HIT(3, { ignoreToughness: true, immobile: true })),
-    A('close', null, 'Lock', 2, 'Any', 'Lock an adjacent door.', { manual: true }),
+    A('close', null, 'Lock', 2, 'Any', 'Lock an adjacent door. The chain stays on it: the card is lost.', { door: 'block', how: 'chained shut' }, 'breaks'),
   ] },
   { id: 'railroad-hammer', name: 'Railroad Hammer', abilities: [
     A('close', 'iron', 'Bludgeon', 1, '3+', 'Deal 🎲 damage', HIT('die')),
@@ -107,7 +109,7 @@ export const EQUIPMENT_CARDS = [
   ] },
   { id: 'crowbar', name: 'Crowbar', abilities: [
     A('close', 'iron', 'Bludgeon', 1, '3+', 'Deal 🎲 damage', HIT('die')),
-    A('close', null, 'Breach', 2, '2+', 'Destroy an adjacent door', { manual: true }),
+    A('close', null, 'Breach', 2, '2+', 'Destroy an adjacent door', { door: 'breach' }),
   ] },
   { id: 'kitchen-knife', name: 'Kitchen Knife', abilities: [
     A('close', null, 'Pierce', 1, '4+', 'Deal 🎲 damage', HIT('die')),

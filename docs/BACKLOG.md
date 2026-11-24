@@ -10,15 +10,11 @@ monster weaknesses/immunities/health, objectives (Kill automatic, others marked 
 
 ---
 
-## 1. Doors (equipment)  ·  reuses the door system from Lockdown / Nailed Shut (`doorOverride`)
-- [ ] **Breach** — Destroy an adjacent door. *Dragon’s Breath Shotgun (1️⃣), Fireman’s Axe, Crowbar*
-- [ ] **Nail Shut** — Block an adjacent door. *Cut Spike (🔗)*
-- [ ] **Lock** — Lock an adjacent door. *Iron Chain, Heavy Silver Chain*
-- Needs: choosing which adjacent door (tap it); doors shown differently on the board when blocked,
-  locked or destroyed (also missing for Lockdown / Nailed Shut / Roof Collapse today); whether
-  monsters respect locked and blocked doors (today monster movement ignores door changes).
-- Questions: can monsters break or pass locked/blocked doors? Does a destroyed door become an open
-  doorway or a gap in the wall?
+## ~~1. Doors (equipment)~~ — done (2026-11-24)
+Breach, Nail Shut and Lock are played (`src/game/doors.js`): Breach makes an open doorway for good, for
+everyone; Nail Shut and Lock both block a door for everyone, monsters too, until breached, and the spike or
+chain is lost. Event-blocked doors (Nailed Shut, Roof Collapse) now stop monsters and are drawn boarded over.
+Still not drawn: Lockdown's locked doors (they work, but look as before).
 
 ## 2. Holding the monster back (equipment)
 - [ ] **Salt Circle** — Prevent Monster from crossing this space for 1 turn. *Salt Lick, Glowing Salt Lamp (both 🔗)*
@@ -108,7 +104,7 @@ need going through with the designer.
 ---
 
 ### Suggested order
-1 → 2 → 3 → 4 (equipment: today you can pay for these and get nothing) · 9 and 8 (small, per monster) ·
+~~1~~ → 2 → 3 → 4 (equipment: today you can pay for these and get nothing) · 9 and 8 (small, per monster) ·
 6 · 5 (new movement) · 7 and 10 together, one monster at a time.
 
-Until group 1-4 are built, consider disabling the ✋ skills so they can't be spent by mistake.
+Until groups 2-4 are built, consider disabling the ✋ skills so they can't be spent by mistake.

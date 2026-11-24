@@ -305,6 +305,7 @@ export class GridState {
     this.undoStack = [];
     this.redoStack = [];
     this.edges = new Map(); // edgeKey -> 'wall' | 'door'
+    this.edgeOverride = null; // the game's door changes, while the rules run (src/game/doors.js)
     // Board-wide elevation preset (see src/terrain.js) and, optionally, a
     // function giving a cell's ground elevation in metres (for export).
     this.terrain = 'flat';
@@ -774,7 +775,10 @@ export class GridState {
   canCross(x, y, dx, dy, unlocked, override) {
     const [o, ex, ey] = dx ? ['v', dx > 0 ? x + 1 : x, y] : ['h', x, dy > 0 ? y + 1 : y];
     const k = edgeKey(o, ex, ey);
-    const t = override ? override(k, this.edgeAt(k)) : this.edgeAt(k);
+    // `override`: the caller's door changes; otherwise the game's own
+    // (edgeOverride, set by the rules while they run: nailed and breached doors).
+    const ov = override ?? this.edgeOverride;
+    const t = ov ? ov(k, this.edgeAt(k)) : this.edgeAt(k);
     if (!t || t === 'door') return true;
     if ((t === 'lockedDoor' || t.startsWith('oneWayDoor')) && unlocked?.(k)) return true;
     if (t === 'oneWayDoor+') return dx > 0 || dy > 0;

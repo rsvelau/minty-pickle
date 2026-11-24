@@ -16,6 +16,7 @@
 // The board is read through a small adapter (see board.js) over GridState,
 // which is plain data too, so a server can rebuild it from the saved board.
 import { MARKERS, streetMask, edgeKey, cellLabel } from '../core/state.js';
+import { gameDoorOverride } from './doors.js';
 import { MONSTERS, spawnMonsters, monstersAct, farthestFromPlayers } from './monsters.js';
 import { turnLimits, injuries, applyDamage } from './combat.js';
 import { craft } from './obolcraft.js';
@@ -243,6 +244,12 @@ const STOPPED = ['slotting', 'choosing', 'asking'];
 export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective', 'event', 'setting'];
 
 export function applyAction(state, board, action) {
+  // Doors the game changed (nailed, breached) count for every move made while
+  // the rules run, monsters' included; then the board is left as drawn.
+  board.grid.edgeOverride = gameDoorOverride(state);
+  try { return applyActionNow(state, board, action); } finally { board.grid.edgeOverride = null; }
+}
+function applyActionNow(state, board, action) {
   board.setPowerOut?.(state.global?.id === 'power-outage');
   const events = [];
   const fail = (error) => ({ ok: false, error, events: [] });

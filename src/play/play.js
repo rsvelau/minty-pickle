@@ -633,8 +633,11 @@ export function createPlay({
           break;
         case 'hazard':
         case 'trap':
+          refreshDiscoveries();
+          break;
         case 'doors':
           refreshDiscoveries();
+          onUsed(); // redraw the walls: nailed, chained or breached doors
           break;
         case 'card':
           attachToArrival(view.actors[e.seat], e.cell, () => onCard({ ...e, player: state.players[e.seat] }));
@@ -1122,6 +1125,8 @@ export function createPlay({
       board.keyGroups().groups.forEach((kg, gi) => { if (view.shownKeys & (1 << gi)) for (const k of kg.doors) out.add(k); });
       return out;
     },
+    // Doors the game changed: edge key -> 'blocked' | 'breached' | 'open'.
+    doorLooks: () => new Map(Object.entries(g()?.doors ?? {})),
     // Is anyone still running into place?
     anyRunning: () => view.actors.some(running),
     isOption: (i) => g()?.phase === 'choosing' && g().options.some((o) => o.i === i),

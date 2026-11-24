@@ -23,6 +23,7 @@ import { MONSTER_BY_ID, DAMAGE_KINDS } from './cards/monsters.js';
 import { checkRequirement } from './cards/requirements.js';
 import { RANGE, cellRange, INJURY_TRACKS } from './cards/injuries.js';
 import { injuries } from './combat.js';
+import { doorsAround } from './doors.js';
 
 const REACH = { close: RANGE.close, mid: RANGE.mid, long: Infinity, self: 0, all: Infinity };
 // Long only reaches 3 spaces or more (not Close or Mid).
@@ -72,6 +73,13 @@ export function targetsFor(state, board, pl, ability) {
     return state.players.filter((p) => !p.dead && (p === pl || cellRange(board.grid, pl.pos, p.pos) <= Math.max(reach, 0)))
       .map((p) => ({ seat: p.seat, name: p.name }));
   }
+  if (fx.door) {
+    // The doors on your own cell's sides. Breach: any not already breached;
+    // block: any not breached (a doorway has nothing to close) or blocked.
+    return doorsAround(state, board, pl.pos)
+      .filter((d) => d.status !== 'breached' && !(fx.door === 'block' && d.status === 'blocked'))
+      .map((d) => ({ edge: d.edge, side: d.side, name: `${d.side} door${d.status === 'blocked' ? ' (blocked)' : d.type === 'lockedDoor' ? ' (locked)' : d.type === 'boardedDoor' ? ' (boarded up)' : ''}` }));
+  }
   return [];
 }
 
@@ -96,7 +104,7 @@ export function useEquipment(state, board, pl, action, ctx, events) {
   const values = dice.map((n) => state.pool[n].v);
 
   // Target.
-  let monster = null, ally = null;
+  let monster = null, ally = null, door = null;
   if (fx.target === 'monster') {
     const options = targetsFor(state, board, pl, a);
     const pick = options.find((o) => o.monster === action.target?.monster) ?? (options.length === 1 ? options[0] : null);
@@ -107,6 +115,10 @@ export function useEquipment(state, board, pl, action, ctx, events) {
     const pick = options.find((o) => o.seat === action.target?.seat) ?? options.find((o) => o.seat === pl.seat);
     if (!pick) return 'no one in range';
     ally = state.players[pick.seat];
+  } else if (fx.door) {
+    const options = targetsFor(state, board, pl, a);
+    door = options.find((o) => o.edge === action.target?.edge) ?? (options.length === 1 ? options[0] : null);
+    if (!door) return options.length ? 'choose a door' : fx.door === 'breach' ? 'no door next to you to breach' : 'no door next to you to shut';
   }
   if (!checkRequirement(a.req, values, { targetDie: monster ? actionRoll(monster) : null })) {
     return `the dice don't meet [${a.req}]${a.req?.startsWith('2x') && monster ? ` (twice ${actionRoll(monster)})` : ''}`;
@@ -197,6 +209,17 @@ export function useEquipment(state, board, pl, action, ctx, events) {
   if (fx.raise) {
     for (const n of raise) state.pool[n].v = fx.to;
     parts.push(raise.length ? `${raise.length === 1 ? 'a die' : `${raise.length} dice`} raised to ${fx.to}` : 'no other die to raise');
+  }
+  if (door) {
+    state.doors ??= {};
+    if (fx.door === 'breach') {
+      state.doors[door.edge] = 'breached';
+      parts.push(`the ${door.side} door is smashed in: an open doorway for good, for everyone`);
+    } else {
+      state.doors[door.edge] = 'blocked';
+      parts.push(`the ${door.side} door is ${fx.how ?? 'blocked'}: no one gets through, the monster included, until it is breached`);
+    }
+    events.push({ type: 'doors', edge: door.edge, change: fx.door });
   }
   if (fx.manual) parts.push(`resolve at the table: ${a.text}`);
 

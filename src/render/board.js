@@ -11,6 +11,7 @@ import { createBridges } from './bridge.js';
 import { createStreets } from './street.js';
 import { createClocktowers } from './clocktower.js';
 import { createLandmarks } from './landmarks.js';
+import { anyDoor } from '../game/doors.js';
 import { flickerize } from './dread.js';
 import { colLabel, parseEdgeKey, isLandmark } from '../core/state.js';
 import { m } from '../core/scale.js';
@@ -444,7 +445,12 @@ export function refreshPropsAndWalls() {
   const PLY = '#a08660', PLANK = '#6e5638';
   // In the play demo, doors whose key has been collected are drawn unlocked.
   const unlockedNow = ui.tool === 'play' && typeof play !== 'undefined' ? play.unlockedEdges() : new Set();
-  for (const [k, type0] of grid.allEdges()) {
+  // ...and doors the game nailed, chained or breached (src/game/doors.js).
+  const doorLooks = ui.tool === 'play' && typeof play !== 'undefined' ? play.doorLooks() : new Map();
+  for (const [k, type1] of grid.allEdges()) {
+    const look = anyDoor(type1) ? doorLooks.get(k) : null;
+    // Blocked: boarded over with planks, like a condemned door.
+    const type0 = look === 'blocked' ? 'boardedDoor' : look === 'breached' ? 'breachedDoor' : type1;
     const unlockedDoor = unlockedNow.has(k) && (type0 === 'lockedDoor' || type0.startsWith('oneWayDoor'));
     const type = unlockedDoor ? 'door' : type0;
     const { o, x, y } = parseEdgeKey(k);
@@ -523,6 +529,35 @@ export function refreshPropsAndWalls() {
     piece(cx, cz, -(DOOR_W / 2 + side / 2), side + WALL_T, FLOOR_H, H, vertical);
     piece(cx, cz, DOOR_W / 2 + side / 2, side + WALL_T, FLOOR_H, H, vertical);
     if (H > DOOR_H) piece(cx, cz, 0, DOOR_W, FLOOR_H + DOOR_H, H - DOOR_H, vertical);
+    if (type === 'breachedDoor') {
+      // Breached: an empty doorway, the smashed leaf flat on the floor inside
+      // and a splintered stub left on the hinge side.
+      const leafH = Math.min(DOOR_H, H) * 0.98;
+      // Tipped over (the box stands on its base: a quarter turn about x lays
+      // it along +z), then turned to fall into the east/south cell, a bit askew.
+      const flat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+      // It falls inward: into the building (the east/south cell if that's
+      // the indoor one, else the west/north one).
+      const far = grid.inBounds(x, y) ? grid.cells[grid.index(x, y)] : null;
+      const sign = far?.area === 'indoor' ? 1 : -1;
+      const yaw = (vertical ? Math.PI / 2 : 0) + (sign < 0 ? Math.PI : 0) + 0.22;
+      tmpQuat.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, yaw).multiply(flat);
+      tmpMatrix.compose(
+        tmpPos.set(cx + (vertical ? 0.08 * sign : 0), FLOOR_H + EY + 0.028, cz + (vertical ? 0 : 0.08 * sign)),
+        tmpQuat,
+        tmpScale.set(DOOR_W * 0.92, leafH, 0.05),
+      );
+      doorLeaves.setMatrixAt(nd++, tmpMatrix);
+      const along = -DOOR_W / 2 + 0.03;
+      tmpMatrix.compose(
+        tmpPos.set(cx + (vertical ? 0 : along), FLOOR_H + EY + leafH * 0.3, cz + (vertical ? along : 0)),
+        tmpQuat.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, vertical ? Math.PI / 2 : 0),
+        tmpScale.set(0.07, leafH * 0.6, 0.06),
+      );
+      frames.setMatrixAt(nf, tmpMatrix);
+      frames.setColorAt(nf++, tmpColor.set('#5a4030'));
+      continue;
+    }
     // Leaf hinged on one jamb. Unlocked doors stand open (~70 degrees);
     // locked doors are shut; one-way doors stand ajar toward the side they
     // open to. Positive swing opens into the east/south cell.
