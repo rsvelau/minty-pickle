@@ -145,15 +145,21 @@ function closeUp() {
 async function run() {
   running = true;
   const subject = subjects().find((s) => s.id === opts.subject) ?? null;
-  const [cols, rows] = subject ? SIZES[opts.size] : [grid.cols, grid.rows];
   status('Building the board…');
   await sleep(30);
   const t0 = performance.now();
   if (subject) {
+    const [cols, rows] = SIZES[opts.size];
     borrowBoard(filledBoard(subject, cols, rows, { rooms: opts.rooms, terrain: grid.terrain }));
     borrowed = true;
+  } else if (borrowed) {
+    // "This map" after another test: put the map back first (the last test's
+    // board would otherwise be measured under this map's name).
+    returnBoard();
+    borrowed = false;
   }
   const buildMs = Math.round(performance.now() - t0);
+  const [cols, rows] = [grid.cols, grid.rows];
   setDreadOverride(opts.midnight ? 1 : 0);
   // Measure the quality as set: automatic resolution waits till we're done.
   autoRes.paused = true;
