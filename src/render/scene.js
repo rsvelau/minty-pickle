@@ -497,6 +497,14 @@ export function fitShadows() {
   setShadowRect(area(r) >= area(a) * 0.7 ? a : r); // most of the board: all of it
 }
 export const shadowWindow = () => ({ ...shadowWin.win });
+// Is ground point (x, z) within `pad` cells of the shadow window?
+export function inShadowWindow(x, z, pad = 4) {
+  const w = shadowWin.win;
+  if (!w) return false;
+  tmpP.set(x, 0, z);
+  const lx = tmpP.dot(LX), ly = tmpP.dot(LY);
+  return lx >= w.x0 - pad && lx <= w.x1 + pad && ly >= w.y0 - pad && ly <= w.y1 + pad;
+}
 
 // Ask for the shadow map to be redrawn on the next frame.
 export let shadowsDirty = true;

@@ -20,8 +20,10 @@ Ready to play? flags them. Capping the size is what lets the whole board be in v
   (what one tile may cost where it's used).
 - **Culling chunks.** Heavy props are drawn in batches of 6 × 6 spaces; batches off screen aren't drawn, so a
   close-up costs a fraction of the whole board.
-- **Shadows on demand.** The shadow map is redrawn only while something moves (figures, dice, tiles easing)
-  or every 250 ms, never for camera moves. During a move it's redrawn every frame, so its cost counts then.
+- **Shadows on demand.** The shadow map is redrawn only while something moves (figures, dice, tiles easing),
+  up to 4 a second while a building's shadow-casting part moves near the view (a swing, a merry-go-round),
+  and otherwise only every 2 s as a safety net; never for camera moves. During a move it's redrawn every
+  frame, so its cost counts then.
 - **Shadow window.** Shadows cover only the ground in view plus a margin, so a shadow redraw costs about what
   the view does; zoomed out, that's the whole board.
 - **Automatic resolution** lowers the pixel count when frames are slow. It helps with pixel-heavy work
@@ -43,9 +45,9 @@ browser; the 35 × 35 close-up's +904k on the phone confirms it). The 60 × 60 r
 they're kept because they found the ceiling.
 
 **The 35 × 35 forest whole board** averages 55 fps (~18 ms, ~1.8×) but its slowest 10% is 43 fps (1.4×): the
-slow frames are the shadow safety refresh (every 250 ms, +1.18M triangles), which runs even when nothing on
-screen moves. Making that refresh happen only near animated shadow casters should bring it to ~1.8×;
-re-measure after.
+slow frames were the shadow safety refresh (every 250 ms, +1.18M triangles), which ran even when nothing on
+screen moved. It now runs every 2 s, or 4 a second only near a moving swing or merry-go-round, which should
+bring this board to ~1.8×. **To measure:** this board again.
 
 What follows from it:
 
@@ -110,7 +112,9 @@ space 872 (nine firs at 88 plus a shrub); a blocked cemetery 452; a cluttered li
 3. **No transparency** except glows and light beams. Glass is a dark solid colour.
 4. **Delete hidden faces**: undersides, backs against walls, the insides of overlapping parts.
 5. **No coplanar faces**: keep surfaces at least 1 cm apart (the diner trim and bridge girders flickered).
-6. **Small details don't cast shadows**: handles, cables, IV lines, hymnals.
+6. **Small details don't cast shadows**: handles, cables, IV lines, hymnals. **Moving parts that cast
+   shadows** (a swing, a fan) cost a shadow redraw up to 4 times a second while they're near the view: use
+   them sparingly, or let them not cast.
 7. **Real-world metres** (1 space = 7 m), origin at the base centre, front facing +X, all modifiers applied.
 8. **Compressed .glb, ≤ ~150 KB**, so the page stays quick to load.
 9. **Flat, low-poly look**: no subdivision; bevels only where they show.

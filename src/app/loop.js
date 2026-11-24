@@ -9,7 +9,7 @@ import { positionPlaceBar } from '../editor/placing.js';
 import { $ } from './dom.js';
 import { play, positionChoices } from '../play/playView.js';
 import { N, clocktowers, heights, landmarks, markers, props, targetHeights, tiles, visibleTop, water } from '../render/board.js';
-import { FOG, QUALITY_KEY, RES_STEPS, applyResolution, fitShadows, SKY, __clearShadowsDirty, resScale, setResScale, __set_camTween, applyQuality, markShadows, shadowsDirty, camTween, camera, cellToWorld, clampTarget, controls, hemi, moon, quality, qualityName, renderer, scene, wake, wakeUntil } from '../render/scene.js';
+import { FOG, QUALITY_KEY, RES_STEPS, applyResolution, fitShadows, inShadowWindow, SKY, __clearShadowsDirty, resScale, setResScale, __set_camTween, applyQuality, markShadows, shadowsDirty, camTween, camera, cellToWorld, clampTarget, controls, hemi, moon, quality, qualityName, renderer, scene, wake, wakeUntil } from '../render/scene.js';
 import { HOUSE_D, HOUSE_W, atmos, cullForest, ghostHouse, houseWindow, porchLight, updateRain, updateTreeFade } from '../render/surroundings.js';
 import { hoverBox, tmpPos, writeTileMatrix } from '../render/tileLook.js';
 import { powerOut } from '../render/tileLook.js';
@@ -111,10 +111,13 @@ export function init() {
     if (atmos.visible) updateRain(dt);
     fitShadows();
     // Shadows on demand: redraw the shadow map when the board changed, tiles
-    // are easing, figures or dice are moving, or SHADOW_REFRESH_MS has passed
-    // (slow-moving things like a swing or a merry-go-round, and anything that
-    // didn't ask). Orbiting the camera alone never redraws it.
-    if (renderer.shadowMap.enabled && (shadowsDirty || heightsEasing || play.busy() || now - lastShadow > SHADOW_REFRESH_MS)) {
+    // are easing, figures or dice are moving, a swing or merry-go-round in
+    // the shadow window moved (at most every MOVER_SHADOW_MS), or, as a
+    // safety net for anything that didn't ask, every SAFETY_SHADOW_MS.
+    // Orbiting the camera alone never redraws it, nor does a still board.
+    const mover = (landmarks?.movedCasters() ?? []).some((p) => inShadowWindow(p.x, p.z));
+    if (renderer.shadowMap.enabled && (shadowsDirty || heightsEasing || play.busy()
+      || (mover && now - lastShadow > MOVER_SHADOW_MS) || now - lastShadow > SAFETY_SHADOW_MS)) {
       renderer.shadowMap.needsUpdate = true;
       lastShadow = now;
       __clearShadowsDirty();
@@ -300,7 +303,11 @@ export function setAutoRes(on) {
 }
 
 export let heightsEasing = false;
-const SHADOW_REFRESH_MS = 250;
+// A slow mover's shadow keeps up 4 times a second; a still board redraws
+// only every 2 s (the Pixel 10a's slowest frames on a 35 x 35 forest were
+// these redraws when they ran every 250 ms).
+const MOVER_SHADOW_MS = 250;
+const SAFETY_SHADOW_MS = 2000;
 let lastShadow = 0;
 let shadowFrame = false; // did this frame redraw the shadow map? (frame log)
 export let lastFrame = 0;

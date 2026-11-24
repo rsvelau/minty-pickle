@@ -219,7 +219,7 @@ function showResults() {
       <dl class="sp-dl">
         <dt>Drawn</dt><dd>${k(v.tris)} triangles · ${v.calls} draws</dd>
         <dt>Frame cost</dt><dd>${ms(v.frame)}<small> (slowest 10%: ${ms(v.frame90)})</small></dd>
-        <dt>Shadow redraw</dt><dd>${v.shadowTris === null ? '–' : `+${k(v.shadowTris)} triangles${v.frameShadow ? ` · frame ${ms(v.frameShadow)}` : ''}`}</dd>
+        <dt>Shadow redraw</dt><dd>${v.shadowTris === null ? '–' : `+${k(v.shadowTris)} triangles${v.frameShadow ? ` · frame ${ms(v.frameShadow)}` : ''}`}<small> · ${v.shadowsPerSec.toFixed(1)} a second</small></dd>
         <dt>Headroom</dt><dd class="${h === null ? '' : h.x >= 1.5 ? 'good' : h.x >= 1 ? 'ok' : 'bad'}">${h === null ? '–' : `${headroomText(h)} the 30 fps budget`}</dd>
       </dl></div>`;
     }).join('')}

@@ -638,8 +638,10 @@ npm test           # headless rules tests (plain Node: no browser, no three.js)
   50% of the quality's resolution, never below 0.75×); after 4 s at 50 fps or better it steps back up.
   Changing quality starts again at full resolution. `autoResolution` in `src/app/loop.js`.
 - **Shadows on demand.** The moon's shadow map is redrawn only when something that casts a shadow may have
-  changed: the board was edited, tiles are easing, figures or dice are moving, or at most every 250 ms
-  (for slow movers like a swing). Orbiting or panning the camera never redraws it. Before this, every frame
+  changed: the board was edited, tiles are easing, figures or dice are moving, or a shadow-casting part of
+  a building moved near the view (the playground's swing and merry-go-round, the burned house's swing; at
+  most 4 a second). Otherwise only a safety redraw every 2 s. Buildings report their own moving parts
+  (`movedCasters` in `src/render/landmarks.js`), so new animated models are covered automatically. Orbiting or panning the camera never redraws it. Before this, every frame
   drew the whole board twice (once for the view, once for its shadows).
 - **Shadow window.** The shadows cover only the ground in view plus a margin (30% each side), worked out in
   moonlight space so everything casting into the view is included; a view taking in most of the board gets

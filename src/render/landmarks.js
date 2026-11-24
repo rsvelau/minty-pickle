@@ -836,8 +836,36 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
       try { built = make(); } catch (e) { console.error('landmark', key, e); continue; }
       built.g.traverse((o) => { o.raycast = () => {}; });
       root.add(built.g);
-      items.set(key, { group: built.g, ticks: built.ticks ?? [] });
+      const ticks = built.ticks ?? [];
+      items.set(key, { group: built.g, ticks, casters: ticks.length ? casterParts(built.g) : [], sig: null });
     }
+  }
+
+  // Animated buildings: the parts that hold something casting a shadow (a
+  // swing, a merry-go-round). When one of them moves the shadow map needs a
+  // redraw (src/app/loop.js); flickering signs and glowing bits don't count.
+  function casterParts(g) {
+    const out = [];
+    g.traverse((o) => {
+      if (o === g) return;
+      let casts = false;
+      o.traverse((c) => { if (c.isMesh && c.castShadow) casts = true; });
+      if (casts) out.push(o);
+    });
+    return out;
+  }
+  const signature = (parts) => parts.reduce((s, o, k) => s + (k + 1) * (o.position.x + o.position.y * 3 + o.position.z * 5
+    + o.rotation.x * 7 + o.rotation.y * 11 + o.rotation.z * 13 + o.scale.x * 17 + (o.visible ? 19 : 0)), 0);
+  // Where shadow-casting parts moved since the last call: [{ x, z }].
+  function movedCasters() {
+    const out = [];
+    for (const [, it] of items) {
+      if (!it.casters.length) continue;
+      const sig = signature(it.casters);
+      if (it.sig !== null && sig !== it.sig) out.push({ x: it.group.position.x, z: it.group.position.z });
+      it.sig = sig;
+    }
+    return out;
   }
 
   function tick(t) {
@@ -849,7 +877,7 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     }
   }
   function clear() { parent.remove(root); }
-  return { update, tick, clear, setPreview, setVisible: (v) => { root.visible = v; } };
+  return { update, tick, clear, setPreview, movedCasters, setVisible: (v) => { root.visible = v; } };
 }
 
 export const LANDMARK_GROUND = Object.fromEntries(Object.entries(LANDMARK_SUBS).map(([s, d]) => [s, d.ground]));
