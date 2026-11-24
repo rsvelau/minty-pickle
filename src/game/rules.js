@@ -18,7 +18,8 @@
 import { MARKERS, streetMask, edgeKey, cellLabel } from '../core/state.js';
 import { gameDoorOverride } from './doors.js';
 import { MONSTERS, spawnMonsters, monstersAct, farthestFromPlayers } from './monsters.js';
-import { turnLimits, injuries, applyDamage, sacrificeCarrier } from './combat.js';
+import { turnLimits, injuries, applyDamage, sacrificeCarrier, killPlayer } from './combat.js';
+import { answer as answerReaction } from './reactions.js';
 import { craft } from './obolcraft.js';
 import { refreshThreat, onPlayerEnters } from './monsterTurn.js';
 import { setupMystery, evidenceObol, revealEvidence, attackObol, nameMonster, revealMonster } from './mystery.js';
@@ -241,7 +242,7 @@ export function newGame(board, setup = {}) {
 // equipment and Obolcraft.
 const STOPPED = ['slotting', 'choosing', 'asking'];
 // Every action: { type, seat? }. Returns { ok, error?, events }.
-export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective', 'event', 'setting', 'sacrifice', 'setDie'];
+export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective', 'event', 'setting', 'sacrifice', 'setDie', 'react'];
 
 export function applyAction(state, board, action) {
   // Doors the game changed (nailed, breached) count for every move made while
@@ -254,10 +255,18 @@ function applyActionNow(state, board, action) {
   const events = [];
   const fail = (error) => ({ ok: false, error, events: [] });
   if (!action || !ACTIONS.includes(action.type)) return fail('unknown action');
+  // A weakness discard to answer (reactions.js), first: the game waits for
+  // the player who was hit (whoever's turn it is).
+  const react = state.reactions?.[0];
+  if (react) {
+    if (action.type === 'react') {
+      if (action.seat !== undefined && action.seat !== react.seat) return fail(`${state.players[react.seat].name} decides`);
+    } else if (action.type !== 'setting') return fail(`waiting for ${state.players[react.seat].name} to decide on a discard`);
+  } else if (action.type === 'react') return fail('nothing to decide');
   // Someone has fallen and the Sacrificial Fetish could save them: the game
   // waits for its carrier (whoever's turn it is).
-  const sac = pendingSacrifice(state);
-  if (action.type === 'sacrifice') {
+  const sac = react ? null : pendingSacrifice(state);
+  if (action.type === 'react') { /* answered below */ } else if (action.type === 'sacrifice') {
     if (!sac) return fail('nothing to decide');
     if (action.seat !== undefined && action.seat !== sac.carrier.seat) return fail(`${sac.carrier.name} decides`);
   } else {
@@ -278,6 +287,8 @@ function applyActionNow(state, board, action) {
       state.moveBonus = 0;
       state.windDouble = false;
       state.noMove = false;                          // Camouflage: can't move the rest of that turn
+      // Discard Crystal & no light for ⌛ (Shadow People): over when its player's turn comes round again.
+      if (state.flags?.noLight && state.flags.noLight.seat === state.cur && state.flags.noLight.round !== state.round) delete state.flags.noLight;
       startOfTurn(state, eventCtx(state));
       state.pool = Array.from({ length: lim.dice }, () => ({ kind: 'black', v: d6(state) }));
       state.slots = [];
@@ -418,7 +429,7 @@ function applyActionNow(state, board, action) {
       if (!['idle', ...STOPPED].includes(state.phase)) return fail('finish moving first');
       const pl = curPlayer(state);
       const before = state.phase === 'idle' ? null : turnLimits(state, board, pl);
-      const err = useEquipment(state, board, pl, action, { log }, events);
+      const err = useEquipment(state, board, pl, action, { log, randInt, state }, events);
       if (err) return fail(err);
       // Toss or Drink mid-turn: injuries held off now give back what they took.
       if (before) relimit(state, board, pl, before, events);
@@ -435,6 +446,13 @@ function applyActionNow(state, board, action) {
       if (v < 1 || v > 6) return fail('a die shows 1 to 6');
       d.v = v;
       syncDefense(state);
+      break;
+    }
+    case 'react': {
+      // Discard the item of that element (undoing the hit), or keep it.
+      const r = answerReaction(state, !!action.yes, action.item, { log, killPlayer });
+      events.push({ type: 'reacted', seat: react.seat, item: r.discarded, text: react.text });
+      afterSacrifice(state, board, events);
       break;
     }
     case 'sacrifice': {
@@ -521,6 +539,7 @@ function pendingSacrifice(state) {
 }
 // Who answers the next Sacrifice (for a host checking seats); else whose turn it is.
 export function sacrificeSeat(state) {
+  if (state.reactions?.length) return state.reactions[0].seat;   // a weakness discard first
   const first = state.sacrifice?.[0];
   const pl = first && state.players[first.seat];
   return (pl?.dying && sacrificeCarrier(state, pl)?.seat) ?? state.cur;
@@ -528,7 +547,7 @@ export function sacrificeSeat(state) {
 // Once no one is left waiting: the game ends if everyone is dead, and a turn
 // whose player died moves on.
 function afterSacrifice(state, board, events) {
-  if (pendingSacrifice(state)) return;
+  if (state.reactions?.length || pendingSacrifice(state)) return;
   if (state.players.every((p) => p.dead)) {
     state.phase = 'over';
     log(state, 'Everyone is dead. The night wins.');
@@ -796,6 +815,13 @@ function advance(state, board, events) {
       if (state.mystery) state.mystery.pendingReveal = null;
       state.steps = 0;
       nextPlayer(state, board, events);
+      return;
+    }
+    // A discard to decide (reactions.js): stop here; any moves left wait at a stop.
+    if (state.reactions?.length) {
+      state.ask = null;
+      state.options = state.steps > 0 ? nextOptions(state, board, { back: true }) : [];
+      state.phase = state.options.length ? 'choosing' : 'slotting';
       return;
     }
     // Fallen mid-turn, waiting on a Sacrifice: everything stops here.

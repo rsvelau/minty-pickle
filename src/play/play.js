@@ -819,6 +819,9 @@ export function createPlay({
         case 'sacrifice':
           onSacrifice({ ...e, player: g()?.players[e.seat], carrierPlayer: g()?.players[e.carrier] });
           break;
+        case 'reacted':
+          if (e.item) onSacrifice({ ...e, reacted: true, player: g()?.players[e.seat] });
+          break;
         case 'monsterIntent':
           onIntent(e);
           break;
@@ -859,6 +862,11 @@ export function createPlay({
   function sacrifice(yes) {
     const s = g();
     return !!s && session.dispatch({ type: 'sacrifice', yes: !!yes, seat: sacrificeSeat(s) }).ok;
+  }
+  // A weakness discard offered at the moment: the player who was hit answers.
+  function react(yes) {
+    const s = g();
+    return !!s && session.dispatch({ type: 'react', yes: !!yes, seat: sacrificeSeat(s) }).ok;
   }
   // Lucky: set a die's value.
   function setDie(n, v) { return act({ type: 'setDie', die: n, v }); }
@@ -1200,7 +1208,7 @@ export function createPlay({
     // Game settings changed outside a game: the next game starts fresh with them.
     invalidate: () => { stale = true; },
     state, session, board, roll, reset, setStartMode, saveState, loadState, useEquipment, answerInvestigate, choose, chooseByKey, tick, setActive,
-    boardChanged, setPlayers, toggleSlot, confirmMove, endTurn, unusedCount, slotTotal, rollWhite, busy, revealCard, nameMonster, craft, sacrifice, setDie,
+    boardChanged, setPlayers, toggleSlot, confirmMove, endTurn, unusedCount, slotTotal, rollWhite, busy, revealCard, nameMonster, craft, sacrifice, setDie, react,
     clockMinutes: () => (g() ? rulesClockMinutes(g()) : rulesStartMinutesFor(cfg)),
     startMinutes: () => (g() ? rulesStartMinutes(g()) : rulesStartMinutesFor(cfg)),
     midnight: () => (g() ? isMidnight(g()) : false),

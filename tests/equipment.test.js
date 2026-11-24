@@ -156,9 +156,13 @@ test('objectives decide the win', () => {
 });
 
 test('discarding an item of the right element for an ∞ weakness effect', () => {
-  const s = setup('banshee', { items: ['kitchen-knife', 'heavy-silver-chain'] }); // ∞: Discard Silver to avoid Swoop damage
+  const s = setup('shadow-people', { items: ['kitchen-knife', 'crystal-talisman'] }); // ∞: Discard Crystal & no light for ⌛
+  assert.ok(!applyAction(s.state, s.board, { type: 'discard', item: 0, track: 2, monster: 'm1' }).ok); // not crystal
   const r = applyAction(s.state, s.board, { type: 'discard', item: 1, track: 2, monster: 'm1' });
   assert.ok(r.ok, r.error);
   assert.deepEqual(s.pl.inventory.equipment.map((e) => e.id), ['kitchen-knife']);
-  assert.ok(!applyAction(s.state, s.board, { type: 'discard', item: 0, track: 2, monster: 'm1' }).ok); // not silver
+  assert.equal(s.state.flags.noLight.seat, s.pl.seat, 'lit spaces are safe for now');
+  // The Banshee's Silver discard isn't offered here: it comes up when a Swoop lands (reactions.test.js).
+  const b = setup('banshee', { items: ['heavy-silver-chain'] });
+  assert.ok(!applyAction(b.state, b.board, { type: 'discard', item: 0, track: 2, monster: 'm1' }).ok);
 });

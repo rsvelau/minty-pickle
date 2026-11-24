@@ -70,17 +70,24 @@ need going through with the designer.
   (candle, coin flip), Redcap "piercing attacks can't land the killing blow", Strigoi "only damaged
   by the Blessed Cosor", Poltergeist "discard salt items inside targeted buildings"...
 
-## 8. Weakness-track effects only announced
-- [ ] Skinwalker 1: **Reset Curseblood Ritual** (needs the ritual counter, see 7)
-- [ ] Banshee 1 and 3: **Grounded until next Perch** (needs Perch, see 7)
-- [ ] White Lady 1, 3, 6: **Trigger Regret** (and 6: disable Wrath, which does work)
+## 8. Weakness-track effects only announced — mostly done (2026-11-24)
+- [x] Skinwalker 1: **Reset Curseblood Ritual** (with the ritual counter: the 3rd ritual sets off its
+  Global Attack (10), then the count starts over)
+- [ ] Banshee 1 and 3: **Grounded until next Perch** (waits for Perch, see 7: on hold until the objective
+  marker rework, which decides what the "heirloom" is)
+- [x] White Lady 1, 3, 6: **Trigger Regret** (Regret strikes at once: Area Attack on every player inside
+  her building; its Unblock waits for Infatuation's Block, see 7)
 
-## 9. Discard weaknesses (∞): the discard works, the effect doesn't
-- [ ] Banshee: **Discard Silver to avoid Swoop damage**
-- [ ] Strigoi: **Discard Holy to prevent Exhaust**
-- [ ] Shadow People: **Discard Fire & avoid 1 attack**, **Discard Fire & keep candle lit**, **Discard Crystal & no light for ⏳**
-- Question: are these used in advance (armed for the next Swoop / Exhaust / attack), or at the moment
-  it happens?
+## 9. Discard weaknesses (∞) — mostly done (2026-11-24)
+- [x] Banshee: **Discard Silver to avoid Swoop damage** (offered when a Swoop hurts you; Swoop now lands
+  beside the nearest player)
+- [x] Strigoi: **Discard Holy to prevent Exhaust** (offered when an Exhaust takes a die)
+- [x] Shadow People: **Discard Fire & avoid 1 attack** (offered when an attack hurts you),
+  **Discard Crystal & no light for ⌛** (lit spaces safe from Umbral Stab until your next turn)
+- [ ] Shadow People: **Discard Fire & keep candle lit** (waits for the candle: the objective rework)
+- Played at the moment (`src/game/reactions.js`): the hit happens, then the game waits for the player;
+  discarding undoes it. Known gap: an Exhaust undone after the same action's Attack doesn't change that
+  Attack (Drain).
 
 ## 10. Objectives other than "Kill"  ·  marked by hand today (Casebook → Objective achieved)
 - [ ] Barghest: **Escape (to the start point)**
@@ -96,6 +103,6 @@ need going through with the designer.
 ---
 
 ### Suggested order
-~~1~~ → ~~2~~ → ~~3~~ → ~~4~~ · 9 and 8 (small, per monster) ·
+~~1~~ → ~~2~~ → ~~3~~ → ~~4~~ · ~~9 and 8~~ (Perch and the candle wait for the objective rework) (small, per monster) ·
 6 · 5 (new movement) · 7 and 10 together, one monster at a time.
 

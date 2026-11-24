@@ -9,7 +9,8 @@
 //   weakness / immune (damage kinds, see DAMAGE_KINDS), weaknessTrack (the
 //   arrows on the art: after `hits` attacks with a weapon of a weakness element,
 //   that effect happens, once; hits null = the purple ∞, an effect that can
-//   happen any number of times, usually by discarding that kind of item), abilities
+//   happen any number of times, usually by discarding that kind of item; `react`:
+//   offered at the moment it happens: 'exhaust', 'attack', or an ability name), abilities
 //   (the rows at the bottom: kind = physical | mental | spiritual | none,
 //   roll = which die faces trigger it), and evidence:
 //     attack: 'P' | 'M' | 'S'   the Attack card (Physical, Mental, Spiritual)
@@ -110,7 +111,7 @@ export const MONSTER_CARDS = [
     note: 'While on rooftops, Banshee is outside Close range.',
     objective: 'Kill',
     weakness: ['iron', 'silver'], immune: [],
-    weaknessTrack: [{ hits: 1, text: 'Grounded until next Perch' }, { hits: 3, text: 'Grounded until next Perch' }, { hits: null, text: 'Discard Silver to avoid Swoop damage' }],
+    weaknessTrack: [{ hits: 1, text: 'Grounded until next Perch' }, { hits: 3, text: 'Grounded until next Perch' }, { hits: null, text: 'Discard Silver to avoid Swoop damage', react: 'Swoop' }],
     abilities: [
       A('none', 'Perch', 'Persistent', 'Move to the rooftop nearest the player closest to the heirloom'),
       A('mental', 'Keen', '1-4', 'Area Attack (2 dice, R5). Only affects outdoor spaces'),
@@ -178,7 +179,7 @@ export const MONSTER_CARDS = [
     note: 'Only damaged by the Blessed Cosor (Piercing die). Always targets the Cosor holder.',
     objective: 'Kill with the Blessed Cosor (Lair → {13} → {9} → Lair)',
     weakness: ['holy'], immune: [],
-    weaknessTrack: [{ hits: null, text: 'Discard Holy to prevent Exhaust' }],
+    weaknessTrack: [{ hits: null, text: 'Discard Holy to prevent Exhaust', react: 'exhaust' }],
     abilities: [
       A('spiritual', 'Drain', '1-3', 'Exhaust (defensive die) and Attack (die)'),
       A('spiritual', 'Charm', '4-5', 'Exhaust (movement die) and Attack (6)'),
@@ -212,7 +213,7 @@ export const MONSTER_CARDS = [
     note: 'Has no singular body. Attacks erupt from lit spaces. Dark spaces smother lit objects. All defensive dice are exhausted upon use.',
     objective: 'Light the Dark Room ({11} → Lair × 4)',
     weakness: ['fire', 'crystal'], immune: ['salt', 'holy', 'iron', 'silver'],
-    weaknessTrack: [{ hits: null, text: 'Discard Fire & avoid 1 attack' }, { hits: null, text: 'Discard Fire & keep candle lit' }, { hits: null, text: 'Discard Crystal & no light for ⌛' }],
+    weaknessTrack: [{ hits: null, text: 'Discard Fire & avoid 1 attack', react: 'attack' }, { hits: null, text: 'Discard Fire & keep candle lit' }, { hits: null, text: 'Discard Crystal & no light for ⌛' }],
     abilities: [
       A('physical', 'Umbral Stab', 'Persistent', 'Attack (die) any player each time they enter a lit space', { darkness: true }),
       A('none', 'Suffocating Darkness', 'Persistent', 'A player with a lit candle who stops in the dark flips a coin. Tails: extinguish'),

@@ -509,7 +509,7 @@ function afterMidnight(state, board, id, choice, cell, pl, ctx, events) {
       const dice = freeDice(state).slice(0, 2);
       for (const { d } of dice) d.spent = true;
       ctx.log(state, `${pl.name} spends ${dice.map(({ d }) => d.v).join(' and ')}.`);
-      if (monster) triggerWeakness(state, monster, 1, ctx, events);
+      if (monster) triggerWeakness(state, board, monster, 1, ctx, events);
       return true;
     }
     case 'wooden-boards':
@@ -519,7 +519,7 @@ function afterMidnight(state, board, id, choice, cell, pl, ctx, events) {
       events.push({ type: 'doors' });
       return true;
     case 'chalk-scrawled-narrative':
-      if (monster) triggerWeakness(state, monster, 2, ctx, events);
+      if (monster) triggerWeakness(state, board, monster, 2, ctx, events);
       pl.skipTurns = (pl.skipTurns ?? 0) + 1;
       ctx.log(state, `${pl.name} will skip their next turn.`);
       return true;

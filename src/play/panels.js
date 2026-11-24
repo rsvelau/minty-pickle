@@ -199,6 +199,12 @@ export function showCardNow(c) {
       `<div class="pc-title">${esc(e.npc?.name ?? 'A victim')} ${saved ? 'is saved' : 'dies'}</div>` +
       `<div class="pc-sub">${saved ? `${esc(e.defenderPlayer?.name ?? '')}'s defense ${e.defense} holds against ${e.amount}.`
         : `${e.amount} damage${e.defenderPlayer ? ` against ${esc(e.defenderPlayer.name)}'s defense ${e.defense}` : ', and no one was close enough to defend them'}. Every player suffers its rage.`}</div>`;
+  } else if (c.kind === 'sacrifice' && c.e.reacted) {
+    const e = c.e;
+    card.classList.add('hurt');
+    card.style.setProperty('--atk', '#3fae5a');
+    html = `<div class="pc-kind">${esc(e.player?.name ?? '')} discards ${esc(EQUIPMENT_BY_ID[e.item]?.name ?? '')}</div><div class="pc-glyph">✦</div>` +
+      `<div class="pc-title">Undone</div><div class="pc-sub">${esc(e.text)}.</div>`;
   } else if (c.kind === 'sacrifice') {
     const e = c.e;
     card.classList.add('hurt');
@@ -713,6 +719,27 @@ export function renderEventChoice() {
 // decides (the game waits).
 export function renderSacrifice() {
   const st = play.session.state;
+  // A weakness discard comes first (reactions.js).
+  const r = st?.reactions?.[0];
+  if (r && ui.tool === 'play') {
+    const show = $('#cardPop').hidden;
+    $('#sacrificeAsk').hidden = !show;
+    if (!show) return;
+    const pl = st.players[r.seat];
+    const mon = MONSTER_BY_ID[st.monsters.find((m) => m.id === r.monster)?.kind];
+    const items = pl.inventory.equipment.filter((it) => EQUIPMENT_BY_ID[it.id]?.abilities.some((a) => a.kind === r.kind));
+    $('#sacKind').textContent = `${mon?.name ?? 'The monster'}'s weakness`;
+    $('#sacTitle').textContent = r.text;
+    $('#sacText').innerHTML = `<b style="color:${pl.colour}">${esc(pl.name)}</b>: discard your ${esc(EQUIPMENT_BY_ID[items[0]?.id]?.name ?? DAMAGE_KINDS[r.kind].label)} to undo ${r.what === 'exhaust' ? 'the Exhaust' : 'that hit'}?`;
+    $('#sacNo').textContent = 'Keep it';
+    $('#sacYes').textContent = 'Discard it';
+    $('#sacNo').onclick = () => play.react(false);
+    $('#sacYes').onclick = () => play.react(true);
+    return;
+  }
+  $('#sacKind').textContent = 'Sacrificial Fetish';
+  $('#sacNo').textContent = 'Let them die';
+  $('#sacYes').textContent = 'Spend it';
   const first = st?.sacrifice?.[0];
   const pl = first && st.players[first.seat];
   const carrier = pl && st.players[sacrificeSeat(st)];

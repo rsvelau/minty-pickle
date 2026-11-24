@@ -97,7 +97,14 @@ teammates in your space for heals like the Medical Kit). Obol costs (◉) take a
 - Damage: the slotted die, the dice added, or a fixed number, minus the monster's **toughness** (unless the skill
   ignores it); the rest comes off its **health**. A monster immune to the skill's element is not affected at all.
 - **Weakness track**: every hit with one of the monster's weakness elements counts; at each number on its card
-  the effect happens once. The game plays −toughness, −die, −HP and Disable [ability]; others are announced.
+  the effect happens once. The game plays −toughness, −die, −HP, Disable [ability], Interrupt, **Reset
+  Curseblood Ritual** (Skinwalker: the ritual count back to 0) and **Trigger Regret** (White Lady: Regret
+  strikes at once, after the skill that set it off); Banshee's Grounded until next Perch is announced (it
+  waits for Perch).
+- **Monster abilities added with them**: the Skinwalker's **Curseblood Ritual** counts (shown on its row as
+  Ritual n/3); the 3rd sets off a Global Attack (10) and the count starts over. The White Lady's **Regret**
+  is an Area Attack on every player inside her building (outside a building: everyone indoors); its Unblock
+  waits for Infatuation's Block. The Banshee's **Swoop** lands beside the nearest player before it attacks.
 - Effects on the monster last until it has acted at the end of the round: toughness down, Bind / Gaffe
   (−5 movement), Choke (immobilized; needs twice its action roll), Seal (attack halved), Blind (next attack
   rolls 1), Powerful Flashlight (damage dice above 3 count as 3), Stock Strike (+3 to the next attack on it).
@@ -108,9 +115,15 @@ teammates in your space for heals like the Medical Kit). Obol costs (◉) take a
   Destroy Anchors…) is played at the table and marked in the Casebook (**Objective achieved**); until then,
   destroying the monster only sends it back to its Lair at full health. Once achieved, a monster with health
   must still be destroyed one more time; one with ∞ health is beaten by the objective alone.
-- **Discard weaknesses** (the purple ∞ on some monster cards, like "Discard Silver to avoid Swoop damage"):
-  when that monster is in the game, the Inventory offers to discard any of your Equipment with a skill of that
-  element, any time on your turn (the effect is resolved at the table).
+- **Discard weaknesses** (the purple ∞ on some monster cards): three are offered **at the moment**: when a
+  Banshee's Swoop hurts you (Silver), a Strigoi's Exhaust takes a die (Holy) or a Shadow People attack hurts
+  you (Fire), and you carry Equipment with a skill of that element, the game waits for you: **Discard it** and
+  that hit is undone (injuries, a death, the exhausted die, the defense it wore), or **Keep it**. A hit that
+  would kill leaves you down until you answer. Moving when it happens, you stop and pick a way on after. The
+  rest are discarded from the Inventory any time on your turn: **Discard Crystal & no light for ⌛** (Shadow
+  People) keeps lit spaces safe from Umbral Stab until your next turn; **keep candle lit** is resolved at the
+  table. One limit: Drain exhausts your defense die before it attacks, so undoing the Exhaust gives the die
+  back but not to that attack.
 - **Defense wears down**: each attack subtracts from your slotted defense, so a second attack faces what's left
   (slot a 6, block a 3, and a 4 then hits the 3 that's left), until your next turn. Defending a townsperson
   wears it down the same way. The dice tray and the Investigate? prompt show what's left ("3/6").

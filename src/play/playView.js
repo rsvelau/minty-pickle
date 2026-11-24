@@ -138,7 +138,9 @@ export function renderPlay() {
   $('#playBoard').innerHTML += s.monsters.map((mo) => {
     const c = grid.coords(mo.pos);
     return `<div class="pl monster-row"><span class="chip" style="background:#6a0a12">!</span>` +
-      `<span>${monsterDef(mo.kind)?.label ?? mo.kind}</span><span>${cellLabel(c.x, c.y)}</span></div>`;
+      `<span>${monsterDef(mo.kind)?.label ?? mo.kind}</span><span>${cellLabel(c.x, c.y)}</span>` +
+      // Skinwalker: Curseblood Rituals so far (the 3rd sets off a Global Attack).
+      `${mo.rituals ? `<span style="color:#c58aff">Ritual ${mo.rituals}/3</span>` : ''}</div>`;
   }).join('');
   $('#playLog').innerHTML = s.log.map((l) => `<li>${l}</li>`).join('');
   renderTray();

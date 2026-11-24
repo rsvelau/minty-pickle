@@ -79,8 +79,8 @@ export function createHost({ board, transport, onUpdate = () => {} }) {
     } else if (msg.kind === 'action' && state) {
       const action = { ...msg.action };
       // A client may only act for a seat it holds (unclaimed seats are open).
-      // A Sacrifice is answered by the Fetish's carrier, whoever's turn it is.
-      const seat = action.type === 'sacrifice' ? sacrificeSeat(state) : state.cur;
+      // A Sacrifice (or a weakness discard) is answered by whoever it is for, whoever's turn it is.
+      const seat = action.type === 'sacrifice' || action.type === 'react' ? sacrificeSeat(state) : state.cur;
       const owner = seats[seat];
       if (owner && owner !== msg.clientId) {
         transport.send({ kind: 'reject', clientId: msg.clientId, error: 'not your turn' });

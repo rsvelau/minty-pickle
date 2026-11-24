@@ -23,6 +23,7 @@ import { endMonsterTurn, hurtMonster } from './equipmentPlay.js';
 import { monsterEnters, monsterDoorBanned } from './eventPlay.js';
 import { anyDoor } from './doors.js';
 import { edgeKey } from '../core/state.js';
+import { watch, offer } from './reactions.js';
 
 // --- Bodies: how a monster gets past walls and doors ------------------------------
 // Corporeal: stopped by locked, nailed, chained, boarded and one-way doors, but
@@ -122,6 +123,12 @@ function damageSpec(spec) {
 export function parseAbility(text) {
   const ops = [];
   const unknown = [];
+  // Curseblood Ritual: "+1 ritual. At 3 ritual: Global Attack (10)": the
+  // count goes up each time; at the mark the Global Attack, and it starts over.
+  // Swoop: "Immediately land adjacent to the nearest player": a teleport.
+  if (/land adjacent to the nearest player/i.test(text)) ops.push({ op: 'teleport', to: 'player' });
+  const rit = /\+1 ritual\.?\s*At (\d+) ritual:\s*Global Attack \(([^)]*)\)/i.exec(text);
+  if (rit) text = text.replace(rit[0], '');
   const re = /(Area Attack|Global Attack|LoS Attack|Attack|Exhaust|Pursue|Outflank|Retreat|Heal|Teleport)\s*(?:\(([^)]*)\)|\[(\d+)\]|to (Lair))?/g;
   let m;
   while ((m = re.exec(text))) {
@@ -139,7 +146,9 @@ export function parseAbility(text) {
     else if (word === 'Area Attack') {
       const [dmg, rad] = arg.split(',');
       const r = /(\d+)/.exec(rad ?? '');
-      ops.push({ op: 'area', dmg: damageSpec(dmg), radius: r ? Number(r[1]) : 2 });
+      // "all players inside": everyone in the monster's building (White Lady's Regret).
+      if (/inside/i.test(rad ?? '')) ops.push({ op: 'area', dmg: damageSpec(dmg), inside: true });
+      else ops.push({ op: 'area', dmg: damageSpec(dmg), radius: r ? Number(r[1]) : 2 });
     } else if (word === 'Global Attack') ops.push({ op: 'global', dmg: damageSpec(arg) });
     else if (word === 'LoS Attack') unknown.push('LoS Attack');
     else if (word === 'Attack') {
@@ -148,6 +157,7 @@ export function parseAbility(text) {
       if (d) ops.push({ op: 'attack', dmg: d, ...(target ? { target: Number(target[1]) } : {}) });
     }
   }
+  if (rit) ops.push({ op: 'ritual', at: Number(rit[1]), dmg: damageSpec(rit[2]) });
   for (const w of ['Seize', 'Lure', 'Consume', 'Pin', 'Drag', 'Trap', 'Block', 'Unblock', 'Trample', 'Drop', 'Target', 'ritual']) {
     if (new RegExp(`\\b${w}\\b`).test(text)) unknown.push(w);
   }
@@ -218,12 +228,29 @@ function planMovement(state, board, monster, ops, ctx) {
         pos = best.c;
       }
     } else if (o.op === 'teleport') {
-      const target = o.to === 'lair' ? lairCell(state) : nearestLight(state, board, pos);
+      const target = o.to === 'lair' ? lairCell(state) : o.to === 'player' ? besideNearest(state, board, pos) : nearestLight(state, board, pos);
       if (target >= 0) { steps.push({ teleport: target }); pos = target; }
     }
   }
   void ctx;
   return { pos, steps };
+}
+// A free walkable space next to the nearest player (as the crow flies).
+function besideNearest(state, board, from) {
+  const g = board.grid;
+  const pl = [...chaseable(state)].sort((a, b) => gridDist(board, from, a.pos) - gridDist(board, from, b.pos))[0];
+  if (!pl) return -1;
+  const { x, y } = g.coords(pl.pos);
+  const taken = new Set(state.players.filter((p) => !p.dead).map((p) => p.pos));
+  let best = -1, bd = Infinity;
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    if (!g.inBounds(x + dx, y + dy)) continue;
+    const c = g.index(x + dx, y + dy);
+    if (!g.cells[c].walkable || taken.has(c)) continue;
+    const d = gridDist(board, from, c);
+    if (d < bd) { bd = d; best = c; }
+  }
+  return best;
 }
 function lairCell(state) {
   return state.mystery?.spawnCell ?? -1;
@@ -313,8 +340,8 @@ function predictVictims(state, board, monster, intents) {
         const t = closeTarget(state, board, pos);
         if (t) seats.add(t.seat);
       } else if (o.op === 'area') {
-        for (const pl of alive(state)) if (gridDist(board, pos, pl.pos) <= o.radius) seats.add(pl.seat);
-      } else if (o.op === 'global') {
+        for (const pl of areaTargets(state, board, pos, o, alive(state))) seats.add(pl.seat);
+      } else if (o.op === 'global' || (o.op === 'ritual' && (monster.rituals ?? 0) + 1 >= o.at)) {
         for (const pl of alive(state)) seats.add(pl.seat);
       }
     }
@@ -322,6 +349,34 @@ function predictVictims(state, board, monster, intents) {
   }
   monster.dangerTypes = types; // seat -> damage types threatening them (P/M/S)
   return [...seats];
+}
+
+// Who an Area Attack from `pos` reaches: within its radius, or (inside) every
+// player in the monster's building; outside any building, everyone indoors.
+function areaTargets(state, board, pos, o, players) {
+  if (!o.inside) return players.filter((pl) => gridDist(board, pos, pl.pos) <= o.radius);
+  const g = board.grid;
+  const indoor = (i) => g.cells[i]?.area === 'indoor';
+  if (!indoor(pos)) return players.filter((pl) => indoor(pl.pos));
+  const b = buildingOf(g, pos);
+  return players.filter((pl) => indoor(pl.pos) && buildingOf(g, pl.pos) === b);
+}
+
+// An ability carried out at once, outside the monster's turn (a weakness
+// track's "Trigger Regret"): its attacks only, from where the monster stands.
+export function strikeNow(state, board, monster, name, ctx, events) {
+  const card = MONSTER_BY_ID[monster.kind];
+  const a = card?.abilities.find((x) => x.name === name);
+  if (!a) return;
+  const type = KIND_TO_TYPE[a.kind] ?? card.evidence.attack;
+  const source = `The ${card.name}'s ${a.name}`;
+  for (const o of parseAbility(a.text).ops) {
+    if (o.op !== 'area' && o.op !== 'global') continue;
+    const targets = o.op === 'global' ? targetable(state) : areaTargets(state, board, monster.pos, o, targetable(state));
+    if (!targets.length) { ctx.log(state, `${source} strikes at no one.`); continue; }
+    events.push({ type: 'monsterAttack', id: monster.id, seat: targets[0].seat, cell: monster.pos, area: true, attack: type });
+    for (const pl of targets) applyDamage(state, board, pl, type, rollDamage({ ...ctx, state }, o.dmg), { log: ctx.log, source }, events);
+  }
 }
 
 // Start of a round: roll the monster's action dice (the number in the top
@@ -530,7 +585,7 @@ export function executeIntent(state, board, monster, ctx, events) {
       }
       if (o.op === 'exhaust') {
         const targets = hit.length ? hit : [closeTarget(state, board, monster.pos)].filter(Boolean);
-        for (const pl of targets) exhaust(state, pl, o.what, ctx, events);
+        for (const pl of targets) struck(state, monster, 'exhaust', pl, ctx, () => exhaust(state, pl, o.what, ctx, events));
         hit = targets;
         continue;
       }
@@ -540,16 +595,27 @@ export function executeIntent(state, board, monster, ctx, events) {
         if (!t) { ctx.log(state, `${source} finds no one in reach.`); continue; }
         hit = [t];
         events.push({ type: 'monsterAttack', id: monster.id, seat: t.seat, cell: t.pos, attack: type });
-        applyDamage(state, board, t, type, roll(o.dmg), { log: ctx.log, source }, events);
+        struck(state, monster, intent.name, t, ctx, () => applyDamage(state, board, t, type, roll(o.dmg), { log: ctx.log, source }, events));
       } else if (o.op === 'area' || o.op === 'global') {
-        const targets = targetable(state).filter((pl) => o.op === 'global' || gridDist(board, monster.pos, pl.pos) <= o.radius);
+        const targets = o.op === 'global' ? targetable(state) : areaTargets(state, board, monster.pos, o, targetable(state));
         if (!targets.length && bash(state, board, monster, card, monster.intents.slice(at + 1), roll, ctx, events)) continue;
         if (!targets.length) { ctx.log(state, `${source} strikes at nothing.`); continue; }
         hit = targets;
         events.push({ type: 'monsterAttack', id: monster.id, seat: targets[0].seat, cell: monster.pos, area: true, attack: type });
-        for (const pl of targets) applyDamage(state, board, pl, type, roll(o.dmg), { log: ctx.log, source }, events);
+        for (const pl of targets) struck(state, monster, intent.name, pl, ctx, () => applyDamage(state, board, pl, type, roll(o.dmg), { log: ctx.log, source }, events));
       } else if (o.op === 'heal') {
         ctx.log(state, `The ${card.name} heals ${o.n}.`);
+      } else if (o.op === 'ritual') {
+        // Curseblood Ritual: one more; at the mark, a Global Attack, and the count starts over.
+        monster.rituals = (monster.rituals ?? 0) + 1;
+        if (monster.rituals < o.at) { ctx.log(state, `${source}: ritual ${monster.rituals} of ${o.at}.`); continue; }
+        monster.rituals = 0;
+        const targets = targetable(state);
+        ctx.log(state, `${source}: the ${o.at}${o.at === 3 ? 'rd' : 'th'} ritual is complete. The curse falls on everyone.`);
+        if (!targets.length) continue;
+        hit = targets;
+        events.push({ type: 'monsterAttack', id: monster.id, seat: targets[0].seat, cell: monster.pos, area: true, attack: type });
+        for (const pl of targets) applyDamage(state, board, pl, type, roll(o.dmg), { log: ctx.log, source }, events);
       }
     }
     if (intent.unknown.length) ctx.log(state, `(${intent.name}: ${intent.unknown.join(', ')} not played yet.)`);
@@ -566,13 +632,24 @@ export function onPlayerEnters(state, board, pl, cell, ctx, events) {
   for (const monster of state.monsters) {
     const card = MONSTER_BY_ID[monster.kind];
     const rule = card?.onEnterLit;
-    if (!rule || pl.dead) continue;
+    if (!rule || pl.dead || pl.dying) continue;
     if ((board.light[cell] ?? 0) < state.config.litThreshold) continue;
+    // Discard Crystal & no light for ⌛: lit spaces are safe for a round.
+    if (state.flags?.noLight) { ctx.log(state, `${pl.name} steps into the light, but the ${card.name} can't reach them there for now.`); continue; }
     const ability = card.abilities.find((a) => a.roll === 'Persistent' && KIND_TO_TYPE[a.kind]);
     const type = KIND_TO_TYPE[rule.kind] ?? card.evidence.attack;
     events.push({ type: 'monsterAttack', id: monster.id, seat: pl.seat, cell, grab: true, attack: type });
-    applyDamage(state, board, pl, type, rollDamage(ctx, damageSpec(rule.dmg)), { log: ctx.log, source: `The ${card.name}'s ${ability?.name ?? 'attack'}` }, events);
+    struck(state, monster, ability?.name, pl, ctx, () => applyDamage(state, board, pl, type, rollDamage(ctx, damageSpec(rule.dmg)), { log: ctx.log, source: `The ${card.name}'s ${ability?.name ?? 'attack'}` }, events));
   }
+}
+
+// A hit on a player that a weakness discard can undo at the moment
+// (reactions.js): by the ability's name (Swoop), or any attack ('attack');
+// Exhaust passes 'exhaust'.
+function struck(state, monster, what, pl, ctx, hit) {
+  const snap = watch(state, pl);
+  hit();
+  if (!offer(state, monster, what, snap, ctx) && what !== 'exhaust') offer(state, monster, 'attack', snap, ctx);
 }
 
 export { describeDamage };

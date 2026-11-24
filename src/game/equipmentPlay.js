@@ -24,6 +24,7 @@ import { checkRequirement } from './cards/requirements.js';
 import { RANGE, cellRange, INJURY_TRACKS } from './cards/injuries.js';
 import { injuries } from './combat.js';
 import { doorsAround } from './doors.js';
+import { strikeNow } from './monsterTurn.js';
 
 const REACH = { close: RANGE.close, mid: RANGE.mid, long: Infinity, self: 0, all: Infinity };
 // Long only reaches 3 spaces or more (not Close or Mid).
@@ -169,6 +170,8 @@ export function useEquipment(state, board, pl, action, ctx, events) {
   // Raise other dice (Torchlight, Illuminate): pick them before paying.
   const raise = fx.raise ? [...new Set(action.raise ?? [])].filter((n) => !dice.includes(n) && state.pool[n] && !state.pool[n].spent).slice(0, fx.raise) : [];
 
+  // What a weakness hit sets off (Trigger Regret) happens after the skill itself.
+  const later = [];
   // Pay the dice.
   for (const n of dice) { state.pool[n].spent = true; state.pool[n].usedFor = card.name; }
 
@@ -194,7 +197,7 @@ export function useEquipment(state, board, pl, action, ctx, events) {
       if (fx.capDie) { monster.mods.capDie = fx.capDie; parts.push(`its damage dice above ${fx.capDie} count as ${fx.capDie} this turn`); }
       if (fx.bonusNext) { monster.mods.bonusNext = (monster.mods.bonusNext ?? 0) + fx.bonusNext; parts.push(`the next attack on it deals ${fx.bonusNext} more`); }
       // A weakness element counts up its weakness track.
-      if (a.kind && mcard.weakness.includes(a.kind)) parts.push(...weaknessHit(state, monster, mcard, ctx, events));
+      if (a.kind && mcard.weakness.includes(a.kind)) parts.push(...weaknessHit(state, board, monster, mcard, ctx, events, later));
       checkDefeat(state, board, monster, mcard, ctx, events);
     }
   }
@@ -312,6 +315,7 @@ export function useEquipment(state, board, pl, action, ctx, events) {
   const text = `${who} uses ${card.name}: ${a.name}${values.length ? ` (${values.join(' + ')})` : ''}${monster ? ` on the ${MONSTER_BY_ID[monster.kind].name}` : ''}${ally && ally !== pl ? ` on ${ally.name}` : ''}. ${parts.filter(Boolean).join('; ')}.${broke ? ` The ${card.name} is spent and discarded.` : ''}`;
   ctx.log(state, text);
   events.push({ type: 'equipUse', seat: pl.seat, item: card.id, ability: a.name, monster: monster?.id ?? null, text, hp: monster?.hp ?? null, broke });
+  for (const f of later) f();
   return null;
 }
 
@@ -339,21 +343,25 @@ function heal(p, spec) {
 }
 
 // A hit with a weakness element: count it, and trigger any track marks reached.
-function weaknessHit(state, monster, mcard, ctx, events) {
+function weaknessHit(state, board, monster, mcard, ctx, events, later = null) {
   monster.weakHits = (monster.weakHits ?? 0) + 1;
   const out = [`weakness hit ${monster.weakHits}`];
   mcard.weaknessTrack.forEach((w, idx) => {
     if (w.hits === null || monster.trackDone.includes(idx) || monster.weakHits < w.hits) return;
     monster.trackDone.push(idx);
     out.push(`weakness: ${w.text}`);
-    applyTrackEffect(monster, mcard, w.text);
+    const strike = applyTrackEffect(monster, mcard, w.text);
     events.push({ type: 'weakness', id: monster.id, text: w.text, hits: w.hits });
+    if (strike) {
+      const f = () => { ctx.log(state, `The ${mcard.name}'s weakness triggers ${strike}.`); strikeNow(state, board, monster, strike, ctx, events); };
+      if (later) later.push(f); else f();
+    }
   });
-  void state; void ctx;
   return out;
 }
 
 // What the game can play of a weakness-track effect; the rest is announced.
+// Returns the name of an ability it sets off at once (Trigger Regret), if any.
 function applyTrackEffect(monster, mcard, text) {
   const t = /−(\d+) toughness/.exec(text);
   if (t) monster.toughLost += Number(t[1]);
@@ -367,6 +375,9 @@ function applyTrackEffect(monster, mcard, text) {
     if (mcard.abilities.some((ab) => ab.name === name)) monster.disabled[name] = /for ⌛/.test(text) ? 1 : true;
   }
   if (/Interrupt this turn/.test(text)) monster.mods.interrupted = true;
+  if (/Reset Curseblood Ritual/.test(text)) monster.rituals = 0;      // the count starts over
+  const trig = /Trigger ([A-Z][\w ]+?)(?:,|$)/.exec(text);
+  return trig && mcard.abilities.some((ab) => ab.name === trig[1].trim()) ? trig[1].trim() : null;
 }
 
 // Achieving the monster's objective wins. A plain "Kill" objective is achieved
@@ -416,14 +427,17 @@ export function achieveObjective(state, ctx, events) {
 }
 
 // ∞ weakness effects that discard an item: "Discard Silver to …". Any time on
-// your turn, discard an Equipment card with a skill of that element.
+// your turn, discard an Equipment card with a skill of that element. Those
+// marked `react` are offered at the moment instead (reactions.js).
+//   Discard Crystal & no light for ⌛: lit spaces are safe from the Shadow
+//   People until your next turn. The rest are announced, played at the table.
 const ELEMENT_WORDS = { silver: 'silver', holy: 'holy', fire: 'fire', crystal: 'crystal', salt: 'salt', iron: 'iron' };
 export function discardOptions(state, pl) {
   const out = [];
   for (const m of state.monsters) {
     const mcard = MONSTER_BY_ID[m.kind];
     mcard?.weaknessTrack.forEach((w, t) => {
-      if (w.hits !== null) return;
+      if (w.hits !== null || w.react) return;
       const word = /Discard (\w+)/i.exec(w.text)?.[1]?.toLowerCase();
       const kind = ELEMENT_WORDS[word];
       if (!kind) return;
@@ -439,7 +453,10 @@ export function discardForWeakness(state, pl, action, ctx, events) {
   if (!opt) return 'that card can’t be discarded for this';
   const [item] = pl.inventory.equipment.splice(opt.item, 1);
   const mcard = MONSTER_BY_ID[state.monsters.find((m) => m.id === opt.monster).kind];
-  ctx.log(state, `${pl.name} discards the ${EQUIPMENT_BY_ID[item.id].name} against the ${mcard.name}: ${opt.text}. (Resolve its effect at the table.)`);
+  const played = /no light for ⌛/i.test(opt.text);
+  if (played) (state.flags ??= {}).noLight = { seat: pl.seat, round: state.round };
+  ctx.log(state, `${pl.name} discards the ${EQUIPMENT_BY_ID[item.id].name} against the ${mcard.name}: ${opt.text}.` +
+    (played ? ' Lit spaces are safe from it until their next turn.' : ' (Resolve its effect at the table.)'));
   events.push({ type: 'weaknessDiscard', seat: pl.seat, item: item.id, text: opt.text });
   return null;
 }
@@ -466,7 +483,7 @@ export function hurtMonster(state, board, monster, dice, kind, rollDie, ctx, eve
   const through = tough === Infinity ? 0 : Math.max(0, dmg - tough);
   if (monster.hp !== null) monster.hp = Math.max(0, monster.hp - through);
   ctx.log(state, `The ${mcard.name} takes ${dmg}${tough && tough !== Infinity ? ` − toughness ${tough}` : ''}: ${through} gets through${monster.hp === null ? '' : ` (${monster.hp}/${monster.maxHp})`}.`);
-  if (kind && mcard.weakness.includes(kind)) weaknessHit(state, monster, mcard, ctx, events);
+  if (kind && mcard.weakness.includes(kind)) weaknessHit(state, board, monster, mcard, ctx, events);
   checkDefeat(state, board, monster, mcard, ctx, events);
   return through;
 }
@@ -474,18 +491,21 @@ export function hurtMonster(state, board, monster, dice, kind, rollDie, ctx, eve
 // Trigger the monster's next weakness-track effects without hits (Message
 // Cypher and Chalk-Scrawled Narrative after midnight): the next `n` numbered
 // marks it hasn't reached, in order.
-export function triggerWeakness(state, monster, n, ctx, events) {
+export function triggerWeakness(state, board, monster, n, ctx, events) {
   const mcard = MONSTER_BY_ID[monster.kind];
   if (!mcard) return [];
   const out = [];
+  const strikes = [];
   mcard.weaknessTrack.forEach((w, idx) => {
     if (out.length >= n || w.hits === null || monster.trackDone.includes(idx)) return;
     monster.trackDone.push(idx);
     monster.mods ??= {};
-    applyTrackEffect(monster, mcard, w.text);
+    const strike = applyTrackEffect(monster, mcard, w.text);
     out.push(w.text);
     events.push({ type: 'weakness', id: monster.id, text: w.text, hits: w.hits });
+    if (strike) strikes.push(strike);
   });
   ctx.log(state, out.length ? `The ${mcard.name}'s weakness: ${out.join('; ')}.` : `The ${mcard.name} has no weakness effects left to trigger.`);
+  for (const s of strikes) strikeNow(state, board, monster, s, ctx, events);
   return out;
 }
