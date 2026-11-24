@@ -118,10 +118,20 @@ async function measure() {
   };
 }
 // How many times the slowest 10% of frames fit in the 30 fps budget (33 ms a
-// frame), from the synced frame times (CPU and GPU end to end: on the safe
-// side, as a normal frame overlaps the two).
+// frame), from the better-supported of two measures:
+// - the frame rate: frames that come every N ms take at most N ms, so this is
+//   a floor ("at least"); it can't show more than the screen's refresh rate.
+// - the synced frame cost: waiting for the GPU every frame adds a stall of
+//   its own (large on some phone GPUs), so it errs on the low side.
+// Measured on a Pixel 10a: 58 fps on a board whose synced cost said 36 ms.
 const BUDGET_MS = 1000 / 30;
-export const headroom = (v) => (v.frame90 ? BUDGET_MS / v.frame90 : null);
+export function headroom(v) {
+  const fromFps = v.low ? v.low / 30 : 0;
+  const fromCost = v.frame90 ? BUDGET_MS / v.frame90 : 0;
+  if (!fromFps && !fromCost) return null;
+  return fromFps >= fromCost ? { x: fromFps, atLeast: v.low >= 55 } : { x: fromCost, atLeast: false };
+}
+const headroomText = (h) => `${h.atLeast ? 'at least ' : ''}${h.x.toFixed(1)}×`;
 
 function closeUp() {
   // Straight down onto the middle of the board at the angled view's slant,
@@ -177,7 +187,7 @@ const viewLine = (v) => {
   return `${v.fps.toFixed(0)} fps (slowest 10%: ${v.low.toFixed(0)}), ${kTris(v.tris)} triangles, ${v.calls} draw calls; `
     + `frame cost ${ms(v.frame)} (slowest 10%: ${ms(v.frame90)}; with shadow redraw ${ms(v.frameShadow)}), CPU ${ms(v.cpu)}, GPU ${ms(v.gpu)}; `
     + `shadow redraw ${v.shadowTris === null ? 'n/a' : `+${kTris(v.shadowTris)} triangles, CPU ${ms(v.cpuShadow)}`} (${v.shadowsPerSec.toFixed(1)}/s)`
-    + (h === null ? '' : `; headroom ${h.toFixed(1)}x for 30 fps`);
+    + (h === null ? '' : `; headroom ${headroomText(h).replace('×', 'x')} for 30 fps`);
 };
 
 export function resultsText(r = last) {
@@ -204,10 +214,10 @@ function showResults() {
         <dt>Drawn</dt><dd>${k(v.tris)} triangles · ${v.calls} draws</dd>
         <dt>Frame cost</dt><dd>${ms(v.frame)}<small> (slowest 10%: ${ms(v.frame90)})</small></dd>
         <dt>Shadow redraw</dt><dd>${v.shadowTris === null ? '–' : `+${k(v.shadowTris)} triangles${v.frameShadow ? ` · frame ${ms(v.frameShadow)}` : ''}`}</dd>
-        <dt>Headroom</dt><dd class="${h === null ? '' : h >= 1.5 ? 'good' : h >= 1 ? 'ok' : 'bad'}">${h === null ? 'needs GPU timing' : `${h.toFixed(1)}× the 30 fps budget`}</dd>
+        <dt>Headroom</dt><dd class="${h === null ? '' : h.x >= 1.5 ? 'good' : h.x >= 1 ? 'ok' : 'bad'}">${h === null ? '–' : `${headroomText(h)} the 30 fps budget`}</dd>
       </dl></div>`;
     }).join('')}
-    <p class="sp-note">Board built in ${r.buildMs} ms. Frame rate stops at the screen's refresh rate (often 60); frame cost doesn't, so it shows what's left. Frame cost: CPU and GPU time for one frame, end to end. Headroom: how many times the slowest 10% of frames fit in 33 ms (30 fps). A shadow redraw happens only while something moves.</p>
+    <p class="sp-note">Board built in ${r.buildMs} ms. Headroom: how many times the slowest 10% of frames fit in 33 ms (30 fps), from the frame rate or the frame cost, whichever shows more. Frame rate stops at the screen's refresh rate, so at 60 fps it reads "at least". Frame cost: each frame timed while waiting for the GPU to finish; that wait adds time of its own, so it errs high. A shadow redraw happens only while something moves.</p>
     <div class="sp-btns"><button id="spCopy">Copy results</button><button id="spAgain">Another test</button><button class="sp-go" data-close>Done</button></div>`;
   el.querySelectorAll('[data-close]').forEach((b) => { b.onclick = closeStressTest; });
   el.querySelector('#spAgain').onclick = showSetup;

@@ -651,7 +651,8 @@ npm test           # headless rules tests (plain Node: no browser, no three.js)
   and draw calls per frame, the extra triangles in a shadow redraw, and the **frame cost**: for the last 2 s
   every frame waits for the GPU to finish, so its time covers CPU and GPU end to end. Frame rate stops at the
   screen's refresh rate (often 60), frame cost doesn't, so **headroom** (how many times the slowest 10% of
-  frames fit in 33 ms, i.e. 30 fps) shows how much is left. Where the browser has GPU timers, GPU time is
+  frames fit in 33 ms, i.e. 30 fps) shows how much is left: from the frame rate ("at least", when it sits at the
+  refresh rate) or the frame cost (which errs high: the wait itself adds time on some phone GPUs), whichever shows more. Where the browser has GPU timers, GPU time is
   reported too. Counts include the shadow pass (three.js would reset them between the two). Midnight effects can be on or off; indoor
   floors are split into 4 × 4 rooms. The editor's board is set aside (autosave off) and comes back when the
   panel closes; automatic resolution is paused so the quality is measured as set. **Copy results** puts the
