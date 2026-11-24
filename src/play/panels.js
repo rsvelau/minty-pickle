@@ -10,7 +10,8 @@ import { MONSTER_BY_ID, DAMAGE_KINDS } from '../game/cards/monsters.js';
 import { matchesEvidence } from '../game/mystery.js';
 import { grid, ui } from '../app/config.js';
 import { $ } from '../app/dom.js';
-import { defenseTotal, dieHTML, play } from './playView.js';
+import { toast } from '../app/files.js';
+import { defenseTotal, dieHTML, endCellPick, play, startCellPick } from './playView.js';
 import { __set_camTween, camera, cellToWorld, controls } from '../render/scene.js';
 import { EQUIPMENT_BY_ID } from '../game/cards/equipment.js';
 import { EVENT_CATEGORIES } from '../game/cards/events.js';
@@ -624,6 +625,22 @@ function renderUseSheet(body, pl, items) {
   }; });
   body.querySelectorAll('[data-target]').forEach((b) => { b.onclick = () => { useUI.target = JSON.parse(b.dataset.target); renderInventory(); }; });
   body.querySelector('.use-go').onclick = () => {
+    if (fx.lure) {
+      // Distract: choose the space on the board.
+      const pay = { item: useUI.item, ability: useUI.ability, dice: [...useUI.dice] };
+      closeInventory();
+      startCellPick({
+        cells: targets.map((t) => t.cell),
+        label: 'Tap a lit space for the boombox',
+        onPick: (cell) => {
+          endCellPick();
+          const r = play.useEquipment({ ...pay, target: { cell } });
+          if (!r.ok) toast(r.error ? r.error[0].toUpperCase() + r.error.slice(1) + '.' : 'That can’t be used now.');
+          useUI.item = null;
+        },
+      });
+      return;
+    }
     const r = play.useEquipment({ item: useUI.item, ability: useUI.ability, dice: useUI.dice, target: useUI.target ?? (targets[0] ? tpay(targets[0]) : null), raise: useUI.raise });
     if (!r.ok) { useUI.error = r.error ? r.error[0].toUpperCase() + r.error.slice(1) + '.' : 'That can’t be used now.'; renderInventory(); return; }
     useUI.item = null;

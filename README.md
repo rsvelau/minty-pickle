@@ -122,8 +122,17 @@ teammates in your space for heals like the Medical Kit). Obol costs (◉) take a
   the monster included, until someone Breaches it; the spike and the chain are left on the door (the card is
   lost). Doors the Nailed Shut and Roof Collapse events block also stop the monster now, and are drawn boarded.
   A breached doorway can't be shut again (Lockdown and Nailed Shut pass it by). `src/game/doors.js`.
-- Skills marked ✋ (Salt Circle, Distract, Rally, Spiritual Backlash, Wrathful Penance, Weeping
-  Barrier, Sacrifice, Camouflage, Brace, Lucky, Toss, Drink, Lunge) are paid for and logged, and resolved at the
+- **Holding the monster back** (each lasts through the monster's next turn, at the end of the round):
+  **Salt Circle** (Salt Lick, Glowing Salt Lamp) pours a ring of salt on your space: no monster, ghosts
+  included, can enter or cross it, though one can still come up beside it and strike whoever is inside.
+  **Distract** (Compact Boombox): pick a space within Mid range (2) on the board (the reachable spaces light
+  amber, the dice tray steps aside); every move the monster makes on its turn heads there. **Camouflage**
+  (Viper Hood): the monster won't come for you or strike you up close (Area and Global attacks still can),
+  and you can't move the rest of your turn. **Brace** (Ice Axe): you can't be moved; nothing moves players
+  yet, so it waits for the monster abilities that will (Drag, Seize...). The salt and the boombox show on
+  the board; Camouflaged and Braced players are tagged in the player list.
+- Skills marked ✋ (Rally, Spiritual Backlash, Wrathful Penance, Weeping
+  Barrier, Sacrifice, Lucky, Toss, Drink, Lunge) are paid for and logged, and resolved at the
   table for now.
 
 **The clock stops at midnight**: from then on it shows 12:00 AM · Midnight, and ⏳ effects do nothing.

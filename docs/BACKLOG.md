@@ -16,14 +16,11 @@ everyone; Nail Shut and Lock both block a door for everyone, monsters too, until
 chain is lost. Event-blocked doors (Nailed Shut, Roof Collapse) now stop monsters and are drawn boarded over.
 Still not drawn: Lockdown's locked doors (they work, but look as before).
 
-## 2. Holding the monster back (equipment)
-- [ ] **Salt Circle** — Prevent Monster from crossing this space for 1 turn. *Salt Lick, Glowing Salt Lamp (both 🔗)*
-- [ ] **Distract** — The Monster must use movement to approach a selected space this turn. *Compact Boombox (🔗)*
-  (the Police Patrol lure after midnight already does something similar: reuse it)
-- [ ] **Camouflage** — Cannot be approached this turn. Cannot move. *Viper Hood*
-  (Bumped Shelf's after-midnight Hide already makes a player untargetable: reuse it)
-- [ ] **Brace** — Immune to being moved this turn. *Ice Axe* (only matters once monsters can move players: see 7)
-- Needs: picking a space on the map (Distract).
+## ~~2. Holding the monster back (equipment)~~ — done (2026-11-24)
+Salt Circle, Distract, Camouflage and Brace are played; each lasts through the monster's next turn. Salt
+stops every monster (ghosts too) entering or crossing the space; Distract picks a space within Mid range (2)
+on the board; Camouflage hides you from pursuit and Close attacks (not Area/Global) and stops your
+movement; Brace is recorded (`bracedRound`) for when monsters can move players (group 7).
 
 ## 3. Spiritual damage tricks (equipment)
 - [ ] **Spiritual Backlash** — The target (a monster or a teammate) takes the Spiritual damage you would have taken this turn instead (untyped to monsters). *Bronze Skull Lantern*
@@ -104,7 +101,7 @@ need going through with the designer.
 ---
 
 ### Suggested order
-~~1~~ → 2 → 3 → 4 (equipment: today you can pay for these and get nothing) · 9 and 8 (small, per monster) ·
+~~1~~ → ~~2~~ → 3 → 4 (equipment: today you can pay for these and get nothing) · 9 and 8 (small, per monster) ·
 6 · 5 (new movement) · 7 and 10 together, one monster at a time.
 
-Until groups 2-4 are built, consider disabling the ✋ skills so they can't be spent by mistake.
+Until groups 3-4 are built, consider disabling the ✋ skills so they can't be spent by mistake.

@@ -40,7 +40,7 @@ export function bodyOf(kind) {
   return t.includes('Incorporeal') ? 'incorporeal' : t.includes('Semi-Corporeal') ? 'semi' : 'corporeal';
 }
 // Every cell, through anything: a ghost's walking field.
-function phaseField(grid, from) {
+function phaseField(grid, from, blocked = new Set()) {
   const n = grid.cells.length;
   const dist = new Int32Array(n).fill(-1), prev = new Int32Array(n).fill(-1);
   dist[from] = 0;
@@ -50,7 +50,7 @@ function phaseField(grid, from) {
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       if (!grid.inBounds(x + dx, y + dy)) continue;
       const j = grid.index(x + dx, y + dy);
-      if (dist[j] >= 0) continue;
+      if (dist[j] >= 0 || blocked.has(j)) continue;
       dist[j] = dist[q[h]] + 1; prev[j] = q[h]; q.push(j);
     }
   }
@@ -61,12 +61,22 @@ function phaseField(grid, from) {
 // others as if every door (locked, nailed, chained...) would give way.
 function monsterField(state, board, monster, from) {
   const g = board.grid;
-  if (bodyOf(monster.kind) === 'incorporeal') return phaseField(g, from);
+  // Salt Circles can't be entered or crossed (a player standing in one can
+  // still be walked up to: the walk stops next to them).
+  const salt = saltedCells(state).filter((i) => !state.players.some((pl) => !pl.dead && pl.pos === i));
+  if (bodyOf(monster.kind) === 'incorporeal') return phaseField(g, from, new Set(salt));
   const { x, y } = g.coords(from);
   const real = g.edgeOverride;
+  const was = salt.map((i) => g.cells[i].walkable);
   g.edgeOverride = (k, t) => (anyDoor(t) ? 'door' : real ? real(k, t) : t);
-  try { return g.moveField(x, y, { keys: false }); } finally { g.edgeOverride = real; }
+  for (const i of salt) g.cells[i].walkable = false;
+  try { return g.moveField(x, y, { keys: false }); } finally {
+    g.edgeOverride = real;
+    salt.forEach((i, n) => { g.cells[i].walkable = was[n]; });
+  }
 }
+// Salt Circles in effect (they last through the monster's turn that round).
+export const saltedCells = (state) => (state.saltCircles ?? []).filter((c) => c.round === state.round).map((c) => c.cell);
 // The edge between two neighbouring cells.
 function edgeBetween(grid, a, b) {
   const p = grid.coords(a), q = grid.coords(b);
@@ -74,7 +84,8 @@ function edgeBetween(grid, a, b) {
   return dx ? edgeKey('v', dx > 0 ? p.x + 1 : p.x, p.y) : edgeKey('h', p.x, dy > 0 ? p.y + 1 : p.y);
 }
 // Can the monster really step from a to b (its neighbour)? Ghosts always can.
-function canWalk(board, monster, a, b) {
+function canWalk(board, monster, a, b, state = null) {
+  if (state && saltedCells(state).includes(b)) return false;   // salt stops every body
   if (bodyOf(monster.kind) === 'incorporeal') return true;
   const p = board.grid.coords(a), q = board.grid.coords(b);
   return board.grid.canStep(p.x, p.y, q.x - p.x, q.y - p.y);
@@ -151,11 +162,13 @@ const label = (board, i) => { const { x, y } = board.grid.coords(i); return cell
 // The living player nearest the monster by walking (ties: lowest seat).
 // Bumped Shelf (after midnight): a hidden player can't be targeted this round.
 const targetable = (state) => alive(state).filter((pl) => pl.hiddenRound !== state.round);
+// Who it will come for (and strike up close): not the camouflaged (Viper Hood).
+const chaseable = (state) => targetable(state).filter((pl) => pl.camoRound !== state.round);
 function nearestTarget(state, board, from, monster = null) {
   const { x, y } = board.grid.coords(from);
   const field = monster ? monsterField(state, board, monster, from) : board.grid.moveField(x, y, { keys: false });
   let best = null;
-  for (const pl of targetable(state)) {
+  for (const pl of chaseable(state)) {
     const d = pl.pos === from ? 0 : field.dist[pl.pos];
     if (d < 0) continue;
     if (!best || d < best.d) best = { pl, d, path: field.path(pl.pos) };
@@ -172,7 +185,7 @@ function planMovement(state, board, monster, ops, ctx) {
       // Police Patrol (after midnight): this move heads for the sirens.
       const path = monsterField(state, board, monster, pos).path(monster.lure.cell) ?? [];
       for (const cell of path.slice(1, 1 + o.n)) {
-        if (!canWalk(board, monster, pos, cell)) break;   // a door in the way
+        if (!canWalk(board, monster, pos, cell, state)) break;   // a door or salt in the way
         steps.push(cell); pos = cell;
       }
       continue;
@@ -184,7 +197,7 @@ function planMovement(state, board, monster, ops, ctx) {
       // (it may Bash it: see doorInPath).
       for (const cell of t.path.slice(1, 1 + o.n)) {
         if (cell === t.pl.pos) break;
-        if (!canWalk(board, monster, pos, cell)) break;
+        if (!canWalk(board, monster, pos, cell, state)) break;
         steps.push(cell);
         pos = cell;
       }
@@ -195,7 +208,7 @@ function planMovement(state, board, monster, ops, ctx) {
         for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
           if (!board.grid.inBounds(x + dx, y + dy)) continue;
           const c = board.grid.index(x + dx, y + dy);
-          if (!canWalk(board, monster, pos, c)) continue;
+          if (!canWalk(board, monster, pos, c, state)) continue;
           const t = nearestTarget(state, board, c, monster);
           const d = t ? t.d : 99;
           if (!best || d > best.d) best = { c, d };
@@ -233,7 +246,7 @@ const inClose = (state, board, pos) => alive(state).filter((pl) => cellRange(boa
 // A fly swarm's route from `from` to the nearest living player: over any
 // terrain, but walls, windows and locked doors stop it. Returns cells or null.
 export function swarmRoute(state, board, from) {
-  return swarmRouteTo(board, from, new Set(alive(state).map((pl) => pl.pos)));
+  return swarmRouteTo(board, from, new Set(chaseable(state).map((pl) => pl.pos)));
 }
 export function swarmRouteTo(board, from, targets) {
   const grid = board.grid;
@@ -261,7 +274,7 @@ const swarmVictim = (state, path) => (path ? alive(state).find((pl) => pl.pos ==
 
 // The player a melee Attack goes for: in Close range, nearest first.
 function closeTarget(state, board, pos) {
-  const near = inClose(state, board, pos).filter((pl) => pl.hiddenRound !== state.round);
+  const near = inClose(state, board, pos).filter((pl) => pl.hiddenRound !== state.round && pl.camoRound !== state.round);
   if (!near.length) return null;
   const t = nearestTarget(state, board, pos);
   return near.find((pl) => pl === t?.pl) ?? near[0];
@@ -487,7 +500,8 @@ export function executeIntent(state, board, monster, ctx, events) {
       cut += trap.cut;
     }
     if (move.steps.length) ctx.log(state, `The ${card.name} moves to ${label(board, monster.pos)}.`);
-    if (monster.lure && move.steps.length) { delete monster.lure; }
+    // Police Patrol's sirens pull one move; Distract holds for the whole turn.
+    if (monster.lure && monster.lure.round === undefined && move.steps.length) { delete monster.lure; }
     if (monster.mods?.interrupted) { ctx.log(state, `The ${card.name} is interrupted.`); break; }
     // Then the rest in card order; `hit` = who the action is aimed at (for Exhaust).
     let hit = [];
@@ -542,6 +556,7 @@ export function executeIntent(state, board, monster, ctx, events) {
   }
   monster.intents = null;
   monster.danger = [];
+  if (monster.lure?.round !== undefined) delete monster.lure;   // Distract is over
   endMonsterTurn(monster);
 }
 

@@ -266,6 +266,7 @@ function applyActionNow(state, board, action) {
       pl.mods = {};
       state.moveBonus = 0;
       state.windDouble = false;
+      state.noMove = false;                          // Camouflage: can't move the rest of that turn
       startOfTurn(state, eventCtx(state));
       state.pool = Array.from({ length: lim.dice }, () => ({ kind: 'black', v: d6(state) }));
       state.slots = [];
@@ -333,6 +334,7 @@ function applyActionNow(state, board, action) {
       // turn carries on afterwards: slot more dice, adjust defense, move
       // again, or end it. With nothing new slotted, this ends the turn.
       if (state.phase !== 'slotting') return fail('not slotting');
+      if (state.noMove && state.slots.some((n) => !state.pool[n].spent)) return fail('camouflaged: you can’t move this turn');
       const fresh = commitFresh(state);
       if (!fresh) { endTurn(state, board, events); break; }
       state.roll = fresh.total;

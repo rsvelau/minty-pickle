@@ -1206,3 +1206,14 @@ body.stress-on #info { display: none !important; }
   cursor: pointer; touch-action: manipulation; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
 }
 .tray-pill[hidden] { display: none; }
+
+/* Picking a space on the board (Distract): a slim bar under the clock. */
+.pick-bar {
+  position: fixed; z-index: 30; left: 50%; transform: translateX(-50%); top: calc(84px + env(safe-area-inset-top, 0px));
+  display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 24px);
+  padding: 6px 6px 6px 14px; border-radius: 999px; border: 1px solid #ffc04a;
+  background: var(--panel); color: var(--text); font: 500 13px system-ui, sans-serif; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+.pick-bar[hidden] { display: none; }
+.pick-bar span { white-space: nowrap; }
+.pick-bar button { min-height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,0.06); color: var(--text); cursor: pointer; }

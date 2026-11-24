@@ -73,6 +73,13 @@ export function targetsFor(state, board, pl, ability) {
     return state.players.filter((p) => !p.dead && (p === pl || cellRange(board.grid, pl.pos, p.pos) <= Math.max(reach, 0)))
       .map((p) => ({ seat: p.seat, name: p.name }));
   }
+  if (fx.lure) {
+    // Distract: any walkable space within the skill's range (Mid: 3).
+    const g = board.grid;
+    const out = [];
+    g.cells.forEach((c, i) => { if (c.walkable && cellRange(g, pl.pos, i) <= reach) out.push({ cell: i, name: `space ${i}` }); });
+    return out;
+  }
   if (fx.door) {
     // The doors on your own cell's sides. Breach: any not already breached;
     // block: any not breached (a doorway has nothing to close) or blocked.
@@ -104,7 +111,7 @@ export function useEquipment(state, board, pl, action, ctx, events) {
   const values = dice.map((n) => state.pool[n].v);
 
   // Target.
-  let monster = null, ally = null, door = null;
+  let monster = null, ally = null, door = null, spot = -1;
   if (fx.target === 'monster') {
     const options = targetsFor(state, board, pl, a);
     const pick = options.find((o) => o.monster === action.target?.monster) ?? (options.length === 1 ? options[0] : null);
@@ -115,6 +122,10 @@ export function useEquipment(state, board, pl, action, ctx, events) {
     const pick = options.find((o) => o.seat === action.target?.seat) ?? options.find((o) => o.seat === pl.seat);
     if (!pick) return 'no one in range';
     ally = state.players[pick.seat];
+  } else if (fx.lure) {
+    if (!state.monsters.length) return 'there is no monster to distract';
+    spot = targetsFor(state, board, pl, a).find((o) => o.cell === action.target?.cell)?.cell ?? -1;
+    if (spot < 0) return 'choose a space within reach';
   } else if (fx.door) {
     const options = targetsFor(state, board, pl, a);
     door = options.find((o) => o.edge === action.target?.edge) ?? (options.length === 1 ? options[0] : null);
@@ -222,6 +233,26 @@ export function useEquipment(state, board, pl, action, ctx, events) {
       parts.push(`the ${door.side} door is ${fx.how ?? 'blocked'}: no one gets through, the monster included, until it is breached`);
     }
     events.push({ type: 'doors', edge: door.edge, change: fx.door });
+  }
+  // Holding the monster back: each lasts through the monster's next turn
+  // (it acts at the end of this round: `round` marks it).
+  if (fx.salt) {
+    state.saltCircles = [...(state.saltCircles ?? []).filter((c) => c.round === state.round), { cell: pl.pos, round: state.round }];
+    parts.push('a ring of salt: no monster can enter or cross this space through its next turn');
+  }
+  if (spot >= 0) {
+    for (const m of state.monsters) m.lure = { cell: spot, round: state.round };
+    parts.push('the monster has to head for that space with its movement on its next turn');
+  }
+  if (fx.camouflage) {
+    pl.camoRound = state.round;
+    state.noMove = true;   // can't move the rest of this turn
+    state.steps = 0;
+    parts.push('camouflaged: the monster won’t come for you or strike you up close through its next turn (Area and Global attacks still can); you can’t move this turn');
+  }
+  if (fx.brace) {
+    pl.bracedRound = state.round;
+    parts.push('braced: nothing can move you through the monster’s next turn');
   }
   if (fx.manual) parts.push(`resolve at the table: ${a.text}`);
 

@@ -569,8 +569,79 @@ export function createPlay({
     }
   }
 
+  // Holding the monster back, on the board: a ring of salt on each Salt
+  // Circle, and the boombox (with its sound) on a Distract space. They go when
+  // the effect does (after the monster's turn).
+  const wardTokens = new Map(); // kind:cell -> mesh
+  const wardTex = {};
+  function wardTexture(kind) {
+    if (wardTex[kind]) return wardTex[kind];
+    const c = document.createElement('canvas');
+    c.width = c.height = 256;
+    const x = c.getContext('2d');
+    let seed = 7;
+    const r = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    if (kind === 'salt') {
+      // Coarse white grains poured in a ring.
+      for (let k = 0; k < 2600; k++) {
+        const a = r() * Math.PI * 2, rad = 96 + (r() - 0.5) * 22 * (1 + r());
+        x.fillStyle = `rgba(${235 + r() * 20},${235 + r() * 20},${230 + r() * 20},${0.55 + r() * 0.45})`;
+        x.fillRect(128 + Math.cos(a) * rad, 128 + Math.sin(a) * rad, 1.5 + r() * 2.5, 1.5 + r() * 2.5);
+      }
+    } else {
+      // Sound rings round a little boombox.
+      x.strokeStyle = 'rgba(255,214,120,0.8)';
+      for (let k = 1; k <= 3; k++) { x.lineWidth = 7 - k * 1.5; x.beginPath(); x.arc(128, 128, 40 + k * 26, -0.9, 0.9); x.stroke(); x.beginPath(); x.arc(128, 128, 40 + k * 26, Math.PI - 0.9, Math.PI + 0.9); x.stroke(); }
+      x.fillStyle = '#26282c'; x.fillRect(80, 100, 96, 56);
+      x.fillStyle = '#c9a23a'; x.fillRect(80, 94, 96, 8);
+      x.fillStyle = '#9a9ea4';
+      for (const cx of [104, 152]) { x.beginPath(); x.arc(cx, 128, 18, 0, Math.PI * 2); x.fill(); }
+      x.fillStyle = '#26282c';
+      for (const cx of [104, 152]) { x.beginPath(); x.arc(cx, 128, 7, 0, Math.PI * 2); x.fill(); }
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return (wardTex[kind] = t);
+  }
+  function syncWards() {
+    const s = g();
+    const want = new Map();
+    for (const c of s?.saltCircles ?? []) if (c.round === s.round) want.set(`salt:${c.cell}`, { kind: 'salt', cell: c.cell });
+    for (const mo of s?.monsters ?? []) if (mo.lure?.round === s.round) want.set(`lure:${mo.lure.cell}`, { kind: 'lure', cell: mo.lure.cell });
+    for (const [k, mesh] of wardTokens) if (!want.has(k)) { group.remove(mesh); wardTokens.delete(k); }
+    for (const [k, w] of want) {
+      if (wardTokens.has(k) || !inBoard(w.cell)) continue;
+      const mat = new THREE.MeshBasicMaterial({ map: wardTexture(w.kind), transparent: true, depthWrite: false });
+      terrainify(mat, { bridge: true });
+      const size = w.kind === 'salt' ? 0.98 : 0.7;
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(size, size).rotateX(-Math.PI / 2), mat);
+      const at = centreOf(w.cell);
+      mesh.position.set(at.x, at.y + 0.025, at.z);
+      mesh.renderOrder = 3;
+      group.add(mesh);
+      wardTokens.set(k, mesh);
+    }
+  }
+
+  // Picking a space on the board (Distract): the spaces that can be chosen,
+  // lit amber.
+  const pickMat = new THREE.MeshBasicMaterial({ color: '#ffc04a', transparent: true, opacity: 0.32, depthWrite: false });
+  terrainify(pickMat, { bridge: true });
+  let pickMesh = null;
+  function showPick(cells) {
+    if (pickMesh) { group.remove(pickMesh); pickMesh.dispose(); pickMesh = null; }
+    if (!cells?.length) return;
+    pickMesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.86, 0.86).rotateX(-Math.PI / 2), pickMat, cells.length);
+    const m4 = new THREE.Matrix4();
+    cells.forEach((cell, n) => { const at = centreOf(cell); m4.makeTranslation(at.x, at.y + 0.03, at.z); pickMesh.setMatrixAt(n, m4); });
+    pickMesh.renderOrder = 4;
+    pickMesh.raycast = () => {};
+    group.add(pickMesh);
+  }
+
   function refreshDiscoveries() {
     syncHazards();
+    syncWards();
     const my = g()?.mystery;
     const list = (my?.found ?? []).slice(0, view.shownFinds).map((f) => ({
       cell: f.cell, visual: evidenceVisual(f.kind, f.code), lair: f.kind === 'lair',
@@ -1129,6 +1200,7 @@ export function createPlay({
       board.keyGroups().groups.forEach((kg, gi) => { if (view.shownKeys & (1 << gi)) for (const k of kg.doors) out.add(k); });
       return out;
     },
+    showPick,
     // Doors the game changed: edge key -> 'blocked' | 'breached' | 'open'.
     doorLooks: () => new Map(Object.entries(g()?.doors ?? {})),
     // Doors a monster has been bashing: edge key -> share of health gone (0..1).

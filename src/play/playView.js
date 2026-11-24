@@ -125,7 +125,9 @@ export function renderPlay() {
     const dangerType = s.monsters.flatMap((mo) => mo.dangerTypes?.[k] ?? [])[0];
     return `<div class="pl${k === s.cur ? ' cur' : ''}${p.dead ? ' dead' : ''}${inDanger && !p.dead ? ` danger${dangerType ? ` danger-${dangerType}` : ''}` : ''}" data-inv="${k}" title="Open ${p.name}'s inventory"><span class="chip" style="background:${p.colour}">${p.name}</span>` +
       `<span>${c ? cellLabel(c.x, c.y) : '–'}</span><span>White dice ${p.white}</span>` +
-      `<span class="inj-row">${injuryPips(p)}${p.dead ? ' <b>Dead</b>' : inDanger ? ` <b class="${dangerType ? `dmg-${dangerType}` : ''}" style="${dangerType ? '' : 'color:#ff6a50'}">${dangerType ? dmgIcon(dangerType) : ''}In danger</b>` : ''}</span>` +
+      `<span class="inj-row">${injuryPips(p)}${p.dead ? ' <b>Dead</b>' : inDanger ? ` <b class="${dangerType ? `dmg-${dangerType}` : ''}" style="${dangerType ? '' : 'color:#ff6a50'}">${dangerType ? dmgIcon(dangerType) : ''}In danger</b>` : ''}` +
+      // Through the monster's next turn (Viper Hood, Ice Axe).
+      `${!p.dead && p.camoRound === s.round ? ' <b style="color:#7fe08a">Camouflaged</b>' : ''}${!p.dead && p.bracedRound === s.round ? ' <b style="color:#9ec3ff">Braced</b>' : ''}</span>` +
       `<span class="obol-row">${OBOL_TYPES.map((t) => `<span class="obol-count${counts[t] ? '' : ' zero'}" title="${OBOLS[t].label} Obols">${obolHTML(t)}${counts[t]}</span>`).join('')}</span></div>`;
   }).join('');
   $('#playBoard').innerHTML += s.monsters.map((mo) => {
@@ -272,8 +274,9 @@ export function renderTray() {
   $('#trayDice').setAttribute('aria-expanded', String(trayOpen));
   // Minimized (the – button): only a small Dice pill; a new roll opens it again.
   if (s.phase === 'rolling') trayMin = false;
-  $('#trayPill').hidden = !show || !trayMin;
-  $('#playTray').hidden = !show || trayMin;
+  // Picking a space on the board: out of the way (the spaces are round the player).
+  $('#trayPill').hidden = !show || !trayMin || !!cellPick;
+  $('#playTray').hidden = !show || trayMin || !!cellPick;
   if (!['slotting', 'choosing'].includes(s.phase)) $('#endConfirm').hidden = true;
   if (!show) return;
   const rolling = s.phase === 'rolling';
@@ -348,4 +351,22 @@ export function toggleTrayOpen() {
 // Power Outage (Global) darkens the board while it's in effect in the game.
 export function syncPowerOut() {
   setPowerOut(ui.tool === 'play' && play.session.state?.global?.id === 'power-outage');
+}
+
+// --- Picking a space on the board (Distract) ------------------------------------------
+// The board lights the spaces that can be chosen; a tap on one calls onPick.
+export let cellPick = null; // { cells: Set, onPick(cell) }
+export function startCellPick({ cells, label, onPick }) {
+  cellPick = { cells: new Set(cells), onPick };
+  play.showPick(cells);
+  $('#pickText').textContent = label;
+  $('#pickBar').hidden = false;
+  $('#pickCancel').onclick = endCellPick;
+  renderTray();
+}
+export function endCellPick() {
+  cellPick = null;
+  play.showPick(null);
+  $('#pickBar').hidden = true;
+  renderTray();
 }

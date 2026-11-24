@@ -79,7 +79,7 @@ export const EQUIPMENT_CARDS = [
   ] },
   { id: 'salt-lick', name: 'Salt Lick', abilities: [
     A('close', 'salt', 'Bludgeon', 1, '3+', 'Deal 🎲 damage', HIT('die')),
-    A('self', 'salt', 'Salt Circle', 1, 'Any', 'Prevent Monster from crossing this space for 1 turn.', { manual: true }, 'breaks'),
+    A('self', 'salt', 'Salt Circle', 1, 'Any', 'Prevent Monster from crossing this space for 1 turn.', { salt: true }, 'breaks'),
   ] },
   { id: 'improvised-spear', name: 'Improvised Spear', abilities: [
     A('close', 'iron', 'Pierce', 1, '4+', 'Deal 🎲 damage', HIT('die')),
@@ -130,7 +130,7 @@ export const EQUIPMENT_CARDS = [
     A('self', null, 'Dress Wound', 1, 'Any', 'Heal all Physical injury tiers (yours, or a teammate’s in your space)', { target: 'ally', heal: { P: 'all' } }),
   ] },
   { id: 'compact-boombox', name: 'Compact Boombox', abilities: [
-    A('mid', null, 'Distract', 1, 'Any', 'The Monster must use movement to approach a selected space this turn', { manual: true }, 'breaks'),
+    A('mid', null, 'Distract', 1, 'Any', 'The Monster must use movement to approach a selected space this turn', { lure: true }, 'breaks'),
     A('mid', null, 'Rally', 1, 'Any', 'You and all allies can turn a 🎲 into a 4 bonus Mental defense this turn', { manual: true }),
   ] },
   { id: 'bronze-skull-lantern', name: 'Bronze Skull Lantern', abilities: [
@@ -149,7 +149,7 @@ export const EQUIPMENT_CARDS = [
   ] },
   { id: 'glowing-salt-lamp', name: 'Glowing Salt Lamp', abilities: [
     A('self', null, 'Illuminate', 2, 'Any', 'Change both 🎲 to 4s and refresh', { target: 'self', refreshAs: 4 }),
-    A('close', 'salt', 'Salt Circle', 1, 'Any', 'Prevent Monster from crossing this space for 1 turn', { manual: true }, 'breaks'),
+    A('close', 'salt', 'Salt Circle', 1, 'Any', 'Prevent Monster from crossing this space for 1 turn', { salt: true }, 'breaks'),
   ] },
   { id: 'purity-seal', name: 'Purity Seal', abilities: [
     A('self', null, 'Sacrificial Seal', 0, null, 'Completely negate all damage taken this turn', { target: 'self', negateAll: true }, 'breaks'),
@@ -167,13 +167,13 @@ export const EQUIPMENT_CARDS = [
   ] },
   { id: 'ice-axe', name: 'Ice Axe', abilities: [
     A('close', null, 'Chop', 1, '4+', 'Reduce target’s toughness by 1 this turn, then deal 🎲 damage', HIT('die', { toughDown: 1 })),
-    A('self', null, 'Brace', 1, '4+', 'Immune to being moved this turn', { manual: true }),
+    A('self', null, 'Brace', 1, '4+', 'Immune to being moved this turn', { brace: true }),
   ] },
   { id: 'sacrificial-fetish', name: 'Sacrificial Fetish', abilities: [
     A('all', null, 'Sacrifice', 0, null, 'When you or a teammate is killed, instead remove all injuries from that player', { manual: true }, 'breaks', 1),
   ] },
   { id: 'viper-hood', name: 'Viper Hood', abilities: [
-    A('self', null, 'Camouflage', 1, '2-', 'Cannot be approached this turn. Cannot move', { manual: true }),
+    A('self', null, 'Camouflage', 1, '2-', 'Cannot be approached this turn. Cannot move', { camouflage: true }),
   ] },
   { id: 'good-luck-charm', name: 'Good Luck Charm', abilities: [
     A('self', null, 'Lucky', 0, null, 'Select values for all of your 🎲 this turn', { manual: true }, 'breaks'),

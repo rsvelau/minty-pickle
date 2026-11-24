@@ -11,7 +11,7 @@ import { __set_painting, activeTouches, paintAllowed, painting, pickCell } from 
 import { cancelPlacing, fitPlacing, paintLine, paintRect, placing, placingBrush, showPlacing, startPlacing } from '../editor/placing.js';
 import { $, $$ } from './dom.js';
 import { canvas, endEdgeStroke, gridPoint, isDoorBrush, moveEdgeStroke, nearestEdge, setHoverEdge, startEdgeStroke } from '../editor/walls.js';
-import { play, renderPlay } from '../play/playView.js';
+import { cellPick, play, renderPlay } from '../play/playView.js';
 import { refreshKeyHighlight, refreshMarkers, refreshPropsAndWalls } from '../render/board.js';
 import { __set_camTween, camera, cellToWorld, controls } from '../render/scene.js';
 import { hoverBox } from '../render/tileLook.js';
@@ -24,31 +24,20 @@ export function init() {
       activeTouches.add(ev.pointerId);
       if (activeTouches.size > 1 && painting) { cancelPainting(); return; }
     }
-    if (ev.button !== 0 || !paintAllowed() || activeTouches.size > 1) return;
-    if (ui.tool === 'walls') { startEdgeStroke(ev); return; }
-    if (ui.tool === 'move') { moveClick(pickCell(ev)); return; }
+    // Play: a tap (down and up without moving: see pointerup) picks a
+    // direction or a space, orbit mode or not; holding fast-forwards runners.
     if (ui.tool === 'play') {
-      // A tap on (or near) a direction choice picks it...
-      const cell = pickCell(ev);
-      if (cell && play.choose(grid.index(cell.x, cell.y))) return;
-      const pt = gridPoint(ev);
-      if (pt && play.state.phase === 'choosing') {
-        let best = null, bestD = 1.0;
-        for (const o of play.state.options) {
-          const c = grid.coords(o.i);
-          const d = Math.hypot(pt.gx - (c.x + 0.5), pt.gy - (c.y + 0.5));
-          if (d < bestD) { bestD = d; best = o; }
-        }
-        if (best) { play.choose(best.i); return; }
-      }
-      // ...otherwise press and hold to fast-forward anyone still running.
+      tapStart = ev.button === 0 && activeTouches.size <= 1 ? { id: ev.pointerId, x: ev.clientX, y: ev.clientY, t: performance.now() } : null;
       if (play.anyRunning() || play.state.phase === 'rolling') {
         play.setFast(true);
-        canvas.setPointerCapture?.(ev.pointerId);
+        if (!ui.orbitMode) canvas.setPointerCapture?.(ev.pointerId);
         renderPlay();
       }
       return;
     }
+    if (ev.button !== 0 || !paintAllowed() || activeTouches.size > 1) return;
+    if (ui.tool === 'walls') { startEdgeStroke(ev); return; }
+    if (ui.tool === 'move') { moveClick(pickCell(ev)); return; }
     const cell = pickCell(ev);
     if (!cell) return;
     canvas.setPointerCapture(ev.pointerId);
@@ -99,6 +88,13 @@ export function init() {
     painting.last = cell;
   });
   canvas.addEventListener('pointerup', finishPainting);
+  canvas.addEventListener('pointerup', (ev) => {
+    const t = tapStart;
+    tapStart = null;
+    if (ui.tool !== 'play' || !t || t.id !== ev.pointerId) return;
+    if (Math.hypot(ev.clientX - t.x, ev.clientY - t.y) > 10 || performance.now() - t.t > 600) return; // a drag or a hold
+    playTap(ev);
+  });
   for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
     canvas.addEventListener(type, () => { if (play.state.fast) { play.setFast(false); renderPlay(); } });
   }
@@ -192,4 +188,27 @@ export function frameAhead() {
   const target = cellToWorld(x, y).addScaledVector(fwd, AHEAD);
   const pos = target.clone().addScaledVector(fwd, -CAM_DIST * Math.cos(CAM_PITCH)).setY(CAM_DIST * Math.sin(CAM_PITCH));
   __set_camTween({ t: 0, fromPos: camera.position.clone(), fromTarget: controls.target.clone(), toPos: pos, toTarget: target });
+}
+
+let tapStart = null;
+// A tap on the board in play: a space being picked (Distract), or a direction
+// choice (on or near its cell).
+function playTap(ev) {
+  const cell = pickCell(ev);
+  if (cellPick) {
+    const i = cell ? grid.index(cell.x, cell.y) : -1;
+    if (cellPick.cells.has(i)) cellPick.onPick(i);
+    return;
+  }
+  if (cell && play.choose(grid.index(cell.x, cell.y))) return;
+  const pt = gridPoint(ev);
+  if (pt && play.state.phase === 'choosing') {
+    let best = null, bestD = 1.0;
+    for (const o of play.state.options) {
+      const c = grid.coords(o.i);
+      const d = Math.hypot(pt.gx - (c.x + 0.5), pt.gy - (c.y + 0.5));
+      if (d < bestD) { bestD = d; best = o; }
+    }
+    if (best) play.choose(best.i);
+  }
 }
