@@ -871,6 +871,15 @@ From the Player Mat and Monster Ref Sheet (`Monsters_and_Injuries` spreadsheet):
   and rolls its damage. Pursue, Outflank, Retreat, Teleport, Attack, Area Attack, Global Attack and Heal are
   played from the card text (`src/game/monsterTurn.js`); other effects (Seize, Lure, Pin, Drag, Trap, Exhaust,
   Block doors...) are named in the log and come with each monster's own rules.
+- **Monsters and doors** (by the body on the card):
+  - **Corporeal** monsters are stopped by locked, nailed, chained, boarded and one-way doors, but plan their
+    route as if those would give way. Stuck at a door that is the next step toward their prey, they trade any
+    queued attack with no one in reach for a **Bash**: one die of Physical damage to the door. Doors have
+    **10** health (**12** when chained); at 0 the door is breached, an open doorway for good, for everyone.
+  - **Incorporeal** monsters (Poltergeist, White Lady, Shadow People) phase through walls, doors and blocked
+    spaces whenever they move.
+  - **Semi-Corporeal** monsters (the Barghest) act as Corporeal, but leave a door alone when a later action
+    that round teleports them (teleports ignore walls anyway).
 
 ### Damage-type colours
 

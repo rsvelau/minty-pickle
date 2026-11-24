@@ -100,3 +100,84 @@ test('a breached doorway stays open: the Nailed Shut event and Lockdown pass it 
   s.state.steps = 3;                                     // moves to spend
   assert.ok(nextOptions(s.state, s.board, { back: true }).some((o) => o.i === s.g.index(6, 4)), 'players walk through in Lockdown');
 });
+
+// --- Monsters at doors ---------------------------------------------------------------
+import { armMonster } from '../src/game/equipmentPlay.js';
+import { executeIntent, bodyOf, DOOR_HP } from '../src/game/monsterTurn.js';
+
+// The player inside the building (6,3); a monster of `kind` on the street at
+// (10,5). Its turn: `ops` (default Pursue 8 and Attack 4); every die rolls `die`.
+function hunt(kind, { doorType = 'door', blocked = null, ops = null, die = 4 } = {}) {
+  const s = setup(doorType);
+  s.pl.pos = s.g.index(6, 3);
+  if (blocked) { s.state.doors = { [s.door]: 'blocked' }; if (blocked === 'chain') s.state.doorHp = { [s.door]: 12 }; }
+  const monster = { id: 'm1', kind, pos: s.g.index(10, 5), prev: -1, revealed: true };
+  armMonster(monster);
+  s.state.monsters = [monster];
+  const intent = (o) => ({ roll: 1, ability: 0, name: 'Hunt', kind: 'physical', text: '', ops: o, unknown: [] });
+  const round = (o = ops ?? [{ op: 'pursue', n: 8 }, { op: 'attack', dmg: { fixed: 4 } }], more = []) => {
+    monster.intents = [intent(o), ...more.map(intent)];
+    const events = [];
+    s.board.grid.edgeOverride = gameDoorOverride(s.state);
+    executeIntent(s.state, s.board, monster, { state: s.state, log: () => {}, randInt: () => die - 1 }, events);
+    s.board.grid.edgeOverride = null;
+    return events;
+  };
+  return { ...s, monster, round };
+}
+
+test('bodies come from the card: Corporeal, Incorporeal, Semi-Corporeal', () => {
+  assert.equal(bodyOf('werewolf'), 'corporeal');
+  assert.equal(bodyOf('poltergeist'), 'incorporeal');
+  assert.equal(bodyOf('barghest'), 'semi');
+});
+
+test('a Corporeal monster stops at a nailed door in its path and bashes it down (10 health)', () => {
+  const s = hunt('werewolf', { blocked: 'nail' });
+  let ev = s.round();
+  assert.equal(s.monster.pos, s.g.index(6, 5), 'it walks up to the door and stops');
+  assert.ok(ev.some((e) => e.type === 'doorBash' && e.amount === 4 && e.hp === DOOR_HP - 4), 'its attack, with no one in reach, became a Bash');
+  assert.equal(s.state.doors[s.door], 'blocked');
+  s.round([{ op: 'attack', dmg: { fixed: 4 } }]);          // 10 − 4 − 4 = 2
+  ev = s.round([{ op: 'attack', dmg: { fixed: 4 } }]);     // broken
+  assert.equal(s.state.doors[s.door], 'breached');
+  assert.ok(ev.some((e) => e.type === 'doors'));
+  s.round([{ op: 'pursue', n: 8 }]);
+  assert.equal(s.monster.pos, s.g.index(6, 4), 'through the doorway, next to the player');
+});
+
+test('a chained door takes 12; a map-locked door stops and gets bashed too', () => {
+  const c = hunt('werewolf', { blocked: 'chain', die: 6 });
+  c.round();
+  assert.equal(c.state.doorHp[c.door], 6);
+  c.round([{ op: 'attack', dmg: { fixed: 4 } }]);
+  assert.equal(c.state.doors[c.door], 'breached');
+  const l = hunt('werewolf', { doorType: 'lockedDoor' });
+  l.round();
+  assert.equal(l.monster.pos, l.g.index(6, 5));
+  assert.equal(l.state.doorHp[l.door], 6);
+});
+
+test('no Bash when the door is not in the way, or someone is in reach', () => {
+  const s = hunt('werewolf', { blocked: 'nail' });
+  s.pl.pos = s.g.index(2, 5);                              // the player is out on the street
+  const ev = s.round();
+  assert.ok(!ev.some((e) => e.type === 'doorBash'));
+});
+
+test('an Incorporeal monster phases through walls and doors', () => {
+  const s = hunt('poltergeist', { blocked: 'nail' });
+  const ev = s.round([{ op: 'pursue', n: 8 }, { op: 'attack', dmg: { fixed: 4 } }]);
+  assert.ok(!ev.some((e) => e.type === 'doorBash'));
+  assert.ok(Math.abs(s.g.coords(s.monster.pos).x - 6) + Math.abs(s.g.coords(s.monster.pos).y - 3) === 1, 'right next to the player, inside');
+  assert.ok(ev.some((e) => e.type === 'damage'), 'and attacks');
+});
+
+test('a Semi-Corporeal monster leaves the door alone when it will teleport later this round', () => {
+  const s = hunt('barghest', { blocked: 'nail' });
+  let ev = s.round(undefined, [[{ op: 'teleport', to: 'light' }]]);
+  assert.ok(!ev.some((e) => e.type === 'doorBash'));
+  const t = hunt('barghest', { blocked: 'nail' });
+  ev = t.round();
+  assert.ok(ev.some((e) => e.type === 'doorBash'), 'no teleport coming: it bashes like a Corporeal one');
+});

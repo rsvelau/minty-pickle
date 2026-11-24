@@ -21,6 +21,74 @@ import { RANGE, cellRange } from './cards/injuries.js';
 import { buildingOf } from '../core/mapCheck.js'; // the same grouping the map check uses
 import { endMonsterTurn, hurtMonster } from './equipmentPlay.js';
 import { monsterEnters, monsterDoorBanned } from './eventPlay.js';
+import { anyDoor } from './doors.js';
+import { edgeKey } from '../core/state.js';
+
+// --- Bodies: how a monster gets past walls and doors ------------------------------
+// Corporeal: stopped by locked, nailed, chained, boarded and one-way doors, but
+//   plans its route as if they'd give way; stuck at one that is the next step
+//   toward its prey, it trades any attack with no one in reach for a Bash
+//   (one die of Physical damage to the door). Doors have DOOR_HP (a chained one
+//   CHAIN_HP); at 0 the door is breached: an open doorway for good.
+// Incorporeal: phases through everything when it moves: walls, doors, blocked
+//   spaces.
+// Semi-Corporeal: as Corporeal, but it won't bother with a door when a later
+//   action this round teleports it (teleports ignore walls anyway).
+export const DOOR_HP = 10, CHAIN_HP = 12;
+export function bodyOf(kind) {
+  const t = MONSTER_BY_ID[kind]?.traits ?? [];
+  return t.includes('Incorporeal') ? 'incorporeal' : t.includes('Semi-Corporeal') ? 'semi' : 'corporeal';
+}
+// Every cell, through anything: a ghost's walking field.
+function phaseField(grid, from) {
+  const n = grid.cells.length;
+  const dist = new Int32Array(n).fill(-1), prev = new Int32Array(n).fill(-1);
+  dist[from] = 0;
+  const q = [from];
+  for (let h = 0; h < q.length; h++) {
+    const { x, y } = grid.coords(q[h]);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      if (!grid.inBounds(x + dx, y + dy)) continue;
+      const j = grid.index(x + dx, y + dy);
+      if (dist[j] >= 0) continue;
+      dist[j] = dist[q[h]] + 1; prev[j] = q[h]; q.push(j);
+    }
+  }
+  const path = (i) => { if (dist[i] < 0) return null; const p = []; for (let c = i; c >= 0; c = prev[c]) p.unshift(c); return p; };
+  return { dist, path };
+}
+// Where a monster would walk from `from`: Incorporeal through anything; the
+// others as if every door (locked, nailed, chained...) would give way.
+function monsterField(state, board, monster, from) {
+  const g = board.grid;
+  if (bodyOf(monster.kind) === 'incorporeal') return phaseField(g, from);
+  const { x, y } = g.coords(from);
+  const real = g.edgeOverride;
+  g.edgeOverride = (k, t) => (anyDoor(t) ? 'door' : real ? real(k, t) : t);
+  try { return g.moveField(x, y, { keys: false }); } finally { g.edgeOverride = real; }
+}
+// The edge between two neighbouring cells.
+function edgeBetween(grid, a, b) {
+  const p = grid.coords(a), q = grid.coords(b);
+  const dx = q.x - p.x, dy = q.y - p.y;
+  return dx ? edgeKey('v', dx > 0 ? p.x + 1 : p.x, p.y) : edgeKey('h', p.x, dy > 0 ? p.y + 1 : p.y);
+}
+// Can the monster really step from a to b (its neighbour)? Ghosts always can.
+function canWalk(board, monster, a, b) {
+  if (bodyOf(monster.kind) === 'incorporeal') return true;
+  const p = board.grid.coords(a), q = board.grid.coords(b);
+  return board.grid.canStep(p.x, p.y, q.x - p.x, q.y - p.y);
+}
+// The door the monster is stuck at: its next step toward its prey crosses a
+// door it can't pass. null if none (or a ghost).
+export function doorInPath(state, board, monster) {
+  if (bodyOf(monster.kind) === 'incorporeal') return null;
+  const t = nearestTarget(state, board, monster.pos, monster);
+  const next = t?.path?.[1];
+  if (next === undefined || canWalk(board, monster, monster.pos, next)) return null;
+  const k = edgeBetween(board.grid, monster.pos, next);
+  return anyDoor(board.grid.edgeAt(k)) ? k : null;
+}
 
 const KIND_TO_TYPE = { physical: 'P', mental: 'M', spiritual: 'S' };
 
@@ -83,9 +151,9 @@ const label = (board, i) => { const { x, y } = board.grid.coords(i); return cell
 // The living player nearest the monster by walking (ties: lowest seat).
 // Bumped Shelf (after midnight): a hidden player can't be targeted this round.
 const targetable = (state) => alive(state).filter((pl) => pl.hiddenRound !== state.round);
-function nearestTarget(state, board, from) {
+function nearestTarget(state, board, from, monster = null) {
   const { x, y } = board.grid.coords(from);
-  const field = board.grid.moveField(x, y, { keys: false });
+  const field = monster ? monsterField(state, board, monster, from) : board.grid.moveField(x, y, { keys: false });
   let best = null;
   for (const pl of targetable(state)) {
     const d = pl.pos === from ? 0 : field.dist[pl.pos];
@@ -102,17 +170,21 @@ function planMovement(state, board, monster, ops, ctx) {
   for (const o of ops) {
     if (o.op === 'pursue' && monster.lure) {
       // Police Patrol (after midnight): this move heads for the sirens.
-      const { x, y } = board.grid.coords(pos);
-      const path = board.grid.moveField(x, y, { keys: false }).path(monster.lure.cell) ?? [];
-      for (const cell of path.slice(1, 1 + o.n)) { steps.push(cell); pos = cell; }
+      const path = monsterField(state, board, monster, pos).path(monster.lure.cell) ?? [];
+      for (const cell of path.slice(1, 1 + o.n)) {
+        if (!canWalk(board, monster, pos, cell)) break;   // a door in the way
+        steps.push(cell); pos = cell;
+      }
       continue;
     }
     if (o.op === 'pursue') {
-      const t = nearestTarget(state, board, pos);
+      const t = nearestTarget(state, board, pos, monster);
       if (!t) continue;
-      // Walk toward them, stopping next to them.
+      // Walk toward them, stopping next to them, or at a door it can't pass
+      // (it may Bash it: see doorInPath).
       for (const cell of t.path.slice(1, 1 + o.n)) {
         if (cell === t.pl.pos) break;
+        if (!canWalk(board, monster, pos, cell)) break;
         steps.push(cell);
         pos = cell;
       }
@@ -121,9 +193,10 @@ function planMovement(state, board, monster, ops, ctx) {
         const { x, y } = board.grid.coords(pos);
         let best = null;
         for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-          if (!board.grid.canStep(x, y, dx, dy)) continue;
+          if (!board.grid.inBounds(x + dx, y + dy)) continue;
           const c = board.grid.index(x + dx, y + dy);
-          const t = nearestTarget(state, board, c);
+          if (!canWalk(board, monster, pos, c)) continue;
+          const t = nearestTarget(state, board, c, monster);
           const d = t ? t.d : 99;
           if (!best || d > best.d) best = { c, d };
         }
@@ -215,7 +288,7 @@ function predictVictims(state, board, monster, intents) {
   for (const intent of intents) {
     const type = KIND_TO_TYPE[intent.kind] ?? card?.evidence.attack;
     const before = new Set(seats);
-    pos = planMovement(state, board, { pos }, intent.ops, null).pos;
+    pos = planMovement(state, board, { pos, kind: monster.kind, lure: monster.lure }, intent.ops, null).pos;
     const swarm = MONSTER_BY_ID[monster.kind]?.actsBy === 'swarm';
     for (const o of intent.ops) {
       if (o.op === 'attack' && swarm && o.target !== undefined) {
@@ -379,7 +452,7 @@ export function executeIntent(state, board, monster, ctx, events) {
   // Traps (Rusty Bear Trap, Summoning Circle...): immobilized for whole turns.
   if ((monster.immobileRounds ?? 0) > 0) { mods.immobile = true; monster.immobileRounds--; }
   if (mods.immobile) ctx.log(state, `The ${card.name} is held in place this turn.`);
-  for (const intent of monster.intents) {
+  for (const [at, intent] of monster.intents.entries()) {
     if (!alive(state).length) break;
     const type = KIND_TO_TYPE[intent.kind] ?? card.evidence.attack;
     const source = `The ${card.name}'s ${intent.name}`;
@@ -402,7 +475,7 @@ export function executeIntent(state, board, monster, ctx, events) {
         continue;
       }
       if (cut > 0) { cut--; continue; }
-      if (monsterDoorBanned(state, board, monster.pos, st)) { ctx.log(state, `The ${card.name} finds the door boarded up.`); break; }
+      if (bodyOf(monster.kind) !== 'incorporeal' && monsterDoorBanned(state, board, monster.pos, st)) { ctx.log(state, `The ${card.name} finds the door boarded up.`); break; }
       events.push({ type: 'monsterStep', id: monster.id, from: monster.pos, to: st });
       monster.prev = monster.pos;
       monster.pos = st;
@@ -449,12 +522,14 @@ export function executeIntent(state, board, monster, ctx, events) {
       }
       if (o.op === 'attack') {
         const t = closeTarget(state, board, monster.pos);
+        if (!t && bash(state, board, monster, card, monster.intents.slice(at + 1), roll, ctx, events)) continue;
         if (!t) { ctx.log(state, `${source} finds no one in reach.`); continue; }
         hit = [t];
         events.push({ type: 'monsterAttack', id: monster.id, seat: t.seat, cell: t.pos, attack: type });
         applyDamage(state, board, t, type, roll(o.dmg), { log: ctx.log, source }, events);
       } else if (o.op === 'area' || o.op === 'global') {
         const targets = targetable(state).filter((pl) => o.op === 'global' || gridDist(board, monster.pos, pl.pos) <= o.radius);
+        if (!targets.length && bash(state, board, monster, card, monster.intents.slice(at + 1), roll, ctx, events)) continue;
         if (!targets.length) { ctx.log(state, `${source} strikes at nothing.`); continue; }
         hit = targets;
         events.push({ type: 'monsterAttack', id: monster.id, seat: targets[0].seat, cell: monster.pos, area: true, attack: type });
@@ -486,3 +561,31 @@ export function onPlayerEnters(state, board, pl, cell, ctx, events) {
 }
 
 export { describeDamage };
+
+// A queued attack with no one in reach becomes a Bash on the door in the
+// monster's way (Corporeal and Semi-Corporeal). Returns true if it bashed.
+function bash(state, board, monster, card, later, roll, ctx, events) {
+  const body = bodyOf(monster.kind);
+  if (body === 'incorporeal') return false;
+  const k = doorInPath(state, board, monster);
+  if (!k) return false;
+  if (body === 'semi' && later.some((i) => i.ops.some((o) => o.op === 'teleport'))) {
+    ctx.log(state, `The ${card.name} leaves the door alone: it is about to vanish elsewhere.`);
+    return true;
+  }
+  state.doorHp ??= {};
+  const before = state.doorHp[k] ?? DOOR_HP;
+  const dmg = roll({ dice: 1 });
+  const left = Math.max(0, before - dmg);
+  events.push({ type: 'doorBash', id: monster.id, edge: k, amount: dmg, hp: left });
+  if (left > 0) {
+    state.doorHp[k] = left;
+    ctx.log(state, `The ${card.name} bashes at the door for ${dmg}: it holds (${left} left).`);
+    return true;
+  }
+  delete state.doorHp[k];
+  (state.doors ??= {})[k] = 'breached';
+  ctx.log(state, `The ${card.name} bashes the door in (${dmg}): an open doorway now.`);
+  events.push({ type: 'doors', edge: k, change: 'breach' });
+  return true;
+}

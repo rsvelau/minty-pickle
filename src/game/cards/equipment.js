@@ -94,11 +94,11 @@ export const EQUIPMENT_CARDS = [
   ] },
   { id: 'iron-chain', name: 'Iron Chain', abilities: [
     A('close', 'iron', 'Choke', 2, '2x Target’s', 'Immobilize target. Deal 3 damage ignoring toughness', HIT(3, { ignoreToughness: true, immobile: true })),
-    A('close', null, 'Lock', 2, 'Any', 'Lock an adjacent door. The chain stays on it: the card is lost.', { door: 'block', how: 'chained shut' }, 'breaks'),
+    A('close', null, 'Lock', 2, 'Any', 'Lock an adjacent door. The chain stays on it: the card is lost.', { door: 'block', how: 'chained shut', hp: 12 }, 'breaks'),
   ] },
   { id: 'heavy-silver-chain', name: 'Heavy Silver Chain', abilities: [
     A('close', 'silver', 'Choke', 2, '2x Target’s', 'Immobilize target. Deal 3 damage ignoring toughness', HIT(3, { ignoreToughness: true, immobile: true })),
-    A('close', null, 'Lock', 2, 'Any', 'Lock an adjacent door. The chain stays on it: the card is lost.', { door: 'block', how: 'chained shut' }, 'breaks'),
+    A('close', null, 'Lock', 2, 'Any', 'Lock an adjacent door. The chain stays on it: the card is lost.', { door: 'block', how: 'chained shut', hp: 12 }, 'breaks'),
   ] },
   { id: 'railroad-hammer', name: 'Railroad Hammer', abilities: [
     A('close', 'iron', 'Bludgeon', 1, '3+', 'Deal 🎲 damage', HIT('die')),
