@@ -876,6 +876,8 @@ From the Player Mat and Monster Ref Sheet (`Monsters_and_Injuries` spreadsheet):
     route as if those would give way. Stuck at a door that is the next step toward their prey, they trade any
     queued attack with no one in reach for a **Bash**: one die of Physical damage to the door. Doors have
     **10** health (**12** when chained); at 0 the door is breached, an open doorway for good, for everyone.
+    A bashed door shows it: pale splintered gashes across it and splinters on the floor, more the worse it
+    gets (1-3 gashes, 2-6 splinters).
   - **Incorporeal** monsters (Poltergeist, White Lady, Shadow People) phase through walls, doors and blocked
     spaces whenever they move.
   - **Semi-Corporeal** monsters (the Barghest) act as Corporeal, but leave a door alone when a later action

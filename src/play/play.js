@@ -30,6 +30,7 @@ export {
   DEFAULT_CONFIG, defaultConfig, OBOLS, OBOL_TYPES, obolCounts, INVENTORY_TABS, formatClock, MIDNIGHT,
 } from '../game/rules.js';
 import { MONSTERS, monsterDef } from '../game/monsters.js';
+import { DOOR_HP } from '../game/monsterTurn.js';
 export { MONSTERS, monsterDef };
 
 // The four players' looks: jacket colour (also the name tag), hair, extras.
@@ -639,6 +640,9 @@ export function createPlay({
           refreshDiscoveries();
           onUsed(); // redraw the walls: nailed, chained or breached doors
           break;
+        case 'doorBash':
+          onUsed(); // the door shows the damage
+          break;
         case 'card':
           attachToArrival(view.actors[e.seat], e.cell, () => onCard({ ...e, player: state.players[e.seat] }));
           break;
@@ -1127,6 +1131,16 @@ export function createPlay({
     },
     // Doors the game changed: edge key -> 'blocked' | 'breached' | 'open'.
     doorLooks: () => new Map(Object.entries(g()?.doors ?? {})),
+    // Doors a monster has been bashing: edge key -> share of health gone (0..1).
+    doorDamage: () => {
+      const s = g();
+      const out = new Map();
+      for (const [k, hp] of Object.entries(s?.doorHp ?? {})) {
+        const max = s.doorMax?.[k] ?? DOOR_HP;
+        if (hp < max) out.set(k, Math.min(1, (max - hp) / max));
+      }
+      return out;
+    },
     // Is anyone still running into place?
     anyRunning: () => view.actors.some(running),
     isOption: (i) => g()?.phase === 'choosing' && g().options.some((o) => o.i === i),

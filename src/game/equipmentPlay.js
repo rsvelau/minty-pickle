@@ -218,7 +218,7 @@ export function useEquipment(state, board, pl, action, ctx, events) {
       parts.push(`the ${door.side} door is smashed in: an open doorway for good, for everyone`);
     } else {
       state.doors[door.edge] = 'blocked';
-      if (fx.hp) (state.doorHp ??= {})[door.edge] = fx.hp;   // a chained door takes more to bash in
+      if (fx.hp) { (state.doorHp ??= {})[door.edge] = fx.hp; (state.doorMax ??= {})[door.edge] = fx.hp; } // a chained door takes more to bash in
       parts.push(`the ${door.side} door is ${fx.how ?? 'blocked'}: no one gets through, the monster included, until it is breached`);
     }
     events.push({ type: 'doors', edge: door.edge, change: fx.door });

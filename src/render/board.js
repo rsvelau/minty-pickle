@@ -443,6 +443,33 @@ export function refreshPropsAndWalls() {
     frames.setColorAt(nf++, tmpColor.set(colour));
   };
   const PLY = '#a08660', PLANK = '#6e5638';
+  // A door a monster has been bashing (`frac` 0..1 of its health gone): pale
+  // splintered gashes across it, more the worse it is, and splinters on the floor either
+  // side. Placed from the edge key so they don't jump between redraws.
+  const damage = (k, cx, cz, vertical, open, y0, y1, frac) => {
+    let seed = [...k].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7) || 1;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const room = frames.instanceMatrix.count - nf;
+    const cracks = Math.min(room, Math.ceil(frac * 3));
+    for (let c = 0; c < cracks; c++) {
+      // Short enough, and near enough the middle, to stay on the door.
+      const along = (rnd() - 0.5) * open * 0.3;
+      const mid = FLOOR_H + y0 + (y1 - y0) * (0.3 + rnd() * 0.45);
+      board(cx, cz, along, mid, open * (0.3 + rnd() * 0.2), m(0.045), WALL_T * 1.6, vertical, (rnd() - 0.5) * 2, '#c9a476'); // raw, pale wood where it split
+    }
+    const chips = Math.min(frames.instanceMatrix.count - nf, Math.ceil(frac * 6));
+    for (let c = 0; c < chips; c++) {
+      const side = c % 2 ? 1 : -1, out = m(0.25) + rnd() * m(0.5), along = (rnd() - 0.5) * open * 0.9;
+      tmpMatrix.compose(
+        tmpPos.set(cx + (vertical ? side * out : along), FLOOR_H + EY + 0.004, cz + (vertical ? along : side * out)),
+        tmpQuat.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rnd() * Math.PI),
+        tmpScale.set(m(0.12 + rnd() * 0.25), m(0.03), m(0.05 + rnd() * 0.05)),
+      );
+      frames.setMatrixAt(nf, tmpMatrix);
+      frames.setColorAt(nf++, tmpColor.set(rnd() < 0.5 ? '#7a5a3a' : '#5e4630'));
+    }
+  };
+  const bashed = ui.tool === 'play' && typeof play !== 'undefined' ? play.doorDamage() : new Map();
   // In the play demo, doors whose key has been collected are drawn unlocked.
   const unlockedNow = ui.tool === 'play' && typeof play !== 'undefined' ? play.unlockedEdges() : new Set();
   // ...and doors the game nailed, chained or breached (src/game/doors.js).
@@ -522,6 +549,7 @@ export function refreshPropsAndWalls() {
       board(cx, cz, 0, mid, diag, m(0.16), WALL_T * 1.25, vertical, ang, PLANK);
       board(cx, cz, 0, mid, diag, m(0.16), WALL_T * 1.25, vertical, -ang, PLANK);
       board(cx, cz, 0, FLOOR_H + y0 + hgt * 0.78, open * 0.96, m(0.16), WALL_T * 1.3, vertical, 0.04, PLANK);
+      if (door && bashed.has(k)) damage(k, cx, cz, vertical, open, y0, y1, bashed.get(k));
       continue;
     }
     // Door: wall either side of a centred opening.
@@ -616,7 +644,10 @@ export function refreshPropsAndWalls() {
         const arm = 0.14;
         mark(tipX + Math.cos(a2) * arm / 2, FLOOR_H, tipZ - Math.sin(a2) * arm / 2, arm, 0.014, 0.05, a2, '#5fcf6a');
       }
-    } else {
+    }
+    // Only a shut door shows it (an open or ajar one is never bashed).
+    if (bashed.has(k) && type === 'lockedDoor') damage(k, cx, cz, vertical, DOOR_W, 0, Math.min(DOOR_H, H), bashed.get(k));
+    if (!unlockedDoor && type !== 'lockedDoor' && !oneWay) {
       // Threshold plate across the opening so doors read from any angle.
       tmpMatrix.compose(
         tmpPos.set(cx, FLOOR_H + EY, cz),
