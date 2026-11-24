@@ -274,8 +274,9 @@ a pulsing yellow painted box and amber glow, and lit by the headlights.
   on the cell beyond (`HEADLIGHTS` in `src/core/state.js`). Walls block them, like any light.
 - The headlights are warm sealed-beam / early-halogen white (about 3,200 K, as on 80s–90s cars), with soft
   beams in the air that fade out over about 13 m as well as the glow on the road. The van is parked very
-  slightly askew, but its beams are aimed straight down the road (each pivoting on its lamp), so they stay
-  between a bridge's railings instead of cutting through the truss.
+  slightly askew, beams and all; over 15 m that swings the beams ~1.2 m to one side, so the van sits that far
+  to the other side of its cell, keeping the beams between the sides of the cells they shine into (inside a
+  bridge's railings rather than through its truss).
 - The play demo starts the pawn on the player start cell, and the headlights are its starting light (the
   panel and play bar show the light on the pawn's cell, `Light 90% (van headlights)`). Exported start cells carry `facing`, `faces` and
   `playerStart` (the start cell's label).
