@@ -61,6 +61,9 @@ export function defenseValue(pl, type = null) {
   return dice + bonus;
 }
 
+// Defense still standing this turn: the total less what attacks wore off it.
+export const defenseLeft = (pl, type = null) => Math.max(0, defenseValue(pl, type) - (pl.defenseUsed ?? 0));
+
 const where = (board, i) => { const { x, y } = board.grid.coords(i); return cellLabel(x, y); };
 
 // Deal `amount` damage of `type` (P/M/S) to a player. Returns the outcome.

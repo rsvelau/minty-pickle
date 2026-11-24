@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { createPlay, obolCounts, OBOL_TYPES, OBOLS, monsterDef, defaultConfig, formatClock } from './play.js';
 import { terrainify, terrainHeight } from '../render/terrain.js';
 import { cellLabel } from '../core/state.js';
+import { defenseLeft, defenseValue } from '../game/combat.js';
 import { WATER_Y, grid, ui } from '../app/config.js';
 import { toast } from '../app/files.js';
 import { $ } from '../app/dom.js';
@@ -294,7 +295,7 @@ export function renderTray() {
   }
   $('#trayDefense').innerHTML = defs.join('');
   [...$('#trayDefense').querySelectorAll('.in-def')].forEach((b, k) => { b.onclick = () => play.toggleSlot(s.defSlots[k], 'defense'); });
-  $('#trayDefTotal').textContent = s.defSlots.reduce((a, n) => a + (s.pool[n]?.v ?? 0), 0);
+  defenseTotal($('#trayDefTotal'), s.players[s.cur]);
   const slots = [];
   const base = s.cfg.moveSlots, most = Math.max(base, s.cfg.litSlots);
   for (let k = 0; k < most; k++) {
@@ -325,6 +326,14 @@ export function renderTray() {
       : (s.pool.some((d) => d.kind === 'white') ? 'Rolled white dice are discarded after this turn' : 'Tap dice to slot them');
 }
 export let trayTarget = 'move';
+// The Defense total: what's left after this turn's attacks ("3/6" once
+// something has hit; equipment bonuses, Rushed and Doomed counted).
+export function defenseTotal(el, pl) {
+  if (!pl) { el.textContent = '0'; return; }
+  const full = defenseValue(pl), left = defenseLeft(pl);
+  el.textContent = (pl.defenseUsed ?? 0) > 0 ? `${left}/${full}` : String(full);
+  el.title = (pl.defenseUsed ?? 0) > 0 ? `${left} of ${full} defense left: attacks this turn wore ${full - left} off` : 'Defense: attacks wear it down until your next turn';
+}
 // Minimized to the Dice pill (for a clear view of the board).
 let trayMin = false;
 export function setTrayMin(on) { trayMin = !!on; renderTray(); }

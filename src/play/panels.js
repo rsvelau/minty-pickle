@@ -10,7 +10,7 @@ import { MONSTER_BY_ID, DAMAGE_KINDS } from '../game/cards/monsters.js';
 import { matchesEvidence } from '../game/mystery.js';
 import { grid, ui } from '../app/config.js';
 import { $ } from '../app/dom.js';
-import { dieHTML, play } from './playView.js';
+import { defenseTotal, dieHTML, play } from './playView.js';
 import { __set_camTween, camera, cellToWorld, controls } from '../render/scene.js';
 import { EQUIPMENT_BY_ID } from '../game/cards/equipment.js';
 import { EVENT_CATEGORIES } from '../game/cards/events.js';
@@ -111,7 +111,7 @@ export function renderAsk() {
   for (let k = s.defSlots.length; k < s.maxDefense; k++) defs.push('<span class="tdie slot def"></span>');
   $('#askDef').innerHTML = defs.join('');
   [...$('#askDef').querySelectorAll('.in-def')].forEach((b, k) => { b.onclick = () => play.toggleSlot(s.defSlots[k], 'defense'); });
-  $('#askDefTotal').textContent = s.defSlots.reduce((a, n) => a + (s.pool[n]?.v ?? 0), 0);
+  defenseTotal($('#askDefTotal'), cur);
   $('#askDefHint').textContent = s.defSlots.length >= s.maxDefense ? 'Defense slots full' :
     'Last chance: brace before you investigate (tap a die to slot it into Defense)';
 }

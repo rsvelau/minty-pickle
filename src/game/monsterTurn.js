@@ -319,8 +319,10 @@ export function setupVictims(state, board, monster, ctx, events) {
 const livingVictims = (state) => (state.npcs ?? []).filter((v) => v.alive);
 
 // The swarm strikes a victim. Players in Close range can defend them: the
-// best slotted defense among them is compared with the damage; at least the
-// damage saves them, otherwise the victim dies. Returns the defender (if any).
+// best defense left among them (attacks this turn wear it down, as for any
+// attack) is compared with the damage; at least the damage saves them,
+// otherwise the victim dies. Either way the defender's defense wears down by
+// what it took. Returns the defender (if any).
 function attackVictim(state, board, monster, card, intent, o, ctx, events) {
   const victims = livingVictims(state);
   let v = victims.find((x) => x.target === o.target) ?? victims[0];
@@ -329,8 +331,10 @@ function attackVictim(state, board, monster, card, intent, o, ctx, events) {
   events.push({ type: 'monsterSwarm', id: monster.id, path, npc: v.id, attack: type });
   const dmg = rollDamage(ctx, o.dmg);
   const guards = alive(state).filter((pl) => cellRange(board.grid, pl.pos, v.cell) <= RANGE.close);
-  const best = guards.reduce((a, pl) => (!a || defenseValue(pl) > defenseValue(a) ? pl : a), null);
-  const block = best ? defenseValue(best) : 0;
+  const left = (pl) => Math.max(0, defenseValue(pl, type) - (pl.defenseUsed ?? 0));
+  const best = guards.reduce((a, pl) => (!a || left(pl) > left(a) ? pl : a), null);
+  const block = best ? left(best) : 0;
+  if (best) best.defenseUsed = (best.defenseUsed ?? 0) + Math.min(block, dmg);
   if (best && block >= dmg) {
     ctx.log(state, `The ${card.name}'s swarm falls on the ${v.name} for ${dmg}: ${best.name} shields them (defense ${block}).`);
     events.push({ type: 'npcAttacked', npc: v.id, cell: v.cell, amount: dmg, defense: block, defender: best.seat, outcome: 'saved' });

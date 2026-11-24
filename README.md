@@ -111,7 +111,9 @@ teammates in your space for heals like the Medical Kit). Obol costs (◉) take a
 - **Discard weaknesses** (the purple ∞ on some monster cards, like "Discard Silver to avoid Swoop damage"):
   when that monster is in the game, the Inventory offers to discard any of your Equipment with a skill of that
   element, any time on your turn (the effect is resolved at the table).
-- **Defense wears down**: each attack subtracts from your slotted defense, so a second attack faces what's left.
+- **Defense wears down**: each attack subtracts from your slotted defense, so a second attack faces what's left
+  (slot a 6, block a 3, and a 4 then hits the 3 that's left), until your next turn. Defending a townsperson
+  wears it down the same way. The dice tray and the Investigate? prompt show what's left ("3/6").
 - Doubling (Bless) applies before toughness.
 - Skills marked ✋ (doors, Salt Circle, Distract, Rally, Spiritual Backlash, Wrathful Penance, Weeping
   Barrier, Sacrifice, Camouflage, Brace, Lucky, Toss, Drink, Lunge) are paid for and logged, and resolved at the

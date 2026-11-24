@@ -18,7 +18,7 @@ export const KEYWORDS = [
   { term: 'Immune', text: 'Weapons of that element do nothing to the monster: no damage, no other effect.' },
   { term: 'Blind', text: 'The monster’s next attack rolls 1.' },
   { term: 'Immobilized', text: 'The monster does everything except move.' },
-  { term: 'Defense', text: 'Attacks subtract from your slotted defense: a second attack faces what’s left.' },
+  { term: 'Defense', text: 'Attacks subtract from your slotted defense until your next turn: a second attack faces what’s left (6 blocks a 3, then a 4 hits the 3 that’s left). Defending a townsperson wears it down too.' },
   { term: 'Objective', text: 'Achieving the monster’s objective wins. “Kill”: destroy it. Others (Escape, Disrupt Ritual…): achieve it; a monster with health must then still be destroyed once more (until then it rises again at its Lair).' },
   { term: 'Survivors', text: 'Townsfolk who appear with Decision events. Choose Live or Die (one must be chosen); the team’s choices are counted.' },
   { term: 'Mindset', text: 'Found in the Event deck. One per investigator; a new one replaces the old.' },

@@ -321,3 +321,35 @@ test('at the Investigate? prompt you can still brace: slot dice and roll white d
   assert.ok(act({ type: 'slot', die: 1, to: 'defense' }).ok, 'take it back out of Defense');
   assert.ok(act({ type: 'slot', die: 1, to: 'move' }).ok, 'movement can be slotted at a stop');
 });
+
+test('every attack wears down what defense is left: 6 blocks a 3, leaving 3, so a 4 hits', async () => {
+  const { defenseLeft } = await import('../src/game/combat.js');
+  const board = createBoard(street());
+  const { state } = newGame(board, { seed: 1, config: { players: 1 } });
+  const pl = state.players[0];
+  const ev = [];
+  pl.defense = [{ kind: 'black', v: 6 }];
+  assert.equal(applyDamage(state, board, pl, 'P', 3, quiet, ev), 'blocked');
+  assert.equal(defenseLeft(pl), 3);
+  assert.equal(applyDamage(state, board, pl, 'P', 4, quiet, ev), 'injured');
+  assert.equal(ev.at(-1).defense, 3, 'the 4 met the 3 that was left');
+  assert.equal(defenseLeft(pl), 0, 'used up');
+});
+
+test('defending a victim wears your defense down too', () => {
+  const { g, state, act } = adzeGame();
+  const v = state.npcs.find((x) => x.target === 1);
+  const pl = state.players[0];
+  state.monsters[0].intents = [victimAction(1, [{ op: 'attack', dmg: { fixed: 3 }, target: 1 }, { op: 'attack', dmg: { fixed: 3 }, target: 1 }])];
+  act({ type: 'roll' });
+  const { x, y } = g.coords(v.cell);
+  pl.pos = g.index(x + 1, y + 1);              // Close range
+  state.pool = [{ kind: 'black', v: 5 }];
+  state.maxDefense = 1;
+  act({ type: 'slot', die: 0, to: 'defense' });
+  const r = act({ type: 'end' });
+  const hits = r.events.filter((e) => e.type === 'npcAttacked');
+  assert.equal(hits[0].outcome, 'saved', '5 holds the first 3');
+  assert.equal(hits[1].outcome, 'killed', 'only 2 left for the second 3');
+  assert.equal(hits[1].defense, 2);
+});
