@@ -1192,3 +1192,17 @@ body.stress-on #info { display: none !important; }
 .move-mode[hidden] { display: none; }
 .move-mode.tactical { border-color: rgba(240, 192, 96, 0.55); color: #f0c060; }
 @media (max-width: 520px) { .move-mode { top: calc(40px + env(safe-area-inset-top, 0px)); min-height: 28px; font-size: 11px; } }
+
+/* The dice tray tucks away to a small pill for a clear view of the board. */
+.tray-min {
+  position: absolute; top: -15px; right: 12px; width: 30px; height: 30px; border-radius: 50%;
+  border: 1px solid #58e0a0; background: var(--panel); color: var(--text);
+  font: 600 18px/1 system-ui, sans-serif; cursor: pointer; touch-action: manipulation; padding: 0;
+}
+.tray-pill {
+  position: fixed; z-index: 8; right: 12px; bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  min-height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid #58e0a0;
+  background: var(--panel); color: var(--text); font: 500 13px system-ui, sans-serif;
+  cursor: pointer; touch-action: manipulation; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+.tray-pill[hidden] { display: none; }

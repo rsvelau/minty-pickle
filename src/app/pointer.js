@@ -1,6 +1,8 @@
 // Pointer input on the board (mouse and touch) for every tool, hover, and
 // switching tools.
 
+import * as THREE from 'three';
+import { FACINGS } from '../core/state.js';
 import { __set_hoverIndex, grid, hoverIndex, ui } from './config.js';
 import { toast } from './files.js';
 import { updateHoverInfo, updateUndoButtons } from './shell.js';
@@ -148,7 +150,7 @@ export function setTool(tool, start) {
   if (tool !== 'play') $('#gameClock').hidden = true;
   if (tool !== 'play') {
     $('#endConfirm').hidden = true;
-    $('#playTray').hidden = true; $('#askCard').hidden = true; $('#obolReveal').hidden = true; $('#inventory').hidden = true;
+    $('#playTray').hidden = true; $('#trayPill').hidden = true; $('#moveModeBtn').hidden = true; $('#askCard').hidden = true; $('#obolReveal').hidden = true; $('#inventory').hidden = true;
     $('#revealSheet').hidden = true; $('#cardPop').hidden = true; $('#casebook').hidden = true; $('#intentBanner').hidden = true;
   }
   document.body.classList.toggle('playing', tool === 'play');
@@ -156,14 +158,10 @@ export function setTool(tool, start) {
   if (tool === 'play' && window.innerWidth < 700) {
     $('#panel').hidden = true;
     $('#expand').hidden = false;
-    // ...and move in close to the pawn so cells are big enough to tap.
+  }
+  if (tool === 'play') {
     play.setActive(true); // places the pawn on the Start space if needed
-    if (play.state.pos >= 0) {
-      const { x, y } = grid.coords(play.state.pos);
-      const p = cellToWorld(x, y);
-      const offset = camera.position.clone().sub(controls.target).setLength(11);
-      __set_camTween({ t: 0, fromPos: camera.position.clone(), fromTarget: controls.target.clone(), toPos: p.clone().add(offset), toTarget: p });
-    }
+    frameAhead();
   }
   play.setActive(tool === 'play');
   syncPowerOut(); // a game's Power Outage never reaches the editor
@@ -173,4 +171,25 @@ export function setTool(tool, start) {
   setHoverEdge(null);
   setHover(null);
   refreshMoveOverlay();
+}
+
+// Starting play: the camera behind the players, a little above, looking a few
+// cells ahead of them, the way they're headed (the way they last came, or out
+// of the van).
+const AHEAD = 2.5, CAM_DIST = 11, CAM_PITCH = THREE.MathUtils.degToRad(42);
+export function frameAhead() {
+  const i = play.state.pos;
+  if (i < 0) return;
+  const { x, y } = grid.coords(i);
+  let fx = 0, fy = -1;
+  const prev = play.state.prev;
+  if (prev >= 0) { const p = grid.coords(prev); fx = x - p.x; fy = y - p.y; }
+  else {
+    const van = grid.cells.findIndex((c, j) => c.sub === 'start' && grid.startFront(j) === i);
+    if (van >= 0) [fx, fy] = FACINGS[grid.startFacing(van)];
+  }
+  const fwd = new THREE.Vector3(fx, 0, fy).normalize();
+  const target = cellToWorld(x, y).addScaledVector(fwd, AHEAD);
+  const pos = target.clone().addScaledVector(fwd, -CAM_DIST * Math.cos(CAM_PITCH)).setY(CAM_DIST * Math.sin(CAM_PITCH));
+  __set_camTween({ t: 0, fromPos: camera.position.clone(), fromTarget: controls.target.clone(), toPos: pos, toTarget: target });
 }

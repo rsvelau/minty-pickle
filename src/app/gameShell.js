@@ -19,6 +19,7 @@ import { $ } from './dom.js';
 import { toast } from './files.js';
 import { applyTerrain } from './panelControls.js';
 import { setTool } from './pointer.js';
+import { setOrbitMode } from '../editor/toolbar.js';
 import { updateUndoButtons } from './shell.js';
 import { gameConfig, play, renderPlay, saveConfig } from '../play/playView.js';
 import { openSettings } from '../play/gameSettings.js';
@@ -40,7 +41,12 @@ const when = (iso) => {
 };
 
 // --- modes ------------------------------------------------------------------------
+// In a game, one finger orbits the camera (nothing to paint there); the
+// editor gets back whatever it had.
+let editorOrbit = false;
 function setMode(mode) {
+  if (mode === 'game' && ui.mode !== 'game') { editorOrbit = ui.orbitMode; setOrbitMode(true); }
+  if (mode === 'editor' && ui.mode !== 'editor') setOrbitMode(editorOrbit);
   ui.mode = mode;
   for (const m of ['title', 'editor', 'game']) document.body.classList.toggle(`mode-${m}`, mode === m);
   $('#gameMenuBtn').hidden = mode !== 'game';

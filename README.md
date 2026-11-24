@@ -441,8 +441,9 @@ markers** in View hides them. Marker art lives in `src/render/markers.js`; the l
   - **Quick** (the default): the pawn runs on by itself while there's only one way forward, and stops at a
     fork, a marker, the start of every move, and when its moves run out.
   - **Tactical**: it stops at **every step** and asks which way to go.
-  - Switch any time during a game with the small **Quick ⇄ / Tactical ⇄** button under the clock; the change
-    applies from the next step and becomes the default for new games.
+  - Switch any time during a game with the small **Quick ⇄ / Tactical ⇄** button under the clock (no
+    pop-up: the button shows the mode); the change applies from the next step and becomes the default for
+    new games.
 - **Every stop is a stop.** Stopped anywhere (out of moves, at a fork or marker, at each step in Tactical, at
   the Investigate? prompt), the player can roll white dice, slot dice into Movement or Defense, use equipment
   and Obolcraft. Movement dice slotted mid-move join the move when a direction is picked ("+2 joins your 3
@@ -451,6 +452,11 @@ markers** in View hides them. Marker art lives in `src/render/markers.js`; the l
   click one (a tap near one on the board works too), or use the **arrow keys** (relative to the camera).
   At a stop mid-move the dice tray folds down to one line so the board and every arrow stay in view; **Dice**
   opens it. **Stop here & end turn** gives up the moves left (it asks first).
+- **Minimize the dice tray** with its **–** button for a clear view of the board: it tucks into a small
+  **🎲 Dice** pill (tap to bring it back). A new roll opens it again, so you always see what you rolled.
+- **Starting a game** turns on **Orbit mode** (one finger turns the camera; the editor keeps its own setting)
+  and frames the board from behind the players, slanted, looking a few cells ahead of them: out of the van,
+  or the way they last moved (`frameAhead` in `src/app/pointer.js`).
 - **When the moves run out** the turn waits for **End turn** while there's anything left to use (dice, white
   dice, equipment or Obols); with nothing left, it ends by itself.
 - **Follow streets** (on by default): on a street, the start space or a bridge, the pawn only goes where the

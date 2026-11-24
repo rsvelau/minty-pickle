@@ -269,7 +269,10 @@ export function renderTray() {
   $('#trayDice').hidden = !choosing;
   $('#trayDice').textContent = trayOpen ? 'Dice ▾' : 'Dice ▴';
   $('#trayDice').setAttribute('aria-expanded', String(trayOpen));
-  $('#playTray').hidden = !show;
+  // Minimized (the – button): only a small Dice pill; a new roll opens it again.
+  if (s.phase === 'rolling') trayMin = false;
+  $('#trayPill').hidden = !show || !trayMin;
+  $('#playTray').hidden = !show || trayMin;
   if (!['slotting', 'choosing'].includes(s.phase)) $('#endConfirm').hidden = true;
   if (!show) return;
   const rolling = s.phase === 'rolling';
@@ -322,6 +325,9 @@ export function renderTray() {
       : (s.pool.some((d) => d.kind === 'white') ? 'Rolled white dice are discarded after this turn' : 'Tap dice to slot them');
 }
 export let trayTarget = 'move';
+// Minimized to the Dice pill (for a clear view of the board).
+let trayMin = false;
+export function setTrayMin(on) { trayMin = !!on; renderTray(); }
 // The tray opened at a stop (and where): it folds again once the pawn moves.
 let trayOpen = false, trayOpenAt = -1;
 export function toggleTrayOpen() {

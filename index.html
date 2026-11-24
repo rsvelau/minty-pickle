@@ -304,7 +304,9 @@
       </div>
     </div>
     <!-- Dice tray: rolled dice and movement slots (shown after a roll). -->
+    <button id="trayPill" class="tray-pill" type="button" hidden aria-label="Show the dice tray">🎲 Dice</button>
     <div id="playTray" class="play-tray" hidden>
+      <button id="trayMin" class="tray-min" type="button" aria-label="Minimize the dice tray" title="Minimize">–</button>
       <div class="tray-target seg" id="trayTarget" role="group" aria-label="Tap a die to put it into">
         <button type="button" data-to="move" class="on">Slot to Move</button>
         <button type="button" data-to="defense">Slot to Defense</button>

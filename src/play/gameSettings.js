@@ -9,7 +9,7 @@ import { setEdgeBrush } from '../editor/moveCheck.js';
 import { setOrbitMode, setShape, setView } from '../editor/toolbar.js';
 import { $, $$ } from '../app/dom.js';
 import { obolHTML } from './panels.js';
-import { gameConfig, play, renderPlay, saveConfig, toggleTrayOpen } from './playView.js';
+import { gameConfig, play, renderPlay, saveConfig, setTrayMin, toggleTrayOpen } from './playView.js';
 import { setCamera } from '../render/scene.js';
 import { openDecks } from './deckBuilder.js';
 import { deckList } from '../game/decks.js';
@@ -66,9 +66,10 @@ export function init() {
   $('#moveModeBtn').addEventListener('click', () => {
     play.state.movement = play.state.movement === 'tactical' ? 'quick' : 'tactical';
     saveConfig(); // the default for the next game too
-    renderPlay();
-    toast(play.state.movement === 'tactical' ? 'Tactical movement: choose every step.' : 'Quick movement: run on to the next fork or marker.');
+    renderPlay(); // the button itself shows the mode: no pop-up
   });
+  $('#trayMin').addEventListener('click', () => setTrayMin(true));
+  $('#trayPill').addEventListener('click', () => setTrayMin(false));
   $('#endNo').addEventListener('click', () => { $('#endConfirm').hidden = true; });
   $('#endYes').addEventListener('click', () => { $('#endConfirm').hidden = true; play.endTurn(); });
   $('#hudRoll').addEventListener('click', () => play.roll());
