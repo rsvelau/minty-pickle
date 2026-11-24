@@ -12,13 +12,17 @@ import { edgeKey, isDoor } from '../core/state.js';
 export const anyDoor = (t) => isDoor(t) || t === 'boardedDoor';
 
 // What everyone (monsters included) sees: blocked doors are walls, breached
-// ones open doorways. Read live, so a door changed mid-action counts at once.
-export function gameDoorOverride(state) {
+// ones open doorways, and locked or one-way doors whose key the investigators
+// have found stand open (for monsters too: they carry no keys of their own).
+// Read live, so a door changed mid-action counts at once.
+export function gameDoorOverride(state, board = null) {
   return (k, t) => {
     if (!t || t === 'wall' || t === 'window' || t === 'boardedWindow') return t;
     const s = state.doors?.[k];
     if (s === 'breached') return 'door';
     if (s === 'blocked') return 'wall';
+    if (state.keys && board && (t === 'lockedDoor' || t.startsWith('oneWayDoor'))
+      && ((board.keyGroups().edgeMask.get(k) ?? 0) & state.keys)) return 'door';
     return t;
   };
 }

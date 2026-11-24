@@ -246,7 +246,7 @@ export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'i
 export function applyAction(state, board, action) {
   // Doors the game changed (nailed, breached) count for every move made while
   // the rules run, monsters' included; then the board is left as drawn.
-  board.grid.edgeOverride = gameDoorOverride(state);
+  board.grid.edgeOverride = gameDoorOverride(state, board);
   try { return applyActionNow(state, board, action); } finally { board.grid.edgeOverride = null; }
 }
 function applyActionNow(state, board, action) {

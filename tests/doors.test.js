@@ -35,7 +35,7 @@ function setup(doorType = 'door') {
 // Can you walk from the street into the building (no keys)?
 const canEnter = (s) => {
   const { x, y } = s.g.coords(s.pl.pos);
-  s.board.grid.edgeOverride = gameDoorOverride(s.state);
+  s.board.grid.edgeOverride = gameDoorOverride(s.state, s.board);
   const ok = s.g.moveField(x, y, { keys: false }).dist[s.g.index(6, 3)] >= 0;
   s.board.grid.edgeOverride = null;
   return ok;
@@ -118,7 +118,7 @@ function hunt(kind, { doorType = 'door', blocked = null, ops = null, die = 4 } =
   const round = (o = ops ?? [{ op: 'pursue', n: 8 }, { op: 'attack', dmg: { fixed: 4 } }], more = []) => {
     monster.intents = [intent(o), ...more.map(intent)];
     const events = [];
-    s.board.grid.edgeOverride = gameDoorOverride(s.state);
+    s.board.grid.edgeOverride = gameDoorOverride(s.state, s.board);
     executeIntent(s.state, s.board, monster, { state: s.state, log: () => {}, randInt: () => die - 1 }, events);
     s.board.grid.edgeOverride = null;
     return events;
@@ -187,4 +187,14 @@ test('a one-way door stops a Corporeal monster from its closed side, and gets ba
   s.round();
   assert.equal(s.monster.pos, s.g.index(6, 5), 'stuck outside');
   assert.equal(s.state.doorHp[s.door], 6, 'bashed for 4');
+});
+
+test('a locked door whose key the investigators found stands open for monsters too', () => {
+  const s = hunt('werewolf', { doorType: 'lockedDoor' });
+  s.g.apply(s.g.index(5, 3), { marker: 'key' }, { silent: true });   // this building's key
+  assert.equal(s.board.keyGroups().groups.length, 1);
+  s.state.keys = 1;                                                  // found
+  const ev = s.round();
+  assert.ok(!ev.some((e) => e.type === 'doorBash'), 'no need to bash');
+  assert.equal(s.monster.pos, s.g.index(6, 4), 'straight through, next to the player');
 });
