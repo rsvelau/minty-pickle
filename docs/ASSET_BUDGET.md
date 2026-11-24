@@ -35,10 +35,17 @@ Ready to play? flags them. Capping the size is what lets the whole board be in v
 | Hawthorn Bend 26 × 20 | close-up | 60 (58) | 234k | 162 | +372k | ≥ 1.9× |
 | Forest (blocked) 60 × 60 | whole board | 24 (19) | 3,379k | 450 | +3,181k | 0.6× |
 | Forest (blocked) 60 × 60 | close-up | 60 (58) | 853k | 41 | +3,438k* | ≥ 1.9× |
+| Forest (blocked) 35 × 35 | whole board | 55 (43) | 1,281k | 233 | +1,180k | 1.4× |
+| Forest (blocked) 35 × 35 | close-up | 60 (59) | 682k | 41 | +904k | ≥ 2.0× |
 
 \* Before the shadow window: the same view's shadow redraw is now about 1.0M triangles (counted in the
-browser). The 60 × 60 rows predate the size cap; they're kept because they found the ceiling.
-**To measure:** Forest (blocked) at 35 × 35, which should land near the per-map budget.
+browser; the 35 × 35 close-up's +904k on the phone confirms it). The 60 × 60 rows predate the size cap;
+they're kept because they found the ceiling.
+
+**The 35 × 35 forest whole board** averages 55 fps (~18 ms, ~1.8×) but its slowest 10% is 43 fps (1.4×): the
+slow frames are the shadow safety refresh (every 250 ms, +1.18M triangles), which runs even when nothing on
+screen moves. Making that refresh happen only near animated shadow casters should bring it to ~1.8×;
+re-measure after.
 
 What follows from it:
 
@@ -124,7 +131,7 @@ Simple props (crates, boxes) can stay as code-built geometry in `src/render/prop
 
 | Date | Asset | Triangles | Close-up headroom | Whole board headroom | Notes |
 |---|---|---|---|---|---|
-| 2026-11-24 | Forest (blocked), code-built | 872 per space | ≥ 1.9× (60 × 60) | 0.6× at 60 × 60 | re-measure at 35 × 35 |
+| 2026-11-24 | Forest (blocked), code-built | 872 per space | ≥ 2.0× (35 × 35) | 1.4× (35 × 35) | slowest frames are shadow safety refreshes |
 | 2026-11-24 | Hawthorn Bend (map) | 0.24M on the board | ≥ 1.9× | ≥ 1.9× | reference map |
 
 ## Later, if needed
