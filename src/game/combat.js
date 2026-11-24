@@ -15,6 +15,7 @@ import { INJURY_TRACKS, DEATHS_DOOR, RANGE, cellRange } from './cards/injuries.j
 import { cellLabel } from '../core/state.js';
 import { MONSTER_BY_ID } from './cards/monsters.js';
 import { flickeringNear } from './eventPlay.js';
+import { hurtMonster } from './equipmentPlay.js';
 
 export const injuries = (pl) => (pl.injuries ??= { P: 0, M: 0, S: 0 });
 export const atDeathsDoor = (pl) => Object.values(injuries(pl)).some((t) => t >= DEATHS_DOOR);
@@ -80,6 +81,10 @@ export function applyDamage(state, board, pl, type, amount, { log, source = 'An 
     events.push({ type: 'damage', seat: pl.seat, cell: pl.pos, attack: type, amount, defense: amount, source, outcome: 'blocked' });
     return 'blocked';
   }
+  // Spiritual damage tricks (Mourning Veil, Blessed Scapular, Bronze Skull
+  // Lantern), through the monster's next turn: the whole hit, before defense.
+  const ward = type === 'S' && pl.spiritWard?.round === state.round ? pl.spiritWard : null;
+  if (ward) return turnAside(state, board, pl, ward, amount, { log, source }, events);
   // Bright Moon (Global): Mental and Physical rolls −1; against a Beast, Physical +2.
   if (state.global?.id === 'bright-moon' && (type === 'P' || type === 'M')) {
     const beast = state.monsters?.some((m) => MONSTER_BY_ID[m.kind]?.traits.includes('Beast'));
@@ -113,4 +118,47 @@ export function applyDamage(state, board, pl, type, amount, { log, source = 'An 
   log(state, `${source} hits ${pl.name} for ${amount} ${track.label} (defense ${block}): ${tier.name}. ${tier.text}.`);
   events.push({ ...base, outcome: 'injured', tier: inj[type] });
   return 'injured';
+}
+
+// A Spiritual hit on a warded player, turned aside (see applyDamage):
+//   heal     Weeping Barrier: one Spiritual tier healed instead of taken.
+//   reflect  Wrathful Penance: the amount back at the monster as Holy damage
+//            (through toughness; a Holy weakness counts a hit).
+//   backlash Spiritual Backlash: the amount goes to the chosen monster
+//            (untyped, through toughness) or teammate (a Spiritual hit on them,
+//            their defense applies).
+function turnAside(state, board, pl, ward, amount, { log, source }, events) {
+  const base = { type: 'damage', seat: pl.seat, cell: pl.pos, attack: 'S', amount, defense: 0, source };
+  if (ward.kind === 'heal') {
+    const inj = injuries(pl);
+    const had = inj.S;
+    inj.S = Math.max(0, inj.S - 1);
+    log(state, `${source} hits ${pl.name} for ${amount} Spiritual, but the Weeping Barrier turns it to healing: ${had ? `Spiritual injury down to tier ${inj.S}` : 'nothing to heal'}.`);
+    events.push({ ...base, outcome: 'healed' });
+    return 'healed';
+  }
+  const ctx = { log };
+  const toMonster = (m, kind, what) => {
+    if (!m) { log(state, `${source} hits ${pl.name} for ${amount} Spiritual, turned aside by the ${what}, but there is no monster to take it.`); return; }
+    log(state, `${source} hits ${pl.name} for ${amount} Spiritual: the ${what} turns it on the ${MONSTER_BY_ID[m.kind]?.name ?? 'monster'}${kind ? ' as Holy damage' : ''}.`);
+    hurtMonster(state, board, m, 1, kind, () => amount, ctx, events);
+  };
+  if (ward.kind === 'reflect') {
+    // At the monster: the nearest one to you.
+    const m = [...(state.monsters ?? [])].sort((a, b) => cellRange(board.grid, pl.pos, a.pos) - cellRange(board.grid, pl.pos, b.pos))[0];
+    toMonster(m, 'holy', 'Wrathful Penance');
+    events.push({ ...base, outcome: 'reflected' });
+    return 'reflected';
+  }
+  // Backlash.
+  const mate = ward.onto?.seat !== undefined ? state.players[ward.onto.seat] : null;
+  if (mate && !mate.dead) {
+    log(state, `${source} hits ${pl.name} for ${amount} Spiritual: the Spiritual Backlash sends it to ${mate.name}.`);
+    events.push({ ...base, outcome: 'redirected' });
+    applyDamage(state, board, mate, 'S', amount, { log, source: `${source} (Spiritual Backlash)` }, events);
+    return 'redirected';
+  }
+  toMonster((state.monsters ?? []).find((m) => m.id === ward.onto?.monster), null, 'Spiritual Backlash');
+  events.push({ ...base, outcome: 'redirected' });
+  return 'redirected';
 }

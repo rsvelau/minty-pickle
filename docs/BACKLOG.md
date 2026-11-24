@@ -22,13 +22,11 @@ stops every monster (ghosts too) entering or crossing the space; Distract picks 
 on the board; Camouflage hides you from pursuit and Close attacks (not Area/Global) and stops your
 movement; Brace is recorded (`bracedRound`) for when monsters can move players (group 7).
 
-## 3. Spiritual damage tricks (equipment)
-- [ ] **Spiritual Backlash** — The target (a monster or a teammate) takes the Spiritual damage you would have taken this turn instead (untyped to monsters). *Bronze Skull Lantern*
-- [ ] **Wrathful Penance** — Spiritual damage you would take this turn is reflected back at the monster as ✺ Holy damage. *Blessed Scapular (2 Obols)*
-- [ ] **Weeping Barrier** — Spiritual damage heals you this turn. *Mourning Veil (1 Obol)*
-- Needs: a hook in `applyDamage` for Spiritual damage (redirect / reflect / heal); Holy damage to the
-  monster counts as a weakness hit where Holy is a weakness.
-- Question: "heals you": by how much: one Spiritual tier, or tiers equal to the damage?
+## ~~3. Spiritual damage tricks (equipment)~~ — done (2026-11-24)
+Weeping Barrier (one Spiritual tier healed per hit), Wrathful Penance (reflected at the nearest monster as
+Holy, through toughness, a weakness hit where Holy is one) and Spiritual Backlash (onto a chosen monster,
+untyped through toughness, or a teammate, their defense applies) are played, through the monster's next
+turn, on the whole hit before defense (`turnAside` in `src/game/combat.js`).
 
 ## 4. Dice and injury tricks (equipment)
 - [ ] **Lucky** — Select values for all of your 🎲 this turn. *Good Luck Charm (🔗)*  (needs a die-value picker)
@@ -101,7 +99,7 @@ need going through with the designer.
 ---
 
 ### Suggested order
-~~1~~ → ~~2~~ → 3 → 4 (equipment: today you can pay for these and get nothing) · 9 and 8 (small, per monster) ·
+~~1~~ → ~~2~~ → ~~3~~ → 4 (equipment: today you can pay for these and get nothing) · 9 and 8 (small, per monster) ·
 6 · 5 (new movement) · 7 and 10 together, one monster at a time.
 
-Until groups 3-4 are built, consider disabling the ✋ skills so they can't be spent by mistake.
+Until group 4 is built, consider disabling the ✋ skills so they can't be spent by mistake.

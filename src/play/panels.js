@@ -185,7 +185,9 @@ export function showCardNow(c) {
     card.classList.add('hurt');
     card.style.setProperty('--atk', ATTACK_TYPES[e.attack].colour);
     html = `<div class="pc-kind">${esc(e.source)}</div><div class="pc-glyph">${ATTACK_GLYPH[e.attack]}</div>` +
-      `<div class="pc-title">${e.outcome === 'blocked' ? 'Blocked!' : e.outcome === 'killed' ? `${esc(e.player?.name ?? '')} is dead` : esc(INJURY_TRACKS[e.attack].tiers[e.tier - 1].name)}</div>` +
+      `<div class="pc-title">${e.outcome === 'blocked' ? 'Blocked!' : e.outcome === 'killed' ? `${esc(e.player?.name ?? '')} is dead`
+        : e.outcome === 'healed' ? 'Healed instead' : e.outcome === 'reflected' ? 'Reflected!' : e.outcome === 'redirected' ? 'Turned aside'
+          : esc(INJURY_TRACKS[e.attack].tiers[e.tier - 1].name)}</div>` +
       `<div class="pc-sub">${esc(hitText(e))}</div>`;
   } else if (c.kind === 'npc') {
     const e = c.e;
@@ -399,6 +401,10 @@ export function hitText(e) {
   const type = ATTACK_TYPES[e.attack].label;
   if (e.outcome === 'blocked') return `${who} blocks ${e.amount} ${type} damage (defense ${e.defense}).`;
   if (e.outcome === 'killed') return `${e.amount} ${type} damage against defense ${e.defense}. ${who} was at Death's Door.`;
+  // Spiritual damage tricks (equipment).
+  if (e.outcome === 'healed') return `${e.amount} ${type} damage heals ${who} instead (Weeping Barrier).`;
+  if (e.outcome === 'reflected') return `${e.amount} ${type} damage thrown back at the monster as Holy damage (Wrathful Penance).`;
+  if (e.outcome === 'redirected') return `${e.amount} ${type} damage sent on by ${who}'s Spiritual Backlash.`;
   const tier = INJURY_TRACKS[e.attack].tiers[(e.tier ?? 1) - 1];
   return `${who} takes ${e.amount} ${type} damage against defense ${e.defense}: ${tier?.name}. ${tier?.text}.`;
 }
@@ -591,7 +597,7 @@ function renderUseSheet(body, pl, items) {
   const values = useUI.dice.map((n) => s.pool[n]?.v ?? 0);
   const mon = fx.target === 'monster' ? play.session.state.monsters.find((m) => m.id === (useUI.target?.monster ?? targets[0]?.monster)) : null;
   const reqOk = useUI.dice.length === a.dice && checkRequirement(a.req, values, { targetDie: mon ? actionRoll(mon) : null });
-  const targeted = fx.target === 'monster' || fx.target === 'ally' || !!fx.door;
+  const targeted = fx.target === 'monster' || fx.target === 'ally' || fx.target === 'either' || !!fx.door;
   // A target's id and what the rules expect for it.
   const tid = (t) => t.monster ?? t.seat ?? t.edge;
   const tpay = (t) => (t.monster ? { monster: t.monster } : t.edge ? { edge: t.edge } : { seat: t.seat });

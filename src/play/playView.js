@@ -127,7 +127,8 @@ export function renderPlay() {
       `<span>${c ? cellLabel(c.x, c.y) : '–'}</span><span>White dice ${p.white}</span>` +
       `<span class="inj-row">${injuryPips(p)}${p.dead ? ' <b>Dead</b>' : inDanger ? ` <b class="${dangerType ? `dmg-${dangerType}` : ''}" style="${dangerType ? '' : 'color:#ff6a50'}">${dangerType ? dmgIcon(dangerType) : ''}In danger</b>` : ''}` +
       // Through the monster's next turn (Viper Hood, Ice Axe).
-      `${!p.dead && p.camoRound === s.round ? ' <b style="color:#7fe08a">Camouflaged</b>' : ''}${!p.dead && p.bracedRound === s.round ? ' <b style="color:#9ec3ff">Braced</b>' : ''}</span>` +
+      `${!p.dead && p.camoRound === s.round ? ' <b style="color:#7fe08a">Camouflaged</b>' : ''}${!p.dead && p.bracedRound === s.round ? ' <b style="color:#9ec3ff">Braced</b>' : ''}` +
+      `${!p.dead && p.spiritWard?.round === s.round ? ` <b style="color:#7fe0b4">${{ heal: 'Veiled', reflect: 'Penance', backlash: 'Backlash' }[p.spiritWard.kind]}</b>` : ''}</span>` +
       `<span class="obol-row">${OBOL_TYPES.map((t) => `<span class="obol-count${counts[t] ? '' : ' zero'}" title="${OBOLS[t].label} Obols">${obolHTML(t)}${counts[t]}</span>`).join('')}</span></div>`;
   }).join('');
   $('#playBoard').innerHTML += s.monsters.map((mo) => {

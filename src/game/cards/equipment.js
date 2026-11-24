@@ -135,13 +135,13 @@ export const EQUIPMENT_CARDS = [
   ] },
   { id: 'bronze-skull-lantern', name: 'Bronze Skull Lantern', abilities: [
     A('self', null, 'Ominous Illumination', 1, 'Any', 'Double this 🎲 and refresh. Cannot defend against Spiritual damage this turn', { target: 'self', refreshAs: 'double', noDefense: 'S' }),
-    A('mid', null, 'Spiritual Backlash', 1, '6', 'The target (a monster or a teammate) takes the Spiritual damage you would have taken this turn instead (untyped to monsters)', { manual: true }),
+    A('mid', null, 'Spiritual Backlash', 1, '6', 'The target (a monster or a teammate) takes the Spiritual damage you would have taken this turn instead (untyped to monsters)', { spirit: 'backlash', target: 'either' }),
   ] },
   { id: 'mourning-veil', name: 'Mourning Veil', abilities: [
-    A('self', null, 'Weeping Barrier', 0, null, 'Spiritual damage heals you this turn', { manual: true }, null, 1),
+    A('self', null, 'Weeping Barrier', 0, null, 'Spiritual damage heals you this turn', { spirit: 'heal' }, null, 1),
   ] },
   { id: 'blessed-scapular', name: 'Blessed Scapular', abilities: [
-    A('mid', 'holy', 'Wrathful Penance', 0, null, 'Spiritual damage you would take this turn is reflected back at the monster as ✺ Holy damage', { manual: true }, null, 2),
+    A('mid', 'holy', 'Wrathful Penance', 0, null, 'Spiritual damage you would take this turn is reflected back at the monster as ✺ Holy damage', { spirit: 'reflect' }, null, 2),
     A('self', null, 'Protective Faith', 1, '2-', 'Change this 🎲 to 6 and set as bonus Spiritual defense this turn', { target: 'self', bonusDefense: { type: 'S', v: 6 } }),
   ] },
   { id: 'mala-beads', name: 'Mala Beads', abilities: [

@@ -131,8 +131,13 @@ teammates in your space for heals like the Medical Kit). Obol costs (◉) take a
   and you can't move the rest of your turn. **Brace** (Ice Axe): you can't be moved; nothing moves players
   yet, so it waits for the monster abilities that will (Drag, Seize...). The salt and the boombox show on
   the board; Camouflaged and Braced players are tagged in the player list.
-- Skills marked ✋ (Rally, Spiritual Backlash, Wrathful Penance, Weeping
-  Barrier, Sacrifice, Lucky, Toss, Drink, Lunge) are paid for and logged, and resolved at the
+- **Spiritual damage tricks** (through the monster's next turn; each Spiritual hit is caught whole, before
+  your defense is touched): **Weeping Barrier** (Mourning Veil) heals a Spiritual tier per hit instead;
+  **Wrathful Penance** (Blessed Scapular) throws the hit back at the nearest monster as Holy damage (through
+  toughness; a Holy weakness counts a hit); **Spiritual Backlash** (Bronze Skull Lantern) sends it to a
+  monster you pick (untyped, through toughness) or a teammate (a Spiritual hit on them, their defense
+  applies). Players with one up are tagged Veiled, Penance or Backlash.
+- Skills marked ✋ (Rally, Sacrifice, Lucky, Toss, Drink, Lunge) are paid for and logged, and resolved at the
   table for now.
 
 **The clock stops at midnight**: from then on it shows 12:00 AM · Midnight, and ⏳ effects do nothing.

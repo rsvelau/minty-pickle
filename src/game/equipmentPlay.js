@@ -73,6 +73,14 @@ export function targetsFor(state, board, pl, ability) {
     return state.players.filter((p) => !p.dead && (p === pl || cellRange(board.grid, pl.pos, p.pos) <= Math.max(reach, 0)))
       .map((p) => ({ seat: p.seat, name: p.name }));
   }
+  if (fx.target === 'either') {
+    // Spiritual Backlash: a monster or a teammate (not yourself) in reach.
+    const mons = state.monsters.filter((m) => MONSTER_BY_ID[m.kind] && cellRange(board.grid, pl.pos, m.pos) <= reach)
+      .map((m) => ({ monster: m.id, name: MONSTER_BY_ID[m.kind].name }));
+    const mates = state.players.filter((p) => !p.dead && p !== pl && cellRange(board.grid, pl.pos, p.pos) <= reach)
+      .map((p) => ({ seat: p.seat, name: p.name }));
+    return [...mons, ...mates];
+  }
   if (fx.lure) {
     // Distract: any walkable space within the skill's range (Mid: 3).
     const g = board.grid;
@@ -111,7 +119,7 @@ export function useEquipment(state, board, pl, action, ctx, events) {
   const values = dice.map((n) => state.pool[n].v);
 
   // Target.
-  let monster = null, ally = null, door = null, spot = -1;
+  let monster = null, ally = null, door = null, spot = -1, onto = null;
   if (fx.target === 'monster') {
     const options = targetsFor(state, board, pl, a);
     const pick = options.find((o) => o.monster === action.target?.monster) ?? (options.length === 1 ? options[0] : null);
@@ -122,6 +130,11 @@ export function useEquipment(state, board, pl, action, ctx, events) {
     const pick = options.find((o) => o.seat === action.target?.seat) ?? options.find((o) => o.seat === pl.seat);
     if (!pick) return 'no one in range';
     ally = state.players[pick.seat];
+  } else if (fx.target === 'either') {
+    const options = targetsFor(state, board, pl, a);
+    onto = options.find((o) => (o.monster !== undefined && o.monster === action.target?.monster) || (o.seat !== undefined && o.seat === action.target?.seat))
+      ?? (options.length === 1 ? options[0] : null);
+    if (!onto) return options.length ? 'choose a target' : 'no monster or teammate in range';
   } else if (fx.lure) {
     if (!state.monsters.length) return 'there is no monster to distract';
     spot = targetsFor(state, board, pl, a).find((o) => o.cell === action.target?.cell)?.cell ?? -1;
@@ -249,6 +262,14 @@ export function useEquipment(state, board, pl, action, ctx, events) {
     state.noMove = true;   // can't move the rest of this turn
     state.steps = 0;
     parts.push('camouflaged: the monster won’t come for you or strike you up close through its next turn (Area and Global attacks still can); you can’t move this turn');
+  }
+  // Spiritual damage tricks: the next Spiritual hits on you (through the
+  // monster's next turn) are turned aside (combat.js applyDamage).
+  if (fx.spirit) {
+    pl.spiritWard = { kind: fx.spirit, round: state.round, onto: onto ? (onto.monster !== undefined ? { monster: onto.monster } : { seat: onto.seat }) : null };
+    parts.push(fx.spirit === 'heal' ? 'Spiritual damage heals you instead (one tier a hit) through the monster’s next turn'
+      : fx.spirit === 'reflect' ? 'Spiritual damage aimed at you is thrown back at the monster as Holy damage through its next turn'
+        : `Spiritual damage aimed at you goes to ${onto.name} instead through the monster’s next turn`);
   }
   if (fx.brace) {
     pl.bracedRound = state.round;
