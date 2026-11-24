@@ -441,6 +441,8 @@ markers** in View hides them. Marker art lives in `src/render/markers.js`; the l
   - **Quick** (the default): the pawn runs on by itself while there's only one way forward, and stops at a
     fork, a marker, the start of every move, and when its moves run out.
   - **Tactical**: it stops at **every step** and asks which way to go.
+  - Switch any time during a game with the small **Quick ⇄ / Tactical ⇄** button under the clock; the change
+    applies from the next step and becomes the default for new games.
 - **Every stop is a stop.** Stopped anywhere (out of moves, at a fork or marker, at each step in Tactical, at
   the Investigate? prompt), the player can roll white dice, slot dice into Movement or Defense, use equipment
   and Obolcraft. Movement dice slotted mid-move join the move when a direction is picked ("+2 joins your 3

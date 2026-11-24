@@ -1179,3 +1179,16 @@ body.stress-on #info { display: none !important; }
 /* At a stop mid-move the tray folds down to one line (so the board, the pawn
    and every arrow stay in view); Dice opens it. */
 .play-tray.compact .tray-row:not(.tray-actions), .play-tray.compact .tray-target { display: none; }
+
+/* Quick / Tactical movement switch, under the game clock. */
+.move-mode {
+  position: fixed; z-index: 7; left: 50%; transform: translateX(-50%);
+  top: calc(46px + env(safe-area-inset-top, 0px));
+  min-height: 30px; padding: 0 11px; border-radius: 999px;
+  border: 1px solid rgba(232, 226, 205, 0.18); background: rgba(10, 12, 16, 0.55);
+  color: rgba(232, 226, 205, 0.85); font: 500 12px system-ui, sans-serif; letter-spacing: 0.02em;
+  cursor: pointer; touch-action: manipulation; white-space: nowrap;
+}
+.move-mode[hidden] { display: none; }
+.move-mode.tactical { border-color: rgba(240, 192, 96, 0.55); color: #f0c060; }
+@media (max-width: 520px) { .move-mode { top: calc(40px + env(safe-area-inset-top, 0px)); min-height: 28px; font-size: 11px; } }

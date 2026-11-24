@@ -1089,7 +1089,15 @@ export function createPlay({
     get count() { return g()?.players.length ?? cfg.players; },
     get startMode() { return view.startMode; },
     get followStreets() { return view.followStreets; },
-    set followStreets(v) { view.followStreets = !!v; if (g()) g().followStreets = !!v; },
+    set followStreets(v) { view.followStreets = !!v; if (g()) act({ type: 'setting', key: 'followStreets', value: !!v }); },
+    // Quick or Tactical movement: switchable mid-game (the rules read it at
+    // every step), and kept as the default for new games.
+    get movement() { return (g()?.config ?? cfg).movement === 'tactical' ? 'tactical' : 'quick'; },
+    set movement(v) {
+      const m = v === 'tactical' ? 'tactical' : 'quick';
+      cfg.movement = m;
+      if (g()) act({ type: 'setting', key: 'movement', value: m });
+    },
     get follow() { return view.follow; },
     set follow(v) { view.follow = !!v; },
     get fast() { return view.fast; },

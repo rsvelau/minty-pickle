@@ -240,7 +240,7 @@ export function newGame(board, setup = {}) {
 // equipment and Obolcraft.
 const STOPPED = ['slotting', 'choosing', 'asking'];
 // Every action: { type, seat? }. Returns { ok, error?, events }.
-export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective', 'event'];
+export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective', 'event', 'setting'];
 
 export function applyAction(state, board, action) {
   board.setPowerOut?.(state.global?.id === 'power-outage');
@@ -421,6 +421,19 @@ export function applyAction(state, board, action) {
     case 'objective': {
       const err = achieveObjective(state, { log }, events);
       if (err) return fail(err);
+      break;
+    }
+    case 'setting': {
+      // Switched mid-game: Quick or Tactical movement, Follow streets. The
+      // rules read both at every step, so the change applies from the next one.
+      if (action.key === 'movement') {
+        state.config.movement = action.value === 'tactical' ? 'tactical' : 'quick';
+        log(state, state.config.movement === 'tactical' ? 'Tactical movement: a direction at every step.' : 'Quick movement: running on to the next fork or marker.');
+        // Stopped at a single way on that Quick would have run through: keep the stop (a direction is still needed).
+      } else if (action.key === 'followStreets') {
+        state.followStreets = !!action.value;
+        if (state.phase === 'choosing') state.options = nextOptions(state, board, { back: true });
+      } else return fail('unknown setting');
       break;
     }
     case 'name': {

@@ -104,3 +104,17 @@ test('out of moves: the turn waits for End turn while there is something left to
   if (state.phase === 'choosing') assert.ok(act({ type: 'choose', cell: pl.pos - 1 }).ok); // from a standstill: west
   assert.equal(state.phase, 'idle', 'no dice, white dice, equipment or Obols: the turn ends by itself');
 });
+
+test('movement mode and Follow streets can be switched mid-game, through the rules', () => {
+  const { state, act, moveBy } = setup();
+  assert.ok(act({ type: 'setting', key: 'movement', value: 'tactical' }).ok);
+  assert.equal(state.config.movement, 'tactical');
+  moveBy(3);
+  assert.equal(state.phase, 'choosing', 'Tactical now: a prompt even with one way on');
+  assert.ok(act({ type: 'setting', key: 'movement', value: 'quick' }).ok);
+  assert.ok(act({ type: 'choose', cell: state.options[0].i }).ok);
+  assert.equal(state.phase, 'idle', 'Quick again: ran the rest of the way, turn over');
+  assert.ok(act({ type: 'setting', key: 'followStreets', value: false }).ok);
+  assert.equal(state.followStreets, false);
+  assert.equal(act({ type: 'setting', key: 'nope', value: 1 }).ok, false);
+});

@@ -226,7 +226,17 @@ export function saveConfig() {
 }
 
 // Game clock: "11:05 PM · Turn 2/12"; from midnight on, just the time.
+export function renderMoveMode() {
+  const b = $('#moveModeBtn');
+  b.hidden = ui.tool !== 'play' || play.state.phase === 'nostart';
+  if (b.hidden) return;
+  const tactical = play.state.movement === 'tactical';
+  b.classList.toggle('tactical', tactical);
+  b.textContent = tactical ? 'Tactical ⇄' : 'Quick ⇄';
+  b.setAttribute('aria-label', `Movement: ${tactical ? 'Tactical' : 'Quick'}. Tap to switch to ${tactical ? 'Quick' : 'Tactical'}.`);
+}
 export function renderClock() {
+  renderMoveMode();
   const el = $('#gameClock');
   el.hidden = ui.tool !== 'play' || play.state.phase === 'nostart';
   if (el.hidden) return;
