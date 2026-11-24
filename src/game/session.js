@@ -25,7 +25,7 @@
 //   sending 'join' again. `seq` lets a client ignore stale updates.
 //   The host also needs the board: send the saved board JSON with the game
 //   (GridState.parse), and wrap it with createBoard.
-import { newGame, applyAction } from './rules.js';
+import { newGame, applyAction, sacrificeSeat } from './rules.js';
 import { publicState } from './mystery.js';
 // Secrets (the mystery monster, face-down evidence, the dice generator) never
 // leave the place that applies the rules: everyone else gets publicState().
@@ -79,12 +79,14 @@ export function createHost({ board, transport, onUpdate = () => {} }) {
     } else if (msg.kind === 'action' && state) {
       const action = { ...msg.action };
       // A client may only act for a seat it holds (unclaimed seats are open).
-      const owner = seats[state.cur];
+      // A Sacrifice is answered by the Fetish's carrier, whoever's turn it is.
+      const seat = action.type === 'sacrifice' ? sacrificeSeat(state) : state.cur;
+      const owner = seats[seat];
       if (owner && owner !== msg.clientId) {
         transport.send({ kind: 'reject', clientId: msg.clientId, error: 'not your turn' });
         return;
       }
-      action.seat = state.cur;
+      action.seat = seat;
       const r = applyAction(state, board, action);
       if (r.ok) broadcast(r.events);
       else transport.send({ kind: 'reject', clientId: msg.clientId, error: r.error });

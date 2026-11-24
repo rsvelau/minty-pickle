@@ -1217,3 +1217,12 @@ body.stress-on #info { display: none !important; }
 .pick-bar[hidden] { display: none; }
 .pick-bar span { white-space: nowrap; }
 .pick-bar button { min-height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,0.06); color: var(--text); cursor: pointer; }
+
+/* Group 4 tricks: Lunge / Sacrifice tag on the card; Lucky's value picker in the tray. */
+.eq-auto { align-self: center; padding: 0 8px; font: 600 11px system-ui, sans-serif; color: var(--muted); white-space: nowrap; }
+.tray-dice.lucky { flex-wrap: wrap; gap: 5px; }
+.lucky-die, .lucky-v { min-width: 34px; min-height: 34px; border-radius: 8px; border: 1px solid #d9c27a; background: rgba(217, 194, 122, 0.12); color: #f4e9c4; font: 700 15px system-ui, sans-serif; cursor: pointer; }
+.lucky-die.on { background: #d9c27a; color: #1a1408; }
+.lucky-v { border-color: var(--line); background: rgba(255, 255, 255, 0.06); color: var(--text); }
+.lucky-to { align-self: center; color: var(--muted); }
+#sacrificeAsk { background: #0d1117; }

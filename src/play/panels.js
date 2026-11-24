@@ -19,6 +19,7 @@ import { targetsFor, actionRoll, abilityReady, killObjective, discardOptions } f
 import { checkRequirement } from '../game/cards/requirements.js';
 import { eventCard } from '../game/decks.js';
 import { choicesFor } from '../game/eventPlay.js';
+import { sacrificeSeat } from '../game/rules.js';
 
 // Module state: assigned by init() below, in the same order as before the split.
 export let OBOL_GLYPHS, DMG_SVG, ATTACK_GLYPH, cardQueue, caseUI, craftUI;
@@ -185,7 +186,7 @@ export function showCardNow(c) {
     card.classList.add('hurt');
     card.style.setProperty('--atk', ATTACK_TYPES[e.attack].colour);
     html = `<div class="pc-kind">${esc(e.source)}</div><div class="pc-glyph">${ATTACK_GLYPH[e.attack]}</div>` +
-      `<div class="pc-title">${e.outcome === 'blocked' ? 'Blocked!' : e.outcome === 'killed' ? `${esc(e.player?.name ?? '')} is dead`
+      `<div class="pc-title">${e.outcome === 'blocked' ? 'Blocked!' : e.outcome === 'killed' ? `${esc(e.player?.name ?? '')} is dead` : e.outcome === 'dying' ? `${esc(e.player?.name ?? '')} falls`
         : e.outcome === 'healed' ? 'Healed instead' : e.outcome === 'reflected' ? 'Reflected!' : e.outcome === 'redirected' ? 'Turned aside'
           : esc(INJURY_TRACKS[e.attack].tiers[e.tier - 1].name)}</div>` +
       `<div class="pc-sub">${esc(hitText(e))}</div>`;
@@ -198,6 +199,13 @@ export function showCardNow(c) {
       `<div class="pc-title">${esc(e.npc?.name ?? 'A victim')} ${saved ? 'is saved' : 'dies'}</div>` +
       `<div class="pc-sub">${saved ? `${esc(e.defenderPlayer?.name ?? '')}'s defense ${e.defense} holds against ${e.amount}.`
         : `${e.amount} damage${e.defenderPlayer ? ` against ${esc(e.defenderPlayer.name)}'s defense ${e.defense}` : ', and no one was close enough to defend them'}. Every player suffers its rage.`}</div>`;
+  } else if (c.kind === 'sacrifice') {
+    const e = c.e;
+    card.classList.add('hurt');
+    card.style.setProperty('--atk', e.saved ? '#3fae5a' : '#7a1a10');
+    html = `<div class="pc-kind">The Sacrificial Fetish</div><div class="pc-glyph">${e.saved ? '✦' : '☠'}</div>` +
+      `<div class="pc-title">${esc(e.player?.name ?? '')} ${e.saved ? 'rises again' : 'is dead'}</div>` +
+      `<div class="pc-sub">${e.saved ? `${esc(e.carrierPlayer?.name ?? '')} paid an Obol and the Fetish crumbled. Every injury is gone.` : 'The Fetish was kept.'}</div>`;
   } else if (c.kind === 'exhaust') {
     const e = c.e;
     html = `<div class="pc-kind">Exhausted</div><div class="pc-glyph">🎲</div>` +
@@ -258,7 +266,7 @@ export function hideCard() {
   $('#cardPop').hidden = true;
   clearTimeout(cardTimer);
   if (cardQueue.length) setTimeout(() => showCardNow(cardQueue.shift()), 120);
-  else renderEventChoice(); // a pending event's choice comes up once its card is read
+  else { renderEventChoice(); renderSacrifice(); } // a pending choice comes up once its card is read
 }
 
 // What's been found, in the shape matchesEvidence wants.
@@ -400,6 +408,7 @@ export function hitText(e) {
   const who = e.player?.name ?? '';
   const type = ATTACK_TYPES[e.attack].label;
   if (e.outcome === 'blocked') return `${who} blocks ${e.amount} ${type} damage (defense ${e.defense}).`;
+  if (e.outcome === 'dying') return `${e.amount} ${type} damage against defense ${e.defense}. ${who} was at Death's Door: the Sacrificial Fetish could save them.`;
   if (e.outcome === 'killed') return `${e.amount} ${type} damage against defense ${e.defense}. ${who} was at Death's Door.`;
   // Spiritual damage tricks (equipment).
   if (e.outcome === 'healed') return `${e.amount} ${type} damage heals ${who} instead (Weeping Barrier).`;
@@ -577,10 +586,13 @@ export function abilitiesHTML(card, use = null) {
     const cost = a.obols ? `${a.obols} ◉` : '🎲'.repeat(a.dice);
     const limit = a.limit === 'once' ? ' <span title="Once, until refreshed">1️⃣</span>' : a.limit === 'breaks' ? ' <span title="Breaks: the card is discarded after this skill">🔗</span>' : '';
     const manual = a.fx?.manual ? ' <span class="eq-manual" title="Played at the table for now">✋</span>' : '';
+    // Lunge is always on; Sacrifice comes up by itself when someone would die.
+    const auto = a.fx?.passive ? 'Always on' : a.fx?.sacrifice ? 'When needed' : '';
     return `<li><span class="eq-range">${RANGE_LABEL[a.range] ?? '—'}</span>` +
       `<span class="eq-kind" title="${kind ? esc(kind.label) : 'Untyped'}">${kind ? kind.icon : '◯'}</span>` +
       `<span><b>${esc(a.name)}</b>${cost || a.req ? ` · ${cost}${a.req ? ` [${esc(a.req)}]` : ''}` : ''} ${esc(a.text)}${limit}${manual}</span>` +
-      (use ? `<button type="button" class="eq-use" data-use="${use.i}:${card.abilities.indexOf(a)}" ${abilityReady(use.item, card.abilities.indexOf(a)) ? '' : 'disabled title="Used up until refreshed"'}>Use</button>` : '') + '</li>';
+      (use && auto ? `<span class="eq-auto">${auto}</span>` : '') +
+      (use && !auto ? `<button type="button" class="eq-use" data-use="${use.i}:${card.abilities.indexOf(a)}" ${abilityReady(use.item, card.abilities.indexOf(a)) ? '' : 'disabled title="Used up until refreshed"'}>Use</button>` : '') + '</li>';
   }).join('')}</ul>`;
 }
 
@@ -695,6 +707,22 @@ export function renderEventChoice() {
   const host = $('#evActions');
   host.innerHTML = opts.map((o) => `<button type="button" data-ev="${o.value}" ${o.ok ? '' : 'disabled title="You can’t pay for this"'}>${esc(o.label)}</button>`).join('');
   host.querySelectorAll('[data-ev]').forEach((b) => { b.onclick = () => play.session.dispatch({ type: 'event', choice: b.dataset.ev, seat: st.cur }); });
+}
+
+// Someone has fallen and the Sacrificial Fetish could save them: its carrier
+// decides (the game waits).
+export function renderSacrifice() {
+  const st = play.session.state;
+  const first = st?.sacrifice?.[0];
+  const pl = first && st.players[first.seat];
+  const carrier = pl && st.players[sacrificeSeat(st)];
+  const show = ui.tool === 'play' && !!pl?.dying && !!carrier && $('#cardPop').hidden;
+  $('#sacrificeAsk').hidden = !show;
+  if (!show) return;
+  $('#sacTitle').textContent = `${pl.name} has fallen`;
+  $('#sacText').innerHTML = `<b style="color:${carrier.colour}">${esc(carrier.name)}</b>: spend the Sacrificial Fetish and 1 Obol to bring ${carrier === pl ? 'yourself' : esc(pl.name)} back, every injury healed? The Fetish crumbles.`;
+  $('#sacNo').onclick = () => play.sacrifice(false);
+  $('#sacYes').onclick = () => play.sacrifice(true);
 }
 
 // Events on the map and the survivors tally.

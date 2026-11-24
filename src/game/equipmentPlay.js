@@ -58,9 +58,13 @@ export const actionRoll = (monster) => (monster.intents ?? []).reduce((a, i) => 
 export const abilityReady = (item, k) => !(item.spent ?? []).includes(k);
 
 // What the UI needs to offer an ability: which targets are in range.
+// Lunge (Fencing Shoes), always on while carried: Close-range attacks reach Mid.
+export const lunges = (pl, ability) => ability.range === 'close' && ability.fx?.dmg !== undefined
+  && pl.inventory.equipment.some((it) => it.id === 'fencing-shoes');
+
 export function targetsFor(state, board, pl, ability) {
   const fx = ability.fx ?? {};
-  const reach = REACH[ability.range] ?? RANGE.close;
+  const reach = lunges(pl, ability) ? RANGE.mid : REACH[ability.range] ?? RANGE.close;
   if (fx.target === 'monster') {
     const min = MIN_REACH[ability.range] ?? 0;
     return state.monsters.filter((m) => {
@@ -108,6 +112,9 @@ export function useEquipment(state, board, pl, action, ctx, events) {
   if (!a) return 'no such skill';
   if (!abilityReady(item, k)) return `${a.name} is used up until it is refreshed`;
   const fx = a.fx ?? { manual: true };
+  if (fx.passive) return `${a.name} is always on while you carry the ${card.name}`;
+  if (fx.sacrifice) return `the ${card.name} is used the moment you or a teammate would die`;
+  if (fx.lucky && state.lucky) return 'Lucky is already in play this turn';
 
   // Dice.
   const dice = [...new Set(action.dice ?? [])];
@@ -274,6 +281,25 @@ export function useEquipment(state, board, pl, action, ctx, events) {
   if (fx.brace) {
     pl.bracedRound = state.round;
     parts.push('braced: nothing can move you through the monster’s next turn');
+  }
+  // Rally: you, and every teammate within reach, +4 Mental defense through
+  // the monster's next turn (it carries the round: see rules.js roll / endRound).
+  if (fx.rally) {
+    const near = state.players.filter((p) => !p.dead && !p.dying && (p === pl || cellRange(board.grid, pl.pos, p.pos) <= REACH[a.range]));
+    for (const p of near) (p.bonusDefense ??= []).push({ type: 'M', v: fx.rally, round: state.round });
+    parts.push(`+${fx.rally} Mental defense for ${near.map((p) => p.name).join(', ')} through the monster’s next turn`);
+  }
+  if (fx.toss) {
+    pl.tossed = true;
+    parts.push('every injury’s effect is held off until you are injured again (the tiers stay)');
+  }
+  if (fx.drink) {
+    pl.drinking = true;
+    parts.push('movement doubled and Physical injuries ignored for the rest of this turn');
+  }
+  if (fx.lucky) {
+    state.lucky = true;
+    parts.push('choose the value of each of your dice this turn');
   }
   if (fx.manual) parts.push(`resolve at the table: ${a.text}`);
 

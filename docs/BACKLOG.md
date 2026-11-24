@@ -28,16 +28,13 @@ Holy, through toughness, a weakness hit where Holy is one) and Spiritual Backlas
 untyped through toughness, or a teammate, their defense applies) are played, through the monster's next
 turn, on the whole hit before defense (`turnAside` in `src/game/combat.js`).
 
-## 4. Dice and injury tricks (equipment)
-- [ ] **Lucky** — Select values for all of your 🎲 this turn. *Good Luck Charm (🔗)*  (needs a die-value picker)
-- [ ] **Rally** — You and all allies can turn a 🎲 into a 4 bonus Mental defense this turn. *Compact Boombox*
-- [ ] **Toss** — Suppress the effects of all injuries until damaged. *Worry Stone (1 Obol, 🔗)*
-- [ ] **Drink** — Double movement and ignore physical injuries this turn. *Questionable Stimulant (🔗)*
-- [ ] **Sacrifice** — When you or a teammate is killed, instead remove all injuries from that player. *Sacrificial Fetish (1 Obol, 🔗)*
-  (a reaction: it must be armed in advance or offered at the moment of death)
-- [ ] **Lunge** — Close range melee attacks can hit from Mid range. *Fencing Shoes* (passive; which skills count as "melee"?)
-- Questions: Rally: do allies spend one of their own rolled dice (on their own turn?), or does the user's
-  die count for everyone? Sacrifice: armed when used, or played at the moment someone dies?
+## ~~4. Dice and injury tricks (equipment)~~ — done (2026-11-24)
+Lucky (set any of your dice this turn, from a picker in the dice tray), Rally (one die: you and teammates
+within Mid get +4 Mental defense through the monster's next turn), Toss (injury effects held off until the
+next injury; covers Death's Door, but a hit that gets through still kills), Drink (movement doubled and
+Physical injuries ignored for the rest of the turn), Sacrifice (when someone would die, the game waits for
+the Fetish's carrier to spend it, or not) and Lunge (always on: Close damage skills reach Mid) are played.
+Toss and Drink used mid-turn give back the slots and dice the injuries took (a lost die is rolled at once).
 
 ## 5. Travel (events)  ·  needs picking spots on the map and new ways to move
 - [ ] **Hidden Passage** — A hole opens in the floor here, and another at a chosen spot on the map. For the rest of the game, travelling through costs 5 movement (not possible with less).
@@ -99,7 +96,6 @@ need going through with the designer.
 ---
 
 ### Suggested order
-~~1~~ → ~~2~~ → ~~3~~ → 4 (equipment: today you can pay for these and get nothing) · 9 and 8 (small, per monster) ·
+~~1~~ → ~~2~~ → ~~3~~ → ~~4~~ · 9 and 8 (small, per monster) ·
 6 · 5 (new movement) · 7 and 10 together, one monster at a time.
 
-Until group 4 is built, consider disabling the ✋ skills so they can't be spent by mistake.

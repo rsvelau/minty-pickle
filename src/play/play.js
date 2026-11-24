@@ -17,7 +17,7 @@ import { m, METERS_PER_CELL } from '../core/scale.js';
 import { dreadUniforms, flickerAt } from '../render/dread.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {
-  DIRS, startMinutes as rulesStartMinutes, clockMinutes as rulesClockMinutes, isMidnight, defaultConfig,
+  DIRS, startMinutes as rulesStartMinutes, clockMinutes as rulesClockMinutes, isMidnight, defaultConfig, sacrificeSeat,
 } from '../game/rules.js';
 import { createBoard } from '../game/board.js';
 import { createLocalSession } from '../game/session.js';
@@ -57,7 +57,7 @@ export function createPlay({
   grid, scene, camera, controls, cellToWorld, cellTop, terrainify, cellLabel, onChange,
   onUsed = () => {}, onCollect = () => {}, onObol = () => {}, onAttack = () => {}, onMonster = () => {},
   onEvidence = () => {}, onAttacked = () => {}, onNamed = () => {}, onMonsterRevealed = () => {},
-  onDamage = () => {}, onIntent = () => {}, onGameOver = () => {}, onNpc = () => {}, onExhaust = () => {}, onCraft = () => {}, onCard = () => {}, onEquip = () => {},
+  onDamage = () => {}, onIntent = () => {}, onGameOver = () => {}, onNpc = () => {}, onExhaust = () => {}, onCraft = () => {}, onCard = () => {}, onEquip = () => {}, onSacrifice = () => {},
   config = defaultConfig(),
 }) {
   const cfg = config; // live: Game settings edits this object; used at the next new game
@@ -816,6 +816,9 @@ export function createPlay({
           if (view.lastStrike && !view.lastStrike.done) view.lastStrike.fx.push(fx); else fx();
           break;
         }
+        case 'sacrifice':
+          onSacrifice({ ...e, player: g()?.players[e.seat], carrierPlayer: g()?.players[e.carrier] });
+          break;
         case 'monsterIntent':
           onIntent(e);
           break;
@@ -852,6 +855,13 @@ export function createPlay({
     if (!s) return { ok: false, error: 'no game' };
     return session.dispatch({ type: 'use', ...use, seat: s.cur });
   }
+  // Sacrifice: the Fetish's carrier answers, whoever's turn it is.
+  function sacrifice(yes) {
+    const s = g();
+    return !!s && session.dispatch({ type: 'sacrifice', yes: !!yes, seat: sacrificeSeat(s) }).ok;
+  }
+  // Lucky: set a die's value.
+  function setDie(n, v) { return act({ type: 'setDie', die: n, v }); }
   function revealCard(n) { return act({ type: 'reveal', card: n }); }
   function nameMonster(id) { return act({ type: 'name', monster: id }); }
   // Pips on dice slotted into Movement but not yet moved.
@@ -1155,6 +1165,8 @@ export function createPlay({
     get bag() { return g()?.bag ?? []; },
     get decks() { return g()?.decks ?? null; }, // the card decks (Obolcraft's Draw an Equipment card reads them)
     get ask() { return g()?.ask ?? null; },
+    get lucky() { return !!g()?.lucky; },              // Lucky: dice values can be chosen
+    get sacrifice() { return g()?.sacrifice ?? []; },  // fallen players waiting on a Sacrifice
     get keys() { return g()?.keys ?? 0; },
     get turn() { return g()?.turn ?? 0; },
     get round() { return g()?.round ?? 1; },
@@ -1188,7 +1200,7 @@ export function createPlay({
     // Game settings changed outside a game: the next game starts fresh with them.
     invalidate: () => { stale = true; },
     state, session, board, roll, reset, setStartMode, saveState, loadState, useEquipment, answerInvestigate, choose, chooseByKey, tick, setActive,
-    boardChanged, setPlayers, toggleSlot, confirmMove, endTurn, unusedCount, slotTotal, rollWhite, busy, revealCard, nameMonster, craft,
+    boardChanged, setPlayers, toggleSlot, confirmMove, endTurn, unusedCount, slotTotal, rollWhite, busy, revealCard, nameMonster, craft, sacrifice, setDie,
     clockMinutes: () => (g() ? rulesClockMinutes(g()) : rulesStartMinutesFor(cfg)),
     startMinutes: () => (g() ? rulesStartMinutes(g()) : rulesStartMinutesFor(cfg)),
     midnight: () => (g() ? isMidnight(g()) : false),

@@ -77,11 +77,8 @@ test('Choke needs twice the monster’s action roll; Obols any colour; 🔗 brea
   assert.ok(s.use(2, 1, [6]).ok);                     // Retrieval [3+] with a 4
   assert.deepEqual(s.pl.inventory.equipment[2].spent, []);  // Piercing Tip is ready again
   assert.match(s.use(2, 0, [9, 10]).error, /\[10\]/);     // (6 + 6 is not 10, but it isn't 'used up')
-  // Sacrifice costs 1 Obol and breaks: the card is gone.
-  const before = s.pl.inventory.equipment.length;
-  assert.ok(s.use(3, 0, []).ok);
-  assert.equal(s.pl.inventory.equipment.length, before - 1);
-  assert.equal(s.pl.inventory.obolcraft.length, 1);
+  // Sacrifice isn't used from the sheet: it comes up when someone would die (tricks.test.js).
+  assert.match(s.use(3, 0, []).error, /the moment/);
 });
 
 test('healing, bonus defense and refreshed dice', () => {

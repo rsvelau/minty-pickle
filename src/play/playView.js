@@ -9,7 +9,7 @@ import { defenseLeft, defenseValue } from '../game/combat.js';
 import { WATER_Y, grid, ui } from '../app/config.js';
 import { toast } from '../app/files.js';
 import { $ } from '../app/dom.js';
-import { craftUI, dmgIcon, hitText, injuryPips, markCaseNew, obolHTML, renderAsk, renderCasebook, renderIntent, renderInventory, renderRevealSheet, showCard, showObol, renderEventChoice } from './panels.js';
+import { craftUI, dmgIcon, hitText, injuryPips, markCaseNew, obolHTML, renderAsk, renderSacrifice, renderCasebook, renderIntent, renderInventory, renderRevealSheet, showCard, showObol, renderEventChoice } from './panels.js';
 import { __set_markerHidden, __set_markerUsed, markers, refreshMarkers, refreshPropsAndWalls, visibleTop } from '../render/board.js';
 import { camera, cellToWorld, controls, scene, wake } from '../render/scene.js';
 import { lightLevels } from '../render/tileLook.js';
@@ -57,6 +57,7 @@ export function init() {
     onCraft: (e) => { craftUI.recipe = null; showCard({ kind: 'craft', e }); },
     onCard: (e) => showCard({ kind: e.deck === 'events' ? 'event' : 'equipment', e }),
     onEquip: (e) => showCard({ kind: 'equipUse', e }),
+    onSacrifice: (e) => showCard({ kind: 'sacrifice', e }),
     onMonsterRevealed: (e) => showCard({ kind: 'monster', monster: e.monster, correct: e.correct }),
     // A monster strikes: a brief, soft flash at the screen edges, in the colour
     // of its damage type (red, blue or green).
@@ -128,7 +129,10 @@ export function renderPlay() {
       `<span class="inj-row">${injuryPips(p)}${p.dead ? ' <b>Dead</b>' : inDanger ? ` <b class="${dangerType ? `dmg-${dangerType}` : ''}" style="${dangerType ? '' : 'color:#ff6a50'}">${dangerType ? dmgIcon(dangerType) : ''}In danger</b>` : ''}` +
       // Through the monster's next turn (Viper Hood, Ice Axe).
       `${!p.dead && p.camoRound === s.round ? ' <b style="color:#7fe08a">Camouflaged</b>' : ''}${!p.dead && p.bracedRound === s.round ? ' <b style="color:#9ec3ff">Braced</b>' : ''}` +
-      `${!p.dead && p.spiritWard?.round === s.round ? ` <b style="color:#7fe0b4">${{ heal: 'Veiled', reflect: 'Penance', backlash: 'Backlash' }[p.spiritWard.kind]}</b>` : ''}</span>` +
+      `${!p.dead && p.spiritWard?.round === s.round ? ` <b style="color:#7fe0b4">${{ heal: 'Veiled', reflect: 'Penance', backlash: 'Backlash' }[p.spiritWard.kind]}</b>` : ''}` +
+      // Rally (through the monster's turn), Toss (until injured), Drink (this turn); fallen, waiting on a Sacrifice.
+      `${!p.dead && p.bonusDefense?.some((b) => b.round === s.round) ? ' <b style="color:#8fb6ff">Rallied</b>' : ''}${!p.dead && p.tossed ? ' <b style="color:#d9c27a">Steadied</b>' : ''}` +
+      `${!p.dead && p.drinking ? ' <b style="color:#e08a5a">Stimulated</b>' : ''}${p.dying ? ' <b style="color:#ff6a50">Fallen</b>' : ''}</span>` +
       `<span class="obol-row">${OBOL_TYPES.map((t) => `<span class="obol-count${counts[t] ? '' : ' zero'}" title="${OBOLS[t].label} Obols">${obolHTML(t)}${counts[t]}</span>`).join('')}</span></div>`;
   }).join('');
   $('#playBoard').innerHTML += s.monsters.map((mo) => {
@@ -140,6 +144,7 @@ export function renderPlay() {
   renderTray();
   renderClock();
   renderAsk();
+  renderSacrifice();
   renderEventChoice();
   renderIntent();
   renderRevealSheet();
@@ -287,6 +292,14 @@ export function renderTray() {
     // Sprained: a black die sits out, disabled.
     Array.from({ length: rolling ? 0 : s.disabledDice }, () => '<span class="tdie disabled" title="Sprained: one black die is disabled">✕</span>').join('');
   [...$('#trayPool').querySelectorAll('button.tdie')].forEach((b, n) => { b.onclick = () => play.toggleSlot(n, trayTarget); });
+  // Lucky: pick a die, then its new value.
+  const luckyDice = s.lucky && !rolling ? s.pool.map((d, n) => ({ d, n })).filter(({ d }) => !d.spent) : [];
+  if (!luckyDice.some(({ n }) => n === luckyPick)) luckyPick = -1;
+  $('#trayLuckyRow').hidden = !luckyDice.length;
+  $('#trayLucky').innerHTML = luckyDice.map(({ d, n }) => `<button type="button" class="lucky-die${n === luckyPick ? ' on' : ''}" data-n="${n}">${d.v}</button>`).join('') +
+    (luckyPick >= 0 ? `<span class="lucky-to">→</span>${[1, 2, 3, 4, 5, 6].map((v) => `<button type="button" class="lucky-v" data-v="${v}">${v}</button>`).join('')}` : '');
+  $('#trayLucky').querySelectorAll('[data-n]').forEach((b) => { b.onclick = () => { luckyPick = Number(b.dataset.n) === luckyPick ? -1 : Number(b.dataset.n); renderTray(); }; });
+  $('#trayLucky').querySelectorAll('[data-v]').forEach((b) => { b.onclick = () => { play.setDie(luckyPick, Number(b.dataset.v)); luckyPick = -1; }; });
   document.querySelectorAll('#trayTarget [data-to]').forEach((b) => b.classList.toggle('on', b.dataset.to === trayTarget));
   // Defense slots (Defense ⬜ +💡⬜), after injuries.
   const defs = [];
@@ -330,6 +343,7 @@ export function renderTray() {
       : (s.pool.some((d) => d.kind === 'white') ? 'Rolled white dice are discarded after this turn' : 'Tap dice to slot them');
 }
 export let trayTarget = 'move';
+let luckyPick = -1; // Lucky: the die being set
 // The Defense total: what's left after this turn's attacks ("3/6" once
 // something has hit; equipment bonuses, Rushed and Doomed counted).
 export function defenseTotal(el, pl) {

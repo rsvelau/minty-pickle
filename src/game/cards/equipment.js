@@ -131,7 +131,7 @@ export const EQUIPMENT_CARDS = [
   ] },
   { id: 'compact-boombox', name: 'Compact Boombox', abilities: [
     A('mid', null, 'Distract', 1, 'Any', 'The Monster must use movement to approach a selected space this turn', { lure: true }, 'breaks'),
-    A('mid', null, 'Rally', 1, 'Any', 'You and all allies can turn a 🎲 into a 4 bonus Mental defense this turn', { manual: true }),
+    A('mid', null, 'Rally', 1, 'Any', 'You and all allies in range gain 4 bonus Mental defense this turn', { rally: 4 }),
   ] },
   { id: 'bronze-skull-lantern', name: 'Bronze Skull Lantern', abilities: [
     A('self', null, 'Ominous Illumination', 1, 'Any', 'Double this 🎲 and refresh. Cannot defend against Spiritual damage this turn', { target: 'self', refreshAs: 'double', noDefense: 'S' }),
@@ -170,27 +170,27 @@ export const EQUIPMENT_CARDS = [
     A('self', null, 'Brace', 1, '4+', 'Immune to being moved this turn', { brace: true }),
   ] },
   { id: 'sacrificial-fetish', name: 'Sacrificial Fetish', abilities: [
-    A('all', null, 'Sacrifice', 0, null, 'When you or a teammate is killed, instead remove all injuries from that player', { manual: true }, 'breaks', 1),
+    A('all', null, 'Sacrifice', 0, null, 'When you or a teammate is killed, instead remove all injuries from that player', { sacrifice: true }, 'breaks', 1),
   ] },
   { id: 'viper-hood', name: 'Viper Hood', abilities: [
     A('self', null, 'Camouflage', 1, '2-', 'Cannot be approached this turn. Cannot move', { camouflage: true }),
   ] },
   { id: 'good-luck-charm', name: 'Good Luck Charm', abilities: [
-    A('self', null, 'Lucky', 0, null, 'Select values for all of your 🎲 this turn', { manual: true }, 'breaks'),
+    A('self', null, 'Lucky', 0, null, 'Select values for all of your 🎲 this turn', { lucky: true }, 'breaks'),
   ] },
   { id: 'worry-stone', name: 'Worry Stone', abilities: [
     A('self', null, 'Rub', 1, '1', 'Reduce Mental injury tier by 1', { target: 'self', heal: { M: 1 } }),
-    A('self', null, 'Toss', 0, null, 'Suppress the effects of all injuries until damaged', { manual: true }, 'breaks', 1),
+    A('self', null, 'Toss', 0, null, 'Suppress the effects of all injuries until damaged', { toss: true }, 'breaks', 1),
   ] },
   { id: 'crystal-talisman', name: 'Crystal Talisman', abilities: [
     A('self', null, 'Barrier', 1, '1', 'Gain 6 additional defense this turn', { target: 'self', bonusDefense: { type: null, v: 6 } }),
     A('mid', 'crystal', 'Bind', 2, '10', 'Reduce monster movement by 5 this turn', { target: 'monster', moveDown: 5 }),
   ] },
   { id: 'questionable-stimulant', name: 'Questionable Stimulant', abilities: [
-    A('self', null, 'Drink', 0, null, 'Double movement and ignore physical injuries this turn.', { manual: true }, 'breaks'),
+    A('self', null, 'Drink', 0, null, 'Double movement and ignore physical injuries this turn.', { drink: true }, 'breaks'),
   ] },
   { id: 'fencing-shoes', name: 'Fencing Shoes', abilities: [
-    A('self', null, 'Lunge', 0, null, 'Close range melee attacks can hit from Mid range.', { manual: true }),
+    A('self', null, 'Lunge', 0, null, 'Close range melee attacks can hit from Mid range.', { passive: 'lunge' }),
     A('self', null, 'Close Gap', 1, 'Any', 'Gain 4 additional movement this turn.', { target: 'self', move: 4 }),
   ] },
 ];

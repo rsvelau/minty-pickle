@@ -137,8 +137,18 @@ teammates in your space for heals like the Medical Kit). Obol costs (◉) take a
   toughness; a Holy weakness counts a hit); **Spiritual Backlash** (Bronze Skull Lantern) sends it to a
   monster you pick (untyped, through toughness) or a teammate (a Spiritual hit on them, their defense
   applies). Players with one up are tagged Veiled, Penance or Backlash.
-- Skills marked ✋ (Rally, Sacrifice, Lucky, Toss, Drink, Lunge) are paid for and logged, and resolved at the
-  table for now.
+- **Dice and injury tricks**: **Lucky** (Good Luck Charm) lets you set any of your dice this turn: a Lucky row
+  in the dice tray, tap a die then its new value. **Rally** (Compact Boombox) costs one die: you and every
+  teammate within Mid range get +4 Mental defense through the monster's next turn (tagged Rallied).
+  **Toss** (Worry Stone) holds off the effects of all your injuries, Death's Door included, until you are
+  injured again (a blocked hit doesn't end it; the tiers stay marked, and a hit that gets through at Death's
+  Door still kills; tagged Steadied). **Drink** (Questionable Stimulant): movement doubled and Physical
+  injuries ignored for the rest of your turn (tagged Stimulated). Used mid-turn, Toss and Drink give back
+  the slots and dice the injuries took; a lost die is rolled at once. **Lunge** (Fencing Shoes) is always on
+  while you carry them: your Close damage skills reach Mid. **Sacrifice** (Sacrificial Fetish) isn't used
+  from the card: when you or a teammate would die and the carrier holds an Obol, the player falls (out of
+  the fight, nothing more can hurt them) and the game waits for the carrier: spend the Fetish and an Obol
+  and they get up with every injury healed, or let them die.
 
 **The clock stops at midnight**: from then on it shows 12:00 AM · Midnight, and ⏳ effects do nothing.
 

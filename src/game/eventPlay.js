@@ -24,7 +24,7 @@
 import { EVENT_BY_ID } from './cards/events.js';
 import { MONSTER_BY_ID } from './cards/monsters.js';
 import { EQUIPMENT_BY_ID } from './cards/equipment.js';
-import { applyDamage, alive } from './combat.js';
+import { applyDamage, alive, killPlayer } from './combat.js';
 import { triggerWeakness } from './equipmentPlay.js';
 import { exhaust } from './monsterTurn.js';
 import { cellRange } from './cards/injuries.js';
@@ -92,9 +92,8 @@ export function shiftClock(state, n, ctx) {
 export function resolveEvent(state, board, id, cell, ctx, events) {
   const pl = ctx.curPlayer(state);
   if (id === PORTRAIT_CURSE) {
-    pl.dead = true;
-    ctx.log(state, `${pl.name} draws the Haunted Portrait's curse, and dies on the spot.`);
-    events.push({ type: 'damage', seat: pl.seat, cell: pl.pos, attack: 'S', amount: 0, defense: 0, source: 'The Haunted Portrait', outcome: 'killed' });
+    const out = killPlayer(state, pl, { log: ctx.log, text: `${pl.name} draws the Haunted Portrait's curse` });
+    events.push({ type: 'damage', seat: pl.seat, cell: pl.pos, attack: 'S', amount: 0, defense: 0, source: 'The Haunted Portrait', outcome: out });
     return;
   }
   const card = EVENT_BY_ID[id];

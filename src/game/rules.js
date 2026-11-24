@@ -18,7 +18,7 @@
 import { MARKERS, streetMask, edgeKey, cellLabel } from '../core/state.js';
 import { gameDoorOverride } from './doors.js';
 import { MONSTERS, spawnMonsters, monstersAct, farthestFromPlayers } from './monsters.js';
-import { turnLimits, injuries, applyDamage } from './combat.js';
+import { turnLimits, injuries, applyDamage, sacrificeCarrier } from './combat.js';
 import { craft } from './obolcraft.js';
 import { refreshThreat, onPlayerEnters } from './monsterTurn.js';
 import { setupMystery, evidenceObol, revealEvidence, attackObol, nameMonster, revealMonster } from './mystery.js';
@@ -241,7 +241,7 @@ export function newGame(board, setup = {}) {
 // equipment and Obolcraft.
 const STOPPED = ['slotting', 'choosing', 'asking'];
 // Every action: { type, seat? }. Returns { ok, error?, events }.
-export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective', 'event', 'setting'];
+export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective', 'event', 'setting', 'sacrifice', 'setDie'];
 
 export function applyAction(state, board, action) {
   // Doors the game changed (nailed, breached) count for every move made while
@@ -254,14 +254,25 @@ function applyActionNow(state, board, action) {
   const events = [];
   const fail = (error) => ({ ok: false, error, events: [] });
   if (!action || !ACTIONS.includes(action.type)) return fail('unknown action');
-  if (action.seat !== undefined && action.seat !== state.cur) return fail('not your turn');
+  // Someone has fallen and the Sacrificial Fetish could save them: the game
+  // waits for its carrier (whoever's turn it is).
+  const sac = pendingSacrifice(state);
+  if (action.type === 'sacrifice') {
+    if (!sac) return fail('nothing to decide');
+    if (action.seat !== undefined && action.seat !== sac.carrier.seat) return fail(`${sac.carrier.name} decides`);
+  } else {
+    if (action.seat !== undefined && action.seat !== state.cur) return fail('not your turn');
+    if (sac && action.type !== 'setting') return fail(`waiting for ${sac.carrier.name} to decide on the Sacrificial Fetish`);
+  }
   switch (action.type) {
     case 'roll': {
       if (state.phase !== 'idle') return fail('cannot roll now');
       const pl = curPlayer(state);
       const lim = turnLimits(state, board, pl);
       pl.defense = [];                               // last turn's defense is spent
-      pl.bonusDefense = [];                          // ...and equipment's "this turn" effects
+      // ...and equipment's "this turn" effects (a teammate's Rally this round
+      // stays, through the monster's turn: its entries carry the round).
+      pl.bonusDefense = (pl.bonusDefense ?? []).filter((b) => b.round === state.round);
       pl.defenseUsed = 0;                            // ...and what attacks wore off it
       pl.mods = {};
       state.moveBonus = 0;
@@ -405,9 +416,46 @@ function applyActionNow(state, board, action) {
     case 'use': {
       // Equipment: any time during your own turn.
       if (!['idle', ...STOPPED].includes(state.phase)) return fail('finish moving first');
-      const err = useEquipment(state, board, curPlayer(state), action, { log }, events);
+      const pl = curPlayer(state);
+      const before = state.phase === 'idle' ? null : turnLimits(state, board, pl);
+      const err = useEquipment(state, board, pl, action, { log }, events);
       if (err) return fail(err);
+      // Toss or Drink mid-turn: injuries held off now give back what they took.
+      if (before) relimit(state, board, pl, before, events);
       restop(state, board, events);
+      break;
+    }
+    case 'setDie': {
+      // Lucky (Good Luck Charm): choose the value of any of your dice this turn.
+      if (!state.lucky) return fail('only with Lucky');
+      if (!STOPPED.includes(state.phase)) return fail('finish moving first');
+      const d = state.pool[action.die | 0];
+      const v = action.v | 0;
+      if (!d || d.spent) return fail('choose a die you haven’t used');
+      if (v < 1 || v > 6) return fail('a die shows 1 to 6');
+      d.v = v;
+      syncDefense(state);
+      break;
+    }
+    case 'sacrifice': {
+      // The carrier's answer: spend the Fetish and an Obol to save the
+      // fallen player (every injury healed), or let them die.
+      const { pl, carrier } = sac;
+      state.sacrifice.shift();
+      delete pl.dying;
+      if (action.yes) {
+        payObols(carrier, 1);
+        carrier.inventory.equipment.splice(carrier.inventory.equipment.findIndex((it) => it.id === 'sacrificial-fetish'), 1);
+        pl.injuries = { P: 0, M: 0, S: 0 };
+        delete pl.tossed;
+        log(state, `${carrier.name} spends the Sacrificial Fetish${carrier === pl ? '' : ` on ${pl.name}`}: ${pl.name} rises again, every injury gone. The Fetish crumbles.`);
+        events.push({ type: 'sacrifice', seat: pl.seat, carrier: carrier.seat, saved: true });
+      } else {
+        pl.dead = true;
+        log(state, `${pl.name} dies.`);
+        events.push({ type: 'sacrifice', seat: pl.seat, carrier: carrier.seat, saved: false });
+      }
+      afterSacrifice(state, board, events);
       break;
     }
     case 'event': {
@@ -459,6 +507,67 @@ function applyActionNow(state, board, action) {
 }
 
 // --- helpers -------------------------------------------------------------------------
+// The first player waiting on a Sacrifice, and who can pay for it. Anyone no
+// longer savable (the Fetish or the Obols gone meanwhile) dies now.
+function pendingSacrifice(state) {
+  while (state.sacrifice?.length) {
+    const pl = state.players[state.sacrifice[0].seat];
+    const carrier = pl.dying && sacrificeCarrier(state, pl);
+    if (carrier) return { pl, carrier };
+    state.sacrifice.shift();
+    if (pl.dying) { delete pl.dying; pl.dead = true; log(state, `${pl.name} dies.`); }
+  }
+  return null;
+}
+// Who answers the next Sacrifice (for a host checking seats); else whose turn it is.
+export function sacrificeSeat(state) {
+  const first = state.sacrifice?.[0];
+  const pl = first && state.players[first.seat];
+  return (pl?.dying && sacrificeCarrier(state, pl)?.seat) ?? state.cur;
+}
+// Once no one is left waiting: the game ends if everyone is dead, and a turn
+// whose player died moves on.
+function afterSacrifice(state, board, events) {
+  if (pendingSacrifice(state)) return;
+  if (state.players.every((p) => p.dead)) {
+    state.phase = 'over';
+    log(state, 'Everyone is dead. The night wins.');
+    events.push({ type: 'gameOver' });
+    return;
+  }
+  if (curPlayer(state).dead && state.phase !== 'over') {
+    state.ask = null;
+    state.steps = 0;
+    if (state.phase === 'idle') nextPlayer(state, board, events);
+    else { state.phase = 'moving'; advance(state, board, events); }
+  }
+}
+// Obols paid for equipment or a Sacrifice: any colour, most plentiful first.
+function payObols(pl, n) {
+  const bag = pl.inventory.obolcraft;
+  for (let j = 0; j < n && bag.length; j++) {
+    const counts = {};
+    for (const o of bag) counts[o.type] = (counts[o.type] ?? 0) + 1;
+    const most = Object.entries(counts).sort((x, y) => y[1] - x[1])[0][0];
+    bag.splice(bag.findIndex((o) => o.type === most), 1);
+  }
+}
+// The turn's limits changed mid-turn (Toss, Drink): slots and dice that the
+// injuries took come back now (a lost die is rolled at once).
+function relimit(state, board, pl, before, events) {
+  const now = turnLimits(state, board, pl);
+  state.maxSlots = Math.max(0, state.maxSlots + now.move - before.move);
+  if (pl.mindset !== 'reckless') state.maxDefense = Math.max(0, state.maxDefense + now.defense - before.defense);
+  state.deathsDoor = now.deathsDoor;
+  const more = now.dice - before.dice;
+  if (more > 0) {
+    const rolled = Array.from({ length: more }, () => ({ kind: 'black', v: d6(state) }));
+    state.pool.push(...rolled);
+    state.disabledDice = Math.max(0, (state.disabledDice ?? 0) - more);
+    log(state, `${who(state)} rolls ${more === 1 ? 'the black die' : `${more} black dice`} the injuries held back: ${rolled.map((d) => d.v).join(', ')}.`);
+    events.push({ type: 'rolled', seat: state.cur, pool: state.pool.map((d) => ({ ...d })) });
+  }
+}
 export const curPlayer = (state) => state.players[state.cur];
 const mysteryCtx = (state) => ({ log, randInt, random, cellLabel, time: () => formatClock(clockMinutes(state)) });
 // What the Event cards need from the rules (eventPlay.js).
@@ -536,6 +645,7 @@ function commitFresh(state) {
   let base = fresh.reduce((a, d) => a + (mind === 'meticulous' ? Math.min(4, d.v) : d.v), 0);
   if (mind === 'rushed') base *= 2;
   if (state.windDouble) base *= 2;
+  if (curPlayer(state).drinking) base *= 2;      // Drink (Questionable Stimulant)
   const total = base + (state.moveBonus ?? 0);
   state.moveBonus = 0;
   return { total, dice: fresh.map((d) => `${d.kind} ${d.v}`).join(' + ') };
@@ -545,7 +655,7 @@ function commitFresh(state) {
 // died or been told to stop, so look at the ways on again.
 function restop(state, board, events) {
   if (state.phase !== 'choosing') return;
-  if (curPlayer(state).dead || state.endTurnNow || state.pendingEvent || state.mystery?.pendingReveal || state.ask) {
+  if (curPlayer(state).dead || curPlayer(state).dying || state.endTurnNow || state.pendingEvent || state.mystery?.pendingReveal || state.ask) {
     state.phase = 'moving';
     advance(state, board, events);
     return;
@@ -688,6 +798,8 @@ function advance(state, board, events) {
       nextPlayer(state, board, events);
       return;
     }
+    // Fallen mid-turn, waiting on a Sacrifice: everything stops here.
+    if (curPlayer(state).dying) { state.ask = null; state.steps = 0; state.phase = 'slotting'; state.options = []; return; }
     if (state.ask) { state.phase = 'asking'; state.options = []; return; }
     if (state.pendingEvent) { state.phase = 'eventing'; state.options = []; return; }
     if (state.mystery?.pendingReveal) { state.phase = 'revealing'; state.options = []; return; }
@@ -746,6 +858,8 @@ function step(state, board, o, events) {
 // on a turn; at midnight the objectives appear and the monster (if any)
 // arrives; from then on monsters act at the end of every turn.
 function nextPlayer(state, board, events) {
+  delete curPlayer(state).drinking;              // Drink and Lucky last this turn only
+  state.lucky = false;
   for (let k = 0; k < state.players.length; k++) {
     state.cur = (state.cur + 1) % state.players.length;
     if (state.cur === 0) endRound(state, board, events);
@@ -812,6 +926,8 @@ function endRound(state, board, events) {
   // Monsters already out carry out the action they declared, and declare the next.
   if (was && state.monsters.length) monstersAct(state, board, events, random, log);
   state.round++;
+  // Rally's defense lasts through the monster's turn: gone now.
+  for (const p of state.players) if (p.bonusDefense) p.bonusDefense = p.bonusDefense.filter((b) => b.round === undefined);
   summon(state, eventCtx(state), events);
   if (isMidnight(state) && !state.midnightDone) {
     state.midnightDone = true;

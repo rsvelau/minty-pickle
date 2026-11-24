@@ -19,7 +19,19 @@ import { hurtMonster } from './equipmentPlay.js';
 
 export const injuries = (pl) => (pl.injuries ??= { P: 0, M: 0, S: 0 });
 export const atDeathsDoor = (pl) => Object.values(injuries(pl)).some((t) => t >= DEATHS_DOOR);
-export const alive = (state) => state.players.filter((pl) => !pl.dead);
+// Still in the fight: not dead, and not down waiting on a Sacrifice.
+export const alive = (state) => state.players.filter((pl) => !pl.dead && !pl.dying);
+
+// Injuries whose effects count right now. Toss (Worry Stone): none, until the
+// player is injured again. Drink (Questionable Stimulant): no Physical ones
+// this turn. The tiers stay marked; only their effects are held off (a hit
+// that gets through at Death's Door still kills).
+export function activeInjuries(pl) {
+  const inj = injuries(pl);
+  if (pl.tossed) return { P: 0, M: 0, S: 0 };
+  if (pl.drinking) return { ...inj, P: 0 };
+  return inj;
+}
 
 // Walking distance between two cells (no keys), or Infinity.
 export function walkDistance(board, a, b, max = 30) {
@@ -31,7 +43,7 @@ export function walkDistance(board, a, b, max = 30) {
 
 // What the current player may use this turn, after injuries.
 export function turnLimits(state, board, pl) {
-  const inj = injuries(pl);
+  const inj = activeInjuries(pl);
   const lit = (board.light[pl.pos] ?? 0) >= state.config.litThreshold;
   const cfg = state.config;
   let move = lit ? Math.max(cfg.litSlots, cfg.moveSlots) : cfg.moveSlots;
@@ -39,12 +51,12 @@ export function turnLimits(state, board, pl) {
   let defense = (cfg.defenseSlots ?? 1) + (lit ? 1 : 0);
   if (inj.M >= 1) defense--;                                // Paranoid
   // Terrified teammates nearby cost one defense slot.
-  const terrifiedNear = state.players.some((o) => o !== pl && !o.dead && injuries(o).M >= 2
+  const terrifiedNear = state.players.some((o) => o !== pl && !o.dead && activeInjuries(o).M >= 2
     && cellRange(board.grid, o.pos, pl.pos) <= RANGE.mid);
   if (terrifiedNear) defense--;
   let dice = state.blackCount - (pl.lostBlack ?? 0);           // black dice exhausted for good
   if (inj.P >= 1) dice--;                                   // Sprained: one die in reserve
-  const deathsDoor = atDeathsDoor(pl);
+  const deathsDoor = Object.values(inj).some((t) => t >= DEATHS_DOOR);
   if (deathsDoor) dice = 1;                                 // one die per turn
   return {
     lit, move: Math.max(0, move), defense: Math.max(0, defense), dice: Math.max(1, dice), deathsDoor, terrifiedNear,
@@ -55,7 +67,7 @@ export function turnLimits(state, board, pl) {
 // plus equipment's bonus defense for that damage type (or any type).
 export function defenseValue(pl, type = null) {
   if (type && pl.mods?.noDefense === type) return 0;       // Ominous Illumination
-  const doomed = injuries(pl).S >= 1;
+  const doomed = activeInjuries(pl).S >= 1;
   const rushed = pl.mindset === 'rushed';                  // Rushed: defense dice count at most 3
   const dice = (pl.defense ?? []).reduce((a, d) => a + Math.min(rushed ? 3 : 99, doomed && d.v === 6 ? 1 : d.v), 0);
   const bonus = (pl.bonusDefense ?? []).filter((b) => !b.type || !type || b.type === type).reduce((a, b) => a + b.v, 0);
@@ -69,7 +81,7 @@ const where = (board, i) => { const { x, y } = board.grid.coords(i); return cell
 
 // Deal `amount` damage of `type` (P/M/S) to a player. Returns the outcome.
 export function applyDamage(state, board, pl, type, amount, { log, source = 'An attack' }, events) {
-  if (pl.dead) return 'dead';
+  if (pl.dead || pl.dying) return 'dead';
   if (pl.mods?.negateAll) {                                // Purity Seal
     log(state, `${source} hits ${pl.name} for ${amount}, but the Purity Seal negates it.`);
     events.push({ type: 'damage', seat: pl.seat, cell: pl.pos, attack: type, amount, defense: amount, source, outcome: 'blocked' });
@@ -106,11 +118,11 @@ export function applyDamage(state, board, pl, type, amount, { log, source = 'An 
     events.push({ ...base, outcome: 'blocked' });
     return 'blocked';
   }
+  delete pl.tossed;                                         // Toss lasts until the next injury
   if (atDeathsDoor(pl)) {
-    pl.dead = true;
-    log(state, `${source} hits ${pl.name} for ${amount} ${track.label} (defense ${block}). ${pl.name} was at Death's Door, and dies at ${where(board, pl.pos)}.`);
-    events.push({ ...base, outcome: 'killed' });
-    return 'killed';
+    const out = killPlayer(state, pl, { log, text: `${source} hits ${pl.name} for ${amount} ${track.label} (defense ${block}). ${pl.name} was at Death's Door, at ${where(board, pl.pos)}` });
+    events.push({ ...base, outcome: out });
+    return out;
   }
   const inj = injuries(pl);
   inj[type] = Math.min(DEATHS_DOOR, inj[type] + 1);
@@ -118,6 +130,29 @@ export function applyDamage(state, board, pl, type, amount, { log, source = 'An 
   log(state, `${source} hits ${pl.name} for ${amount} ${track.label} (defense ${block}): ${tier.name}. ${tier.text}.`);
   events.push({ ...base, outcome: 'injured', tier: inj[type] });
   return 'injured';
+}
+
+// A player would die. Sacrifice (Sacrificial Fetish): if they, or a teammate,
+// carry the Fetish and an Obol to pay for it, the game waits for the carrier
+// to decide (the 'sacrifice' action); until then the player is down ('dying':
+// nothing more can hurt them). Otherwise they die. Returns 'dying' or 'killed'.
+export function killPlayer(state, pl, { log, text }) {
+  if (sacrificeCarrier(state, pl)) {
+    pl.dying = true;
+    (state.sacrifice ??= []).push({ seat: pl.seat });
+    log(state, `${text}, and falls. The Sacrificial Fetish could save them…`);
+    return 'dying';
+  }
+  pl.dead = true;
+  log(state, `${text}, and dies.`);
+  return 'killed';
+}
+// Who can pay for the Sacrifice to save `pl`: pl themselves first, then the
+// teammates in seat order (alive, carrying the Fetish, holding an Obol).
+export function sacrificeCarrier(state, pl) {
+  const can = (o) => !o.dead && (o === pl || !o.dying) && o.inventory.equipment.some((it) => it.id === 'sacrificial-fetish')
+    && o.inventory.obolcraft.length >= 1;
+  return [pl, ...state.players.filter((o) => o !== pl)].find(can) ?? null;
 }
 
 // A Spiritual hit on a warded player, turned aside (see applyDamage):

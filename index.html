@@ -221,6 +221,11 @@
       <div class="ask-top"><div><span class="ev-kind" id="evKind"></span><b id="evTitle"></b><p class="ask-sub" id="evText"></p></div></div>
       <div class="ev-actions" id="evActions"></div>
     </div>
+    <!-- Sacrifice: someone has fallen; the Fetish's carrier decides (src/play/panels.js renderSacrifice). -->
+    <div id="sacrificeAsk" class="ask-card event-choice" hidden role="dialog" aria-labelledby="sacTitle">
+      <div class="ask-top"><div><span class="ev-kind">Sacrificial Fetish</span><b id="sacTitle"></b><p class="ask-sub" id="sacText"></p></div></div>
+      <div class="ev-actions"><button id="sacNo" type="button">Let them die</button><button id="sacYes" type="button" class="on">Spend it</button></div>
+    </div>
     <!-- Evidence Obol: choose one of the face-down Evidence cards. -->
     <div id="revealSheet" class="reveal-sheet" hidden role="dialog" aria-labelledby="revealTitle">
       <b id="revealTitle">Evidence found</b>
@@ -312,6 +317,7 @@
         <button type="button" data-to="defense">Slot to Defense</button>
       </div>
       <div class="tray-row"><span class="tray-label">Rolled</span><div class="tray-dice" id="trayPool"></div></div>
+      <div class="tray-row" id="trayLuckyRow" hidden><span class="tray-label">Lucky</span><div class="tray-dice lucky" id="trayLucky"></div></div>
       <div class="tray-row" id="trayReserveRow"><span class="tray-label">Reserve</span><div class="tray-dice" id="trayReserve"></div></div>
       <div class="tray-row"><span class="tray-label">Move</span><div class="tray-dice" id="traySlots"></div><b class="tray-total" id="trayTotal">0</b></div>
       <div class="tray-row"><span class="tray-label">Defense</span><div class="tray-dice" id="trayDefense"></div><b class="tray-total def" id="trayDefTotal">0</b></div>
