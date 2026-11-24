@@ -647,8 +647,12 @@ npm test           # headless rules tests (plain Node: no browser, no three.js)
   of 630k, and on a 60 × 60 forest about 0.8 million instead of 3.8 million.
 - **Stress test** (editor: File → Stress test). Fills a board (26 × 20, 40 × 40 or the largest, 60 × 60)
   with any tile, walkable or blocked, or any premade building, or takes the map as it is, then measures
-  the whole board and a close-up for 4 s each: frames per second (average and the slowest 10%), triangles
-  and draw calls per frame, and the triangles in a shadow redraw. Midnight effects can be on or off; indoor
+  the whole board and a close-up, 6 s each: frames per second (average and the slowest 10%), triangles
+  and draw calls per frame, the extra triangles in a shadow redraw, and the **frame cost**: for the last 2 s
+  every frame waits for the GPU to finish, so its time covers CPU and GPU end to end. Frame rate stops at the
+  screen's refresh rate (often 60), frame cost doesn't, so **headroom** (how many times the slowest 10% of
+  frames fit in 33 ms, i.e. 30 fps) shows how much is left. Where the browser has GPU timers, GPU time is
+  reported too. Counts include the shadow pass (three.js would reset them between the two). Midnight effects can be on or off; indoor
   floors are split into 4 × 4 rooms. The editor's board is set aside (autosave off) and comes back when the
   panel closes; automatic resolution is paused so the quality is measured as set. **Copy results** puts the
   numbers on the clipboard. `src/editor/stressTest.js`, boards from `src/core/stressBoard.js`.

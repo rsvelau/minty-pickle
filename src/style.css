@@ -1166,3 +1166,12 @@ body.mode-title .stress-panel, body.mode-game .stress-panel { display: none !imp
 .sp-table tr:first-child th { font-weight: 500; font-size: 11px; color: var(--muted); }
 .sp-table td.good { color: #7fe08a; } .sp-table td.ok { color: #e8c76a; } .sp-table td.bad { color: #ff8a7a; }
 body.stress-on #info { display: none !important; }
+.sp-view { border-top: 1px solid var(--line); padding: 6px 0 4px; }
+.sp-vhead { display: flex; align-items: baseline; gap: 8px; }
+.sp-vhead b { flex: 1; }
+.sp-vhead span { font-weight: 600; font-variant-numeric: tabular-nums; }
+.sp-vhead small, .sp-dl small { color: var(--muted); font-size: 11px; }
+.sp-dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 4px 0 0; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.sp-dl dt { color: var(--muted); }
+.sp-dl dd { margin: 0; }
+.stress-panel .good { color: #7fe08a; } .stress-panel .ok { color: #e8c76a; } .stress-panel .bad { color: #ff8a7a; }

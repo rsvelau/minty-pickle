@@ -19,13 +19,14 @@ import { $ } from '../app/dom.js';
 import { toast } from '../app/files.js';
 import { borrowBoard, editorBoardShown, returnBoard } from '../app/gameShell.js';
 import { minimizePanel } from '../app/shell.js';
-import { autoRes, setDreadOverride, shadowFrame } from '../app/loop.js';
+import { autoRes, frameLog, setDreadOverride } from '../app/loop.js';
 import { __set_camTween, camera, controls, qualityName, renderer, resScale, setCamera, setResScale, wake } from '../render/scene.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const SIZES = [[26, 20, 'Hawthorn Bend size'], [40, 40, ''], [MAX_SIZE, MAX_SIZE, 'largest']];
 const SETTLE_MS = 1500;   // shaders compile, the camera settles
 const MEASURE_MS = 4000;  // per view
+const SYNC_MS = 2000;     // per view, waiting for the GPU every frame
 
 let opts = { subject: 'map', size: 2, midnight: true, rooms: true };
 let borrowed = false;
@@ -57,7 +58,7 @@ function showSetup() {
     <label class="sp-check"><input type="checkbox" id="spMid" ${opts.midnight ? 'checked' : ''} /> Midnight effects (downpour, flicker, swaying trees)</label>
     <label class="sp-check" id="spRoomsRow" ${opts.subject === 'map' ? 'hidden' : ''}><input type="checkbox" id="spRooms" ${opts.rooms ? 'checked' : ''} /> Indoor floors: split into 4 × 4 rooms</label>
     <p class="sp-note">Runs at the current quality (<b>${esc(qualityName)}</b>). ${opts.subject === 'map' ? '' : 'Your board is set aside and comes back when you close this. Its undo history is cleared.'}</p>
-    <div class="sp-btns"><button class="sp-go" id="spRun">Run (about 12 s)</button></div>`;
+    <div class="sp-btns"><button class="sp-go" id="spRun">Run (about 16 s)</button></div>`;
   el.hidden = false;
   el.querySelector('[data-close]').onclick = closeStressTest;
   el.querySelector('#spSubject').onchange = (e) => { opts.subject = e.target.value; showSetup(); };
@@ -73,47 +74,54 @@ function status(text) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Measure the current view: every rendered frame for MEASURE_MS at full rate.
-function measure() {
-  return new Promise((resolve) => {
-    const times = [];
-    let lastFrame = renderer.info.render.frame;
-    // The view (camera pass) and the shadow redraws are counted apart: the
-    // shadow map is only redrawn now and then (src/app/loop.js).
-    let tris = 0, calls = 0, samples = 0, shTris = 0, shCalls = 0, shadows = 0;
-    const t0 = performance.now();
-    const step = (now) => {
-      wake(300);
-      const f = renderer.info.render.frame;
-      if (f !== lastFrame) {
-        lastFrame = f;
-        times.push(now);
-        if (shadowFrame) { shTris += renderer.info.render.triangles; shCalls += renderer.info.render.calls; shadows++; } else {
-          tris += renderer.info.render.triangles;
-          calls += renderer.info.render.calls;
-          samples++;
-        }
-      }
-      if (now - t0 < MEASURE_MS) { requestAnimationFrame(step); return; }
-      const gaps = times.slice(1).map((t, k) => t - times[k]).sort((a, b) => a - b);
-      const span = times.length > 1 ? times[times.length - 1] - times[0] : MEASURE_MS;
-      const p90 = gaps.length ? gaps[Math.min(gaps.length - 1, Math.floor(gaps.length * 0.9))] : MEASURE_MS;
-      const view = samples ? { tris: tris / samples, calls: calls / samples } : null;
-      const withShadow = shadows ? { tris: shTris / shadows, calls: shCalls / shadows } : null;
-      resolve({
-        fps: times.length > 1 ? ((times.length - 1) * 1000) / span : 0,
-        low: 1000 / p90,
-        // Without a frame that skipped the shadows (a very slow device), the
-        // view can't be told apart: report the whole frame.
-        tris: Math.round((view ?? withShadow ?? { tris: 0 }).tris),
-        calls: Math.round((view ?? withShadow ?? { calls: 0 }).calls),
-        shadowTris: view && withShadow ? Math.max(0, Math.round(withShadow.tris - view.tris)) : null,
-        shadowsPerSec: (shadows * 1000) / Math.max(1, performance.now() - t0),
-      });
-    };
-    requestAnimationFrame(step);
-  });
+// Measure the current view: every rendered frame for MEASURE_MS at full
+// rate, from the frame log (src/app/loop.js).
+const pct = (list, q) => { if (!list.length) return null; const a = [...list].sort((x, y) => x - y); return a[Math.min(a.length - 1, Math.floor(a.length * q))]; };
+const mean = (list) => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : null);
+async function measure() {
+  frameLog.frames = [];
+  frameLog.gpu = [];
+  frameLog.recording = true;
+  const t0 = performance.now();
+  while (performance.now() - t0 < MEASURE_MS) { wake(300); await sleep(100); }
+  frameLog.recording = false;
+  await sleep(200); // late GPU timer results
+  const frames = frameLog.frames;
+  const gpuTimes = frameLog.gpu;
+  // Then SYNC_MS with every frame waiting for the GPU: the full frame cost.
+  frameLog.frames = [];
+  frameLog.sync = frameLog.recording = true;
+  const t1 = performance.now();
+  while (performance.now() - t1 < SYNC_MS) { wake(300); await sleep(100); }
+  frameLog.sync = frameLog.recording = false;
+  const synced = frameLog.frames.slice(1); // the first may straddle the switch
+  const syncPlain = synced.filter((f) => !f.shadow);
+  const syncView = syncPlain.length ? syncPlain : synced;
+  const syncShadow = synced.filter((f) => f.shadow);
+  const gaps = frames.slice(1).map((f, k) => f.t - frames[k].t);
+  const span = frames.length > 1 ? frames[frames.length - 1].t - frames[0].t : MEASURE_MS;
+  const plain = frames.filter((f) => !f.shadow), shadowed = frames.filter((f) => f.shadow);
+  const view = plain.length ? plain : shadowed; // a very slow device redraws shadows every frame
+  const viewTris = mean(view.map((f) => f.tris)) ?? 0;
+  return {
+    fps: frames.length > 1 ? ((frames.length - 1) * 1000) / span : 0,
+    low: gaps.length ? 1000 / pct(gaps, 0.9) : 0,
+    tris: Math.round(viewTris),
+    calls: Math.round(mean(view.map((f) => f.calls)) ?? 0),
+    shadowTris: plain.length && shadowed.length ? Math.max(0, Math.round(mean(shadowed.map((f) => f.tris)) - viewTris)) : null,
+    shadowsPerSec: (shadowed.length * 1000) / Math.max(1, span),
+    cpu: pct(view.map((f) => f.cpu), 0.5), cpu90: pct(view.map((f) => f.cpu), 0.9),
+    cpuShadow: pct(shadowed.map((f) => f.cpu), 0.5),
+    gpu: pct(gpuTimes, 0.5), gpu90: pct(gpuTimes, 0.9),
+    frame: pct(syncView.map((f) => f.total), 0.5), frame90: pct(syncView.map((f) => f.total), 0.9),
+    frameShadow: pct(syncShadow.map((f) => f.total), 0.5),
+  };
 }
+// How many times the slowest 10% of frames fit in the 30 fps budget (33 ms a
+// frame), from the synced frame times (CPU and GPU end to end: on the safe
+// side, as a normal frame overlaps the two).
+const BUDGET_MS = 1000 / 30;
+export const headroom = (v) => (v.frame90 ? BUDGET_MS / v.frame90 : null);
 
 function closeUp() {
   // Straight down onto the middle of the board at the angled view's slant,
@@ -157,34 +165,49 @@ async function run() {
     size: `${cols} × ${rows}`, cells: cols * rows, buildMs, views,
     quality: qualityName, midnight: opts.midnight,
     screen: `${window.innerWidth} × ${window.innerHeight} at ${renderer.getPixelRatio().toFixed(2)}×`,
-    device: navigator.userAgent,
+    device: navigator.userAgent, gpuTiming: !!frameLog.gpuSupported,
   };
   showResults();
 }
 
+const ms = (v) => (v === null || v === undefined ? 'n/a' : `${v.toFixed(1)} ms`);
+const kTris = (n) => (n >= 10000 ? `${Math.round(n / 1000)}k` : String(n));
+const viewLine = (v) => {
+  const h = headroom(v);
+  return `${v.fps.toFixed(0)} fps (slowest 10%: ${v.low.toFixed(0)}), ${kTris(v.tris)} triangles, ${v.calls} draw calls; `
+    + `frame cost ${ms(v.frame)} (slowest 10%: ${ms(v.frame90)}; with shadow redraw ${ms(v.frameShadow)}), CPU ${ms(v.cpu)}, GPU ${ms(v.gpu)}; `
+    + `shadow redraw ${v.shadowTris === null ? 'n/a' : `+${kTris(v.shadowTris)} triangles, CPU ${ms(v.cpuShadow)}`} (${v.shadowsPerSec.toFixed(1)}/s)`
+    + (h === null ? '' : `; headroom ${h.toFixed(1)}x for 30 fps`);
+};
+
 export function resultsText(r = last) {
-  const k = (n) => (n >= 10000 ? `${Math.round(n / 1000)}k` : String(n));
   return [
     `Stress test: ${r.subject}, ${r.size} (${r.cells} spaces), quality ${r.quality}${r.midnight ? ', midnight' : ''}`,
-    ...r.views.map((v) => `${v.name}: ${v.fps.toFixed(0)} fps (slowest 10%: ${v.low.toFixed(0)}), ${k(v.tris)} triangles, ${v.calls} draw calls, shadow redraw ${v.shadowTris === null ? 'n/a' : `${k(v.shadowTris)} triangles`} (${v.shadowsPerSec.toFixed(1)}/s)`),
-    `Board built in ${r.buildMs} ms. Screen ${r.screen}.`,
+    ...r.views.map((v) => `${v.name}: ${viewLine(v)}`),
+    `Board built in ${r.buildMs} ms. Screen ${r.screen}. GPU timing ${r.gpuTiming ? 'on' : 'not available here'}.`,
     r.device,
   ].join('\n');
 }
 
 function showResults() {
   const r = last;
-  const k = (n) => (n >= 10000 ? `${Math.round(n / 1000)}k` : n.toLocaleString());
+  const k = kTris;
   const tone = (fps) => (fps >= 50 ? 'good' : fps >= 28 ? 'ok' : 'bad');
   const el = panel();
   el.innerHTML = `
     <div class="sp-head"><b>${esc(r.subject)}</b><button class="sp-x" data-close aria-label="Close">✕</button></div>
     <p class="sp-note">${esc(r.size)} (${r.cells.toLocaleString()} spaces) · ${esc(r.quality)}${r.midnight ? ' · midnight' : ''}</p>
-    <table class="sp-table">
-      <tr><th></th><th>fps</th><th>slowest 10%</th><th>triangles</th><th>draws</th><th>shadows</th></tr>
-      ${r.views.map((v) => `<tr><th>${esc(v.name)}</th><td class="${tone(v.fps)}">${v.fps.toFixed(0)}</td><td class="${tone(v.low)}">${v.low.toFixed(0)}</td><td>${k(v.tris)}</td><td>${v.calls}</td><td>${v.shadowTris === null ? '–' : k(v.shadowTris)}</td></tr>`).join('')}
-    </table>
-    <p class="sp-note">Board built in ${r.buildMs} ms. Triangles and draws are what the view draws each frame. Shadows: triangles in a shadow redraw, which happens only when something moves (at most 4 a second). Aim: 30 fps or more in the slowest 10%.</p>
+    ${r.views.map((v) => {
+      const h = headroom(v);
+      return `<div class="sp-view"><div class="sp-vhead"><b>${esc(v.name)}</b><span class="${tone(v.low)}">${v.fps.toFixed(0)} fps</span><small>slowest 10%: ${v.low.toFixed(0)}</small></div>
+      <dl class="sp-dl">
+        <dt>Drawn</dt><dd>${k(v.tris)} triangles · ${v.calls} draws</dd>
+        <dt>Frame cost</dt><dd>${ms(v.frame)}<small> (slowest 10%: ${ms(v.frame90)})</small></dd>
+        <dt>Shadow redraw</dt><dd>${v.shadowTris === null ? '–' : `+${k(v.shadowTris)} triangles${v.frameShadow ? ` · frame ${ms(v.frameShadow)}` : ''}`}</dd>
+        <dt>Headroom</dt><dd class="${h === null ? '' : h >= 1.5 ? 'good' : h >= 1 ? 'ok' : 'bad'}">${h === null ? 'needs GPU timing' : `${h.toFixed(1)}× the 30 fps budget`}</dd>
+      </dl></div>`;
+    }).join('')}
+    <p class="sp-note">Board built in ${r.buildMs} ms. Frame rate stops at the screen's refresh rate (often 60); frame cost doesn't, so it shows what's left. Frame cost: CPU and GPU time for one frame, end to end. Headroom: how many times the slowest 10% of frames fit in 33 ms (30 fps). A shadow redraw happens only while something moves.</p>
     <div class="sp-btns"><button id="spCopy">Copy results</button><button id="spAgain">Another test</button><button class="sp-go" data-close>Done</button></div>`;
   el.querySelectorAll('[data-close]').forEach((b) => { b.onclick = closeStressTest; });
   el.querySelector('#spAgain').onclick = showSetup;

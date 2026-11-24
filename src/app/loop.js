@@ -119,7 +119,21 @@ export function init() {
       __clearShadowsDirty();
       shadowFrame = true;
     } else shadowFrame = false;
+    // Count the whole frame, shadow pass included (three.js would reset its
+    // counters between the shadow pass and the view).
+    renderer.info.autoReset = false;
+    renderer.info.reset();
+    const query = frameLog.recording ? gpuBegin() : null;
     renderer.render(scene, camera);
+    if (query) gpuEnd(query);
+    if (frameLog.recording) {
+      const cpu = performance.now() - now;
+      // Synced: wait for the GPU to finish the frame (reading back one pixel
+      // does), so the time covers CPU and GPU work end to end.
+      if (frameLog.sync) { const gl = renderer.getContext(); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, syncPixel); }
+      frameLog.frames.push({ t: now, cpu, total: performance.now() - now, tris: renderer.info.render.triangles, calls: renderer.info.render.calls, shadow: shadowFrame });
+      gpuPoll();
+    }
     // FPS readout (View → FPS).
     fpsMeter.frames++;
     if (now - fpsMeter.since >= 1000) {
@@ -208,6 +222,48 @@ export function updateDread(dt) {
   if (porchLight) porchLight.intensity = porchLight.userData.baseIntensity * flickerAt(0.71, dreadT, dread);
   if (houseWindow) houseWindow.material.color.set('#e9a85c').multiplyScalar(flickerAt(0.71, dreadT, dread));
 }
+// --- Frame log (the stress test) ----------------------------------------------------
+// While `recording`, every rendered frame logs its start time, CPU time (this
+// loop's work plus handing the frame to the GPU), triangles and draw calls
+// (shadow pass included) and whether it redrew the shadows. Where the browser
+// offers GPU timers (EXT_disjoint_timer_query_webgl2), `gpu` gets each frame's
+// GPU time in ms: unlike fps, frame times aren't capped by the screen's
+// refresh rate, so they show the headroom left.
+// With `sync`, each frame also waits for the GPU to finish (`total`): the
+// full cost of a frame, on any browser, at the price of a lower frame rate
+// while it's on.
+export const frameLog = { recording: false, sync: false, frames: [], gpu: [], gpuSupported: null };
+const syncPixel = new Uint8Array(4);
+let gpuExt = null;
+const gpuPending = [];
+function gpuBegin() {
+  const gl = renderer.getContext();
+  if (frameLog.gpuSupported === null) {
+    gpuExt = gl.getExtension?.('EXT_disjoint_timer_query_webgl2') ?? null;
+    frameLog.gpuSupported = !!gpuExt && typeof gl.createQuery === 'function';
+  }
+  if (!frameLog.gpuSupported || gpuPending.length > 8) return null;
+  const q = gl.createQuery();
+  gl.beginQuery(gpuExt.TIME_ELAPSED_EXT, q);
+  return q;
+}
+function gpuEnd(q) {
+  renderer.getContext().endQuery(gpuExt.TIME_ELAPSED_EXT);
+  gpuPending.push(q);
+}
+function gpuPoll() {
+  const gl = renderer.getContext();
+  while (gpuPending.length) {
+    const q = gpuPending[0];
+    if (!gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) break;
+    const ns = gl.getQueryParameter(q, gl.QUERY_RESULT);
+    const disjoint = gl.getParameter(gpuExt.GPU_DISJOINT_EXT);
+    gl.deleteQuery(q);
+    gpuPending.shift();
+    if (!disjoint) frameLog.gpu.push(ns / 1e6);
+  }
+}
+
 // --- Automatic resolution -------------------------------------------------------
 // Frames that should run at full rate (something is moving) but take longer
 // than ~1/28 s for a second on end: draw fewer pixels (one RES_STEPS step).
@@ -245,5 +301,5 @@ export function setAutoRes(on) {
 export let heightsEasing = false;
 const SHADOW_REFRESH_MS = 250;
 let lastShadow = 0;
-export let shadowFrame = false; // did the last frame redraw the shadow map? (stress test)
+let shadowFrame = false; // did this frame redraw the shadow map? (frame log)
 export let lastFrame = 0;
