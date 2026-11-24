@@ -657,8 +657,17 @@ export function createProps(group, { firGeo, firMat }) {
   const tmpC = new THREE.Color();
   const UP = new THREE.Vector3(0, 1, 0);
 
-  function meshFor(kind, needed) {
-    let mesh = meshes[kind];
+  // Culling chunks: a kind with lots of triangles on the board (forest firs,
+  // thickets, packed cemeteries...) is drawn as one batch per CHUNK x CHUNK
+  // cells instead of one for the whole board, so the renderer can skip the
+  // batches that are off screen. Light kinds stay one batch (fewer draw calls).
+  const CHUNK = 6;
+  const CHUNK_MIN_TRIS = 20000;
+  const trisPer = (kind) => { const g = kind === 'fir' ? firGeo : kinds[kind]; return (g.index ? g.index.count : g.attributes.position.count) / 3; };
+
+  // `key` is the kind, or kind@chunk for a chunked kind.
+  function meshFor(key, kind, needed) {
+    let mesh = meshes[key];
     if (mesh && mesh.instanceMatrix.count >= needed) return mesh;
     if (mesh) { group.remove(mesh); mesh.dispose(); }
     const cap = Math.max(64, Math.ceil(needed * 1.5));
@@ -670,7 +679,7 @@ export function createProps(group, { firGeo, firMat }) {
     mesh.receiveShadow = true;
     mesh.raycast = () => {};
     mesh.count = 0;
-    meshes[kind] = mesh;
+    meshes[key] = mesh;
     group.add(mesh);
     return mesh;
   }
@@ -712,9 +721,22 @@ export function createProps(group, { firGeo, firMat }) {
         }
       });
     }
-    for (const kind of new Set([...Object.keys(meshes), ...Object.keys(placements)])) {
-      const list = placements[kind] ?? [];
-      const mesh = meshFor(kind, list.length);
+    const batches = {}; // key -> placements
+    for (const [kind, list] of Object.entries(placements)) {
+      const chunked = list.length * trisPer(kind) >= CHUNK_MIN_TRIS;
+      for (const pl of list) {
+        let key = kind;
+        if (chunked) { const { x, y } = grid.coords(pl[5]); key = `${kind}@${Math.floor(x / CHUNK)},${Math.floor(y / CHUNK)}`; }
+        (batches[key] ??= []).push(pl);
+      }
+    }
+    // Batches that emptied go (a chunk the forest no longer reaches).
+    for (const key of Object.keys(meshes)) {
+      if (!batches[key]) { group.remove(meshes[key]); meshes[key].dispose(); delete meshes[key]; }
+    }
+    for (const [key, list] of Object.entries(batches)) {
+      const kind = key.split('@')[0];
+      const mesh = meshFor(key, kind, list.length);
       list.forEach(([x, y, z, rot, scale, i], n) => {
         // Firs are unit-height geometry: scale to young trees ~5-8 m.
         const s = kind === 'fir'
@@ -728,6 +750,8 @@ export function createProps(group, { firGeo, firMat }) {
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
       mesh.computeBoundingSphere();
+      // The terrain shader lifts props a little: keep culling on the safe side.
+      mesh.boundingSphere.radius += 0.5;
     }
   }
 

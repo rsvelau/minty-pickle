@@ -630,8 +630,28 @@ npm test           # headless rules tests (plain Node: no browser, no three.js)
   | High | up to 2× | 2048 | 100% | 100% | 30 | full rate |
 
   Phones start on Medium, computers on High. `QUALITY` in `src/render/scene.js`.
-- **FPS** (View menu) shows the real frame rate and whether it's in active, idle or midnight mode: handy when trying
-  the game on a phone.
+- **FPS** (View menu) shows the real frame rate, whether it's in active, idle or midnight mode, and the
+  resolution when automatic resolution has lowered it: handy when trying the game on a phone.
+- **Auto resolution** (View menu, on by default, remembered per device). When frames that should run at full
+  rate drop below about 28 fps for a second, the game draws fewer pixels, a step at a time (85%, 70%, 60%,
+  50% of the quality's resolution, never below 0.75×); after 4 s at 50 fps or better it steps back up.
+  Changing quality starts again at full resolution. `autoResolution` in `src/app/loop.js`.
+- **Shadows on demand.** The moon's shadow map is redrawn only when something that casts a shadow may have
+  changed: the board was edited, tiles are easing, figures or dice are moving, or at most every 250 ms
+  (for slow movers like a swing). Orbiting or panning the camera never redraws it. Before this, every frame
+  drew the whole board twice (once for the view, once for its shadows).
+- **Culling chunks.** Heavy props (anything with 20k+ triangles on the board, such as forest firs) are drawn
+  in batches of 6 × 6 spaces, and the forest ring around the town in square sectors, so the renderer skips
+  batches that are off screen; forest sectors wholly beyond the fog are skipped too. Light props stay one
+  batch each, to keep draw calls down. On Hawthorn Bend a close-up now draws about 260k triangles instead
+  of 630k, and on a 60 × 60 forest about 0.8 million instead of 3.8 million.
+- **Stress test** (editor: File → Stress test). Fills a board (26 × 20, 40 × 40 or the largest, 60 × 60)
+  with any tile, walkable or blocked, or any premade building, or takes the map as it is, then measures
+  the whole board and a close-up for 4 s each: frames per second (average and the slowest 10%), triangles
+  and draw calls per frame, and the triangles in a shadow redraw. Midnight effects can be on or off; indoor
+  floors are split into 4 × 4 rooms. The editor's board is set aside (autosave off) and comes back when the
+  panel closes; automatic resolution is paused so the quality is measured as set. **Copy results** puts the
+  numbers on the clipboard. `src/editor/stressTest.js`, boards from `src/core/stressBoard.js`.
 
 ## View menu
 

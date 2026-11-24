@@ -9,8 +9,8 @@ import { positionPlaceBar } from '../editor/placing.js';
 import { $ } from './dom.js';
 import { play, positionChoices } from '../play/playView.js';
 import { N, clocktowers, heights, landmarks, markers, props, targetHeights, tiles, visibleTop, water } from '../render/board.js';
-import { FOG, QUALITY_KEY, SKY, __set_camTween, applyQuality, camTween, camera, cellToWorld, clampTarget, controls, hemi, moon, quality, qualityName, renderer, scene, wake, wakeUntil } from '../render/scene.js';
-import { HOUSE_D, HOUSE_W, atmos, ghostHouse, houseWindow, porchLight, updateRain, updateTreeFade } from '../render/surroundings.js';
+import { FOG, QUALITY_KEY, RES_STEPS, applyResolution, SKY, __clearShadowsDirty, resScale, setResScale, __set_camTween, applyQuality, markShadows, shadowsDirty, camTween, camera, cellToWorld, clampTarget, controls, hemi, moon, quality, qualityName, renderer, scene, wake, wakeUntil } from '../render/scene.js';
+import { HOUSE_D, HOUSE_W, atmos, cullForest, ghostHouse, houseWindow, porchLight, updateRain, updateTreeFade } from '../render/surroundings.js';
 import { hoverBox, tmpPos, writeTileMatrix } from '../render/tileLook.js';
 import { powerOut } from '../render/tileLook.js';
 
@@ -26,7 +26,7 @@ export function init() {
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    applyResolution();
   });
   TINT = {
     sky: new THREE.Color('#56627a'), skyRed: new THREE.Color('#7c4650'),
@@ -45,6 +45,7 @@ export function init() {
     // After midnight things move all the time: a smoother rate than idle.
     const restFps = dread > 0 ? quality.midnightFps : quality.idleFps;
     if (!active && now - lastFrame < 1000 / restFps - 2) return;
+    autoResolution(now, active);
     lastFrame = now;
     fpsMeter.active = active ? 'active' : dread > 0 ? 'midnight' : 'idle';
     const dt = Math.min(clock.getDelta(), 0.1);
@@ -106,14 +107,25 @@ export function init() {
     updateDread(dt);
     try { positionChoices(); positionPlaceBar(); } catch (e) { console.error(e); }
     updateTreeFade();
+    cullForest();
     if (atmos.visible) updateRain(dt);
+    // Shadows on demand: redraw the shadow map when the board changed, tiles
+    // are easing, figures or dice are moving, or SHADOW_REFRESH_MS has passed
+    // (slow-moving things like a swing or a merry-go-round, and anything that
+    // didn't ask). Orbiting the camera alone never redraws it.
+    if (renderer.shadowMap.enabled && (shadowsDirty || heightsEasing || play.busy() || now - lastShadow > SHADOW_REFRESH_MS)) {
+      renderer.shadowMap.needsUpdate = true;
+      lastShadow = now;
+      __clearShadowsDirty();
+      shadowFrame = true;
+    } else shadowFrame = false;
     renderer.render(scene, camera);
     // FPS readout (View → FPS).
     fpsMeter.frames++;
     if (now - fpsMeter.since >= 1000) {
       if (fpsMeter.show) {
         const fps = Math.round((fpsMeter.frames * 1000) / (now - fpsMeter.since));
-        $('#fps').textContent = `${fps} fps · ${fpsMeter.active} · ${qualityName}`;
+        $('#fps').textContent = `${fps} fps · ${fpsMeter.active} · ${qualityName}${resScale < 1 ? ` · res ${Math.round(resScale * 100)}%` : ''}`;
       }
       fpsMeter.frames = 0;
       fpsMeter.since = now;
@@ -125,12 +137,15 @@ export function init() {
     window.addEventListener(type, () => wake(), { passive: true, capture: true });
   }
   controls.addEventListener('change', () => wake(400));
-  grid.onChange(() => wake());
+  grid.onChange(() => { wake(); markShadows(); });
   applyQuality(qualityName);
   document.querySelectorAll('[data-quality]').forEach((b) => b.addEventListener('click', () => {
     applyQuality(b.dataset.quality);
     try { localStorage.setItem(QUALITY_KEY, qualityName); } catch { /* ignore */ }
   }));
+  try { autoRes.on = localStorage.getItem(AUTO_RES_KEY) !== '0'; } catch { /* default on */ }
+  $('#optAutoRes').checked = autoRes.on;
+  $('#optAutoRes').addEventListener('change', (e) => setAutoRes(e.target.checked));
   $('#optFps').addEventListener('change', (e) => {
     fpsMeter.show = e.target.checked;
     $('#fps').hidden = !fpsMeter.show;
@@ -156,7 +171,7 @@ export function init() {
       try { localStorage.setItem('infoCollapsed', c ? '1' : '0'); } catch { /* fine */ }
     });
   }
-  window.gridPlanner = { grid, scene, camera, controls, cellToWorld, brushes: BRUSHES, terrainHeight, play, dread: () => dread };
+  window.gridPlanner = { grid, scene, camera, controls, cellToWorld, brushes: BRUSHES, terrainHeight, play, dread: () => dread, stopCameraGlide: () => __set_camTween(null) };
 }
 
 // Midnight dread (play demo, from midnight on): lights flicker, the
@@ -165,8 +180,11 @@ export function init() {
 export let dread = 0;
 export let towerOut = 0; // 0..1 progress of the clock dials dying
 export let dreadT = 0;
+// The stress test can force midnight on (1) or off (0); null = follow the game.
+export let dreadOverride = null;
+export function setDreadOverride(v) { dreadOverride = v; }
 export function updateDread(dt) {
-  const want = ui.tool === 'play' && play.midnight() ? 1 : 0;
+  const want = dreadOverride ?? (ui.tool === 'play' && play.midnight() ? 1 : 0);
   dread += Math.sign(want - dread) * Math.min(Math.abs(want - dread), dt / 4);
   towerOut += Math.sign(want - towerOut) * Math.min(Math.abs(want - towerOut), dt / 2.5);
   dreadT += dt;
@@ -190,5 +208,42 @@ export function updateDread(dt) {
   if (porchLight) porchLight.intensity = porchLight.userData.baseIntensity * flickerAt(0.71, dreadT, dread);
   if (houseWindow) houseWindow.material.color.set('#e9a85c').multiplyScalar(flickerAt(0.71, dreadT, dread));
 }
+// --- Automatic resolution -------------------------------------------------------
+// Frames that should run at full rate (something is moving) but take longer
+// than ~1/28 s for a second on end: draw fewer pixels (one RES_STEPS step).
+// Back up a step after 4 s on end faster than ~1/50 s. Idle and midnight
+// frames are held back on purpose, so only back-to-back full-rate frames
+// count. The stress test pauses it, to measure the quality as set.
+const AUTO_RES_KEY = 'minty-pickle.autoRes';
+export const autoRes = { on: true, paused: false, ema: 0, slowFor: 0, fastFor: 0, wasActive: false, cooldown: 0 };
+function autoResolution(now, active) {
+  const dtMs = now - lastFrame;
+  const counts = active && autoRes.wasActive && dtMs < 1000; // longer: the tab was hidden
+  autoRes.wasActive = active;
+  if (!counts || !autoRes.on || autoRes.paused) { autoRes.slowFor = autoRes.fastFor = 0; return; }
+  autoRes.ema = autoRes.ema ? autoRes.ema * 0.9 + dtMs * 0.1 : dtMs;
+  if (now < autoRes.cooldown) return; // let a change settle first
+  autoRes.slowFor = autoRes.ema > 1000 / 28 ? autoRes.slowFor + dtMs : 0;
+  autoRes.fastFor = autoRes.ema < 1000 / 50 ? autoRes.fastFor + dtMs : 0;
+  const k = RES_STEPS.indexOf(resScale);
+  let next = k;
+  if (autoRes.slowFor > 1000 && k < RES_STEPS.length - 1) next = k + 1;
+  else if (autoRes.fastFor > 4000 && k > 0) next = k - 1;
+  if (next !== k) {
+    setResScale(RES_STEPS[next]);
+    autoRes.slowFor = autoRes.fastFor = 0;
+    autoRes.ema = 0;
+    autoRes.cooldown = now + 1500;
+  }
+}
+export function setAutoRes(on) {
+  autoRes.on = on;
+  if (!on && resScale !== 1) setResScale(1);
+  try { localStorage.setItem(AUTO_RES_KEY, on ? '1' : '0'); } catch { /* fine */ }
+}
+
 export let heightsEasing = false;
+const SHADOW_REFRESH_MS = 250;
+let lastShadow = 0;
+export let shadowFrame = false; // did the last frame redraw the shadow map? (stress test)
 export let lastFrame = 0;

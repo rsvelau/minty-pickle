@@ -170,7 +170,6 @@ export function makeHouse({ ghost = false } = {}) {
 }
 
 export let porchLight = null, houseWindow = null;
-export let surroundFirs = null, surroundFirsPlaced = 0; // the forest ring (thinned on lower quality)
 export function buildSurroundings() {
   disposeChildren(surroundGroup);
   const rnd = rand32(90210);
@@ -195,9 +194,10 @@ export function buildSurroundings() {
   const ringArea = (board.w + 2 * (clear + depth)) * (board.d + 2 * (clear + depth)) - (board.w + 2 * clear) * (board.d + 2 * clear);
   const spacing = m(6);
   const count = Math.min(4500, Math.round(ringArea / (spacing * spacing * 1.4)));
-  const firs = new THREE.InstancedMesh(firGeo, firMat, count);
-  firs.castShadow = true;
-  firs.receiveShadow = true;
+  // Trees go into square sectors, one batch each, so the renderer skips the
+  // sectors behind the camera and those lost in the fog (see cullForest).
+  const SECTOR = 14;
+  const sectors = new Map(); // "sx,sz" -> [{ matrix, shade }]
   const cellHash = new Map();
   const key = (x, z) => `${Math.floor(x / spacing)},${Math.floor(z / spacing)}`;
   const shade = new THREE.Color();
@@ -220,17 +220,45 @@ export function buildSurroundings() {
       tmpQuat.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rnd() * Math.PI * 2),
       tmpScale.set(r, h, r),
     );
-    firs.setMatrixAt(placed, tmpMatrix);
-    shade.setScalar(0.75 + rnd() * 0.5);
-    firs.setColorAt(placed, shade);
+    const sk = `${Math.floor(x / SECTOR)},${Math.floor(z / SECTOR)}`;
+    if (!sectors.has(sk)) sectors.set(sk, []);
+    sectors.get(sk).push({ matrix: tmpMatrix.clone(), shade: 0.75 + rnd() * 0.5 });
     placed++;
   }
-  firs.count = placed;
-  firs.computeBoundingSphere();
-  surroundGroup.add(firs);
-  surroundFirs = firs;
-  surroundFirsPlaced = placed;
-  firs.count = Math.round(placed * quality.trees);
+  forestChunks = [];
+  for (const list of sectors.values()) {
+    const firs = new THREE.InstancedMesh(firGeo, firMat, list.length);
+    firs.castShadow = true;
+    firs.receiveShadow = true;
+    firs.raycast = () => {};
+    list.forEach((t, k) => { firs.setMatrixAt(k, t.matrix); firs.setColorAt(k, shade.setScalar(t.shade)); });
+    firs.computeBoundingSphere();
+    surroundGroup.add(firs);
+    forestChunks.push({ mesh: firs, placed: list.length });
+  }
+  setForestDensity(quality.trees);
+}
+
+// The forest ring in sectors: { mesh, placed }. Lower quality draws fewer
+// trees in each (trees were placed in random order, so cutting the list
+// thins every sector evenly).
+export let forestChunks = [];
+export function setForestDensity(fraction) {
+  for (const c of forestChunks) c.mesh.count = Math.round(c.placed * fraction);
+}
+// Sectors wholly beyond the fog can't be seen (fog fades to the sky colour):
+// don't draw them at all. Fog goes by depth along the view direction, so a
+// sector is hidden only when even its nearest point is deeper than fog.far.
+// Called every frame.
+const tmpFwd = new THREE.Vector3();
+const tmpTo = new THREE.Vector3();
+export function cullForest() {
+  const far = scene.fog ? scene.fog.far : Infinity;
+  camera.getWorldDirection(tmpFwd);
+  for (const c of forestChunks) {
+    const s = c.mesh.boundingSphere;
+    c.mesh.visible = tmpTo.subVectors(s.center, camera.position).dot(tmpFwd) - s.radius < far;
+  }
 }
 
 // Drizzle: streaks ~1.5 m long, spread over the board and the near forest.

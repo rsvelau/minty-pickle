@@ -1132,3 +1132,37 @@ body.mode-game .editor-only, body.mode-game #info, body.mode-game .help { displa
 .ev-actions { display: grid; gap: 8px; margin-top: 10px; }
 .ev-actions button { min-height: 46px; padding: 6px 12px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,0.06); color: var(--text); font: 500 15px system-ui, sans-serif; text-align: left; cursor: pointer; }
 .ev-actions button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Stress test (src/editor/stressTest.js) --------------------------------------- */
+.stress-panel {
+  position: fixed; z-index: 40; left: 50%; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  width: min(440px, calc(100vw - 16px)); max-height: 70vh; overflow: auto;
+  padding: 10px 12px 12px; border-radius: 14px; border: 1px solid var(--line);
+  background: var(--panel); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5); color: var(--text); font: 14px system-ui, sans-serif;
+}
+.stress-panel[hidden] { display: none; }
+body.mode-title .stress-panel, body.mode-game .stress-panel { display: none !important; }
+.sp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.sp-x { width: 36px; height: 36px; border-radius: 9px; border: 1px solid var(--line); background: rgba(255,255,255,0.05); color: var(--text); cursor: pointer; }
+.sp-field { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.sp-field select { min-height: 40px; border-radius: 9px; border: 1px solid var(--line); background: #0d1014; color: var(--text); padding: 0 8px; font-size: 14px; }
+.sp-sizes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0; }
+.sp-sizes[hidden], .sp-check[hidden] { display: none; }
+.sp-sizes button, .sp-btns button {
+  min-height: 42px; border-radius: 9px; border: 1px solid var(--line); background: rgba(255,255,255,0.05);
+  color: var(--text); font: 500 14px system-ui, sans-serif; cursor: pointer; touch-action: manipulation;
+}
+.sp-sizes button small { display: block; font-size: 10px; color: var(--muted); font-weight: 400; }
+.sp-sizes button.on { border-color: #5fcf6a; background: rgba(95, 207, 106, 0.18); }
+.sp-check { display: flex; gap: 8px; align-items: center; margin: 6px 0; font-size: 13px; }
+.sp-note { margin: 6px 0; font-size: 12px; color: var(--muted); }
+.sp-status { margin: 10px 0 4px; font-size: 14px; }
+.sp-btns { display: flex; gap: 6px; margin-top: 8px; }
+.sp-btns button { flex: 1; }
+.sp-btns .sp-go { border-color: #5fcf6a; background: rgba(95, 207, 106, 0.18); color: #dff5e2; }
+.sp-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; margin: 6px 0; }
+.sp-table th, .sp-table td { padding: 5px 4px; text-align: right; border-bottom: 1px solid var(--line); }
+.sp-table th:first-child { text-align: left; }
+.sp-table tr:first-child th { font-weight: 500; font-size: 11px; color: var(--muted); }
+.sp-table td.good { color: #7fe08a; } .sp-table td.ok { color: #e8c76a; } .sp-table td.bad { color: #ff8a7a; }
+body.stress-on #info { display: none !important; }

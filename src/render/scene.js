@@ -11,7 +11,7 @@ import { edgeKey } from '../core/state.js';
 import { BED_H, DECK_TOP, INSET, TILE, grid, hoverIndex } from '../app/config.js';
 import { applyControlBindings } from '../app/controls.js';
 import { hoverEdge } from '../editor/walls.js';
-import { surroundFirs, surroundFirsPlaced } from './surroundings.js';
+import { setForestDensity } from './surroundings.js';
 import { makeRadialTexture } from './textures.js';
 
 // Module state: assigned by init() below, in the same order as before the split.
@@ -44,6 +44,10 @@ export function init() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // Shadows on demand: the moon's shadow map is redrawn only when something
+  // that casts a shadow may have changed (see markShadows and the frame loop),
+  // not on every frame. Moving the camera never needs it.
+  renderer.shadowMap.autoUpdate = false;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
   container.appendChild(renderer.domElement);
@@ -379,24 +383,36 @@ export function setCamera(name, instant = false) {
   };
 }
 export const QUALITY_KEY = 'minty-pickle.quality';
+// Automatic resolution (src/app/loop.js) scales the quality's pixel ratio
+// down when frames come too slowly: RES_STEPS, never below MIN_PIXEL_RATIO.
+export const RES_STEPS = [1, 0.85, 0.7, 0.6, 0.5];
+const MIN_PIXEL_RATIO = 0.75;
+export let resScale = 1;
+export const basePixelRatio = () => Math.min(window.devicePixelRatio, quality.pixelRatio);
+export function setResScale(s) { resScale = s; applyResolution(); }
+export function applyResolution() {
+  renderer.setPixelRatio(Math.max(Math.min(MIN_PIXEL_RATIO, basePixelRatio()), basePixelRatio() * resScale));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
 export const isPhoneish = () => window.matchMedia?.('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 900;
 export function applyQuality(name) {
   qualityName = QUALITY[name] ? name : 'high';
   quality = QUALITY[qualityName];
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, quality.pixelRatio));
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  resScale = 1; // a fresh choice starts at full resolution again
+  applyResolution();
   if (renderer.shadowMap.enabled !== quality.shadows) {
     renderer.shadowMap.enabled = quality.shadows;
     moon.castShadow = quality.shadows;
     // Materials compile differently with shadows on or off.
     scene.traverse((o) => { for (const mat of [].concat(o.material ?? [])) mat.needsUpdate = true; });
   }
+  markShadows();
   if (moon.shadow.mapSize.x !== quality.shadowSize) {
     moon.shadow.mapSize.set(quality.shadowSize, quality.shadowSize);
     moon.shadow.map?.dispose();
     moon.shadow.map = null;
   }
-  if (typeof surroundFirs !== 'undefined' && surroundFirs) surroundFirs.count = Math.round(surroundFirsPlaced * quality.trees);
+  setForestDensity(quality.trees);
   document.querySelectorAll('[data-quality]').forEach((b) => b.classList.toggle('on', b.dataset.quality === qualityName));
   wake();
 }
@@ -408,6 +424,10 @@ export function applyQuality(name) {
 // ticks over at the quality's idle rate (rain, water and flicker keep going,
 // just more slowly), which keeps phones cool. wake(ms) asks for full rate.
 export let wakeUntil = 0;
+// Ask for the shadow map to be redrawn on the next frame.
+export let shadowsDirty = true;
+export function markShadows() { shadowsDirty = true; }
+export function __clearShadowsDirty() { shadowsDirty = false; }
 export function wake(ms = 1200) { wakeUntil = Math.max(wakeUntil, performance.now() + ms); }
 
 // ---------------------------------------------------------------------------

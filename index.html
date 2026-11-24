@@ -176,6 +176,9 @@
             <button id="myMaps" title="Save this board to My maps, or open one (saved maps can be played from New game)">My maps</button>
             <button id="checkMap" title="Check this map has what the game needs: a start, investigation spots, reachable markers">Ready to play?</button>
           </div>
+          <div class="file-row single">
+            <button id="stressTest" title="How heavy is a tile, a building or this map on this device? Fills a board and measures frame rate, triangles and draw calls">Stress test</button>
+          </div>
           <input type="file" id="importFile" accept="application/json,.json" hidden />
           <p class="note" id="saveNote">Autosaves in this browser.</p>
         </section>
@@ -345,6 +348,7 @@
           <label class="vm-chip"><input type="checkbox" id="optLowWalls" />Low walls</label>
           <label class="vm-chip"><input type="checkbox" id="optMarkers" checked />Markers</label>
           <label class="vm-chip"><input type="checkbox" id="optFps" />FPS</label>
+          <label class="vm-chip" title="Draw fewer pixels when the frame rate drops below 30, and more again when it recovers"><input type="checkbox" id="optAutoRes" checked />Auto resolution</label>
         </div>
         <span class="vm-label">Quality</span>
         <div class="vm-grid vm-grid-3" id="qualityButtons">
@@ -360,6 +364,7 @@
     <div id="deckScreen" class="screen deck-screen" hidden role="dialog" aria-modal="true" aria-label="Cards in the game"></div>
     <button id="gameMenuBtn" class="game-menu-btn" type="button" hidden aria-label="Game menu" title="Menu (Esc)">☰</button>
 
+    <div id="stressPanel" class="stress-panel" hidden role="dialog" aria-label="Stress test"></div>
     <div id="placeBar" class="place-bar" hidden>
       <div id="placeName" class="place-name"></div>
       <div class="place-btns">

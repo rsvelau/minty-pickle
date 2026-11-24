@@ -28,7 +28,7 @@ const SLOTS = ['slot1', 'slot2', 'slot3'];
 const AUTOSAVE = 'autosave';
 
 // What the board currently holds, and the game in progress.
-let boardHolds = 'editor';   // 'editor' | 'game'
+let boardHolds = 'editor';   // 'editor' | 'game' | 'test' (the stress test)
 let game = null;             // { map: <map file>, name } while a game is loaded
 let autosaveTimer = 0;
 
@@ -69,6 +69,18 @@ function loadGameBoard(mapFile) {
   grid.clearHistory();
   updateUndoButtons();
 }
+
+// The stress test borrows the board the same way a game does: the editor's
+// board is flushed to storage first and autosave stays off until it's back.
+export function borrowBoard(data) {
+  if (boardHolds === 'editor') storage.plannerBoard.set(grid.toJSON());
+  boardHolds = 'test';
+  applyTerrain(data.terrain ?? 'flat');
+  grid.load(data);
+  grid.clearHistory();
+  updateUndoButtons();
+}
+export const returnBoard = () => restoreEditorBoard();
 
 // Is the editor's own board the one on screen (so the editor may autosave it)?
 export const editorBoardShown = () => boardHolds === 'editor';
