@@ -16,7 +16,7 @@ import { colLabel, parseEdgeKey, isLandmark } from '../core/state.js';
 import { m } from '../core/scale.js';
 import { BASE, BED_H, DECK_T, DECK_TOP, DOOR_H, DOOR_W, FLOOR_H, PALETTE, RAIL_H, SUB_LOOK, TILE, WALL_FULL, WALL_LOW, WALL_T, WATER_Y, grid, hoverIndex, rand32, ui } from '../app/config.js';
 import { play } from '../play/playView.js';
-import { BUILDING_STYLES, board, bridgeDepthMat, buildingSeeds, buildingStyle, cellToWorld, deckMat, doorMat, frameMat, glassDarkMat, glassLitMat, groundHole, innerGroundMat, interiorStyle, moon, outerGroundMat, outerHole, poolGeo, poolMat, railMat, scene, slabMat, tileGeoBase, tileMat, unitBoxGeo, wallMat } from './scene.js';
+import { BUILDING_STYLES, board, bridgeDepthMat, buildingSeeds, buildingStyle, cellToWorld, deckMat, doorMat, frameMat, glassDarkMat, glassLitMat, groundHole, innerGroundMat, interiorStyle, outerGroundMat, outerHole, poolGeo, poolMat, railMat, scene, slabMat, tileGeoBase, tileMat, unitBoxGeo, wallMat, resetShadowWindow } from './scene.js';
 import { buildRain, buildSurroundings, firGeo, firMat } from './surroundings.js';
 import { lampsOn, lightLevels, makeLabel, mixHex, refreshAll, tmpColor, tmpMatrix, tmpPos, tmpQuat, tmpScale } from './tileLook.js';
 
@@ -250,11 +250,9 @@ export function buildBoard() {
     }
   }
 
-  // Moon shadows cover the board plus the nearest ring of trees.
-  const s = board.radius + 14;
-  Object.assign(moon.shadow.camera, { left: -s, right: s, top: s, bottom: -s, near: 1, far: s * 4 });
-  moon.shadow.camera.updateProjectionMatrix();
-  moon.position.set(-0.6 * s, 1.2 * s, -0.5 * s);
+  // Moon shadows: at most the board plus the nearest ring of trees, and
+  // usually just the part around the view (see fitShadows in scene.js).
+  resetShadowWindow(board.radius + 14);
 
   buildSurroundings();
   buildRain();

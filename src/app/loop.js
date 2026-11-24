@@ -9,7 +9,7 @@ import { positionPlaceBar } from '../editor/placing.js';
 import { $ } from './dom.js';
 import { play, positionChoices } from '../play/playView.js';
 import { N, clocktowers, heights, landmarks, markers, props, targetHeights, tiles, visibleTop, water } from '../render/board.js';
-import { FOG, QUALITY_KEY, RES_STEPS, applyResolution, SKY, __clearShadowsDirty, resScale, setResScale, __set_camTween, applyQuality, markShadows, shadowsDirty, camTween, camera, cellToWorld, clampTarget, controls, hemi, moon, quality, qualityName, renderer, scene, wake, wakeUntil } from '../render/scene.js';
+import { FOG, QUALITY_KEY, RES_STEPS, applyResolution, fitShadows, SKY, __clearShadowsDirty, resScale, setResScale, __set_camTween, applyQuality, markShadows, shadowsDirty, camTween, camera, cellToWorld, clampTarget, controls, hemi, moon, quality, qualityName, renderer, scene, wake, wakeUntil } from '../render/scene.js';
 import { HOUSE_D, HOUSE_W, atmos, cullForest, ghostHouse, houseWindow, porchLight, updateRain, updateTreeFade } from '../render/surroundings.js';
 import { hoverBox, tmpPos, writeTileMatrix } from '../render/tileLook.js';
 import { powerOut } from '../render/tileLook.js';
@@ -109,6 +109,7 @@ export function init() {
     updateTreeFade();
     cullForest();
     if (atmos.visible) updateRain(dt);
+    fitShadows();
     // Shadows on demand: redraw the shadow map when the board changed, tiles
     // are easing, figures or dice are moving, or SHADOW_REFRESH_MS has passed
     // (slow-moving things like a swing or a merry-go-round, and anything that

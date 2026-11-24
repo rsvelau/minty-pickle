@@ -640,11 +640,18 @@ npm test           # headless rules tests (plain Node: no browser, no three.js)
   changed: the board was edited, tiles are easing, figures or dice are moving, or at most every 250 ms
   (for slow movers like a swing). Orbiting or panning the camera never redraws it. Before this, every frame
   drew the whole board twice (once for the view, once for its shadows).
+- **Shadow window.** The shadows cover only the ground in view plus a margin (30% each side), worked out in
+  moonlight space so everything casting into the view is included; a view taking in most of the board gets
+  the whole board. The window moves, and shadows are redrawn, only when the view leaves it or zooms well in.
+  On a 60 × 60 forest a close-up's shadow redraw fell from 3.4M to 1.0M triangles, and shadows near the
+  camera are sharper. `fitShadows` in `src/render/scene.js`.
 - **Culling chunks.** Heavy props (anything with 20k+ triangles on the board, such as forest firs) are drawn
   in batches of 6 × 6 spaces, and the forest ring around the town in square sectors, so the renderer skips
   batches that are off screen; forest sectors wholly beyond the fog are skipped too. Light props stay one
   batch each, to keep draw calls down. On Hawthorn Bend a close-up now draws about 260k triangles instead
   of 630k, and on a 60 × 60 forest about 0.8 million instead of 3.8 million.
+- **Asset budget**: what a tile, building or character may cost, measured on a Pixel 10a:
+  [`docs/ASSET_BUDGET.md`](docs/ASSET_BUDGET.md).
 - **Stress test** (editor: File → Stress test). Fills a board (26 × 20, 40 × 40 or the largest, 60 × 60)
   with any tile, walkable or blocked, or any premade building, or takes the map as it is, then measures
   the whole board and a close-up, 6 s each: frames per second (average and the slowest 10%), triangles

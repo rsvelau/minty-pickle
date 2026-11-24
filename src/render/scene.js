@@ -424,6 +424,80 @@ export function applyQuality(name) {
 // ticks over at the quality's idle rate (rain, water and flicker keep going,
 // just more slowly), which keeps phones cool. wake(ms) asks for full rate.
 export let wakeUntil = 0;
+// --- Shadow window -----------------------------------------------------------------
+// The moon's shadows cover only the ground in view plus a margin, not the
+// whole board: on a 60 x 60 board a shadow redraw drew the whole forest
+// (3.4M triangles on a Pixel 10a) even for a close-up.
+// The shadow camera looks along the moonlight from above the board's centre;
+// only its rectangle changes. Each frame the ground in view is found (the
+// view's corner rays meeting the ground) and turned into moonlight space,
+// where a caster lines up with the shadow it throws, so that rectangle holds
+// everything casting into the view. The window moves (and shadows are
+// redrawn) only when the view leaves it or zooms well in, so redraws stay
+// rare; a view taking in most of the board gets the whole board.
+const SHADOW_MARGIN = 0.3;   // added on each side, as a share of the view's size
+const SHADOW_MIN = 6;        // smallest window side, cells
+const LIGHT_DIR = new THREE.Vector3(-0.6, 1.2, -0.5).normalize();
+const LX = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), LIGHT_DIR).normalize(); // moonlight-space x
+const LY = new THREE.Vector3().crossVectors(LIGHT_DIR, LX);                                       // moonlight-space y
+const shadowWin = { full: 30, all: null, win: null };
+const tmpRay = new THREE.Vector3();
+const tmpP = new THREE.Vector3();
+const NDC_CORNERS = [[-1, -1], [1, -1], [-1, 1], [1, 1], [0, 0]];
+const rectOf = (pts) => {
+  const r = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity };
+  for (const p of pts) { const x = p.dot(LX), y = p.dot(LY); r.x0 = Math.min(r.x0, x); r.x1 = Math.max(r.x1, x); r.y0 = Math.min(r.y0, y); r.y1 = Math.max(r.y1, y); }
+  return r;
+};
+export function resetShadowWindow(full) {
+  shadowWin.full = full;
+  const c = [[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([a, b]) => new THREE.Vector3(a * full, 0, b * full));
+  shadowWin.all = rectOf(c);
+  const L = full * 1.6; // far enough above anything on the board
+  moon.target.position.set(0, 0, 0);
+  moon.position.copy(LIGHT_DIR).multiplyScalar(L);
+  moon.shadow.camera.near = 1;
+  moon.shadow.camera.far = L + full * 2;
+  moon.target.updateMatrixWorld();
+  shadowWin.win = null; // refit on the next frame
+}
+function setShadowRect(r) {
+  shadowWin.win = r;
+  Object.assign(moon.shadow.camera, { left: r.x0, right: r.x1, bottom: r.y0, top: r.y1 });
+  moon.shadow.camera.updateProjectionMatrix();
+  markShadows();
+}
+// The ground in view, as a rectangle in moonlight space, clipped to the
+// whole shadow area (null: nothing of the board in view).
+export function viewShadowRect() {
+  const cam = camera.position;
+  const reach = Math.max(40, cam.distanceTo(controls.target) * 1.5); // rays that miss the ground stop here
+  const pts = [controls.target.clone().setY(0)];
+  for (const [nx, ny] of NDC_CORNERS) {
+    tmpRay.set(nx, ny, 0.5).unproject(camera).sub(cam).normalize();
+    const t = tmpRay.y < -1e-3 ? -cam.y / tmpRay.y : Infinity;
+    if (t < reach) pts.push(tmpP.set(cam.x + tmpRay.x * t, 0, cam.z + tmpRay.z * t).clone());
+    else { const h = Math.hypot(tmpRay.x, tmpRay.z) || 1; pts.push(tmpP.set(cam.x + (tmpRay.x / h) * reach, 0, cam.z + (tmpRay.z / h) * reach).clone()); }
+  }
+  const r = rectOf(pts), a = shadowWin.all;
+  return { x0: Math.max(r.x0, a.x0), x1: Math.min(r.x1, a.x1), y0: Math.max(r.y0, a.y0), y1: Math.min(r.y1, a.y1) };
+}
+const area = (r) => Math.max(0, r.x1 - r.x0) * Math.max(0, r.y1 - r.y0);
+// Called every frame; changes the shadow window (and asks for a redraw)
+// only when the view needs it.
+export function fitShadows() {
+  if (!renderer.shadowMap.enabled || !shadowWin.all) return;
+  const need = viewShadowRect(), w = shadowWin.win, a = shadowWin.all;
+  if (need.x0 >= need.x1 || need.y0 >= need.y1) { if (!w) setShadowRect(a); return; }
+  const inside = w && need.x0 >= w.x0 && need.x1 <= w.x1 && need.y0 >= w.y0 && need.y1 <= w.y1;
+  const tooLoose = w && area(w) > area(need) * 4 && area(w) > SHADOW_MIN * SHADOW_MIN * 4;
+  if (inside && !tooLoose) return;
+  const mx = Math.max(SHADOW_MIN / 2, (need.x1 - need.x0) * SHADOW_MARGIN), my = Math.max(SHADOW_MIN / 2, (need.y1 - need.y0) * SHADOW_MARGIN);
+  const r = { x0: Math.max(a.x0, need.x0 - mx), x1: Math.min(a.x1, need.x1 + mx), y0: Math.max(a.y0, need.y0 - my), y1: Math.min(a.y1, need.y1 + my) };
+  setShadowRect(area(r) >= area(a) * 0.7 ? a : r); // most of the board: all of it
+}
+export const shadowWindow = () => ({ ...shadowWin.win });
+
 // Ask for the shadow map to be redrawn on the next frame.
 export let shadowsDirty = true;
 export function markShadows() { shadowsDirty = true; }
