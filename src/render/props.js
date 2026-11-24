@@ -14,6 +14,15 @@ import { isLandmark } from '../core/state.js';
 
 // --- geometry helpers --------------------------------------------------------
 
+// The start van is parked very slightly askew (PARK_SKEW radians). Its
+// headlight beams are aimed back by the same angle, each pivoting on its own
+// lamp, so they run straight down the road: over 13-15 m even 0.08 rad swings
+// a beam ~1 m sideways, through a bridge's railing and truss.
+const PARK_SKEW = 0.08;
+function aimStraight(geo, px, pz) {
+  return geo.translate(-px, 0, -pz).rotateY(-PARK_SKEW).translate(px, 0, pz);
+}
+
 // Bake a flat colour into a geometry (so one material serves every prop).
 function part(geo, hex) {
   geo = geo.index ? geo.toNonIndexed() : geo;
@@ -286,7 +295,7 @@ function buildKinds() {
       // Out across the start cell in front and into the next one (~15 m).
       sh.moveTo(m(2.5), -m(0.9)); sh.lineTo(m(15), -m(3.0)); sh.lineTo(m(15), m(3.0)); sh.lineTo(m(2.5), m(0.9));
       sh.closePath();
-      return part(new THREE.ShapeGeometry(sh).rotateX(Math.PI / 2).translate(0, 0.03, 0), '#ffc480');
+      return part(aimStraight(new THREE.ShapeGeometry(sh).rotateX(Math.PI / 2).translate(0, 0.03, 0), m(2.5), 0), '#ffc480');
     })(),
     // Soft beams of light in the air from each headlamp: narrow at the lamp,
     // ~1.9 m wide after 13 m, brightest at the lamp and fading out.
@@ -297,7 +306,7 @@ function buildKinds() {
         let g = new THREE.CylinderGeometry(m(1.9), m(0.12), L, 18, 8, true) // top (wide) -> far end
           .rotateZ(-Math.PI / 2)                                             // axis along +x
           .translate(lampX + L / 2, lampY, m(z));
-        g = g.toNonIndexed();
+        g = aimStraight(g, lampX, m(z)).toNonIndexed();
         g.deleteAttribute('uv');
         const pos = g.attributes.position;
         // Light stops at the road: flatten anything below road level.
@@ -586,7 +595,7 @@ function keepInside(grid, x, y, list, reach) {
 
 // The van faces (fx, fz); the painted start box sits on the cell in front.
 function startSpace(fx, fz) {
-  const rot = Math.atan2(-fz, fx) + 0.08; // parked, very slightly askew
+  const rot = Math.atan2(-fz, fx) + PARK_SKEW; // parked, very slightly askew
   return [
     ['van', -fx * 0.04, -fz * 0.04, rot], ['vanLights', -fx * 0.04, -fz * 0.04, rot],
     ['vanHazard', -fx * 0.04, -fz * 0.04, rot], ['vanBeam', -fx * 0.04, -fz * 0.04, rot],

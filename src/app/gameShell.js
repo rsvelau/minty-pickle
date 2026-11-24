@@ -257,7 +257,7 @@ function startGame({ map, name, players, startMode, movement = 'quick', monster 
   setTool('play');
   renderPlay();
   autosaveNow();
-  toast(`${name}: ${players === 1 ? 'one investigator' : `${players} investigators`}. Good luck.`);
+  // No pop-up: the board, the clock and the play bar say a game has begun.
 }
 // A map file object, always with its details.
 const readMapFile = (file) => (typeof file === 'string' ? JSON.parse(file) : file);
@@ -308,7 +308,6 @@ function loadSlot(id) {
   play.loadState(loaded.state);
   setTool('play');
   renderPlay();
-  toast(`Loaded: ${loaded.name || 'saved game'}.`);
 }
 // The map from a save, as a map file again (data + details).
 function writeMapFromData({ data, meta }) {
