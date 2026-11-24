@@ -88,10 +88,13 @@ export function init() {
   // than peak frame rate. Each level sets the render resolution, shadows, how
   // many trees surround the town, how much rain falls, and the "idle" frame
   // rate used while nothing is moving (see the render loop at the bottom).
+  // After midnight the town never keeps still (the monster, danger rings,
+  // flickering lights, swaying trees, the downpour), so it gets its own,
+  // smoother rate: `midnightFps` (Infinity = the screen's full rate).
   QUALITY = {
-    low: { pixelRatio: 1, shadows: false, shadowSize: 1024, trees: 0.35, rain: 0.35, idleFps: 12 },
-    medium: { pixelRatio: 1.5, shadows: true, shadowSize: 1024, trees: 0.65, rain: 0.6, idleFps: 20 },
-    high: { pixelRatio: 2, shadows: true, shadowSize: 2048, trees: 1, rain: 1, idleFps: 30 },
+    low: { pixelRatio: 1, shadows: false, shadowSize: 1024, trees: 0.35, rain: 0.35, idleFps: 12, midnightFps: 30 },
+    medium: { pixelRatio: 1.5, shadows: true, shadowSize: 1024, trees: 0.65, rain: 0.6, idleFps: 20, midnightFps: 30 },
+    high: { pixelRatio: 2, shadows: true, shadowSize: 2048, trees: 1, rain: 1, idleFps: 30, midnightFps: Infinity },
   };
   qualityName = (() => {
     try { const q = localStorage.getItem(QUALITY_KEY); if (QUALITY[q]) return q; } catch { /* ignore */ }

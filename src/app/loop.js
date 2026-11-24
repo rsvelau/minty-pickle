@@ -42,9 +42,11 @@ export function init() {
     const now = performance.now();
     const active = now < wakeUntil || !!camTween || heightsEasing || play.busy() || markers.busy()
       || clocktowers.busy() || (dread > 0 && dread < 1) || (towerOut > 0 && towerOut < 1);
-    if (!active && now - lastFrame < 1000 / quality.idleFps - 2) return;
+    // After midnight things move all the time: a smoother rate than idle.
+    const restFps = dread > 0 ? quality.midnightFps : quality.idleFps;
+    if (!active && now - lastFrame < 1000 / restFps - 2) return;
     lastFrame = now;
-    fpsMeter.active = active;
+    fpsMeter.active = active ? 'active' : dread > 0 ? 'midnight' : 'idle';
     const dt = Math.min(clock.getDelta(), 0.1);
 
     if (camTween) {
@@ -111,7 +113,7 @@ export function init() {
     if (now - fpsMeter.since >= 1000) {
       if (fpsMeter.show) {
         const fps = Math.round((fpsMeter.frames * 1000) / (now - fpsMeter.since));
-        $('#fps').textContent = `${fps} fps · ${fpsMeter.active ? 'active' : 'idle'} · ${qualityName}`;
+        $('#fps').textContent = `${fps} fps · ${fpsMeter.active} · ${qualityName}`;
       }
       fpsMeter.frames = 0;
       fpsMeter.since = now;

@@ -144,12 +144,16 @@ export function swayFir(shader) {
         // Wind from the west-south-west in world space, turned into the
         // tree's own (rotated, scaled) space.
         vec3 world = vec3(bend + 0.6 * gust, 0.0, 0.45 * sin(uSwayTime * 1.1 + ph * 2.3) * gust);
-        mat3 im = mat3(1.0);
-        float treeH = 1.0;
+        vec3 offs = world * (uSway * hgt * hgt * 0.05);
         #ifdef USE_INSTANCING
-          im = mat3(instanceMatrix);
-          treeH = length(instanceMatrix[1].xyz);
+          // Into the tree's own space. Its matrix is a turn times a scale
+          // per axis, so the inverse is each column over its length squared
+          // (cheap, unlike inverse() on every vertex).
+          vec3 c0 = instanceMatrix[0].xyz, c1 = instanceMatrix[1].xyz, c2 = instanceMatrix[2].xyz;
+          float l1 = dot(c1, c1);
+          offs *= sqrt(l1); // taller trees bend further
+          offs = vec3(dot(c0, offs) / dot(c0, c0), dot(c1, offs) / l1, dot(c2, offs) / dot(c2, c2));
         #endif
-        transformed += inverse(im) * (world * uSway * hgt * hgt * treeH * 0.05);
+        transformed += offs;
       }`);
 }

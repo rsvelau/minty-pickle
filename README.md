@@ -620,16 +620,17 @@ npm test           # headless rules tests (plain Node: no browser, no three.js)
   camera moving, a runner jogging, dice tumbling, a marker burst, a monster stalking, midnight setting in).
   Otherwise it ticks over at an idle rate, so rain, water and flicker keep moving but the phone stays cool.
 - **Quality** (View menu: Low / Medium / High, remembered per device). Sets render resolution, shadows, how
-  many trees ring the town, how much rain falls, and the idle frame rate:
+  many trees ring the town, how much rain falls, and the idle frame rate. After midnight the town never keeps
+  still (monster, danger rings, flicker, swaying trees, downpour), so it rests at a smoother midnight rate:
 
-  | | Resolution | Shadows | Trees | Rain | Idle fps |
-  |---|---|---|---|---|---|
-  | Low | 1× | off | 35% | 35% | 12 |
-  | Medium | up to 1.5× | 1024 | 65% | 60% | 20 |
-  | High | up to 2× | 2048 | 100% | 100% | 30 |
+  | | Resolution | Shadows | Trees | Rain | Idle fps | After midnight |
+  |---|---|---|---|---|---|---|
+  | Low | 1× | off | 35% | 35% | 12 | 30 |
+  | Medium | up to 1.5× | 1024 | 65% | 60% | 20 | 30 |
+  | High | up to 2× | 2048 | 100% | 100% | 30 | full rate |
 
   Phones start on Medium, computers on High. `QUALITY` in `src/render/scene.js`.
-- **FPS** (View menu) shows the real frame rate and whether it's in active or idle mode: handy when trying
+- **FPS** (View menu) shows the real frame rate and whether it's in active, idle or midnight mode: handy when trying
   the game on a phone.
 
 ## View menu
