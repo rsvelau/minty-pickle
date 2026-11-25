@@ -277,6 +277,8 @@ cells become Street when loaded. The street surface lives in `src/render/street.
   south sidewalk of east-west streets, the east one of north-south streets, the outer corner of a bend. A
   post is never placed within one cell of another lamp (a junction's, or one on a parallel street), so they
   never bunch up. All start dark (`streetLampCells` in `src/core/state.js`).
+  Posts mid-sidewalk (along a street, at a T, at a dead end) stand ~2 m along it from the middle, so
+  they never block a door centred on the cell's side.
 
 ### Building finishes
 

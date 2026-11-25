@@ -418,6 +418,9 @@ const DIR = { [N]: [0, -1], [E]: [1, 0], [S]: [0, 1], [W]: [-1, 0] };
 // Rotation that turns a +z-facing prop to face a side.
 const FACE = { [N]: Math.PI, [S]: 0, [E]: Math.PI / 2, [W]: -Math.PI / 2 };
 // Traffic keeps right: a car arriving from side d stops at this corner.
+// Posts mid-sidewalk stand this far (cell units, ~2 m) along it from the
+// middle: doors are centred on a cell's side, and a lamp there blocks one.
+const LAMP_SHIFT = 0.3;
 const RIGHT_CORNER = { [N]: [-1, -1], [E]: [1, -1], [S]: [1, 1], [W]: [-1, 1] };
 
 function placeFurniture(items, mask, centre, y, lit, hash, post = false) {
@@ -429,12 +432,15 @@ function placeFurniture(items, mask, centre, y, lit, hash, post = false) {
     // its outer corner square; a dead end at its closed end.
     let lx, lz;
     const ew = (mask & (E | W)) && !(mask & (N | S)), ns = (mask & (N | S)) && !(mask & (E | W));
-    if (open.length === 0 || ew) [lx, lz] = [0, CORNER - SW * 0.15];
-    else if (ns) [lx, lz] = [CORNER - SW * 0.15, 0];
+    if (open.length === 0 || ew) [lx, lz] = [LAMP_SHIFT, CORNER - SW * 0.15];
+    else if (ns) [lx, lz] = [CORNER - SW * 0.15, LAMP_SHIFT];
     else if (open.length === 2) {
       const [a, b] = [N, E, S, W].filter((d) => !(mask & d));
       [lx, lz] = [DIR[a][0] + DIR[b][0], DIR[a][1] + DIR[b][1]].map((v) => v * (CORNER - SW * 0.1));
-    } else [lx, lz] = DIR[opposite(open[0])].map((v) => v * (CORNER - SW * 0.15));
+    } else {
+      const [ex, ez] = DIR[opposite(open[0])];
+      [lx, lz] = [ex * (CORNER - SW * 0.15) + (ez ? LAMP_SHIFT : 0), ez * (CORNER - SW * 0.15) + (ex ? LAMP_SHIFT : 0)];
+    }
     const rot = ew || open.length === 0 ? Math.PI / 2 : 0;   // the ladder bar along the street
     items.push(['lampPost', centre.x + lx, y, centre.z + lz, rot]);
     items.push([lit ? 'globeOn' : 'globeOff', centre.x + lx, y, centre.z + lz, rot]);
@@ -455,7 +461,9 @@ function placeFurniture(items, mask, centre, y, lit, hash, post = false) {
   let lx, lz;
   if (open.length === 3) {
     const closed = [N, E, S, W].find((b) => !(mask & b));
-    [lx, lz] = DIR[closed].map((v) => v * (CORNER - SW * 0.15));
+    const [ex, ez] = DIR[closed];
+    // Slid along the sidewalk, off the middle where a door would be.
+    [lx, lz] = [ex * (CORNER - SW * 0.15) + (ez ? LAMP_SHIFT : 0), ez * (CORNER - SW * 0.15) + (ex ? LAMP_SHIFT : 0)];
   } else {
     const corners = [[1, 1], [-1, 1], [-1, -1], [1, -1]];
     [lx, lz] = corners[hash % 4].map((v) => v * (CORNER - SW * 0.1));
