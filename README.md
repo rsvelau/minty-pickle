@@ -44,9 +44,11 @@ In a game the editor's tools are hidden and everything you press is in the **doc
 
 **Messages** (`src/play/feed.js`): every line the game logs is kept, but only what stands out pops up
 over the board, above the dock: a marker touched (key, dice, Research, Investigation, Obols, evidence), an
-attack on a player, an attack on a monster, objective steps and midnight. Rolls, moves, turn changes, skills
-and crafting stay quiet. Colours: red the monster's actions, purple damage to a monster, gold objectives, teal evidence and
-Obols, green skills and crafting, violet the night. Each fades after a few seconds. The 💬 button in the dock's status line
+attack on a player, an attack on a monster, a death (or a fall the Sacrificial Fetish could undo), skills
+used, Obolcraft, objective steps and midnight. Rolls, moves and turn changes stay quiet. Every player reads
+the same lines: they come from the game's shared log, not from whoever's device or turn it is. Colours:
+white on dark red a death, red the monster's actions, purple damage to a monster, gold objectives, teal evidence and
+Obols, green skills and Obolcraft, violet the night. Each fades after a few seconds. The 💬 button in the dock's status line
 opens the recent history (every line, quiet ones too); tapping it again closes the history and turns the
 pop-ups off, and once more turns them back on. The full log is under Team.
 

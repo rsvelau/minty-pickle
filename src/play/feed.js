@@ -18,17 +18,20 @@ const GAP = 420;           // ms between lines arriving together
 
 // Colour by what the line is about.
 const KINDS = [
+  ['death', /\b(and dies|and falls|is dead|is killed|Sacrificial Fetish|brought back)\b/i],
   ['monster', /^The [^.]*?(’s|'s) |\b(singles out|is pulled|exhausted|pinned|drops the|strikes at|finds no one|is immune)\b|\bhits \w+ for\b/],
   ['hurt', /\b(takes \d+|damage|toughness|health left|falls|is destroyed|defeated|weakness)\b/i],
   ['objective', /\b(Cosor|sharpen|bless|deliver|cleanse|candle|escape|objective|picks up|Ring|Gown|Finger Bone|holy water|anchor)\w*/i],
   ['evidence', /\b(evidence|investigat\w*|Obol|Casebook|Lair|found)\b/i],
-  ['skill', /\b(uses|Equipment|craft\w*|Lucky|Rally|refresh\w*|heal\w*)\b/i],
+  ['skill', /(\b(uses|Equipment|craft\w*|Lucky|Rally|refresh\w*|heal\w*|discards)\b|Obolcraft)/i],
   ['night', /\b(midnight|round|monster appears|rises)\b/i],
 ];
 const kindOf = (text) => KINDS.find(([, re]) => re.test(text))?.[0] ?? 'plain';
-// What pops up: attacks either way, objectives, evidence and Obols, and the
-// markers (keys, dice, research) and the night; not skills, crafting or plain lines.
-const POPS = new Set(['monster', 'hurt', 'objective', 'evidence', 'night']);
+// What pops up: attacks either way, a death, objectives, evidence and Obols,
+// skills and Obolcraft, the markers (keys, dice, research) and the night; not
+// rolls, moves, turns and other plain lines. Every player sees the same lines:
+// they come from the game's own log, which is shared (one game state).
+const POPS = new Set(['death', 'monster', 'hurt', 'objective', 'evidence', 'skill', 'night']);
 const MARKER = /\b(picked up a key|collected a single-use White Die|attuned a Black Die|used Research|Objective marker|takes the)\b/;
 const pops = (text) => POPS.has(kindOf(text)) || MARKER.test(text);
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

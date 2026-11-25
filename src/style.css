@@ -1363,6 +1363,7 @@ body:not(.playing) .feed { display: none; }
 @keyframes feedIn { from { opacity: 0; transform: translateY(6px); } }
 @media (prefers-reduced-motion: reduce) { .feed-line { animation: none; } }
 .fk-monster { border-left-color: #ff5a4a; color: #ffc8c0; }
+.fk-death { border-left-color: #ff2a2a; color: #fff; background: rgba(90, 8, 12, 0.86); font-weight: 600; }
 .fk-hurt { border-left-color: #c58aff; color: #e6d2ff; }
 .fk-objective { border-left-color: #f3c84a; color: #fbe6a8; }
 .fk-evidence { border-left-color: #4ac8e0; color: #c4eef6; }
