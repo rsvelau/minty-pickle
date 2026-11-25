@@ -310,7 +310,7 @@ export function refreshWaterAndBridges() {
   deckGlow.needsUpdate = true;
   decks.computeBoundingSphere();
   bridges.update(grid, { visible: ui.view === 'all', deckTop: DECK_TOP, bedY: BED_H });
-  streets.update(grid, { visible: ui.view === 'all', cellToWorld, surfaceY: SUB_LOOK.street.h + 0.002, lightLevels, lampsOn });
+  streets.update(grid, { visible: ui.view === 'all', cellToWorld, surfaceY: SUB_LOOK.street.h + STREET_LIFT, lightLevels, lampsOn });
   refreshPropsAndWalls();
   refreshMarkers();
   for (const mat of bridges.materials) terrainify(mat, { bridge: true });
@@ -349,6 +349,13 @@ export function refreshKeyHighlight() {
   keyHighlight.instanceMatrix.needsUpdate = true;
 }
 
+// The street surface stands this far above the board tile under it (cell
+// units, ~7 cm): closer, a phone's depth buffer can't tell them apart and the
+// tile shows through (a lit lamp's bright tile turned the asphalt blue).
+// visibleTop includes it, so pawns, decals and markers sit on the asphalt.
+export const STREET_LIFT = 0.01;
+const onStreet = (c) => ui.view === 'all' && (c.sub === 'street' || c.sub === 'start');
+
 // Props on cells (main view only) and walls/doors on edges (every view).
 export function refreshPropsAndWalls() {
   clocktowers.update({
@@ -373,7 +380,7 @@ export function refreshPropsAndWalls() {
       const c = grid.cells[i];
       if (c.bridge) return DECK_TOP;
       if (c.area === 'water') return WATER_Y;
-      return targetHeights[i];
+      return targetHeights[i] + (onStreet(c) ? STREET_LIFT : 0);   // the van and anything else on the asphalt
     },
   });
 
@@ -715,7 +722,7 @@ export function visibleTop(i) {
   const c = grid.cells[i];
   if (deckVisible[i]) return DECK_TOP;
   if (c.area === 'water' && water.mesh.visible) return WATER_Y;
-  return heights[i];
+  return heights[i] + (onStreet(c) ? STREET_LIFT : 0);   // the asphalt, not the tile under it
 }
 
 // Triangles the board draws with everything in view (instances counted, the
