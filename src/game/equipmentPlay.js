@@ -394,7 +394,7 @@ function checkDefeat(state, board, monster, mcard, ctx, events) {
     monster.pos = state.mystery.spawnCell;
     monster.hp = monster.maxHp;
     monster.intents = null;
-    ctx.log(state, `The ${mcard.name} falls, and rises again at its Lair. Its objective (${mcard.objective}) must be achieved before it can be finished.`);
+    ctx.log(state, `The ${mcard.name} falls, and rises again at its Lair. Its objective must be achieved before it can be finished: ${mcard.objective}`);
     events.push({ type: 'monsterTeleport', id: monster.id, to: monster.pos });
     return;
   }
@@ -420,7 +420,7 @@ export function achieveObjective(state, ctx, events) {
   if (killObjective(mcard)) return 'this monster’s objective is to destroy it';
   if (state.objectiveDone) return 'already achieved';
   state.objectiveDone = true;
-  ctx.log(state, `Objective achieved: ${mcard.objective}.${m.hp === null ? '' : ` The ${mcard.name} can now be destroyed for good.`}`);
+  ctx.log(state, `Objective achieved: ${mcard.objective.replace(/\.$/, '')}.${m.hp === null ? '' : ` The ${mcard.name} can now be destroyed for good.`}`);
   events.push({ type: 'objective', kind: mcard.id });
   if (m.hp === null) { state.monsters = state.monsters.filter((x) => x !== m); win(state, ctx, events); }
   return null;

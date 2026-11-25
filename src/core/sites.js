@@ -23,7 +23,7 @@ export const SITES = {
   boutique: { label: 'Boutique', number: 3, fixtures: ['wedding-gown'] },
   curio: { label: 'Curio shop', number: 7, fixtures: ['antique-chest'] },
   funeral: { label: 'Funeral parlor', number: 11, fixtures: ['finger-bone'] },
-  outdoor: { label: 'Outdoor store', number: null, fixtures: ['whetstone'] },
+  outdoor: { label: 'Outdoor store', number: 12, fixtures: ['whetstone'] },
 };
 
 // Fixtures: the things at a site the objectives use.

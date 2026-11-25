@@ -701,7 +701,7 @@ function objectiveHTML(my) {
   const sites = mapSites(grid);
   const where = (at) => (at === 'lair' || at === 'start' || at === 'any' ? '' : (sites[at] ?? []).map(placeLabel).join(', '));
   const steps = sc ? `<ol class="obj-steps">${sc.steps.map((stp) => `<li>${esc(stp.text)}${where(stp.at) ? ` <span class="obj-where">${where(stp.at)}</span>` : ''}</li>`).join('')}</ol>` : '';
-  return `<p class="case-note"><b>Objective:</b> ${esc(card.objective)}. ` +
+  return `<p class="case-note"><b>Objective:</b> ${esc(card.objective.replace(/\.$/, ''))}. ` +
     (kill ? 'Destroy it to win.'
       : done ? `Achieved.${st.monsters.length ? ' Now destroy it one more time.' : ''}`
         : sc?.played ? 'The game tracks it: reach the sites below.' : 'Achieve it to win (play it at the table, then mark it here). Until then, destroying it only sends it back to its Lair.') + '</p>' +

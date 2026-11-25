@@ -60,7 +60,7 @@ export const OBJECTIVES = {
     needs: ['outdoor', 'church'],
     steps: [
       { do: 'collect', at: 'lair', item: 'cosor', text: 'Find the Cosor (a Romanian knife) at the Lair' },
-      { do: 'perform', at: 'outdoor', text: 'Sharpen it at the Outdoor Store' },
+      { do: 'perform', at: 'outdoor', text: 'Sharpen it at the Outdoor Store {12}' },
       { do: 'perform', at: 'church', text: 'Bless it at the Church: the Blessed Cosor ignores the Strigoi’s toughness, one die of damage a turn' },
       { do: 'kill', at: 'lair', text: 'Kill the Strigoi with it' },
     ],

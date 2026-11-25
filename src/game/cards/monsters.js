@@ -36,7 +36,7 @@ export const MONSTER_CARDS = [
     id: 'werewolf', name: 'Werewolf', hp: 20, toughness: 4, badge: 3,
     traits: ['Corporeal', 'Beast'],
     note: 'Half speed indoors.',
-    objective: 'Kill',
+    objective: 'Kill: wear its health down to 0.',
     weakness: ['silver'], immune: [],
     weaknessTrack: [{ hits: 2, text: '−2 toughness' }, { hits: 4, text: '−1 die' }, { hits: 6, text: 'Disable Terrifying Howl' }],
     abilities: [
@@ -50,7 +50,7 @@ export const MONSTER_CARDS = [
     id: 'barghest', name: 'Barghest', hp: null, toughness: null, badge: 2,
     traits: ['Semi-Corporeal', 'Dissipating'],
     note: 'Start: Town Entrance. Can’t enter buildings. Midnight: all players Corrupted. Cleanse at {9}.',
-    objective: 'Escape (to the start point)',
+    objective: 'Escape: every investigator must be cleansed at the Holy Water Basin in the Church {9} before they can cross the river. One cleansed investigator reaching the Start space wins for the team.',
     weakness: ['salt', 'holy'], immune: ['crystal', 'iron', 'fire', 'silver'],
     weaknessTrack: [{ hits: 1, text: 'Disable Death Gaze for ⌛' }, { hits: 2, text: 'Disable Death Gaze for ⌛' }, { hits: 4, text: 'Disable Shadow Trap' }],
     abilities: [
@@ -67,7 +67,7 @@ export const MONSTER_CARDS = [
     pack: true,
     traits: ['Corporeal', 'Demon'],
     note: 'Respawns at Lair when killed. Pinned players cannot move.',
-    objective: 'Disrupt Ritual ({9} → Lair)',
+    objective: 'Disrupt the Ritual: carry holy water from the Holy Water Basin in the Church {9} to the Lair.',
     weakness: ['holy', 'crystal'], immune: ['fire'],
     weaknessTrack: [{ hits: 1, text: '−1 die' }, { hits: 3, text: '−1 die' }, { hits: 5, text: '−1 die' }],
     abilities: [
@@ -81,7 +81,7 @@ export const MONSTER_CARDS = [
     id: 'skinwalker', name: 'Skinwalker', hp: 20, toughness: 4, badge: 2,
     traits: ['Corporeal', 'Intelligent', 'Cursed'],
     note: 'Avoids traps. When the first player reaches the Lair, stun Skinwalker and reduce its toughness to 0 for ⌛.',
-    objective: 'Kill',
+    objective: 'Kill: wear its health down to 0.',
     weakness: ['crystal', 'holy'], immune: ['silver'],
     weaknessTrack: [{ hits: 1, text: 'Reset Curseblood Ritual' }, { hits: 3, text: '−2 toughness' }, { hits: 6, text: 'Disable Curseblood Ritual' }],
     abilities: [
@@ -95,7 +95,7 @@ export const MONSTER_CARDS = [
     id: 'wendigo', name: 'Wendigo', hp: 20, toughness: 1, badge: 2,
     traits: ['Corporeal', 'Intelligent', 'Regenerative'],
     note: 'Avoids traps. Consume heals equal to damage. Lure causes players to move towards Wendigo.',
-    objective: 'Kill',
+    objective: 'Kill: wear its health down to 0.',
     weakness: ['fire'], immune: ['iron', 'silver'],
     weaknessTrack: [{ hits: 1, text: 'Disable Regeneration until Wendigo feeds' }, { hits: 3, text: 'Disable Regeneration until Wendigo feeds' }, { hits: 5, text: 'Disable Regeneration permanently' }],
     abilities: [
@@ -109,7 +109,7 @@ export const MONSTER_CARDS = [
     id: 'banshee', name: 'Banshee', hp: 15, toughness: 2, badge: 1,
     traits: ['Corporeal', 'Fae'],
     note: 'While on rooftops, Banshee is outside Close range.',
-    objective: 'Kill',
+    objective: 'Kill: wear its health down to 0.',
     weakness: ['iron', 'silver'], immune: [],
     weaknessTrack: [{ hits: 1, text: 'Grounded until next Perch' }, { hits: 3, text: 'Grounded until next Perch' }, { hits: null, text: 'Discard Silver to avoid Swoop damage', react: 'Swoop' }],
     abilities: [
@@ -123,7 +123,7 @@ export const MONSTER_CARDS = [
     id: 'ushi-oni', name: 'Ushi-Oni', hp: 30, toughness: 5, badge: 1,
     traits: ['Corporeal', 'Demon'],
     note: 'End of turn: Move (10) toward Lair. Ignores walls; can’t cross salt. Seized players are at Death’s Door. Carried to Lair = killed.',
-    objective: 'Kill',
+    objective: 'Kill: wear its health down to 0.',
     weakness: ['salt', 'holy'], immune: [],
     weaknessTrack: [{ hits: 1, text: '−1 toughness and drop player' }, { hits: 2, text: '−1 toughness and drop player' }, { hits: 3, text: '−1 toughness and drop player' }],
     abilities: [
@@ -137,7 +137,7 @@ export const MONSTER_CARDS = [
     id: 'redcap', name: 'Redcap', hp: 9, toughness: 10, badge: 1,
     traits: ['Corporeal', 'Fae'],
     note: 'Piercing attacks can damage Redcap, but can’t land the killing blow.',
-    objective: 'Kill',
+    objective: 'Kill: wear its health down to 0.',
     weakness: ['iron', 'holy'], immune: [],
     weaknessTrack: [{ hits: 1, text: '−3 HP, +1 die' }, { hits: 4, text: '−3 HP, +1 die' }, { hits: 8, text: '−3 HP' }],
     abilities: [
@@ -150,7 +150,7 @@ export const MONSTER_CARDS = [
     id: 'poltergeist', name: 'Poltergeist', hp: null, toughness: null, badge: 1,
     traits: ['Incorporeal', 'Spirit'],
     note: 'Has no physical body. Discard salt items inside targeted buildings to trigger its weakness.',
-    objective: 'Destroy Anchors (Lair + 4 POI, die [6])',
+    objective: 'Destroy the Anchors: at 4 Objective markers, then at the Lair, slot a 6 to destroy the spiritual anchor there.',
     weakness: ['salt', 'iron'], immune: [],
     weaknessTrack: [{ hits: 1, text: 'Interrupt this turn' }, { hits: 2, text: 'Interrupt this turn' }, { hits: 3, text: 'Interrupt this turn' }],
     abilities: [
@@ -163,7 +163,7 @@ export const MONSTER_CARDS = [
     id: 'white-lady', name: 'White Lady', hp: null, toughness: null, badge: 1,
     traits: ['Incorporeal', 'Spirit'],
     note: 'If no occupied building is targeted, uses Infatuation (ignore die).',
-    objective: 'Perform Ceremony ({3}, {7}, Lair → {9} + 3 ⌛)',
+    objective: 'Set her soul free: bring the Decayed Wedding Gown (Boutique {3}), the Tarnished Wedding Ring (Curio Shop {7}) and the Desiccated Finger Bone (Funeral Parlor {11}) to the Church {9} to complete the wedding ritual.',
     weakness: ['salt', 'fire'], immune: ['iron'],
     weaknessTrack: [{ hits: 1, text: 'Trigger Regret' }, { hits: 3, text: 'Trigger Regret' }, { hits: 6, text: 'Trigger Regret, disable Wrath' }],
     abilities: [
@@ -177,7 +177,7 @@ export const MONSTER_CARDS = [
     id: 'strigoi', name: 'Strigoi', hp: 10, toughness: null, badge: 1,
     traits: ['Corporeal', 'Revenant'],
     note: 'Only damaged by the Blessed Cosor (Piercing die). Always targets the Cosor holder.',
-    objective: 'Kill with the Blessed Cosor (Lair → {13} → {9} → Lair)',
+    objective: 'Kill with the Blessed Cosor: take the Cosor (a Romanian knife) from the Lair, sharpen it at the Outdoor Store {12}, bless it at the Church {9}, then strike the Strigoi with it.',
     weakness: ['holy'], immune: [],
     weaknessTrack: [{ hits: null, text: 'Discard Holy to prevent Exhaust', react: 'exhaust' }],
     abilities: [
@@ -194,7 +194,7 @@ export const MONSTER_CARDS = [
     body: 'cocoon', actsBy: 'swarm',
     traits: ['Corporeal', 'Intelligent'],
     note: 'Attacks target only NPCs. NPCs are Frail and can be Defended. On NPC death: Global Attack (die × ☠). No NPCs left: attacks are Global.',
-    objective: 'Kill Nest (Lair)',
+    objective: 'Kill the Nest at the Lair, while defending the victims at the Hotel {1}, the Bar {5} and the Hospital {13} from its fly swarms.',
     weakness: ['fire', 'holy'], immune: ['crystal', 'salt', 'iron', 'silver'],
     weaknessTrack: [{ hits: 1, text: '−1 toughness' }, { hits: 3, text: '−1 toughness' }, { hits: 5, text: '−1 die' }],
     abilities: [
@@ -211,7 +211,7 @@ export const MONSTER_CARDS = [
     body: 'none', onEnterLit: { kind: 'physical', dmg: 'die' },
     traits: ['Incorporeal', 'Darkness'],
     note: 'Has no singular body. Attacks erupt from lit spaces. Dark spaces smother lit objects. All defensive dice are exhausted upon use.',
-    objective: 'Light the Dark Room ({11} → Lair × 4)',
+    objective: 'Light the Dark Room: carry lit candles from the Votive Candle Stand in the Church {9} to the Lair. 4 candles (2 with one or two players); the dark can snuff them out on the way.',
     weakness: ['fire', 'crystal'], immune: ['salt', 'holy', 'iron', 'silver'],
     weaknessTrack: [{ hits: null, text: 'Discard Fire & avoid 1 attack', react: 'attack' }, { hits: null, text: 'Discard Fire & keep candle lit', react: 'candle' }, { hits: null, text: 'Discard Crystal & no light for ⌛' }],
     abilities: [
