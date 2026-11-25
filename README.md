@@ -319,7 +319,8 @@ Store, Funeral Parlor, Hospital, Pharmacy** (`src/core/buildings.js`). Each one 
   Untyped indoor floor gets the same household clutter. Cemetery walkable cells: grave markers in two or
   three corners and often a tipped headstone, a fallen urn, a dropped shovel, a grave lantern or a broken angel. Pieces back onto a wall or window
   of their own cell (never a door), so shelves, counters and beds face into the room. Church: walkable cells
-  are pews facing the pulpit, blocked cells the pulpit (as the old Church floor). Hospital: ward bays and the
+  are four short pews facing the pulpit, a pair each side of an aisle, in the cell's corners (the pawn
+  lanes stay clear), blocked cells the pulpit (as the old Church floor). Hospital: ward bays and the
   odd wheelchair or drip stand (as the old Hospital floor). Library: bookcases, reading tables; Bar: back bar,
   counter, stools; Market and Pharmacy: gondola shelving, produce, the pharmacy counter; Boutique: clothes
   rails and mannequins; Curio Shop: glass cabinets, a grandfather clock; Florist: tiered flower stands and

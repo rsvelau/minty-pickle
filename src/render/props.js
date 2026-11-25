@@ -109,21 +109,21 @@ function buildKinds() {
       box(0.9, 0.45, 0.9, '#6b4f5c'), box(0.9, 0.5, 0.2, '#6b4f5c', 0, -0.35, 0.45),
     ),
     table: merge(box(1.1, 0.06, 0.6, '#6e4a2e', 0, 0, 0.4), box(0.9, 0.4, 0.4, '#4e321e')),
-    // Church pew, 4.4 m long, facing +z (seat at the front, back behind),
-    // dark old oak with carved end panels and a hymnal shelf on the back.
+    // Church pew facing +z (seat at the front, back behind), dark old oak with
+    // carved end panels and a hymnal shelf on the back. 1.4 m long: a church
+    // cell holds four, a pair each side of a central aisle, in its corners, so
+    // the pawn spots and the lanes between them stay clear.
     pew: (() => {
-      const oak = '#5a3820', end = '#43291a';
+      const oak = '#5a3820', end = '#43291a', L = 1.4, h = L / 2;
       return merge(
-        box(4.4, 0.07, 0.5, oak, 0, 0.02, 0.42),             // seat
-        box(4.4, 0.6, 0.07, oak, 0, -0.24, 0.48),            // back
-        box(4.4, 0.05, 0.12, end, 0, -0.24, 1.08),           // top rail
-        box(4.2, 0.05, 0.12, oak, 0, -0.33, 0.74),           // hymnal shelf (behind)
-        box(4.2, 0.08, 0.16, end, 0, 0.42, 0.12),            // kneeler
-        box(0.09, 1.0, 0.62, end, -2.2, -0.02, 0),           // end panels
-        box(0.09, 1.0, 0.62, end, 2.2, -0.02, 0),
-        box(0.07, 0.42, 0.42, end, 0, 0.02, 0),              // middle support
-        box(0.3, 0.2, 0.05, '#2a2a30', -1.2, -0.31, 0.79),    // a couple of hymnals
-        box(0.3, 0.2, 0.05, '#3a1e22', 1.0, -0.31, 0.79),
+        box(L, 0.07, 0.5, oak, 0, 0.02, 0.42),               // seat
+        box(L, 0.6, 0.07, oak, 0, -0.24, 0.48),              // back
+        box(L, 0.05, 0.12, end, 0, -0.24, 1.08),             // top rail
+        box(L - 0.2, 0.05, 0.12, oak, 0, -0.33, 0.74),       // hymnal shelf (behind)
+        box(L - 0.2, 0.08, 0.16, end, 0, 0.42, 0.12),        // kneeler
+        box(0.09, 1.0, 0.62, end, -h, -0.02, 0),             // end panels
+        box(0.09, 1.0, 0.62, end, h, -0.02, 0),
+        box(0.3, 0.2, 0.05, '#2a2a30', -0.3, -0.31, 0.79),   // a hymnal
       );
     })(),
     // The pulpit end of the church, facing +z (towards the pews): a raised
@@ -1049,7 +1049,7 @@ export function createProps(group, { firGeo, firMat }) {
         // Church: a pew facing the pulpit, or the pulpit facing the pews.
         if (type === 'church') {
           const [fx, fz] = churchFacing(grid, i);
-          list = [[c.walkable ? 'pew' : 'pulpit', 0, 0, Math.atan2(fx, fz)]];
+          list = c.walkable ? turn(CORNERS.map(([sx, sz]) => ['pew', sx * 0.38, sz * 0.38, 0]), Math.atan2(fx, fz)) : [['pulpit', 0, 0, Math.atan2(fx, fz)]];
         } else if (type === 'hospital' || BUILDING_VARIANTS[type]) {
           // A typed building: its own furniture, backed onto a wall.
           let seed = (i * 2654435761) % 2147483647 || 1;
