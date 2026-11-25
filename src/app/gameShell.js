@@ -119,7 +119,6 @@ export function showTitle() {
   const anySave = storage.saves.list().length > 0;
   openScreen(`
     <div class="title-block">
-      <p class="title-kicker">A night in Hawthorn Bend</p>
       <h1 class="title-name">Midnight Shift</h1>
     </div>
     <div class="screen-menu">
