@@ -23,7 +23,7 @@ test('the offer: players + 1 cards from the Equipment deck, face up, before anyo
   assert.match(s.act({ type: 'roll', seat: 0 }).error, /cannot roll/);
 });
 
-test('each takes one in seat order; the rest go back under the deck; then P1 rolls', () => {
+test('each takes one in seat order; the rest are shuffled back in; then P1 rolls', () => {
   const s = setup(3);
   const deck = s.state.decks.equipment.length;
   const offer = [...s.state.scouting.offer];
@@ -39,7 +39,7 @@ test('each takes one in seat order; the rest go back under the deck; then P1 rol
   assert.equal(s.state.cur, 0);
   assert.equal(s.state.scouting, null);
   assert.equal(s.state.decks.equipment.length, deck + 1, 'the one left over is back');
-  assert.equal(s.state.decks.equipment[0], offer[2], 'under the deck');
+  assert.ok(s.state.decks.equipment.includes(offer[2]), 'shuffled into the deck');
   assert.ok(s.act({ type: 'roll', seat: 0 }).ok);
 });
 

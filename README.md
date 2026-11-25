@@ -19,7 +19,7 @@ The app opens on the **title screen** (`src/app/gameShell.js`):
 here first, and what they gathered was left at the edge of town. Players + 1 Equipment cards are drawn from
 the deck, dealt face down and turned over; the investigators take turns in seat order, each tapping a card
 and **Take**-ing it into their Skills (marked "From Scouting"). Once everyone has chosen, the card left over
-goes back under the deck and P1's first turn begins. Rules: `newGame(board, { scout: true })` starts the
+is shuffled back into the deck and P1's first turn begins. Rules: `newGame(board, { scout: true })` starts the
 phase (`state.scouting`: the offer, the order, who took what) and the `scout` action takes a card.
 
 In a game the editor's tools are hidden and everything you press is in the **dock** along the bottom
@@ -42,10 +42,13 @@ In a game the editor's tools are hidden and everything you press is in the **doc
   map, Quit to title**.
 - **The action button** does what comes next: **Roll**, then **Move** (the dice slotted), then **End turn**.
 
-**Messages** (`src/play/feed.js`): what just happened appears in a few colour-coded lines over the board,
-above the dock: red the monster's actions, purple damage to a monster, gold objectives, teal evidence and
-Obols, green skills and crafting, violet the night. Each fades after a few seconds; tap them for the recent
-history, and the 💬 button in the dock's status line turns them off or on (the full log is under Team).
+**Messages** (`src/play/feed.js`): every line the game logs is kept, but only what stands out pops up
+over the board, above the dock: a marker touched (key, dice, Research, Investigation, Obols, evidence), an
+attack on a player, an attack on a monster, objective steps and midnight. Rolls, moves, turn changes, skills
+and crafting stay quiet. Colours: red the monster's actions, purple damage to a monster, gold objectives, teal evidence and
+Obols, green skills and crafting, violet the night. Each fades after a few seconds. The 💬 button in the dock's status line
+opens the recent history (every line, quiet ones too); tapping it again closes the history and turns the
+pop-ups off, and once more turns them back on. The full log is under Team.
 
 **Monster health**: a ring at the monster's feet, the bright arc its health left (green, amber, then red)
 and the dim red arc what it has lost, with "6/10" beside it; each hit floats its damage up from the monster.

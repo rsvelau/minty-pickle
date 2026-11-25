@@ -246,8 +246,8 @@ export function newGame(board, setup = {}) {
 // back) left what they could gather at the edge of town. Players + 1 Equipment
 // cards are drawn and shown face up; the players take turns, in seat order,
 // each taking one (the 'scout' action, { card: index into the offer }). Once
-// everyone has chosen, what's left goes back under the deck and the first
-// turn begins.
+// everyone has chosen, what's left is shuffled back into the deck and the
+// first turn begins.
 //   state.scouting = { offer: [card ids], order: [seats], at: index into order, took: { seat: id } }
 function startScouting(state, events) {
   const offer = [];
@@ -277,8 +277,8 @@ function scout(state, action, events) {
   events.push({ type: 'scouted', seat: pl.seat, id });
   sc.at++;
   if (sc.at < sc.order.length && sc.offer.length) { state.cur = sc.order[sc.at]; return null; }
-  // Everyone has chosen: the rest go back under the deck; the first turn begins.
-  state.decks.equipment.unshift(...sc.offer);
+  // Everyone has chosen: the rest are shuffled back into the deck; the first turn begins.
+  for (const left of sc.offer) state.decks.equipment.splice(randInt(state, state.decks.equipment.length + 1), 0, left);
   state.scouting = null;
   state.phase = 'idle';
   state.cur = 0;
