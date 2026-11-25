@@ -33,6 +33,10 @@ const TILE_PX = 256;
 const ATLAS_COLS = 8, ATLAS_ROWS = 4;  // 16 masks x 2 wear variants
 const WEARS = 2;
 const CURB = m(0.15);                   // sidewalk curb height
+// The street surface stands this far above the board tile under it (cell
+// units, ~7 cm): closer, a phone's depth buffer can't tell them apart and the
+// tile shows through (a lit lamp's bright tile turned the asphalt blue).
+export const STREET_LIFT = 0.01;
 
 const ASPHALT = '#34383b';
 const CONCRETE = '#8a8984';

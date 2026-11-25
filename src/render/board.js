@@ -8,7 +8,7 @@ import { terrainify, cellLevel, terrainSmoothAt, updateOverrides, terrainHeight,
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { createProps } from './props.js';
 import { createBridges } from './bridge.js';
-import { createStreets } from './street.js';
+import { createStreets, STREET_LIFT } from './street.js';
 import { createClocktowers } from './clocktower.js';
 import { createLandmarks } from './landmarks.js';
 import { anyDoor } from '../game/doors.js';
@@ -349,11 +349,8 @@ export function refreshKeyHighlight() {
   keyHighlight.instanceMatrix.needsUpdate = true;
 }
 
-// The street surface stands this far above the board tile under it (cell
-// units, ~7 cm): closer, a phone's depth buffer can't tell them apart and the
-// tile shows through (a lit lamp's bright tile turned the asphalt blue).
-// visibleTop includes it, so pawns, decals and markers sit on the asphalt.
-export const STREET_LIFT = 0.01;
+// Streets are lifted STREET_LIFT above their tile (street.js); visibleTop
+// includes it, so pawns, decals and markers sit on the asphalt.
 const onStreet = (c) => ui.view === 'all' && (c.sub === 'street' || c.sub === 'start');
 
 // Props on cells (main view only) and walls/doors on edges (every view).

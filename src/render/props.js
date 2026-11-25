@@ -10,6 +10,7 @@ import { m } from '../core/scale.js';
 import { terrainify } from './terrain.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { isLandmark } from '../core/state.js';
+import { STREET_LIFT } from './street.js';
 
 
 // --- geometry helpers --------------------------------------------------------
@@ -598,11 +599,15 @@ function startSpace(fx, fz) {
   // Back a touch, and over to the side the skew swings the beams away from
   // (the van's right, looking ahead).
   const x = -fx * 0.04 - fz * VAN_SHIFT, z = -fz * 0.04 + fx * VAN_SHIFT;
+  // The van stands on the asphalt (lifted STREET_LIFT above the tile); the
+  // flat light on the road keeps its old height, just under a bridge deck
+  // ahead (level with it, the two flicker against each other).
+  const d = -STREET_LIFT;
   return [
     ['van', x, z, rot], ['vanLights', x, z, rot],
-    ['vanHazard', x, z, rot], ['vanBeam', x, z, rot],
-    ['vanCone', x, z, rot],
-    ['startFrame', fx, fz, 0], ['startFill', fx, fz, 0],
+    ['vanHazard', x, z, rot], ['vanBeam', x, z, rot, 1, d],
+    ['vanCone', x, z, rot, 1, d],
+    ['startFrame', fx, fz, 0, 1, d], ['startFill', fx, fz, 0, 1, d],
   ];
 }
 
