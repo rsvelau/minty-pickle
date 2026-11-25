@@ -17,6 +17,7 @@ import { closeCasebook, closeInventory, hideCard, openCasebook, openInventory } 
 import { play } from '../play/playView.js';
 import { markerHidden, markerUsed } from '../render/board.js';
 import { siteOf, siteLabel } from '../core/sites.js';
+import { BUILDING_TYPES, typeAt } from '../core/buildings.js';
 import { buildingSeeds, buildingStyle, focusHovered, interiorStyle, renderer, setCamera } from '../render/scene.js';
 import { lampsOn, lightLevels } from '../render/tileLook.js';
 import { editorBoardShown } from './gameShell.js';
@@ -106,6 +107,7 @@ export function init() {
     if (BRUSH_KEYS[e.key]) { setTool('cells'); setBrush(BRUSH_KEYS[e.key]); }
     else if (key === 'm') setTool('move');
     else if (key === 'p') setTool('markers');
+    else if (key === 'b') setTool('buildings');
     else if (key === 'v') setViewMenu($('#viewList').hidden);
     else if (key === 'y') setTool('play', 'standard');
     else if (['w', 'd', 'k', 'o', 'x', 'g'].includes(key)) {
@@ -149,7 +151,9 @@ export function updateHoverInfo() {
     `<span class="tag">${AREAS[c.area].label} · ${areaLabel(c)}${c.sub === 'start' ? ` (van facing ${FACING_NAMES[grid.startFacing(hoverIndex)]})` : hasFixedFootprint(c.sub) && c.facing !== null ? ` (faces ${FACING_NAMES[c.facing]}${c.flip ? ', flipped' : ''})` : ''}</span>` +
     (c.area === 'indoor' ? (() => {
       const seed = buildingSeeds()[hoverIndex];
-      return `<span class="tag">Outside: ${buildingStyle(seed).name}</span><span class="tag">Inside: ${interiorStyle(seed).name}</span>`;
+      const t = BUILDING_TYPES[typeAt(grid, hoverIndex)];
+      return (t ? `<span class="tag marker-tag">${t.label}</span><span class="tag">Outside: ${t.exterior}</span><span class="tag">Inside: ${t.interior}</span>`
+        : `<span class="tag">Outside: ${buildingStyle(seed).name}</span><span class="tag">Inside: ${interiorStyle(seed).name}</span>`);
     })() : '') +
     (grid.cells.some((s, j) => s.sub === 'start' && grid.startFront(j) === hoverIndex) ? '<span class="tag marker-tag">Player start</span>' : '') +
     (c.bridge ? `<span class="tag">Bridge (spans ${grid.bridgeAxis(x, y) === 'x' ? 'E–W' : 'N–S'})</span>` : '') +
@@ -171,7 +175,7 @@ export function edgeLabel(o, x, y, type) {
 }
 
 export function markerLabel(c, i) {
-  const site = c.marker === 'objective' ? siteOf(c) : null;
+  const site = c.marker === 'objective' ? siteOf(c, grid, i) : null;
   const label = site ? `Objective: ${siteLabel(site)}` : `${MARKERS[c.marker].label} marker`;
   if (!c.walkable) return `${label} (cell is blocked)`;
   if (markerUsed(i)) return `${label} (${{ whiteDice: 'collected', blackDice: 'attuned', key: 'picked up', investigation: 'visited', objective: 'visited' }[c.marker] ?? 'used'})`;

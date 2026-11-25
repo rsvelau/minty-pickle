@@ -11,13 +11,15 @@ import { createBridges } from './bridge.js';
 import { createStreets, STREET_LIFT } from './street.js';
 import { createClocktowers } from './clocktower.js';
 import { createLandmarks } from './landmarks.js';
+import { createBuildingDress } from './buildingDress.js';
+import { BUILDING_TYPES, buildingTypes, frontDoor } from '../core/buildings.js';
 import { anyDoor } from '../game/doors.js';
 import { flickerize } from './dread.js';
 import { colLabel, parseEdgeKey, isLandmark } from '../core/state.js';
 import { m } from '../core/scale.js';
 import { BASE, BED_H, DECK_T, DECK_TOP, DOOR_H, DOOR_W, FLOOR_H, PALETTE, RAIL_H, SUB_LOOK, TILE, WALL_FULL, WALL_LOW, WALL_T, WATER_Y, grid, hoverIndex, rand32, ui } from '../app/config.js';
 import { play } from '../play/playView.js';
-import { BUILDING_STYLES, board, bridgeDepthMat, buildingSeeds, buildingStyle, cellToWorld, deckMat, doorMat, frameMat, glassDarkMat, glassLitMat, groundHole, innerGroundMat, interiorStyle, outerGroundMat, outerHole, poolGeo, poolMat, railMat, scene, slabMat, tileGeoBase, tileMat, unitBoxGeo, wallMat, resetShadowWindow } from './scene.js';
+import { BUILDING_STYLES, INTERIOR_STYLES, board, bridgeDepthMat, buildingSeeds, buildingStyle, cellToWorld, deckMat, doorMat, frameMat, glassDarkMat, glassLitMat, groundHole, innerGroundMat, interiorStyle, outerGroundMat, outerHole, poolGeo, poolMat, railMat, scene, slabMat, tileGeoBase, tileMat, unitBoxGeo, wallMat, resetShadowWindow } from './scene.js';
 import { buildRain, buildSurroundings, firGeo, firMat } from './surroundings.js';
 import { lampsOn, lightLevels, makeLabel, mixHex, refreshAll, tmpColor, tmpMatrix, tmpPos, tmpQuat, tmpScale } from './tileLook.js';
 
@@ -97,6 +99,7 @@ export function edgeBase(o, x, y) {
 export let props = null; // walkable/blocked variants of every surface (src/props.js)
 export let bridges = null; // steel truss bridge structures (src/bridge.js)
 export let streets = null;
+let dress = null; // typed buildings' signs and awnings (src/render/buildingDress.js)
 
 export function disposeChildren(group) {
   for (const child of [...group.children]) {
@@ -188,6 +191,8 @@ export function buildBoard() {
   clocktowers = createClocktowers(boardGroup);
   landmarks?.clear();
   landmarks = createLandmarks(boardGroup, { terrainify, flickerize });
+  dress?.clear();
+  dress = createBuildingDress(boardGroup);
 
   // Walls and doors on cell edges (a door = two short wall pieces, an
   // optional lintel, and an open door leaf).
@@ -387,6 +392,18 @@ export function refreshPropsAndWalls() {
   // Each edge takes the style of the building it belongs to (the indoor cell
   // on either side); edges with no building beside them use their own hash.
   const seeds = buildingSeeds();
+  // A typed building (src/core/buildings.js) always wears its type's finishes.
+  const types = buildingTypes(grid);
+  const outside = (s) => {
+    const t = BUILDING_TYPES[types.get(s)];
+    const st = buildingStyle(s);
+    const f = t && BUILDING_STYLES.find((b) => b.name === t.exterior);
+    return f ? { ...st, colour: f.colour, tex: f.tex } : st;
+  };
+  const inside = (s) => {
+    const t = BUILDING_TYPES[types.get(s)];
+    return (t && INTERIOR_STYLES.find((b) => b.name === t.interior)) || interiorStyle(s);
+  };
   const wa = walls.geometry.attributes;
   // The two faces of the current edge, and its building's style (windows).
   let style = BUILDING_STYLES[0];
@@ -398,9 +415,9 @@ export function refreshPropsAndWalls() {
     const [ca, cb] = grid.edgeCells(o, x, y);
     const sa = seedOf(ca), sb = seedOf(cb);
     const own = sa >= 0 ? sa : sb >= 0 ? sb : 100000 + (o === 'v' ? 1 : 2) * 7919 + x * 131 + y;
-    style = buildingStyle(own);
-    faceNeg = sa >= 0 ? interiorStyle(sa) : sb >= 0 ? buildingStyle(sb) : style;
-    facePos = sb >= 0 ? interiorStyle(sb) : sa >= 0 ? buildingStyle(sa) : style;
+    style = outside(own);
+    faceNeg = sa >= 0 ? inside(sa) : sb >= 0 ? outside(sb) : style;
+    facePos = sb >= 0 ? inside(sb) : sa >= 0 ? outside(sa) : style;
   };
   let EY = 0, DROP = 0; // current edge: floor level, and how far the ground falls below it
   const piece = (cx, cz, along, len, base, height, vertical) => {
@@ -705,6 +722,20 @@ export function refreshPropsAndWalls() {
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     mesh.computeBoundingSphere();
   }
+
+  // Typed buildings: a sign (and a shop's awning) over the front door.
+  const signs = [];
+  const byBuilding = new Map();
+  seeds.forEach((b, i) => { if (b >= 0 && types.has(b)) (byBuilding.get(b) ?? byBuilding.set(b, []).get(b)).push(i); });
+  for (const [b, cells] of byBuilding) {
+    const door = frontDoor(grid, cells);
+    if (!door) continue;
+    const { o, x, y } = parseEdgeKey(door.edge);
+    const cx = o === 'v' ? x - grid.cols / 2 : x - grid.cols / 2 + 0.5;
+    const cz = o === 'v' ? y - grid.rows / 2 + 0.5 : y - grid.rows / 2;
+    signs.push({ type: types.get(b), cx, cz, y: edgeBase(o, x, y).base + FLOOR_H, out: door.out, off: WALL_T / 2 + 0.006 });
+  }
+  dress.update(signs, { visible: ui.view === 'all' && !ui.lowWalls });
 }
 
 export function deckLook(c, i) {

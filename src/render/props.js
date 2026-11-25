@@ -11,6 +11,7 @@ import { terrainify } from './terrain.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { isLandmark } from '../core/state.js';
 import { STREET_LIFT } from './street.js';
+import { BUILDING_TYPES, buildingIds, roomIds, typeAt, unitRooms } from '../core/buildings.js';
 
 
 // --- geometry helpers --------------------------------------------------------
@@ -338,6 +339,129 @@ function buildKinds() {
     startFill: part(new THREE.PlaneGeometry(0.94, 0.94).rotateX(-Math.PI / 2).translate(0, 0.02, 0), '#ffffff'),
     // Flat stepping stone for a ford.
     steppingStone: merge(part(new THREE.CylinderGeometry(m(0.5), m(0.55), m(0.25), 7), '#727670')),
+    ...buildingKinds(),
+  };
+}
+
+// --- Building furniture (src/core/buildings.js types) --------------------------
+// Modelled along x, backed against a wall at -z (front facing +z), real size.
+const cyl = (r, h, hex, x = 0, z = 0, y = 0, seg = 10) =>
+  part(new THREE.CylinderGeometry(m(r), m(r), m(h), seg).translate(m(x), m(y) + m(h) / 2, m(z)), hex);
+const ball = (r, hex, x = 0, z = 0, y = 0, sy = 1) =>
+  part(new THREE.IcosahedronGeometry(m(r), 0).scale(1, sy, 1).translate(m(x), m(y), m(z)), hex);
+const BOOKS = ['#7a2a24', '#2a4a6a', '#3a5a3a', '#8a6a2a', '#4a2a4a', '#6a6a5a'];
+const GOODS = ['#c8402a', '#e0b030', '#3a7ac0', '#40a060', '#e0e0d0', '#a03a7a'];
+// Rows of coloured blocks on shelves (books, goods, bottles).
+function rows(w, d, levels, y0, dy, colours, { h = 0.28, z = 0, n = 6 } = {}) {
+  const out = [];
+  for (let r = 0; r < levels; r++) for (let k = 0; k < n; k++) {
+    const bw = (w - 0.1) / n;
+    out.push(box(bw * 0.92, h * (0.75 + ((r * 7 + k * 3) % 5) * 0.06), d, colours[(r * 3 + k) % colours.length], -w / 2 + 0.05 + bw * (k + 0.5), z, y0 + r * dy));
+  }
+  return out;
+}
+function buildingKinds() {
+  const oak = '#5a3a24', darkOak = '#3e271a', steel = '#9aa0a4', cream = '#e6dcc4';
+  return {
+    // Library / shop: tall bookcase 1.8 m wide, 2 m tall, books on four shelves.
+    bookshelf: merge(
+      box(1.8, 2.0, 0.08, darkOak, 0, -0.16), box(0.06, 2.0, 0.36, darkOak, -0.87), box(0.06, 2.0, 0.36, darkOak, 0.87),
+      ...[0.05, 0.52, 0.99, 1.46, 1.94].map((y) => box(1.8, 0.04, 0.36, oak, 0, 0, y)),
+      ...rows(1.7, 0.24, 4, 0.09, 0.47, BOOKS, { h: 0.34, n: 9 }),
+    ),
+    // Market / pharmacy: steel gondola shelving with goods, 1.8 m wide, 1.6 m tall.
+    storeShelf: merge(
+      box(1.8, 1.6, 0.06, steel, 0, -0.22), ...[0.1, 0.55, 1.0, 1.45].map((y) => box(1.8, 0.04, 0.48, steel, 0, 0, y)),
+      box(1.8, 0.1, 0.5, '#6a6e72'), ...rows(1.7, 0.3, 3, 0.14, 0.45, GOODS, { h: 0.26, n: 8 }),
+    ),
+    // Shop counter 1.8 m with a cash register.
+    counter: merge(
+      box(1.8, 0.95, 0.6, oak), box(1.9, 0.05, 0.66, '#8a6a48', 0, 0, 0.95),
+      box(0.4, 0.22, 0.35, '#3a3a3a', 0.5, -0.05, 1.0), box(0.36, 0.08, 0.18, '#d8d0b8', 0.5, 0.1, 1.2),
+    ),
+    // Boutique: clothes rail 1.5 m with garments hanging.
+    rack: merge(
+      box(0.04, 1.5, 0.04, steel, -0.72), box(0.04, 1.5, 0.04, steel, 0.72), box(1.5, 0.03, 0.03, steel, 0, 0, 1.48),
+      box(0.4, 0.03, 0.4, steel, -0.72), box(0.4, 0.03, 0.4, steel, 0.72),
+      ...['#7a3a52', '#2a3a5a', '#c8b89a', '#5a2a2a', '#3a5a4a', '#8a7a9a', '#2a2a2a'].map((c, k) => box(0.12, 0.85, 0.45, c, -0.6 + k * 0.2, 0, 0.6)),
+    ),
+    mannequin: merge(
+      cyl(0.18, 0.04, '#2a2a2a'), cyl(0.02, 0.9, steel), box(0.42, 0.6, 0.24, cream, 0, 0, 0.9),
+      box(0.36, 0.45, 0.26, '#7a3a52', 0, 0, 0.95), ball(0.11, cream, 0, 0, 1.68),
+    ),
+    // Bar: a long dark counter with a brass foot rail, and the back bar.
+    barCounter: merge(
+      box(2.6, 1.05, 0.6, darkOak), box(2.7, 0.06, 0.7, '#6a4a30', 0, 0, 1.05),
+      box(2.6, 0.04, 0.04, '#b08a3a', 0, 0.36, 0.2),
+    ),
+    backBar: merge(
+      box(2.4, 0.9, 0.45, darkOak), box(2.4, 1.2, 0.06, '#7a8a90', 0, -0.2, 0.9),   // mirror
+      box(2.4, 0.04, 0.25, oak, 0, -0.08, 1.4), box(2.4, 0.04, 0.25, oak, 0, -0.08, 1.85),
+      ...rows(2.2, 0.08, 2, 1.44, 0.45, ['#3a6a3a', '#8a5a1a', '#c8c0a0', '#5a1a1a', '#2a4a2a'], { h: 0.32, n: 10, z: -0.08 }),
+    ),
+    stool: merge(cyl(0.2, 0.06, '#7a2a2a', 0, 0, 0.72), cyl(0.03, 0.72, steel), cyl(0.2, 0.03, steel)),
+    chair: merge(box(0.44, 0.05, 0.44, oak, 0, 0, 0.45), box(0.44, 0.5, 0.05, oak, 0, -0.2, 0.47),
+      ...[[-0.19, -0.19], [0.19, -0.19], [-0.19, 0.19], [0.19, 0.19]].map(([x, z]) => box(0.04, 0.45, 0.04, darkOak, x, z))),
+    // Cafe: a small round table.
+    cafeTable: merge(cyl(0.35, 0.04, '#e8e0d0', 0, 0, 0.74, 14), cyl(0.04, 0.74, '#2a2a2a'), cyl(0.22, 0.03, '#2a2a2a')),
+    // Library: reading table with a green banker's lamp.
+    readingTable: merge(
+      box(2.0, 0.06, 0.9, oak, 0, 0, 0.72), ...[[-0.9, -0.38], [0.9, -0.38], [-0.9, 0.38], [0.9, 0.38]].map(([x, z]) => box(0.07, 0.72, 0.07, darkOak, x, z)),
+      box(0.1, 0.3, 0.1, '#b08a3a', 0, 0, 0.78), box(0.36, 0.1, 0.16, '#2a6a3a', 0, 0, 1.06),
+    ),
+    // Curio shop: glass-fronted cabinet of oddities; a grandfather clock.
+    curioCabinet: merge(
+      box(1.2, 2.0, 0.45, darkOak), box(1.1, 1.5, 0.02, '#9ab0b4', 0, 0.23, 0.35),
+      ...rows(1.0, 0.2, 3, 0.45, 0.5, ['#b08a3a', '#c8c0a0', '#6a3a2a', '#3a4a5a', '#8a2a2a'], { h: 0.22, n: 4, z: 0.05 }),
+    ),
+    clock: merge(box(0.5, 2.1, 0.35, '#4a2a1a'), cyl(0.18, 0.03, cream, 0, 0.18, 1.7), box(0.06, 0.6, 0.02, '#b08a3a', 0, 0.18, 0.7)),
+    // Florist: tiered stand of flower buckets; a single bucket.
+    flowerStand: merge(
+      box(1.4, 0.4, 0.6, '#6a5a3a'), box(1.4, 0.4, 0.4, '#6a5a3a', 0, -0.1, 0.4), box(1.4, 0.4, 0.2, '#6a5a3a', 0, -0.2, 0.8),
+      ...[[0, 0.15, 0.4], [1, -0.05, 0.8], [2, -0.2, 1.2]].flatMap(([r, z, y]) => [-0.45, 0, 0.45].flatMap((x, k) => [
+        cyl(0.13, 0.25, '#7a8a8a', x, z, y), ball(0.2, ['#c84a6a', '#e8d040', '#e8e0f0', '#d0603a', '#8a4ac0'][(r * 3 + k) % 5], x, z, y + 0.38, 0.8)])),
+    ),
+    flowerBucket: merge(cyl(0.16, 0.35, '#7a8a8a'), ball(0.26, '#c84a6a', 0, 0, 0.5, 0.8), ball(0.18, '#e8d040', 0.12, 0.08, 0.62, 0.8)),
+    // Outdoor store: gear rack of jackets and packs; a pitched tent; a canoe on stands.
+    gearRack: merge(
+      box(1.6, 1.8, 0.08, '#4a4a40', 0, -0.2), box(1.6, 0.04, 0.4, '#4a4a40', 0, 0, 1.5),
+      ...['#3a5a2a', '#c86a1a', '#8a2a1a', '#2a4a6a', '#5a5a3a'].map((c, k) => box(0.26, 0.8, 0.35, c, -0.6 + k * 0.3, 0, 0.65)),
+      box(0.45, 0.55, 0.3, '#c86a1a', -0.4, 0, 0), box(0.45, 0.55, 0.3, '#3a5a2a', 0.3, 0, 0),
+    ),
+    tent: merge(part(new THREE.ConeGeometry(m(1.2), m(1.4), 4).rotateY(Math.PI / 4).translate(0, m(0.7), 0), '#d8742a'), box(0.5, 0.9, 0.02, '#3a2a1a', 0, 0.62, 0)),
+    canoe: merge(part(new THREE.CylinderGeometry(m(0.38), m(0.38), m(4.2), 10, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).rotateX(Math.PI).translate(0, m(0.85), 0), '#a82a1a'),
+      box(0.1, 0.6, 0.8, '#5a4a30', -1.3), box(0.1, 0.6, 0.8, '#5a4a30', 1.3)),
+    // Funeral parlor: a casket on a draped bier with a spray of lilies; rows of chairs; a wreath on an easel.
+    casket: merge(
+      box(2.3, 0.7, 0.8, '#4a3a4a'), box(2.1, 0.55, 0.65, '#3a1e14', 0, 0, 0.7), box(2.15, 0.08, 0.7, '#5a2e1e', 0, 0, 1.25),
+      box(2.12, 0.04, 0.05, '#b08a3a', 0, 0.34, 0.95), ball(0.3, '#ece8dc', 0, 0, 1.4, 0.5), ball(0.2, '#4a6a3a', 0.3, 0, 1.36, 0.5),
+    ),
+    chairRow: merge(...[-0.75, 0, 0.75].flatMap((x) => [box(0.46, 0.05, 0.44, '#6a6a6a', x, 0, 0.45), box(0.46, 0.45, 0.04, '#6a6a6a', x, -0.2, 0.48),
+      box(0.04, 0.45, 0.44, '#4a4a4a', x - 0.2), box(0.04, 0.45, 0.44, '#4a4a4a', x + 0.2)])),
+    wreath: merge(box(0.04, 1.4, 0.04, oak, 0, -0.1), box(0.6, 0.04, 0.04, oak, 0, 0.1, 0.1),
+      part(new THREE.TorusGeometry(m(0.35), m(0.09), 5, 12).translate(0, m(1.3), m(0.02)), '#3a5a2a'), ball(0.12, '#ece8dc', 0, 0.08, 1.0)),
+    // Hotel and apartments: a bed, nightstand, dresser, kitchenette; the front desk
+    // and its key board; a bank of mailboxes; a potted plant.
+    bed: merge(
+      box(2.0, 0.4, 1.0, oak), box(1.9, 0.18, 0.92, cream, 0, 0, 0.4), box(1.2, 0.12, 0.94, '#6a3a4a', 0.35, 0, 0.5),
+      box(0.4, 0.12, 0.7, '#f0ece0', -0.7, 0, 0.6), box(0.08, 0.9, 1.0, darkOak, -1.0),
+    ),
+    nightstand: merge(box(0.45, 0.55, 0.4, oak), cyl(0.07, 0.3, '#c8b890', 0, 0, 0.55), cyl(0.14, 0.18, '#e8dcb0', 0, 0, 0.85)),
+    dresser: merge(box(1.2, 0.85, 0.5, oak), ...[0.15, 0.42, 0.68].map((y) => box(1.1, 0.02, 0.02, darkOak, 0, 0.26, y)), box(0.7, 0.5, 0.04, '#8a9aa0', 0, -0.2, 0.9)),
+    kitchenette: merge(
+      box(2.0, 0.9, 0.6, cream), box(2.0, 0.04, 0.62, '#6a6a62', 0, 0, 0.9), box(0.6, 0.02, 0.5, '#2a2a2a', 0.5, 0, 0.92),
+      box(2.0, 0.6, 0.35, cream, 0, -0.12, 1.45), box(0.4, 0.3, 0.4, '#d8d8d0', -0.6, 0, 0.92),
+    ),
+    frontDesk: merge(
+      box(2.4, 1.05, 0.7, '#5a2a1e'), box(2.5, 0.05, 0.78, '#8a6a48', 0, 0, 1.05), cyl(0.06, 0.06, '#c8a040', 0.7, 0.15, 1.1),
+      box(1.4, 0.9, 0.12, darkOak, 0, -0.45, 1.25), ...[0, 1, 2, 3].flatMap((c) => [0, 1, 2].map((r) => box(0.06, 0.12, 0.02, '#b08a3a', -0.5 + c * 0.33, -0.38, 1.38 + r * 0.25))),
+    ),
+    mailboxes: merge(box(1.4, 1.2, 0.3, '#8a6a3a', 0, 0, 0.6), ...[0, 1, 2, 3].flatMap((c) => [0, 1, 2].map((r) => box(0.28, 0.3, 0.02, '#c8a040', -0.5 + c * 0.33, 0.16, 0.72 + r * 0.36)))),
+    plant: merge(cyl(0.22, 0.4, '#8a4a2a'), ball(0.45, '#2e5a32', 0, 0, 0.8, 1.1)),
+    // Pharmacy counter with a green cross over it.
+    pharmCounter: merge(box(2.0, 1.0, 0.6, cream), box(2.1, 0.05, 0.66, '#6a8a7a', 0, 0, 1.0), box(0.5, 0.15, 0.05, '#2aa05a', 0, -0.2, 1.8), box(0.15, 0.5, 0.05, '#2aa05a', 0, -0.2, 1.62)),
+    // Market: angled produce bins.
+    produce: merge(box(1.8, 0.7, 0.9, '#7a5a3a'), ...[[-0.6, '#c8402a'], [0, '#e0a030'], [0.6, '#5a9a3a']].map(([x, c]) => ball(0.32, c, x, 0, 0.75, 0.45))),
   };
 }
 
@@ -516,6 +640,93 @@ const VARIANTS = {
   river: { walkable: (ctx) => ford(ctx) },
 };
 
+// --- Typed buildings (src/core/buildings.js) ----------------------------------
+// ctx adds `back`: the turn that puts a piece's back (-z) against a wall of
+// this cell (or `along` when it has none), and `unit`: the cell is in a
+// private room (a hotel room, a flat). Walkable cells only get something
+// against a wall, leaving the floor clear to walk; blocked cells are full.
+const W = -0.43;   // against the back wall (cell units)
+const atWall = (ctx, list) => turn(list, ctx.back);
+const BUILDING_VARIANTS = {
+  hotel: {
+    walkable: (ctx) => atWall(ctx, ctx.unit ? [['dresser', 0.1, W + 0.02, 0]] : [['plant', 0.35, W + 0.05, 0], ['armchair', -0.15, W + 0.07, 0]]),
+    blocked: (ctx) => atWall(ctx, ctx.unit
+      ? [['bed', -0.05, -0.28, 0], ['nightstand', 0.35, W + 0.02, 0], ['dresser', 0.05, 0.36, Math.PI]]
+      : ctx.rnd() < 0.45 ? [['frontDesk', 0, -0.25, 0], ['plant', 0.4, 0.3, 0]]
+        : [['sofa', 0, -0.25, 0], ['table', 0, 0.05, 0], ['armchair', -0.33, 0.3, Math.PI * 0.85], ['armchair', 0.33, 0.3, -Math.PI * 0.85]]),
+  },
+  apartments: {
+    walkable: (ctx) => atWall(ctx, ctx.unit ? [[ctx.rnd() < 0.5 ? 'armchair' : 'dresser', 0, W + 0.06, 0]] : ctx.rnd() < 0.4 ? [['plant', 0.38, W + 0.05, 0]] : []),
+    blocked: (ctx) => atWall(ctx, ctx.unit
+      ? (ctx.rnd() < 0.5 ? [['bed', -0.05, -0.28, 0], ['nightstand', 0.35, W + 0.02, 0], ['dresser', 0.05, 0.36, Math.PI]]
+        : [['kitchenette', 0, W + 0.04, 0], ['table', 0, 0.12, 0], ['chair', -0.15, 0.3, Math.PI], ['sofa', 0, 0.38, Math.PI]])
+      : [['mailboxes', 0, W + 0.02, 0], ['plant', 0.38, -0.1, 0], ['crate', -0.3, 0.2, 0.3, 0.6]]),
+  },
+  boutique: {
+    walkable: (ctx) => atWall(ctx, ctx.rnd() < 0.5 ? [['rack', 0, W + 0.05, 0]] : [['mannequin', -0.25, W + 0.06, 0], ['mannequin', 0.25, W + 0.06, 0.3]]),
+    blocked: (ctx) => atWall(ctx, [['rack', 0, -0.3, 0], ['rack', 0, 0.05, 0], ['mannequin', -0.3, 0.35, 0.4], ['mannequin', 0.3, 0.35, -0.4], ['counter', 0, W + 0.0, 0, 0.0]].filter((p) => p[4] !== 0)),
+  },
+  market: {
+    walkable: (ctx) => atWall(ctx, [[ctx.rnd() < 0.5 ? 'produce' : 'storeShelf', 0, W + 0.04, 0]]),
+    blocked: (ctx) => atWall(ctx, [['storeShelf', 0, -0.03, Math.PI], ['storeShelf', 0, 0.03, 0], ['produce', 0, W + 0.04, 0], ['produce', 0, 0.42, Math.PI]]),
+  },
+  bar: {
+    walkable: (ctx) => atWall(ctx, [['stool', -0.2, -0.3, 0], ['stool', 0.2, -0.3, 0], ['cafeTable', 0, W + 0.04, 0, 0.8]]),
+    blocked: (ctx) => atWall(ctx, [['backBar', 0, W + 0.02, 0], ['barCounter', 0, -0.05, Math.PI], ['stool', -0.3, 0.22, 0], ['stool', 0, 0.22, 0], ['stool', 0.3, 0.22, 0]]),
+  },
+  library: {
+    walkable: (ctx) => atWall(ctx, [['bookshelf', 0, W + 0.02, 0]]),
+    blocked: (ctx) => atWall(ctx, ctx.rnd() < 0.6
+      ? [['bookshelf', 0, -0.03, Math.PI], ['bookshelf', 0, 0.03, 0], ['bookshelf', 0, W + 0.02, 0], ['bookshelf', 0, 0.45, Math.PI]]
+      : [['bookshelf', 0, W + 0.02, 0], ['readingTable', 0, 0.1, 0], ['chair', -0.25, -0.1, 0], ['chair', 0.25, -0.1, 0], ['chair', -0.25, 0.3, Math.PI], ['chair', 0.25, 0.3, Math.PI]]),
+  },
+  curio: {
+    walkable: (ctx) => atWall(ctx, ctx.rnd() < 0.7 ? [['curioCabinet', 0, W + 0.04, 0]] : [['clock', 0.3, W + 0.03, 0]]),
+    blocked: (ctx) => atWall(ctx, [['curioCabinet', -0.2, W + 0.04, 0], ['clock', 0.3, W + 0.03, 0], ['curioCabinet', 0, 0.05, 0], ['crate', -0.3, 0.35, 0.4, 0.7], ['crate', 0.25, 0.3, -0.3, 0.6], ['armchair', 0.3, 0.05, -0.8]]),
+  },
+  florist: {
+    walkable: (ctx) => atWall(ctx, [['flowerBucket', -0.3, W + 0.05, 0], ['flowerBucket', 0, W + 0.05, 1], ['flowerBucket', 0.3, W + 0.05, 2]]),
+    blocked: (ctx) => atWall(ctx, [['flowerStand', 0, -0.3, 0], ['flowerStand', 0, 0.3, Math.PI], ['flowerBucket', -0.4, 0, 0], ['flowerBucket', 0.4, 0, 1], ['counter', 0, 0.02, 0, 0.0]].filter((p) => p[4] !== 0)),
+  },
+  cafe: {
+    walkable: (ctx) => atWall(ctx, [['cafeTable', 0, -0.32, 0, 0.9], ['chair', -0.2, -0.32, Math.PI / 2], ['chair', 0.2, -0.32, -Math.PI / 2]]),
+    blocked: (ctx) => atWall(ctx, ctx.rnd() < 0.5
+      ? [['backBar', 0, W + 0.02, 0], ['counter', 0, -0.05, Math.PI], ['stool', -0.25, 0.2, 0], ['stool', 0.25, 0.2, 0]]
+      : [['cafeTable', -0.22, -0.2, 0], ['cafeTable', 0.22, 0.2, 0], ...[[-0.22, -0.2], [0.22, 0.2]].flatMap(([x, z]) => [['chair', x - 0.12, z, Math.PI / 2], ['chair', x + 0.12, z, -Math.PI / 2]])]),
+  },
+  outdoor: {
+    walkable: (ctx) => atWall(ctx, [['gearRack', 0, W + 0.04, 0]]),
+    blocked: (ctx) => atWall(ctx, [['gearRack', 0, W + 0.04, 0], ctx.rnd() < 0.5 ? ['tent', 0, 0.12, 0.4] : ['canoe', 0, 0.12, 0]]),
+  },
+  funeral: {
+    walkable: (ctx) => atWall(ctx, ctx.rnd() < 0.5 ? [['chairRow', 0, -0.25, Math.PI]] : [['wreath', 0.3, W + 0.04, 0]]),
+    blocked: (ctx) => atWall(ctx, [['casket', 0, -0.2, 0], ['wreath', -0.38, W + 0.04, 0.3], ['wreath', 0.38, W + 0.04, -0.3], ['chairRow', 0, 0.32, Math.PI]]),
+  },
+  pharmacy: {
+    walkable: (ctx) => atWall(ctx, [['storeShelf', 0, W + 0.04, 0]]),
+    blocked: (ctx) => atWall(ctx, ctx.rnd() < 0.4 ? [['pharmCounter', 0, W + 0.05, 0], ['storeShelf', 0, 0.3, Math.PI]]
+      : [['storeShelf', 0, -0.03, Math.PI], ['storeShelf', 0, 0.03, 0], ['storeShelf', 0, W + 0.04, 0]]),
+  },
+};
+// Which way a cell's furniture backs onto a wall: the turn (radians) that
+// puts local -z against a walled side (a wall or window of its own, or the
+// building's edge; not a door), or null if it has none. N 0, E -π/2, S π, W π/2.
+const SIDE_TURN = [[0, -1, 0], [1, 0, -Math.PI / 2], [0, 1, Math.PI], [-1, 0, Math.PI / 2]];
+function wallTurn(grid, i, ids) {
+  const { x, y } = grid.coords(i);
+  const auto = grid.autoEdges();
+  const walled = SIDE_TURN.filter(([dx, dy]) => {
+    const k = dx ? `v${dx > 0 ? x + 1 : x},${y}` : `h${x},${dy > 0 ? y + 1 : y}`;
+    const t = grid.edges.get(k) ?? auto.get(k);
+    if (t && /door/i.test(t) && t !== 'boardedDoor') return false;
+    if (t) return true;
+    const n = grid.inBounds(x + dx, y + dy) ? grid.index(x + dx, y + dy) : -1;
+    return n < 0 || ids[n] !== ids[i];
+  });
+  if (!walled.length) return null;
+  return walled[(x * 7 + y * 13) % walled.length][2];
+}
+
 // Which way a church cell faces, as a unit step (fx, fz) along one axis.
 // A pulpit (blocked church cell) faces its congregation: the average
 // direction to every pew in its church. Pews all face back along that line,
@@ -530,7 +741,7 @@ function churchCells(grid, i) {
       const nx = x + dx, ny = y + dy;
       if (!grid.inBounds(nx, ny)) continue;
       const k = grid.index(nx, ny);
-      if (!seen.has(k) && grid.cells[k].sub === 'church') { seen.add(k); order.push(k); }
+      if (!seen.has(k) && typeAt(grid, k) === 'church') { seen.add(k); order.push(k); }
     }
   }
   return order; // breadth-first from i: nearest first
@@ -704,14 +915,28 @@ export function createProps(group, { firGeo, firMat }) {
   function update(grid, ctx) {
     const placements = {}; // kind -> array of [x, y, z, rot, scale]
     if (ctx.visible) {
+      const ids = buildingIds(grid);
+      const units = unitRooms(grid);
       grid.cells.forEach((c, i) => {
         const variant = VARIANTS[c.sub]?.[c.walkable ? 'walkable' : 'blocked'];
         const { x, y } = grid.coords(i);
         let list = variant ? null : [];
+        const type = c.area === 'indoor' ? typeAt(grid, i) : null;
         // Church: a pew facing the pulpit, or the pulpit facing the pews.
-        if (c.sub === 'church') {
+        if (type === 'church') {
           const [fx, fz] = churchFacing(grid, i);
           list = [[c.walkable ? 'pew' : 'pulpit', 0, 0, Math.atan2(fx, fz)]];
+        } else if (type === 'hospital' || BUILDING_VARIANTS[type]) {
+          // A typed building: its own furniture, backed onto a wall.
+          let seed = (i * 2654435761) % 2147483647 || 1;
+          const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+          const axis = runAxis(grid, x, y, c);
+          const along = axis === 'x' ? 0 : Math.PI / 2;
+          const back = wallTurn(grid, i, ids) ?? along;
+          const unit = !!BUILDING_TYPES[type]?.rooms && units.has(roomIds(grid)[i]);
+          const v = type === 'hospital' ? VARIANTS.hospital : BUILDING_VARIANTS[type];
+          const make = v[c.walkable ? 'walkable' : 'blocked'];
+          list = make ? make({ rnd, along, across: along + Math.PI / 2, back, unit }) : [];
         } else
         // Start space: the van, facing along the road.
         if (c.sub === 'start') {

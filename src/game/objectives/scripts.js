@@ -92,7 +92,7 @@ export function mapSites(grid) {
   grid.cells.forEach((c, i) => {
     if (c.marker !== 'objective' || !c.walkable) return;
     out.all.push(i);
-    const s = siteOf(c);
+    const s = siteOf(c, grid, i);
     if (s) (out[s] ??= []).push(i);
   });
   return out;

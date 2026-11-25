@@ -13,6 +13,8 @@
 //   floors    indoor floors that make a marker this site when the author
 //             hasn't picked one (a marker on a Church floor is the Church)
 //
+import { BUILDING_TYPES, typeAt } from './buildings.js';
+
 // The Lair (where the monster rises) and the Start space (the van) are sites
 // on every map without a marker: see IMPLICIT_SITES.
 export const SITES = {
@@ -21,9 +23,9 @@ export const SITES = {
   church: { label: 'Church', number: 9, fixtures: ['votive-candle-stand', 'holy-water-basin'], floors: ['church'] },
   hospital: { label: 'Hospital', number: 13, fixtures: ['bed'], floors: ['hospital'] },
   boutique: { label: 'Boutique', number: 3, fixtures: ['wedding-gown'] },
-  curio: { label: 'Curio shop', number: 7, fixtures: ['antique-chest'] },
-  funeral: { label: 'Funeral parlor', number: 11, fixtures: ['finger-bone'] },
-  outdoor: { label: 'Outdoor store', number: 12, fixtures: ['whetstone'] },
+  curio: { label: 'Curio Shop', number: 7, fixtures: ['antique-chest'] },
+  funeral: { label: 'Funeral Parlor', number: 11, fixtures: ['finger-bone'] },
+  outdoor: { label: 'Outdoor Store', number: 12, fixtures: ['whetstone'] },
 };
 
 // Fixtures: the things at a site the objectives use.
@@ -46,10 +48,14 @@ export const siteLabel = (id) => SITES[id]?.label ?? IMPLICIT_SITES[id]?.label ?
 export const siteByNumber = (n) => Object.keys(SITES).find((id) => SITES[id].number === n) ?? null;
 
 // The site a cell's Objective marker stands for: the author's pick, else its
-// floor's, else null (an untyped objective: it still counts where a monster
-// wants "any objective", like the Poltergeist's anchors).
-export function siteOf(cell) {
+// building's (a marker in the Hotel is the Hotel: src/core/buildings.js),
+// else null (an untyped objective: it still counts where a monster wants
+// "any objective", like the Poltergeist's anchors). `grid` and `i` let it
+// see the building; without them, an old Church / Hospital floor still counts.
+export function siteOf(cell, grid = null, i = -1) {
   if (cell?.marker !== 'objective') return null;
   if (SITES[cell.site]) return cell.site;
+  const type = grid && i >= 0 ? typeAt(grid, i) : cell.use ?? null;
+  if (type && SITES[BUILDING_TYPES[type]?.site]) return BUILDING_TYPES[type].site;
   return Object.keys(SITES).find((id) => SITES[id].floors?.includes(cell.sub)) ?? null;
 }

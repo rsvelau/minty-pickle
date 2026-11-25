@@ -10,7 +10,7 @@ test('every tile can be stress tested: walkable and blocked, premade buildings b
   const ids = new Set(list.map((s) => s.id));
   assert.equal(ids.size, list.length, 'ids are unique');
   assert.ok(!list.some((s) => s.sub === 'start'), 'no start space');
-  assert.ok(ids.has('indoor:hospital:walkable') && ids.has('indoor:hospital:blocked'));
+  assert.ok(ids.has('building:hospital:walkable') && ids.has('building:hospital:blocked'), 'building types too');
   for (const s of list) if (isLandmark(s.sub)) assert.equal(s.walkable, false, s.id);
 });
 
@@ -23,7 +23,7 @@ test('a filled board covers the largest map with the subject', () => {
 });
 
 test('indoor floors are split into 4 x 4 rooms with doors, unless asked not to', () => {
-  const ward = subjects().find((s) => s.id === 'indoor:hospital:blocked');
+  const ward = subjects().find((s) => s.id === 'building:hospital:blocked');
   const g = load(filledBoard(ward, 8, 8));
   assert.ok(g.edges.size > 0);
   assert.equal(g.edges.get('h2,4'), 'door');

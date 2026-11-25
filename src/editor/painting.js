@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { isFlat, rayTerrain } from '../render/terrain.js';
 import { footprintOf } from '../core/state.js';
+import { buildingCells } from '../core/buildings.js';
 import { BRUSHES, FLOOR_H, TILE, WATER_Y, grid, ui } from '../app/config.js';
 import { decks, tiles, water } from '../render/board.js';
 import { camera, renderer } from '../render/scene.js';
@@ -72,6 +73,7 @@ export const paintAllowed = () => !ui.orbitMode && !ui.spaceHeld;
 
 // What a stroke paints: a cell brush, or (Markers tool) just the marker.
 export function currentPatch() {
+  if (ui.tool === 'buildings') return { use: ui.buildingBrush || null };   // applied to a whole building (applyAt)
   if (ui.tool !== 'markers') return BRUSHES[ui.brush];
   if (ui.markerBrush === 'erase') return (c) => (c.marker ? { marker: null, site: null } : null);
   return (c) => {
@@ -86,12 +88,19 @@ export function currentPatch() {
 // Cells already of that landmark are left alone, so dragging lays them side
 // by side instead of smearing them.
 export function brushFootprint() {
-  if (ui.tool === 'markers' || !ui.brush) return null;
+  if (ui.tool !== 'cells' || !ui.brush) return null;
   const [area, sub] = ui.brush.split(':');
   const fp = footprintOf(area, sub);
   return Array.isArray(fp) && (fp[0] > 1 || fp[1] > 1) ? { sub, w: fp[0], h: fp[1] } : null;
 }
 export function applyAt(x, y, patch, opts) {
+  // Buildings tool: the whole building under the pointer takes the type.
+  if (ui.tool === 'buildings') {
+    const cells = buildingCells(grid, grid.index(x, y));
+    const out = cells.filter((i) => grid.apply(i, patch, { silent: true }));
+    if (out.length && !opts?.silent) grid.emit(out);
+    return out;
+  }
   const fp = brushFootprint();
   if (!fp) return grid.apply(grid.index(x, y), patch, opts) ? [grid.index(x, y)] : [];
   if (grid.cells[grid.index(x, y)].sub === fp.sub) return [];

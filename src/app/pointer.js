@@ -141,6 +141,7 @@ export function setTool(tool, start) {
   $('#wallTools').hidden = tool !== 'walls';
   $('#moveTools').hidden = tool !== 'move';
   $('#markerTools').hidden = tool !== 'markers';
+  $('#buildingTools').hidden = tool !== 'buildings';
   $('#playTools').hidden = tool !== 'play';
   $('#playHud').hidden = tool !== 'play';
   if (tool !== 'play') $('#gameClock').hidden = true;

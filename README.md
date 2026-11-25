@@ -116,9 +116,8 @@ teammates in your space for heals like the Medical Kit). Obol costs (◉) take a
 - On yourself: healing, bonus defense (typed, until your next turn), refreshed dice (back with a new value,
   ready to slot), raising other dice, +movement, Purity Seal.
 - **1️⃣** once until refreshed (Retrieval refreshes Piercing Tip); **🔗 breaks**: the card is discarded.
-- **Objective sites**: each Objective marker stands for a site (Markers → Objective → Site: Hotel {1},
-  Bar {5}, Church {9}, Hospital {13}, Curio shop; a marker on a Church or Hospital floor is that site without
-  picking). A site type always has the same fixtures (the Church: a Votive Candle Stand and a Holy Water
+- **Objective sites**: each Objective marker stands for a site: the type of the building it is in (Buildings
+  tool), or one picked in Markers → Objective → Site. A site type always has the same fixtures (the Church: a Votive Candle Stand and a Holy Water
   Basin). Each monster's objective script (`src/game/objectives/scripts.js`) names the sites it needs: a map
   missing one has that monster disabled (the Markers panel and Ready to play? list which and why; it's never
   drawn there). When the monster is known (midnight, or named early), only its own sites appear on the board
@@ -234,7 +233,7 @@ the edges between cells.
 | Category | Subcategories |
 |----------|---------------|
 | Outdoor | Ground (default), Street, Start space, Old Clocktower\*, Path, Cemetery, Cemetery path, Forest cemetery\*, Forest\*, Brambles\* |
-| Indoor | Hardwood (default), Carpet, Church floor, Hospital floor, Condemned\* |
+| Indoor | Hardwood (default), Carpet, Condemned\* (then the Buildings tool says what a building is) |
 | Water | Lake, River (always start blocked), Fishing dock & boathouse\* |
 | Outdoor landmarks | 26 ready-made blocked landmarks (see **Landmarks** below) |
 
@@ -299,21 +298,40 @@ shader. A building is indoor floor joined by open floor or doors (walls and wind
 buildings), and its finishes come from its first cell, so they stay put while you paint. Hovering an indoor
 cell names both finishes.
 
-### Church floor
+### Building types
 
-An indoor tile for churches. **Walkable** church cells each hold a dark oak **pew** (with hymnals and a
-kneeler) facing the pulpit; a **blocked** church cell (use the Blocked brush) is the **pulpit**: a raised
-dais with a red runner and front step, a carved octagonal pulpit with an open Bible, an altar with
-candlesticks, and a tall wooden cross. The pulpit faces its congregation, and every pew in the same church
-faces back along that line like a nave, so pews beside the pulpit still face the front.
+Lay every building out the same way, with plain **Hardwood** or **Carpet** floor, walkable and blocked cells,
+walls, windows and doors. Then the **Buildings** tool (`B`) says what it is: pick a type and tap the building.
+A building is floor joined by open floor or doors; a wall or window between two floors splits buildings, so a
+row of shops sharing walls is several. One type per building, stored on its cells (so repainting keeps it, and
+new floor painted into a typed building takes its type). **Generic** clears it. The panel counts the map's
+buildings and what they are; hovering an indoor cell names its type.
 
-### Hospital floor
+Types: **Church, Hotel, Apartments, Boutique, Market, Bar, Library, Curio Shop, Florist, Cafe, Outdoor
+Store, Funeral Parlor, Hospital, Pharmacy** (`src/core/buildings.js`). Each one sets:
 
-An indoor tile for the hospital, pale linoleum. **Walkable** (the default) cells are mostly clear, with the
-odd parked wheelchair, IV drip stand or gurney against one edge. A **blocked** hospital cell (use the
-Blocked brush) is a **ward bay**: two wheeled beds with a folding privacy screen between them, drip stands,
-a vital-signs monitor cart, a gurney left across the front and a wheelchair. The bay lines up with the way
-the room runs.
+- **Furniture** (`src/render/props.js` BUILDING_VARIANTS): **blocked** cells hold the heavy pieces, **walkable**
+  cells only get something against a wall so the floor stays clear to walk. Pieces back onto a wall or window
+  of their own cell (never a door), so shelves, counters and beds face into the room. Church: walkable cells
+  are pews facing the pulpit, blocked cells the pulpit (as the old Church floor). Hospital: ward bays and the
+  odd wheelchair or drip stand (as the old Hospital floor). Library: bookcases, reading tables; Bar: back bar,
+  counter, stools; Market and Pharmacy: gondola shelving, produce, the pharmacy counter; Boutique: clothes
+  rails and mannequins; Curio Shop: glass cabinets, a grandfather clock; Florist: tiered flower stands and
+  buckets; Cafe: counter, round tables and chairs; Outdoor Store: gear racks, tents, a canoe; Funeral Parlor:
+  caskets, wreaths, rows of chairs.
+- **Hotel and Apartments** tell rooms apart: a small room (up to 6 cells) behind a single door from the
+  building's own floor is a private unit (a bed, nightstand and dresser; in a flat, sometimes a kitchenette),
+  everything else is common area (the hotel's front desk and lounge chairs; the apartments' mailboxes).
+- **Outside**: its exterior and interior wall finishes (brick for the Hotel and Library, plaster for the
+  Hospital...), and a **sign** over its front door (the door onto a street first), lit for the Hotel, Bar, Cafe,
+  Hospital, Pharmacy and the Church's cross (they flicker at midnight). Shops (Boutique, Market, Florist,
+  Cafe) get a striped **awning**. Signs hide with Low walls.
+- **Floor**: the Church keeps its worn oak boards, the Hospital, Market and Pharmacy pale linoleum; the others
+  show the floor you painted.
+- **Objective site**: an Objective marker inside is that site with no tagging (Hotel {1}, Boutique {3}, Bar {5},
+  Curio Shop {7}, Church {9}, Funeral Parlor {11}, Outdoor Store {12}, Hospital {13}).
+
+Old maps: Church floor and Hospital floor cells load as Hardwood in a Church or Hospital.
 
 ### Old Clocktower
 

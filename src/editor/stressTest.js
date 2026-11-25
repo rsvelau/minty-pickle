@@ -45,7 +45,7 @@ export function openStressTest() {
 function showSetup() {
   const el = panel();
   const subs = subjects();
-  const groups = TILE_CATEGORIES.map((c) => {
+  const groups = [...TILE_CATEGORIES, { id: 'buildings', label: 'Building types' }].map((c) => {
     const list = subs.filter((s) => s.cat === c.id);
     return list.length ? `<optgroup label="${esc(c.label)}">${list.map((s) => `<option value="${s.id}" ${opts.subject === s.id ? 'selected' : ''}>${esc(s.label)}</option>`).join('')}</optgroup>` : '';
   }).join('');

@@ -8,6 +8,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { flickerize } from './dread.js';
 import { METERS_PER_CELL } from '../core/scale.js';
 import { edgeKey } from '../core/state.js';
+import { buildingIds } from '../core/buildings.js';
 import { BED_H, DECK_TOP, INSET, TILE, grid, hoverIndex } from '../app/config.js';
 import { applyControlBindings } from '../app/controls.js';
 import { hoverEdge } from '../editor/walls.js';
@@ -551,25 +552,5 @@ export function interiorStyle(seed) {
 // doors; a wall or window between two floors splits them, so a row of shops
 // sharing walls gets a different look per shop.
 export function buildingSeeds() {
-  const seeds = new Int32Array(grid.cells.length).fill(-1);
-  const auto = grid.autoEdges();
-  const passable = (t) => !t || t === 'door' || t === 'lockedDoor' || t === 'boardedDoor' || t.startsWith('oneWayDoor');
-  for (let i = 0; i < grid.cells.length; i++) {
-    if (seeds[i] >= 0 || grid.cells[i].area !== 'indoor') continue;
-    seeds[i] = i;
-    const queue = [i];
-    while (queue.length) {
-      const { x, y } = grid.coords(queue.pop());
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        if (!grid.inBounds(x + dx, y + dy)) continue;
-        const k = grid.index(x + dx, y + dy);
-        if (seeds[k] >= 0 || grid.cells[k].area !== 'indoor') continue;
-        const ek = dx ? edgeKey('v', dx > 0 ? x + 1 : x, y) : edgeKey('h', x, dy > 0 ? y + 1 : y);
-        if (!passable(grid.edges.get(ek) ?? auto.get(ek))) continue;
-        seeds[k] = i;
-        queue.push(k);
-      }
-    }
-  }
-  return seeds;
+  return buildingIds(grid);   // src/core/buildings.js (cached until the board changes)
 }

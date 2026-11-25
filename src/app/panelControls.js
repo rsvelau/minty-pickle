@@ -5,6 +5,7 @@ import { MAX_RADIUS, MARKERS, centreBrightness, lightKind, MIN_SIZE, MAX_SIZE, d
 import { setTerrain, terrainId, TERRAIN_PRESETS } from '../render/terrain.js';
 import { drawMarkerIcon } from '../render/markers.js';
 import { SITES, FIXTURES } from '../core/sites.js';
+import { BUILDING_TYPES, BUILDING_ORDER, buildingIds, buildingTypes } from '../core/buildings.js';
 import { monsterAvailability } from '../game/objectives/scripts.js';
 import { METERS_PER_CELL } from '../core/scale.js';
 import { grid, ui } from './config.js';
@@ -53,12 +54,18 @@ export function init() {
     b.addEventListener('click', () => { setTool('markers'); setMarkerBrush(t); });
   });
   // Objective sites: the picker, and what the map's sites let it host.
-  $('#siteBrush').innerHTML = '<option value="">From the floor (Church, Hospital) or none</option>' +
+  $('#siteBrush').innerHTML = '<option value="">From its building (Buildings tool)</option>' +
     Object.entries(SITES).map(([id, s]) => `<option value="${id}">${s.label}${s.number ? ` {${s.number}}` : ''}</option>`).join('');
   $('#siteBrush').value = ui.siteBrush;
   $('#siteBrush').addEventListener('change', (e) => { ui.siteBrush = e.target.value; renderSiteNote(); });
+  // Buildings tool: one button per type, and Generic to clear.
+  $('#buildingTypes').innerHTML = [['', 'Generic'], ...BUILDING_ORDER.map((t) => [t, BUILDING_TYPES[t].label])]
+    .map(([t, label]) => `<button class="brush" data-btype="${t}">${label}</button>`).join('');
+  document.querySelectorAll('[data-btype]').forEach((b) => b.addEventListener('click', () => { setTool('buildings'); setBuildingBrush(b.dataset.btype); }));
+  setBuildingBrush(ui.buildingBrush);
   let availTimer = 0;
-  grid.onChange(() => { clearTimeout(availTimer); availTimer = setTimeout(renderSiteAvail, 250); });
+  grid.onChange(() => { clearTimeout(availTimer); availTimer = setTimeout(() => { renderSiteAvail(); renderBuildingList(); }, 250); });
+  renderBuildingList();
   renderSiteAvail();
   setMarkerBrush(ui.markerBrush);
   $('#lightRadius').max = MAX_RADIUS;
@@ -113,12 +120,25 @@ export function setMarkerBrush(name) {
   $('#siteRow').hidden = name !== 'objective';
   renderSiteNote();
 }
+export function setBuildingBrush(t) {
+  ui.buildingBrush = t;
+  document.querySelectorAll('[data-btype]').forEach((b) => b.classList.toggle('on', b.dataset.btype === t));
+}
+// The buildings on this map and what they are.
+function renderBuildingList() {
+  const ids = buildingIds(grid), types = buildingTypes(grid);
+  const all = new Set([...ids].filter((b) => b >= 0));
+  const named = [...types.values()].reduce((m, t) => ({ ...m, [t]: (m[t] ?? 0) + 1 }), {});
+  $('#buildingList').innerHTML = all.size
+    ? `<b>${all.size} building${all.size === 1 ? '' : 's'}</b>, ${types.size} given a type${types.size ? `: ${Object.entries(named).map(([t, n]) => `${BUILDING_TYPES[t].label}${n > 1 ? ` ×${n}` : ''}`).join(', ')}` : ''}.`
+    : 'No buildings yet: paint indoor floor and walls first.';
+}
 // What the chosen site always holds.
 function renderSiteNote() {
   const s = SITES[ui.siteBrush];
   $('#siteNote').hidden = ui.markerBrush !== 'objective';
   $('#siteNote').textContent = s ? `${s.label}: ${s.fixtures.map((f) => FIXTURES[f]?.label ?? f).join(', ')}.`
-    : 'A marker on a Church or Hospital floor is that site; elsewhere it is a plain objective (still an anchor for the Poltergeist).';
+    : 'A marker inside a building given a type (Buildings tool) is that site; elsewhere it is a plain objective (still an anchor for the Poltergeist).';
 }
 // Which monsters this map can host: the rest are disabled (their objectives need sites it lacks).
 export function renderSiteAvail() {

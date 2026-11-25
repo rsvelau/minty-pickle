@@ -1,5 +1,6 @@
 // How each cell looks: surface colour, light, height; per-cell refresh.
 
+import { BUILDING_TYPES, typeAt } from '../core/buildings.js';
 import * as THREE from 'three';
 import { setLightSeeds } from './dread.js';
 import { BASE, BED_H, DECK_TOP, FLOOR_H, PALETTE, SUB_LOOK, TILE, WATER_Y, grid, ui } from '../app/config.js';
@@ -120,7 +121,10 @@ export function cellLook(cell, level = 0, lamp = false) {
 }
 
 export function refreshCell(i) {
-  const look = cellLook(grid.cells[i], lightLevels[i], !!lampsOn[i]);
+  // A typed building's special floor (church boards, linoleum) shows over the painted one.
+  const floor = BUILDING_TYPES[typeAt(grid, i)]?.floor;
+  const cell = floor ? { ...grid.cells[i], sub: floor } : grid.cells[i];
+  const look = cellLook(cell, lightLevels[i], !!lampsOn[i]);
   tmpColor.set(look.color);
   tmpColor.offsetHSL(0, 0, jitter[i] * (ui.view === 'all' ? 0.18 : 0.06));
   if (look.shade) tmpColor.multiplyScalar(look.shade);

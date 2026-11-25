@@ -1,6 +1,7 @@
 // Grid data model: cell attributes, strokes with undo/redo, and (de)serialization.
 
 import { SITES } from './sites.js';
+import { BUILDING_TYPES, FLOOR_TYPES } from './buildings.js';
 export const COLS = 20;
 export const ROWS = 26;
 export const FORMAT_VERSION = 3;
@@ -98,13 +99,10 @@ export const AREAS = {
     subs: {
       hardwood: { label: 'Hardwood', cat: 'interiors' },
       carpet: { label: 'Carpet', cat: 'interiors' },
-      // Church: walkable cells hold a pew facing the pulpit; a blocked church
-      // cell is the pulpit (a raised dais with lectern, altar and cross).
-      church: { label: 'Church floor', cat: 'interiors' },
+      // Church, Hospital and every other kind of building: plain floor here,
+      // then the Buildings tool says what it is (src/core/buildings.js).
       // Condemned building: walls go up automatically round the outside of
       // the shape, with boarded-up doors and windows on the street side.
-      // Hospital: pale linoleum; a blocked cell is a ward bay (beds, screen).
-      hospital: { label: 'Hospital floor', cat: 'interiors' },
       condemned: { label: 'Condemned', walkable: false, cat: 'interiors' },
     },
   },
@@ -137,7 +135,7 @@ export function landmarkDims(sub, face) {
   return face % 2 === 0 ? [long, short] : [short, long];
 }
 
-export const CELL_KEYS = ['area', 'sub', 'lit', 'radius', 'walkable', 'bridge', 'lamp', 'marker', 'site', 'facing', 'flip'];
+export const CELL_KEYS = ['area', 'sub', 'lit', 'radius', 'walkable', 'bridge', 'lamp', 'marker', 'site', 'use', 'facing', 'flip'];
 
 // Directions as [dx, dy], indexed 0..3 = north, east, south, west.
 export const FACINGS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
@@ -160,7 +158,8 @@ export const defaultWalkable = (area, sub) =>
 //         sits on top of the cell and never changes the cell itself.
 export const defaultCell = () => ({
   area: 'outdoor', sub: 'ground', lit: false, radius: 0, walkable: true, bridge: false, lamp: false, marker: null,
-  site: null,   // Objective marker: the site it stands for (src/core/sites.js), null = from its floor, or none
+  site: null,   // Objective marker: the site it stands for (src/core/sites.js), null = from its building, or none
+  use: null,    // indoor: the building type (src/core/buildings.js), null = generic
   facing: null, // start space / premade building: which way it faces (index into FACINGS); null = automatic
   flip: false,  // premade building: mirrored left to right
 });
@@ -322,6 +321,9 @@ export function normalizeCell(c = {}) {
   const subs = Object.keys(AREAS[area].subs);
   const wanted = SUB_ALIASES[c.sub] ?? c.sub;
   let sub = subs.includes(wanted) ? wanted : (subs[0] ?? null);
+  // Old Church and Hospital floors: hardwood in a building of that type.
+  let use = area === 'indoor' && BUILDING_TYPES[c.use] ? c.use : null;
+  if (area === 'indoor' && FLOOR_TYPES[c.sub]) { sub = 'hardwood'; use ??= FLOOR_TYPES[c.sub]; }
   const water = area === 'water';
   return {
     area,
@@ -335,6 +337,7 @@ export function normalizeCell(c = {}) {
     lamp: !!c.lamp,
     marker: MARKERS[c.marker] ? c.marker : null,
     site: c.marker === 'objective' && SITES[c.site] ? c.site : null,
+    use,
     facing: (sub === 'start' || hasFixedFootprint(sub)) && Number.isInteger(c.facing) && c.facing >= 0 && c.facing < 4 ? c.facing : null,
     flip: hasFixedFootprint(sub) && !!c.flip,
   };
@@ -389,7 +392,7 @@ export class GridState {
   // `resized` tells listeners the board dimensions changed (rebuild needed).
   emit(indices, resized = false) {
     this._auto = null;
-    this._lamps = null;
+    this.forgetDerived();
     for (const fn of this.listeners) fn(indices, resized);
   }
 
@@ -475,6 +478,7 @@ export class GridState {
     if (before === type) return false;
     if (this.strokeEdges && !this.strokeEdges.has(k)) this.strokeEdges.set(k, before);
     if (type) this.edges.set(k, type); else this.edges.delete(k);
+    this.forgetDerived();
     if (!silent) this.emit([]);
     return true;
   }
@@ -486,7 +490,7 @@ export class GridState {
     const cell = this.cells[i];
     if (typeof patch === 'function') patch = patch(cell, i, this);
     this._auto = null;
-    this._lamps = null;
+    this.forgetDerived();
     if (!patch) return false;
     let changed = false;
     for (const k in patch) if (cell[k] !== patch[k]) { changed = true; break; }
@@ -638,6 +642,9 @@ export class GridState {
 
   // Is this cell's street lamp switched on? (A lamp flag left on a cell that
   // is no longer an intersection does nothing.)
+  // Everything worked out from the cells and edges (lamp posts, buildings,
+  // rooms, building types): dropped whenever anything changes.
+  forgetDerived() { this._lamps = this._bids = this._rooms = this._btypes = this._units = null; }
   // Every cell with a street lamp post (cached until the board changes).
   streetLamps() { return (this._lamps ??= streetLampCells(this)); }
   lampOn(i) {
@@ -1124,6 +1131,7 @@ export class GridState {
           lamp: this.lampOn(i),
           marker: c.marker,
           ...(c.marker === 'objective' && c.site ? { site: c.site } : {}),
+          ...(c.use && c.area === 'indoor' ? { use: c.use } : {}),
           ...(hasFixedFootprint(c.sub) && c.facing !== null ? { facing: c.facing, faces: FACING_NAMES[c.facing], flip: !!c.flip } : {}),
           ...(c.sub === 'start' ? (() => {
             const f = this.startFacing(i);

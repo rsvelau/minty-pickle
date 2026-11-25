@@ -127,7 +127,8 @@ export function init() {
     lowWalls: false,  // full-height walls by default; Low walls in the view menu cuts them away
     lightRadius: 1,      // radius for the Light source brush (cells)
     markerBrush: 'investigation', // marker the Markers tool places ('erase' removes)
-    siteBrush: '',                // Objective markers: the site they stand for ('' = from the floor)
+    siteBrush: '',                // Objective markers: the site they stand for ('' = from the building)
+    buildingBrush: 'hotel',       // Buildings tool: the type a tapped building becomes ('' = generic)
     showMarkers: true,
     shape: 'brush',      // 'brush' | 'rect'
     view: 'all',         // 'all' | 'area' | 'light' | 'walk'

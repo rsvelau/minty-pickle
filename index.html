@@ -26,6 +26,7 @@
             <button data-tool="walls">Walls &amp; doors</button>
             <button data-tool="move">Movement <kbd>M</kbd></button>
             <button data-tool="markers">Markers <kbd>P</kbd></button>
+            <button data-tool="buildings">Buildings <kbd>B</kbd></button>
             <button data-tool="play" data-start="standard" class="play-btn">Play demo <kbd>Y</kbd></button>
             <button data-tool="play" data-start="midnight" class="play-btn play-btn-midnight">Midnight demo</button>
             <button id="openSettings" class="settings-btn" type="button">⚙ Game settings</button>
@@ -114,6 +115,13 @@
             <p class="note site-note" id="siteNote" hidden></p>
             <p class="note site-avail" id="siteAvail"></p>
             <p class="note">Click or drag to place on walkable cells (Shift-drag fills a rectangle). Markers sit on top of a cell and never change it. Hover a Key to see the locked and one-way doors it unlocks in its building.</p>
+          </div>
+
+          <!-- Buildings: what each building is (src/core/buildings.js). -->
+          <div id="buildingTools" hidden>
+            <div class="building-grid" id="buildingTypes"></div>
+            <p class="note">Tap a building to make it this type: the whole building takes it (floors joined by open floor or doors; walls and windows split buildings). Lay it out with plain floor, walls, windows and doors first: walkable cells stay clear to walk, blocked cells get the heavy furniture. A sign goes over its front door, and Objective markers inside become that site. In a Hotel or Apartments, small rooms behind one door are private rooms; the rest are halls and lobbies.</p>
+            <p class="note" id="buildingList"></p>
           </div>
 
           <div id="moveTools" hidden>
