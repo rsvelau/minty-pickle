@@ -24,6 +24,7 @@ import { setOrbitMode } from '../editor/toolbar.js';
 import { updateUndoButtons } from './shell.js';
 import { gameConfig, play, renderPlay, saveConfig } from '../play/playView.js';
 import { openSettings } from '../play/gameSettings.js';
+import { hideSheet, hideSheets } from '../play/sheets.js';
 
 export const BUILTIN_MAPS = [builtinHawthorn];
 const SLOTS = ['slot1', 'slot2', 'slot3'];
@@ -53,6 +54,13 @@ function setMode(mode) {
   $('#gameMenuBtn').hidden = mode !== 'game';
   $('#panelTitle').textContent = mode === 'game' ? (game?.name ?? 'Midnight Shift') : 'Grid Planner';
   $('#expand').textContent = mode === 'game' ? 'Investigators ☰' : 'Grid Planner ☰';
+  // In a game the view controls live in the dock's More sheet; the editor
+  // keeps them in its view menu, top right.
+  const list = $('#viewList');
+  if (mode === 'game') { $('#moreView').append(list); list.hidden = false; } else if (list.parentElement !== $('#viewMenu')) {
+    $('#viewMenu').append(list); list.hidden = true; $('#viewToggle').setAttribute('aria-expanded', 'false');
+  }
+  if (mode !== 'game') hideSheets();
 }
 
 // Put the editor's board back on the board (after a game used it).
@@ -355,7 +363,7 @@ function showLoad(onBack) {
   });
 }
 
-function showSave() {
+function showSave(onBack = showPauseMenu) {
   const rows = slotRows(true).filter((r) => r.id !== AUTOSAVE);
   openScreen(`
     ${back()}
@@ -366,7 +374,7 @@ function showSave() {
         <button class="primary" data-save="${r.id}">${r.entry ? 'Overwrite' : 'Save here'}</button>
       </div>`).join('')}</div>
     <p class="screen-note">The game also autosaves at the start of every turn.</p>`, (el) => {
-    el.querySelector('[data-back]').addEventListener('click', showPauseMenu);
+    el.querySelector('[data-back]').addEventListener('click', () => onBack());
     el.querySelectorAll('[data-save]').forEach((b) => b.addEventListener('click', () => {
       const save = currentSave();
       if (!save) return;
@@ -388,7 +396,7 @@ export function showPauseMenu() {
       <button data-act="quit">Quit to title</button>
     </div>`, (el) => {
     el.querySelector('[data-act="resume"]').addEventListener('click', closeScreen);
-    el.querySelector('[data-act="save"]').addEventListener('click', showSave);
+    el.querySelector('[data-act="save"]').addEventListener('click', () => showSave());
     el.querySelector('[data-act="load"]').addEventListener('click', () => showLoad(showPauseMenu));
     el.querySelector('[data-act="restart"]').addEventListener('click', (ev) => {
       if (!ev.currentTarget.dataset.confirm) { ev.currentTarget.dataset.confirm = '1'; ev.currentTarget.textContent = 'Restart? Tap again'; return; }
@@ -485,13 +493,31 @@ export function showMyMaps() {
 // Run once at startup (called from src/main.js, after everything else).
 export function init() {
   $('#gameMenuBtn').addEventListener('click', showPauseMenu);
+  // The dock's More sheet: settings, and (in a game) save, load, restart, quit.
+  $('#moreMenu').innerHTML = `<span class="vm-label">Game</span><div class="more-grid">
+    <button type="button" data-more="settings">Game settings</button>
+    <button type="button" data-more="save" class="game-only">Save game</button>
+    <button type="button" data-more="load" class="game-only">Load game</button>
+    <button type="button" data-more="restart" class="game-only">Restart this map</button>
+    <button type="button" data-more="quit" class="game-only">Quit to title</button></div>`;
+  const more = (k, fn) => $(`[data-more="${k}"]`).addEventListener('click', fn);
+  more('settings', () => { hideSheet('moreSheet'); openSettings(); });
+  more('save', () => { hideSheet('moreSheet'); showSave(closeScreen); });
+  more('load', () => { hideSheet('moreSheet'); showLoad(closeScreen); });
+  more('restart', (ev) => {
+    const b = ev.currentTarget;
+    if (!b.dataset.confirm) { b.dataset.confirm = '1'; b.textContent = 'Restart? Tap again'; return; }
+    delete b.dataset.confirm; b.textContent = 'Restart this map';
+    hideSheet('moreSheet'); play.reset(); renderPlay(); autosaveNow();
+  });
+  more('quit', () => { hideSheet('moreSheet'); showTitle(); });
   $('#toTitle').addEventListener('click', showTitle);
   $('#myMaps').addEventListener('click', showMyMaps);
   window.addEventListener('keydown', (e) => {
     if (!$('#deckScreen').hidden) { if (e.key === 'Escape') { e.stopImmediatePropagation(); $('#deckScreen').hidden = true; } return; }
     if ($('#screen').hidden) {
       // Escape in a game opens the menu (unless something else wants it).
-      const free = ['#dialog', '#settings', '#inventory', '#casebook', '#cardPop', '#revealSheet', '#endConfirm'].every((s) => $(s).hidden);
+      const free = ['#dialog', '#settings', '#inventory', '#casebook', '#teamSheet', '#moreSheet', '#cardPop', '#revealSheet', '#endConfirm'].every((s) => $(s).hidden);
       if (e.key === 'Escape' && ui.mode === 'game' && free && play.state.phase !== 'asking') { e.stopImmediatePropagation(); showPauseMenu(); }
       return;
     }

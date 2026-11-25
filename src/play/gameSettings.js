@@ -68,11 +68,20 @@ export function init() {
     saveConfig(); // the default for the next game too
     renderPlay(); // the button itself shows the mode: no pop-up
   });
+  // The same switch in the dock's More sheet.
+  document.querySelectorAll('[data-movemode]').forEach((m) => m.addEventListener('click', () => {
+    play.state.movement = m.dataset.movemode;
+    saveConfig();
+    renderPlay();
+  }));
   $('#trayMin').addEventListener('click', () => setTrayMin(true));
   $('#trayPill').addEventListener('click', () => setTrayMin(false));
   $('#endNo').addEventListener('click', () => { $('#endConfirm').hidden = true; });
   $('#endYes').addEventListener('click', () => { $('#endConfirm').hidden = true; play.endTurn(); });
-  $('#hudRoll').addEventListener('click', () => play.roll());
+  $('#hudRoll').addEventListener('click', (e) => {
+    const act = e.currentTarget.dataset.act;
+    if (act === 'move') play.confirmMove(); else if (act === 'end') requestEndTurn(); else play.roll();
+  });
   $('#playStreets').addEventListener('change', (e) => { play.state.followStreets = e.target.checked; });
   $('#playReset').addEventListener('click', () => play.reset());
   syncPlayerButtons();

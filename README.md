@@ -15,8 +15,29 @@ The app opens on the **title screen** (`src/app/gameShell.js`):
 - **Map editor**: the planner described below, exactly as before (⌂ in its panel goes back to the title).
 - **Game settings**: the rules settings (Obols, slots, turn length...), the defaults for new games.
 
-In a game the editor's tools are hidden; the side panel shows the investigators and the log, and **☰** (or
-Esc) opens the game menu: **Resume, Save game** (3 slots), **Load game, Restart this map, Quit to title**.
+In a game the editor's tools are hidden and everything you press is in the **dock** along the bottom
+(`src/play/sheets.js`, `panels.js`): a status line, four menus and the big action button.
+
+- **Team**: everyone's place, white dice, injury pips, Obols and conditions, plus the log. Tap a player for their
+  injuries in full (and a shortcut to their Skills).
+- **Skills** (`I`): the Equipment skills and Obolcraft, in two tabs. Its badge counts the skills the current
+  player can use **right now**. The Skills tab has two views: **Ready first** groups every skill into **Use now**
+  (with the dice that work already picked: lowest first, so the high ones stay for moving), **Almost** (one thing
+  missing: roll first, a monster out of range, an Obol short...), **Not now** (used up, someone else's turn, no
+  monster on the board) and **Automatic** (Lunge, Sacrifice); **By item** is card by card, each skill with the
+  same reason under it. Obolcraft lists the recipes you can craft first. The check is `src/game/skills.js`
+  (`skillStatus`): it picks dice and a target, then tries the action on a copy of the game with the rules
+  themselves, so it never offers something the rules would refuse. ✋ skills (resolved at the table) can only
+  be checked for dice and Obols.
+- **Case** (`C`): the Casebook and the Field Guide. A dot means new evidence.
+- **More** (Esc opens the full game menu): Quick / Tactical movement, Follow camera, Follow streets, the view
+  controls (layer, camera, labels, quality), **Game settings, Save game** (3 slots), **Load game, Restart this
+  map, Quit to title**.
+- **The action button** does what comes next: **Roll**, then **Move** (the dice slotted), then **End turn**.
+
+Each menu opens as a sheet over the board just above the dock, one at a time: tap its button again, ✕, or drag
+its top edge down to close it. A phone held sideways gets the dock as a strip down the right edge, with sheets
+beside it.
 The game **autosaves at the start of every turn**. A save holds the whole game state (including the dice's
 random-number state, so it continues exactly) and a copy of the map, so it still loads after the map is
 edited or deleted.
@@ -49,7 +70,7 @@ dice; they are part of the saved game. An **Equipment Obol** draws an Equipment 
 inventory, and the Obolcraft "Draw an Equipment card" recipe draws from the same deck. An **Event Obol** draws
 an Event card, shown and logged; a **Global** event becomes the one in effect (shown beside the clock) until
 another Global replaces it. **Mindsets** are shuffled into the Event deck: drawing one gives it to that
-investigator (shown in their Inventory title), replacing any Mindset they had.
+investigator (shown in the title of their Skills sheet), replacing any Mindset they had.
 
 **Events in play** (`src/game/eventPlay.js`). The card pops up; if it needs a choice (Decisions, optional "Can"
 Opportunities and Cursed Objects), the turn pauses until **the drawing character** chooses (alone):
@@ -95,8 +116,8 @@ Opportunities and Cursed Objects), the turn pauses until **the drawing character
   two weakness effects, but you skip your next turn. Trap durations (⏳) count rounds and work as before.
 - Still played at the table: Hidden Passage, Peculiar Mirror, Decrepit Truck, Hiding Spot (travel).
 
-**Using equipment** (`src/game/equipmentPlay.js`): any time during your turn, open the Inventory → Equipment
-and tap **Use** on a skill. Pick its dice from your free rolled dice (their total must meet the bracket), and a
+**Using equipment** (`src/game/equipmentPlay.js`): any time during your turn, open **Skills** in the dock
+and tap **Use** on a skill (Ready first lists the ones you can use now, with their dice already picked). Pick its dice from your free rolled dice (their total must meet the bracket), and a
 target if it needs one (monsters within the skill's range: Close 1, Mid up to 2, Long 3 or more only;
 teammates in your space for heals like the Medical Kit). Obol costs (◉) take any colour.
 - Damage: the slotted die, the dice added, or a fixed number, minus the monster's **toughness** (unless the skill
@@ -161,7 +182,7 @@ teammates in your space for heals like the Medical Kit). Obol costs (◉) take a
   you (Fire), and you carry Equipment with a skill of that element, the game waits for you: **Discard it** and
   that hit is undone (injuries, a death, the exhausted die, the defense it wore), or **Keep it**. A hit that
   would kill leaves you down until you answer. Moving when it happens, you stop and pick a way on after. The
-  rest are discarded from the Inventory any time on your turn: **Discard Crystal & no light for ⌛** (Shadow
+  rest are discarded from Skills → By item any time on your turn: **Discard Crystal & no light for ⌛** (Shadow
   People) keeps lit spaces safe from Umbral Stab until your next turn; **keep candle lit** is resolved at the
   table. One limit: Drain exhausts your defense die before it attacks, so undoing the Exhaust gives the die
   back but not to that attack.
@@ -521,10 +542,10 @@ markers** in View hides them. Marker art lives in `src/render/markers.js`; the l
   (Yes / No; on a keyboard Enter or Y = yes, Escape or N = no). **No** runs on through the space and leaves
   it for later. **Yes** draws a random **Obol** from a shared bag for that player, shown in a short reveal and
   on the scoreboard.
-- **Inventory.** Each player has their own inventory with two tabs, **Equipment** (empty for now) and
-  **Obolcraft**, where every Obol they draw is kept, with where and when it was found. Open it with the bag
-  button on the play bar (or `I`) for the current player, or tap a player in the scoreboard.
-- **Obolcraft** (Obolcraft tab of the inventory): trade Obols for effects, from the Player Mat. Obol colours
+- **Skills.** Each player has their own Skills sheet with two tabs, **Skills** (their Equipment) and
+  **Obolcraft** (every Obol they draw). Open it from the dock (or `I`) for the current player; the player chips
+  at its top switch to anyone else.
+- **Obolcraft** (Obolcraft tab of the Skills sheet): trade Obols for effects, from the Player Mat. Obol colours
   share the damage-type theme (Attack red = Physical, Event blue = Mental, Equipment green = Spiritual, plus
   yellow Evidence); a black slot takes any colour. Recipes: red + any → reduce Physical injury by a tier; blue +
   any → Mental; green + any → Spiritual; yellow + any → your next white die is **Resonant** (it returns to your
@@ -567,8 +588,7 @@ markers** in View hides them. Marker art lives in `src/render/markers.js`; the l
   - **Quick** (the default): the pawn runs on by itself while there's only one way forward, and stops at a
     fork, a marker, the start of every move, and when its moves run out.
   - **Tactical**: it stops at **every step** and asks which way to go.
-  - Switch any time during a game with the small **Quick ⇄ / Tactical ⇄** button under the clock (no
-    pop-up: the button shows the mode); the change applies from the next step and becomes the default for
+  - Switch any time during a game under **More → Movement** in the dock; the change applies from the next step and becomes the default for
     new games.
 - **Every stop is a stop.** Stopped anywhere (out of moves, at a fork or marker, at each step in Tactical, at
   the Investigate? prompt), the player can roll white dice, slot dice into Movement or Defense, use equipment
@@ -969,7 +989,7 @@ From the Player Mat and Monster Ref Sheet (`Monsters_and_Injuries` spreadsheet):
   monster's melee Attack reaches Close range.
 - **Damage.** An attack's damage is compared with the total of the slotted defense dice: at least the damage is
   **blocked**; less gives **one tier** on that attack's track (Physical, Mental, Spiritual).
-- **Injuries** (tiers add up; tracks are separate; scoreboard pips and an Injuries tab in the inventory):
+- **Injuries** (tiers add up; tracks are separate; scoreboard pips, and in full under Team):
   Physical: Sprained (one black die disabled, shown crossed out in the tray), Hobbled (−1 movement slot). Mental: Paranoid (−1 defense slot),
   Terrified (teammates within Mid range lose a defense slot). Spiritual: Doomed (defense 6s count as
   1), Hexed (shown; applies once items exist). Tier 3 on any track is **Death's Door**: one die per turn, and any
@@ -1097,7 +1117,7 @@ menus (`src/main.js` explains the same at the top):
 - `src/editor/` — map-building tools: `painting.js`, `placing.js` (premade building preview), `walls.js`,
   `moveCheck.js`, `toolbar.js` (tools, brushes and the tile menu).
 - `src/play/` — the play demo: `play.js` (figures, animation, camera), `playView.js` (HUD, dice, clock,
-  choices), `panels.js` (evidence, Casebook, Field Guide, injuries, Obolcraft, inventory),
+  choices), `panels.js` (evidence, Casebook, Field Guide, Team, Skills and Obolcraft, the dock), `sheets.js` (the dock's sheets),
   `gameSettings.js`.
 - `src/app/` — the shell: `config.js` (colours, brushes, `ui` state, the grid, storage), `pointer.js` (mouse
   and touch), `controls.js`, `panelControls.js`, `files.js` (export/import, PNG, dialogs, Ready to play?),

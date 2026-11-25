@@ -14,6 +14,7 @@ import { $ } from './dom.js';
 import { hoverEdge } from '../editor/walls.js';
 import { closeSettings, requestEndTurn } from '../play/gameSettings.js';
 import { closeCasebook, closeInventory, hideCard, openCasebook, openInventory } from '../play/panels.js';
+import { hideSheet } from '../play/sheets.js';
 import { play } from '../play/playView.js';
 import { markerHidden, markerUsed } from '../render/board.js';
 import { siteOf, siteLabel } from '../core/sites.js';
@@ -32,13 +33,13 @@ export function init() {
   // so it never paints a tile, places a wall or moves the camera.
   window.addEventListener('pointerdown', (ev) => {
     const panelOpen = !$('#panel').hidden;
-    const viewOpen = !$('#viewList').hidden;
+    const viewOpen = !$('#viewList').hidden && $('#viewList').parentElement === $('#viewMenu');
     if (!panelOpen && !viewOpen) return;
     const t = ev.target;
     const inside = (sel) => t instanceof Element && !!t.closest(sel);
     if (ui.mode === 'title' || inside('#screen') || inside('#gameMenuBtn')) return; // the game shell's screens
     if (inside('#dialog') || inside('#settings') || inside('#inventory') || inside('#playHud') || inside('#playChoices') || inside('#playTray')
-      || inside('#askCard') || inside('#obolReveal') || inside('#revealSheet') || inside('#cardPop') || inside('#casebook') || inside('#intentBanner') || inside('#endConfirm')) return;
+      || inside('#teamSheet') || inside('#moreSheet') || inside('#askCard') || inside('#obolReveal') || inside('#revealSheet') || inside('#cardPop') || inside('#casebook') || inside('#intentBanner') || inside('#endConfirm')) return;
     let closed = false;
     if (panelOpen && !inside('#panel') && !inside('#expand')) { minimizePanel(); closed = true; }
     if (viewOpen && !inside('#viewMenu')) { setViewMenu(false); closed = true; }
@@ -54,6 +55,7 @@ export function init() {
     if (!$('#settings').hidden) { if (e.key === 'Escape') closeSettings(); return; }
     if (!$('#inventory').hidden) { if (e.key === 'Escape' || e.key.toLowerCase() === 'i') closeInventory(); return; }
     if (!$('#casebook').hidden) { if (e.key === 'Escape' || e.key.toLowerCase() === 'c') closeCasebook(); return; }
+    for (const id of ['teamSheet', 'moreSheet']) if (!$(`#${id}`).hidden && e.key === 'Escape') { hideSheet(id); return; }
     if (!$('#cardPop').hidden && (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); hideCard(); return; }
     if (ui.tool === 'play' && play.state.phase === 'revealing' && /^[1-4]$/.test(e.key)) {
       const faceDown = (play.state.mystery?.deck ?? []).map((c, i) => (c ? -1 : i)).filter((i) => i >= 0);

@@ -452,7 +452,7 @@ body.playing .help { display: none; }
 .play-tray {
   position: fixed;
   left: 50%;
-  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(var(--dock-h) + 8px);
   transform: translateX(-50%);
   z-index: 8;
   width: min(460px, calc(100% - 24px));
@@ -573,7 +573,7 @@ body.playing .help { display: none; }
 .ask-card {
   position: fixed;
   left: 50%;
-  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(var(--dock-h) + 8px);
   transform: translateX(-50%);
   z-index: 9;
   width: min(380px, calc(100% - 24px));
@@ -682,7 +682,7 @@ body.playing .help { display: none; }
   font: 11px/1.4 ui-monospace, Menlo, Consolas, monospace; color: #cfe8d8; pointer-events: none;
 }
 .fps[hidden] { display: none; }
-body.playing .fps { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+body.playing .fps { bottom: calc(var(--dock-h) + 8px); }
 
 .play-board .monster-row { cursor: default; color: #f0b0b0; }
 
@@ -742,7 +742,7 @@ body.playing .fps { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
 
 /* Choose a face-down card. */
 .reveal-sheet {
-  position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  position: fixed; left: 50%; bottom: calc(var(--dock-h) + 8px); transform: translateX(-50%);
   z-index: 9; width: min(440px, calc(100% - 24px)); padding: 12px; display: grid; gap: 6px; text-align: center;
   background: var(--panel); border: 1px solid #c9a24a; border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
 }
@@ -1101,7 +1101,7 @@ body.mode-game .editor-only, body.mode-game #info, body.mode-game .help { displa
 
 /* Using equipment */
 .eq-abilities li { grid-template-columns: 38px 18px 1fr auto; }
-.eq-use { align-self: center; min-height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid #5fcf6a; background: rgba(95, 207, 106, 0.16); color: #dff5e2; font: 600 13px system-ui, sans-serif; cursor: pointer; }
+.eq-use { align-self: center; min-height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.04); color: var(--muted); font: 600 13px system-ui, sans-serif; cursor: pointer; }
 .eq-use:disabled { opacity: 0.35; border-color: var(--line); background: none; color: var(--muted); }
 .use-sheet { display: grid; gap: 8px; padding: 4px 2px; }
 .use-title { color: var(--text); font-size: 15px; }
@@ -1200,7 +1200,7 @@ body.stress-on #info { display: none !important; }
   font: 600 18px/1 system-ui, sans-serif; cursor: pointer; touch-action: manipulation; padding: 0;
 }
 .tray-pill {
-  position: fixed; z-index: 8; right: 12px; bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  position: fixed; z-index: 8; right: 12px; bottom: calc(var(--dock-h) + 8px);
   min-height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid #58e0a0;
   background: var(--panel); color: var(--text); font: 500 13px system-ui, sans-serif;
   cursor: pointer; touch-action: manipulation; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
@@ -1240,3 +1240,105 @@ body.stress-on #info { display: none !important; }
 /* Buildings tool: one button per building type. */
 .building-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
 .building-grid .brush { font-size: 12px; padding: 6px 4px; }
+
+/* --- The dock (bottom): status line, Team / Skills / Case / More, the action button. --- */
+:root { --dock-h: 120px; }
+.play-hud.dock {
+  bottom: 0; flex-direction: column; align-items: stretch; gap: 6px;
+  width: min(560px, 100%); padding: 7px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+  border: 1px solid var(--line); border-bottom: 0; border-radius: 14px 14px 0 0;
+  box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.45);
+}
+.dock-status { display: flex; align-items: center; gap: 8px; min-height: 22px; padding: 0 2px; }
+.dock .die-sm { width: 24px; height: 24px; padding: 2px; border-radius: 6px; border-width: 1.5px; }
+.dock .die-sm i { width: 4px; height: 4px; }
+.dock .hud-status { font-size: 12.5px; line-height: 1.3; }
+.dock-row { display: flex; gap: 6px; align-items: stretch; }
+.dock-btn {
+  position: relative; flex: 1 1 0; min-width: 0; min-height: 54px; padding: 5px 2px 4px;
+  display: grid; justify-items: center; align-content: center; gap: 3px;
+  border-radius: 10px; font: 600 11px system-ui, sans-serif; letter-spacing: 0.02em; color: var(--text);
+  touch-action: manipulation;
+}
+.dock-btn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.dock-btn.on { border-color: var(--accent); background: rgba(217, 164, 106, 0.16); color: #f3e3cf; }
+.dock .hud-roll { flex: 1.5 1 0; min-width: 84px; min-height: 54px; border-radius: 10px; }
+.hud-badge.n {
+  width: auto; height: 18px; min-width: 18px; padding: 0 5px; top: 3px; right: 6px; border-radius: 9px;
+  background: #58e0a0; color: #06140d; font: 800 11px/18px system-ui, sans-serif; text-align: center;
+}
+.hud-badge[hidden] { display: none; }
+/* In a game the dock holds what the corners used to: menu, view menu, movement switch, side panel. */
+body.mode-game #gameMenuBtn, body.mode-game #viewMenu, body.mode-game #moveModeBtn,
+body.mode-game #expand, body.mode-game #panel { display: none !important; }
+body:not(.mode-game) .game-only { display: none !important; }
+
+/* --- Sheets: the dock's menus, over the board just above the dock. ---------------- */
+.dialog.sheet {
+  inset: auto 0 var(--dock-h) 0; z-index: 9; padding: 0 8px;
+  place-items: end center; background: none; backdrop-filter: none; pointer-events: none;
+}
+.dialog.sheet > .dialog-card {
+  pointer-events: auto; width: min(560px, 100%);
+  max-height: min(66vh, calc(100vh - var(--dock-h) - 64px)); overflow: auto; overscroll-behavior: contain;
+  border-radius: 14px 14px 0 0; border-bottom: 0; box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.5);
+}
+.sheet-head { position: sticky; top: -16px; z-index: 2; margin: -16px -16px 0; padding: 14px 16px 8px; background: inherit; cursor: grab; touch-action: none; }
+.sheet-head::before {
+  content: ''; position: absolute; left: 50%; top: 5px; width: 36px; height: 4px; margin-left: -18px;
+  border-radius: 2px; background: rgba(255, 255, 255, 0.22);
+}
+.journal .sheet-head::before { background: rgba(42, 33, 24, 0.3); }
+.sheet .inv-body { max-height: none; overflow: visible; min-height: 0; }
+.sheet-body { display: grid; gap: 8px; margin-top: 8px; }
+.sheet-sub { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.sheet .play-log { max-height: 160px; }
+.sheet .play-stats { margin: 0; }
+.play-board .pl.picked { border-color: var(--accent); }
+.team-detail { border-top: 1px solid var(--line); padding-top: 8px; }
+.team-who { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.team-who .chip { width: 12px; height: 12px; border-radius: 50%; }
+.team-who .team-skills { margin-left: auto; min-height: 34px; }
+.more-body .vm-grid button.on { border-color: var(--accent); background: rgba(217, 164, 106, 0.16); color: #f3e3cf; }
+.more-checks { display: flex; gap: 16px; flex-wrap: wrap; }
+.more-body .view-list { width: auto; max-height: none; padding: 0; border: 0; background: none; box-shadow: none; backdrop-filter: none; }
+.more-body .vm-col { grid-template-columns: 1fr 1fr; }
+.more-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.more-grid button { min-height: 44px; }
+
+/* --- Skills: Ready first (grouped) or By item. -------------------------------------- */
+.skill-view { margin: 2px 0 8px; }
+.skill-view button { min-height: 34px; }
+.skill-view button.on { border-color: var(--accent); background: rgba(217, 164, 106, 0.16); color: #f3e3cf; }
+.sk-group { margin-bottom: 12px; }
+.sk-head { display: flex; align-items: center; gap: 8px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.sk-head span { padding: 0 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); letter-spacing: 0; }
+.sk-now .sk-head { color: #58e0a0; }
+.sk-almost .sk-head { color: #e8c76a; }
+.sk-not .eq-abilities li, .sk-auto .eq-abilities li { opacity: 0.62; }
+.sk-from { display: block; margin-top: 2px; color: var(--muted); font-size: 11.5px; }
+.sk-why { display: block; margin-top: 2px; color: #e8c76a; font-size: 11.5px; }
+.sk-not .sk-why, .sk-auto .sk-why { color: var(--muted); }
+.eq-use.go { border-color: #5fcf6a; background: rgba(95, 207, 106, 0.18); color: #dff5e2; }
+.inv-tabs .n.go { background: rgba(88, 224, 160, 0.22); color: #9ff0c8; }
+body.mode-game #camMode { display: none; }
+
+/* Phones held sideways: the dock is a strip down the right edge, sheets open beside it. */
+:root { --dock-w: 0px; }
+@media (orientation: landscape) and (max-height: 540px) {
+  .play-hud.dock {
+    left: auto; right: 0; top: 0; bottom: 0; transform: none; width: 132px;
+    padding: calc(8px + env(safe-area-inset-top, 0px)) calc(8px + env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) 8px;
+    border: 1px solid var(--line); border-right: 0; border-radius: 14px 0 0 14px; box-shadow: -6px 0 24px rgba(0, 0, 0, 0.45);
+  }
+  .dock-status { align-items: flex-start; }
+  .dock-status .die-sm { display: none; }
+  .dock .hud-status { font-size: 11.5px; }
+  .dock-row { flex: 1; display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; align-content: end; }
+  .dock-btn { min-height: 48px; }
+  .dock .hud-roll { grid-column: 1 / 3; min-height: 52px; }
+  .dialog.sheet { inset: 0 var(--dock-w) 0 auto; padding: 8px 0; place-items: center end; }
+  .dialog.sheet > .dialog-card { width: min(440px, calc(100vw - var(--dock-w) - 16px)); max-height: calc(100vh - 16px); border-radius: 14px 0 0 14px; border-bottom: 1px solid var(--line); border-right: 0; }
+  .play-tray, .ask-card { margin-left: calc(var(--dock-w) / -2); }
+  .game-clock, .intent-banner { margin-left: calc(var(--dock-w) / -2); }
+}

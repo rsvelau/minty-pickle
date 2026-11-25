@@ -9,7 +9,7 @@ import { defenseLeft, defenseValue } from '../game/combat.js';
 import { WATER_Y, grid, ui } from '../app/config.js';
 import { toast } from '../app/files.js';
 import { $ } from '../app/dom.js';
-import { craftUI, dmgIcon, hitText, injuryPips, markCaseNew, obolHTML, renderAsk, renderSacrifice, renderCasebook, renderIntent, renderInventory, renderRevealSheet, showCard, showObol, renderEventChoice } from './panels.js';
+import { craftUI, dmgIcon, hitText, injuryPips, markCaseNew, obolHTML, renderAsk, renderSacrifice, renderCasebook, renderIntent, renderInventory, renderTeam, renderSkillBadge, renderRevealSheet, showCard, showObol, renderEventChoice } from './panels.js';
 import { objectiveLive } from '../game/objectives/scripts.js';
 import { describeItem } from '../game/objectives/verbs.js';
 import { RANGE, cellRange } from '../game/cards/injuries.js';
@@ -129,7 +129,7 @@ export function renderPlay() {
     const counts = obolCounts(p);
     const inDanger = s.monsters.some((mo) => mo.danger?.includes(k));
     const dangerType = s.monsters.flatMap((mo) => mo.dangerTypes?.[k] ?? [])[0];
-    return `<div class="pl${k === s.cur ? ' cur' : ''}${p.dead ? ' dead' : ''}${inDanger && !p.dead ? ` danger${dangerType ? ` danger-${dangerType}` : ''}` : ''}" data-inv="${k}" title="Open ${p.name}'s inventory"><span class="chip" style="background:${p.colour}">${p.name}</span>` +
+    return `<div class="pl${k === s.cur ? ' cur' : ''}${p.dead ? ' dead' : ''}${inDanger && !p.dead ? ` danger${dangerType ? ` danger-${dangerType}` : ''}` : ''}" data-inv="${k}" title="${p.name}'s injuries and skills"><span class="chip" style="background:${p.colour}">${p.name}</span>` +
       `<span>${c ? cellLabel(c.x, c.y) : '–'}</span><span>White dice ${p.white}</span>` +
       `<span class="inj-row">${injuryPips(p)}${p.dead ? ' <b>Dead</b>' : inDanger ? ` <b class="${dangerType ? `dmg-${dangerType}` : ''}" style="${dangerType ? '' : 'color:#ff6a50'}">${dangerType ? dmgIcon(dangerType) : ''}In danger</b>` : ''}` +
       // Through the monster's next turn (Viper Hood, Ice Axe).
@@ -161,9 +161,19 @@ export function renderPlay() {
   renderRevealSheet();
   if (!$('#casebook').hidden) renderCasebook();
   if (!$('#inventory').hidden) renderInventory();
+  if (!$('#teamSheet').hidden) renderTeam();
+  renderSkillBadge();
   // Floating bar.
   [...$('#hudDie').children].forEach((el, n) => el.classList.toggle('on', !!face && PIPS[face].includes(n)));
-  $('#hudRoll').disabled = roll.disabled;
+  // The dock's big button does what comes next: Roll, then Move (the dice
+  // slotted), then End turn; the tray keeps its own buttons too.
+  const hud = $('#hudRoll'), tm = $('#trayMove'), te = $('#trayEnd');
+  const next = !roll.disabled ? ['roll', 'Roll']
+    : !tm.hidden && !tm.disabled ? ['move', tm.textContent]
+      : ['slotting', 'choosing'].includes(s.phase) && !te.hidden && !te.disabled ? ['end', 'End turn'] : ['roll', 'Roll'];
+  hud.dataset.act = next[0];
+  hud.textContent = next[1];
+  hud.disabled = next[0] === 'roll' && roll.disabled;
   $('#hudStatus').innerHTML = chip + ({
     nostart: 'Paint a Start space first.',
     idle: `On <b>${here}</b>${s.pos >= 0 ? ` · light ${Math.round(lightLevels[s.pos] * 100)}%` : ''}. Roll.` +
@@ -254,6 +264,7 @@ export function renderMoveMode() {
   b.classList.toggle('tactical', tactical);
   b.textContent = tactical ? 'Tactical ⇄' : 'Quick ⇄';
   b.setAttribute('aria-label', `Movement: ${tactical ? 'Tactical' : 'Quick'}. Tap to switch to ${tactical ? 'Quick' : 'Tactical'}.`);
+  document.querySelectorAll('[data-movemode]').forEach((m) => m.classList.toggle('on', m.dataset.movemode === play.state.movement || (m.dataset.movemode === 'quick' && !tactical)));
 }
 export function renderClock() {
   renderMoveMode();

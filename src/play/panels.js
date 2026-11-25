@@ -22,10 +22,12 @@ import { choicesFor } from '../game/eventPlay.js';
 import { sacrificeSeat } from '../game/rules.js';
 import { scriptOf, mapSites, knownMonster } from '../game/objectives/scripts.js';
 import { progressLines } from '../game/objectives/verbs.js';
+import { skillStatus } from '../game/skills.js';
+import { showSheet, hideSheet, sheetOpen, dragToClose } from './sheets.js';
 
 // Module state: assigned by init() below, in the same order as before the split.
 export let OBOL_GLYPHS, DMG_SVG, ATTACK_GLYPH, cardQueue, caseUI, craftUI;
-export let inv;
+export let inv, teamUI;
 
 // Run once at startup (called from src/main.js, in order).
 export function init() {
@@ -54,9 +56,7 @@ export function init() {
   cardQueue = [];
   $('#cardPop').addEventListener('click', hideCard);
   caseUI = { tab: 'case', showAll: false, seen: 0 };
-  $('#hudCase').addEventListener('click', () => openCasebook());
   $('#caseClose').addEventListener('click', closeCasebook);
-  $('#casebook').addEventListener('click', (e) => { if (e.target === $('#casebook')) closeCasebook(); });
   document.querySelectorAll('[data-ctab]').forEach((b) => b.addEventListener('click', () => { caseUI.tab = b.dataset.ctab; renderCasebook(); }));
   $('#intentBanner').addEventListener('click', () => {
     const mo = play.state.monsters.find((m) => m.intents);
@@ -78,13 +78,39 @@ export function init() {
   // --- Inventory -----------------------------------------------------------------------
   // Each player's own inventory, in tabs. Opens on the current player (the bag
   // button on the play bar, or I), or on whoever you tap in the scoreboard.
-  inv = { player: 0, tab: 'obolcraft' };
-  $('#hudInv').addEventListener('click', () => openInventory());
+  inv = { player: 0, tab: 'skills', view: 'ready' };
+  try { inv.view = localStorage.getItem('minty-pickle.skillsView') === 'items' ? 'items' : 'ready'; } catch { /* ignore */ }
   $('#invClose').addEventListener('click', closeInventory);
-  $('#inventory').addEventListener('click', (e) => { if (e.target === $('#inventory')) closeInventory(); });
+
+  // --- The dock: Team, Skills, Case, More (sheets.js keeps one open at a time). ---------
+  // A dock button opens its sheet, or closes it if it's the one open.
+  const openers = { teamSheet: () => openTeam(), inventory: () => openInventory(), casebook: () => openCasebook(), moreSheet: () => showSheet('moreSheet') };
+  const closers = { teamSheet: () => hideSheet('teamSheet'), inventory: closeInventory, casebook: closeCasebook, moreSheet: () => hideSheet('moreSheet') };
+  document.querySelectorAll('.dock-btn[data-sheet]').forEach((b) => b.addEventListener('click', () => {
+    const id = b.dataset.sheet;
+    if (sheetOpen(id)) closers[id](); else openers[id]();
+  }));
+  for (const id of Object.keys(closers)) {
+    $(`#${id}`).querySelector('[data-close]')?.addEventListener('click', closers[id]);
+    dragToClose(id, closers[id]);
+  }
+  // Sheets and the things above the dock sit on its measured height.
+  // Phones held sideways get the dock as a strip down the right edge (CSS:
+  // .dock-rail), so the board keeps its height.
+  const rail = matchMedia('(orientation: landscape) and (max-height: 540px)');
+  const measure = () => {
+    const d = $('#playHud'), root = document.documentElement.style;
+    if (!d.offsetHeight) return;
+    root.setProperty('--dock-h', rail.matches ? '0px' : `${d.offsetHeight}px`);
+    root.setProperty('--dock-w', rail.matches ? `${d.offsetWidth}px` : '0px');
+  };
+  new ResizeObserver(measure).observe($('#playHud'));
+  rail.addEventListener('change', measure);
+  // Team: tap someone to see their injuries in full (and their skills).
+  teamUI = { player: null };
   $('#playBoard').addEventListener('click', (e) => {
     const row = e.target instanceof Element && e.target.closest('[data-inv]');
-    if (row) openInventory(Number(row.dataset.inv));
+    if (row) { teamUI.player = Number(row.dataset.inv); renderTeam(); }
   });
 }
 
@@ -307,9 +333,9 @@ export function openCasebook(tab) {
   if (tab) caseUI.tab = tab;
   $('#caseBadge').hidden = true;
   renderCasebook();
-  $('#casebook').hidden = false;
+  showSheet('casebook');
 }
-export function closeCasebook() { $('#casebook').hidden = true; }
+export function closeCasebook() { hideSheet('casebook'); }
 
 export function renderCasebook() {
   document.querySelectorAll('[data-ctab]').forEach((b) => b.classList.toggle('on', b.dataset.ctab === caseUI.tab));
@@ -486,8 +512,10 @@ export function obolcraftHTML(pl) {
   const canAct = mine && ['idle', 'slotting', 'choosing', 'asking'].includes(s.phase); // before rolling or at any stop
   const summary = `<div class="inv-summary">${OBOL_TYPES.map((t) =>
     `<span class="obol-count${counts[t] ? '' : ' zero'}">${obolHTML(t)}${OBOLS[t].label} ${counts[t]}</span>`).join('')}</div>`;
-  const recipes = RECIPES.map((r) => {
-    const why = craftBlocked(play.session.state ?? s, pl, r); // the game state itself: it holds the decks
+  // Recipes you can craft now come first; the rest say what's missing.
+  const whyOf = (r) => craftBlocked(play.session.state ?? s, pl, r); // the game state itself: it holds the decks
+  const recipes = [...RECIPES].sort((x, y) => (whyOf(x) ? 1 : 0) - (whyOf(y) ? 1 : 0)).map((r) => {
+    const why = whyOf(r);
     // Which named colours are short, to dim them.
     const have = { ...counts };
     const cost = r.cost.map((c) => {
@@ -544,83 +572,166 @@ export function wireObolcraft(body, pl) {
     play.craft(craftUI.recipe, [...craftUI.pay], craftUI.target ?? undefined);
   });
 }
+// The Skills sheet: a player's Equipment skills and their Obolcraft, in tabs.
+const SKILL_TABS = { skills: 'Skills', obolcraft: 'Obolcraft' };
 export function renderInventory() {
   const s = play.state;
   const pl = s.players[inv.player] ?? s.players[0];
   if (!pl) return;
   const ms = pl.mindset ? eventCard(pl.mindset) : null;
-  $('#invTitle').textContent = `${pl.name}'s inventory${ms ? ` · ${ms.name}` : ''}`;
+  $('#invTitle').textContent = `${s.players.length > 1 ? `${pl.name}’s skills` : 'Skills'}${ms ? ` · ${ms.name}` : ''}`;
   $('#invTitle').title = ms ? `Mindset: ${ms.text}` : '';
   const host = $('#invPlayers');
+  host.hidden = s.players.length < 2;
   host.innerHTML = s.players.map((p, k) =>
     `<button type="button" role="tab" data-k="${k}" class="${k === inv.player ? 'on' : ''}" aria-selected="${k === inv.player}">` +
     `<span class="chip" style="background:${p.colour}"></span>${p.name}</button>`).join('');
-  host.querySelectorAll('button').forEach((b) => { b.onclick = () => { inv.player = Number(b.dataset.k); renderInventory(); }; });
+  host.querySelectorAll('button').forEach((b) => { b.onclick = () => { inv.player = Number(b.dataset.k); useUI.item = null; renderInventory(); }; });
+  if (!SKILL_TABS[inv.tab]) inv.tab = 'skills';
+  const ready = skillStatus(play.session.state, play.board, play.session.state.players[pl.seat]).filter((e) => e.status === 'now').length;
   const tabs = $('#invTabs');
-  tabs.innerHTML = Object.entries(INVENTORY_TABS).map(([id, t]) =>
+  tabs.innerHTML = Object.entries(SKILL_TABS).map(([id, label]) =>
     `<button type="button" role="tab" data-tab="${id}" class="${id === inv.tab ? 'on' : ''}" aria-selected="${id === inv.tab}">` +
-    `${t.label}<span class="n">${id === 'injuries' ? Object.values(pl.injuries ?? {}).reduce((a, b) => a + b, 0) : pl.inventory[id].length}</span></button>`).join('');
-  tabs.querySelectorAll('button').forEach((b) => { b.onclick = () => { inv.tab = b.dataset.tab; renderInventory(); }; });
-  const body = $('#invBody');
-  if (inv.tab === 'injuries') {
-    const inj = pl.injuries ?? { P: 0, M: 0, S: 0 };
-    body.innerHTML = `<div class="inj-list">${['P', 'M', 'S'].map((t) => `<div class="inj-track" style="--trk-soft:${ATTACK_TYPES[t].soft}"><b class="trk-head">${dmgIcon(t)} ${INJURY_TRACKS[t].label}</b>` +
-      INJURY_TRACKS[t].tiers.map((tier, k) => `<div class="inj-tier${inj[t] > k ? ' has' : ''}"><span class="sw" style="background:${ATTACK_TYPES[t].colour};opacity:${[0.5, 0.75, 1][k]}"></span>` +
-        `<span><b style="display:inline">${esc(tier.name)}</b> · ${esc(tier.text)}</span></div>`).join('') + '</div>').join('')}</div>` +
-      `<p class="inv-empty" style="padding:12px 4px">${pl.dead ? `${esc(pl.name)} is dead.` : 'Tiers add up; each track is separate. Tier 3 on any track is Death’s Door.'}</p>`;
-    return;
-  }
-  const items = pl.inventory[inv.tab];
-  if (!items.length && inv.tab !== 'obolcraft') {
-    body.innerHTML = `<p class="inv-empty">${INVENTORY_TABS[inv.tab].empty}</p>`;
-    return;
-  }
+    `${label}<span class="n${id === 'skills' && ready ? ' go' : ''}">${id === 'skills' ? (ready ? `${ready} ready` : pl.inventory.equipment.length) : pl.inventory.obolcraft.length}</span></button>`).join('');
+  tabs.querySelectorAll('button').forEach((b) => { b.onclick = () => { inv.tab = b.dataset.tab; useUI.item = null; renderInventory(); }; });
+  renderInventoryTab(s, pl, $('#invBody'));
+}
+function renderInventoryTab(s, pl, body) {
+  const items = pl.inventory.equipment;
   if (inv.tab === 'obolcraft') {
     body.innerHTML = obolcraftHTML(pl);
     wireObolcraft(body, pl);
     return;
-  } else {
-    const mine = inv.player === s.cur && ['idle', 'slotting', 'choosing', 'asking'].includes(s.phase); // before rolling or at any stop
-    if (useUI.item !== null && mine && items[useUI.item]) { renderUseSheet(body, pl, items); return; }
-    useUI.item = null;
-    body.innerHTML = `<div class="eq-list">${items.map((e, i) => {
+  }
+  const mine = inv.player === s.cur && ['idle', 'slotting', 'choosing', 'asking'].includes(s.phase); // before rolling or at any stop
+  if (useUI.item !== null && mine && items[useUI.item]) { renderUseSheet(body, pl, items); return; }
+  useUI.item = null;
+  if (!items.length) { body.innerHTML = `<p class="inv-empty">${INVENTORY_TABS.equipment.empty}</p>`; return; }
+  const viewSeg = `<div class="seg skill-view" role="group" aria-label="Order">` +
+    `<button type="button" data-view="ready" class="${inv.view === 'ready' ? 'on' : ''}">Ready first</button>` +
+    `<button type="button" data-view="items" class="${inv.view === 'items' ? 'on' : ''}">By item</button></div>`;
+  if (inv.view === 'ready') body.innerHTML = viewSeg + readySkillsHTML(pl);
+  else {
+    const status = statusByKey(pl);
+    body.innerHTML = viewSeg + `<div class="eq-list">${items.map((e, i) => {
       const card = EQUIPMENT_BY_ID[e.id];
-      return `<div class="eq-card"><b>${esc(e.label ?? card?.name ?? 'Item')}</b>${card ? abilitiesHTML(card, mine ? { item: e, i } : null) : ''}` +
+      return `<div class="eq-card"><b>${esc(e.label ?? card?.name ?? 'Item')}</b>${card ? abilitiesHTML(card, mine ? { item: e, i, status } : null) : ''}` +
         `${e.from ? `<small class="eq-from">From ${esc(e.from)}</small>` : ''}</div>`;
     }).join('')}</div>` + (mine ? discardHTML(pl) : '') + (mine ? '' : `<p class="inv-empty" style="padding:8px 4px">${inv.player === s.cur ? 'Equipment can be used during your turn: roll first if a skill needs dice.' : 'Only usable on this investigator’s own turn.'}</p>`);
-    body.querySelectorAll('[data-discard]').forEach((b) => { b.onclick = () => {
-      if (!b.dataset.confirm) { b.dataset.confirm = '1'; b.textContent = 'Tap again to discard'; return; }
-      const o = JSON.parse(b.dataset.discard);
-      const r = play.session.dispatch({ type: 'discard', ...o, seat: s.cur });
-      if (r.ok) closeInventory(); else { b.textContent = r.error; }
-    }; });
-    body.querySelectorAll('[data-use]').forEach((b) => { b.onclick = () => { const [i, k] = b.dataset.use.split(':').map(Number); Object.assign(useUI, { item: i, ability: k, dice: [], target: null, raise: [], error: '' }); renderInventory(); }; });
   }
+  body.querySelectorAll('[data-view]').forEach((b) => { b.onclick = () => {
+    inv.view = b.dataset.view;
+    try { localStorage.setItem('minty-pickle.skillsView', inv.view); } catch { /* ignore */ }
+    renderInventory();
+  }; });
+  body.querySelectorAll('[data-discard]').forEach((b) => { b.onclick = () => {
+    if (!b.dataset.confirm) { b.dataset.confirm = '1'; b.textContent = 'Tap again to discard'; return; }
+    const o = JSON.parse(b.dataset.discard);
+    const r = play.session.dispatch({ type: 'discard', ...o, seat: s.cur });
+    if (r.ok) closeInventory(); else { b.textContent = r.error; }
+  }; });
+  // Use: open the use sheet with the dice and target that work already picked.
+  body.querySelectorAll('[data-use]').forEach((b) => { b.onclick = () => {
+    const [i, k] = b.dataset.use.split(':').map(Number);
+    const st = statusByKey(pl).get(`${i}:${k}`);
+    Object.assign(useUI, { item: i, ability: k, dice: [...(st?.action?.dice ?? [])], target: st?.action?.target ?? null, raise: [], error: '' });
+    renderInventory();
+  }; });
 }
-export function openInventory(k = play.state.cur) {
+// Each skill's status (src/game/skills.js), by "item:ability".
+function statusByKey(pl) {
+  const st = play.session.state;
+  return new Map(skillStatus(st, play.board, st.players[pl.seat]).map((e) => [`${e.item}:${e.ability}`, e]));
+}
+// Ready first: Use now, Almost, Not now, Automatic.
+const GROUPS = [
+  ['now', 'Use now'],
+  ['almost', 'Almost'],
+  ['not', 'Not now'],
+  ['auto', 'Automatic'],
+];
+function readySkillsHTML(pl) {
+  const st = play.session.state;
+  const list = skillStatus(st, play.board, st.players[pl.seat]);
+  return GROUPS.map(([g, label]) => {
+    const rows = list.filter((e) => e.status === g);
+    if (!rows.length) return '';
+    return `<div class="sk-group sk-${g}"><b class="sk-head">${label}<span>${rows.length}</span></b><ul class="eq-abilities sk-list">${rows.map((e) => {
+      const a = e.card.abilities[e.ability];
+      const dice = e.action?.dice?.length ? ` · ${e.action.dice.map((n) => st.pool[n].v).join(' + ')}` : '';
+      return abilityRow(a, `<small class="sk-from">${esc(e.card.name)}${g === 'now' ? dice : ''}</small>`,
+        g === 'now' ? `<button type="button" class="eq-use go" data-use="${e.item}:${e.ability}">Use</button>` : '',
+        e.why);
+    }).join('')}</ul></div>`;
+  }).join('') || `<p class="inv-empty">${INVENTORY_TABS.equipment.empty}</p>`;
+}
+export function openInventory(k = play.state.cur, tab = null) {
+  if (k !== inv.player) useUI.item = null;
   inv.player = k;
+  if (tab) inv.tab = tab;
   renderInventory();
-  $('#inventory').hidden = false;
+  showSheet('inventory');
 }
-export function closeInventory() { $('#inventory').hidden = true; }
+// The dock's Skills badge: how many skills the current player can use right now.
+export function renderSkillBadge() {
+  const st = play.session.state;
+  const pl = st?.players?.[st.cur];
+  const n = pl && play.state.phase !== 'nostart' ? skillStatus(st, play.board, pl).filter((e) => e.status === 'now').length : 0;
+  const b = $('#skillBadge');
+  b.hidden = !n;
+  b.textContent = n ? String(n) : '';
+  $('#hudInv').setAttribute('aria-label', n ? `Skills: ${n} ready to use` : 'Skills');
+}
+export function closeInventory() { useUI.item = null; hideSheet('inventory'); }
+
+// --- Team: everyone at a glance (playView renders the scoreboard and log into
+// the sheet), and one player's injuries in full.
+export function openTeam() {
+  teamUI.player = play.state.cur;
+  renderTeam();
+  showSheet('teamSheet');
+}
+export function renderTeam() {
+  const s = play.state;
+  const k = teamUI.player ?? s.cur;
+  const pl = s.players[k];
+  document.querySelectorAll('#playBoard [data-inv]').forEach((r) => r.classList.toggle('picked', Number(r.dataset.inv) === k));
+  if (!pl) { $('#teamDetail').innerHTML = ''; return; }
+  const inj = pl.injuries ?? { P: 0, M: 0, S: 0 };
+  $('#teamDetail').innerHTML = `<div class="team-who"><span class="chip" style="background:${pl.colour}"></span><b>${esc(pl.name)}</b>` +
+    `<button type="button" class="team-skills">Skills ›</button></div>` +
+    `<div class="inj-list">${['P', 'M', 'S'].map((t) => `<div class="inj-track" style="--trk-soft:${ATTACK_TYPES[t].soft}"><b class="trk-head">${dmgIcon(t)} ${INJURY_TRACKS[t].label}</b>` +
+      INJURY_TRACKS[t].tiers.map((tier, n) => `<div class="inj-tier${inj[t] > n ? ' has' : ''}"><span class="sw" style="background:${ATTACK_TYPES[t].colour};opacity:${[0.5, 0.75, 1][n]}"></span>` +
+        `<span><b style="display:inline">${esc(tier.name)}</b> · ${esc(tier.text)}</span></div>`).join('') + '</div>').join('')}</div>` +
+    `<p class="inv-empty" style="padding:8px 4px">${pl.dead ? `${esc(pl.name)} is dead.` : 'Tiers add up; each track is separate. Tier 3 on any track is Death’s Door.'}</p>`;
+  $('#teamDetail').querySelector('.team-skills').onclick = () => openInventory(k, 'skills');
+}
 
 // An Equipment card's abilities, as printed: range, damage kind, name, cost
 // [requirement], effect, and its 1️⃣ / 🔗 limit.
 const RANGE_LABEL = { close: 'Close', mid: 'Mid', long: 'Long', self: 'Self', all: 'All' };
 // With `use` ({ item, i }): a Use button per ability that is ready.
+// One printed skill as a row; `extra` (where it's from), a Use button, a reason.
+function abilityRow(a, extra = '', button = '', why = '') {
+  const kind = a.kind ? DAMAGE_KINDS[a.kind] : null;
+  const cost = a.obols ? `${a.obols} ◉` : '🎲'.repeat(a.dice);
+  const limit = a.limit === 'once' ? ' <span title="Once, until refreshed">1️⃣</span>' : a.limit === 'breaks' ? ' <span title="Breaks: the card is discarded after this skill">🔗</span>' : '';
+  const manual = a.fx?.manual ? ' <span class="eq-manual" title="Played at the table for now">✋</span>' : '';
+  return `<li><span class="eq-range">${RANGE_LABEL[a.range] ?? '—'}</span>` +
+    `<span class="eq-kind" title="${kind ? esc(kind.label) : 'Untyped'}">${kind ? kind.icon : '◯'}</span>` +
+    `<span><b>${esc(a.name)}</b>${cost || a.req ? ` · ${cost}${a.req ? ` [${esc(a.req)}]` : ''}` : ''} ${esc(a.text)}${limit}${manual}${extra}` +
+    `${why ? `<small class="sk-why">${esc(why)}</small>` : ''}</span>${button}</li>`;
+}
+// With `use` ({ item, i, status }): a Use button per skill, lit when it can be
+// used now; otherwise the reason it can't, under the skill.
 export function abilitiesHTML(card, use = null) {
-  return `<ul class="eq-abilities">${card.abilities.map((a) => {
-    const kind = a.kind ? DAMAGE_KINDS[a.kind] : null;
-    const cost = a.obols ? `${a.obols} ◉` : '🎲'.repeat(a.dice);
-    const limit = a.limit === 'once' ? ' <span title="Once, until refreshed">1️⃣</span>' : a.limit === 'breaks' ? ' <span title="Breaks: the card is discarded after this skill">🔗</span>' : '';
-    const manual = a.fx?.manual ? ' <span class="eq-manual" title="Played at the table for now">✋</span>' : '';
+  return `<ul class="eq-abilities">${card.abilities.map((a, k) => {
     // Lunge is always on; Sacrifice comes up by itself when someone would die.
     const auto = a.fx?.passive ? 'Always on' : a.fx?.sacrifice ? 'When needed' : '';
-    return `<li><span class="eq-range">${RANGE_LABEL[a.range] ?? '—'}</span>` +
-      `<span class="eq-kind" title="${kind ? esc(kind.label) : 'Untyped'}">${kind ? kind.icon : '◯'}</span>` +
-      `<span><b>${esc(a.name)}</b>${cost || a.req ? ` · ${cost}${a.req ? ` [${esc(a.req)}]` : ''}` : ''} ${esc(a.text)}${limit}${manual}</span>` +
-      (use && auto ? `<span class="eq-auto">${auto}</span>` : '') +
-      (use && !auto ? `<button type="button" class="eq-use" data-use="${use.i}:${card.abilities.indexOf(a)}" ${abilityReady(use.item, card.abilities.indexOf(a)) ? '' : 'disabled title="Used up until refreshed"'}>Use</button>` : '') + '</li>';
+    const st = use?.status?.get(`${use.i}:${k}`);
+    const button = !use ? '' : auto ? `<span class="eq-auto">${auto}</span>`
+      : `<button type="button" class="eq-use${st?.status === 'now' ? ' go' : ''}" data-use="${use.i}:${k}" ${abilityReady(use.item, k) ? '' : 'disabled title="Used up until refreshed"'}>Use</button>`;
+    return abilityRow(a, '', button, use && !auto && st && st.status !== 'now' ? st.why : '');
   }).join('')}</ul>`;
 }
 
@@ -643,7 +754,7 @@ function renderUseSheet(body, pl, items) {
   const tpay = (t) => (t.monster ? { monster: t.monster } : t.edge ? { edge: t.edge } : { seat: t.seat });
   const dieChip = (d, on, attr) => `<button type="button" class="use-die${on ? ' on' : ''}" ${attr}="${d.n}">${d.v}<small>${d.kind === 'white' ? 'white' : ''}</small></button>`;
   body.innerHTML = `<div class="use-sheet">
-    <button type="button" class="screen-back use-back">‹ Equipment</button>
+    <button type="button" class="screen-back use-back">‹ Skills</button>
     <b class="use-title">${esc(card.name)} · ${esc(a.name)}</b>
     ${abilitiesHTML({ abilities: [a] })}
     ${a.dice ? `<p class="use-label">Slot ${a.dice === 1 ? 'one die' : `${a.dice} dice`}${a.req ? ` · total [${esc(a.req)}]${mon && /2x/.test(a.req) ? ` = at least ${2 * actionRoll(mon)}` : ''}` : ''}</p>

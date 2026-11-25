@@ -81,15 +81,8 @@
                 <p class="play-status" id="playStatus"></p>
               </div>
             </div>
-            <p class="play-stats" id="playStats"></p>
-            <div class="play-board" id="playBoard"></div>
-            <ol class="play-log" id="playLog"></ol>
             <div class="file-row">
               <button id="playReset" class="editor-only">Restart</button>
-              <label class="check play-follow"><input type="checkbox" id="playFollow" checked /> Follow camera</label>
-            </div>
-            <div class="file-row">
-              <label class="check play-follow" title="On streets, the start space and bridges, only move where the road goes (or through a door)"><input type="checkbox" id="playStreets" checked /> Follow streets</label>
             </div>
             <p class="note">Players take turns. Each starts on the Start space and moves one cell per pip. It keeps going while there's one way forward and stops at forks: tap or click a round arrow button (or use the arrow keys). With Follow streets on, roads only go where they lead. Walls, windows, locked and one-way doors and blocked cells stop it; walking over a Key unlocks its building.</p>
           </div>
@@ -253,7 +246,7 @@
       <p class="card-pop-hint" id="cardPopHint">Tap to continue</p>
     </div>
     <!-- Casebook and Field Guide. -->
-    <div id="casebook" class="dialog" hidden role="dialog" aria-modal="true" aria-labelledby="caseTitle">
+    <div id="casebook" class="dialog sheet" hidden role="dialog" aria-modal="true" aria-labelledby="caseTitle">
       <div class="dialog-card journal">
         <div class="inv-head">
           <h3 id="caseTitle" class="journal-title">Casebook</h3>
@@ -298,28 +291,74 @@
     <div id="gameClock" class="game-clock" hidden aria-live="polite"></div>
     <!-- Play: switch between Quick and Tactical movement mid-game. -->
     <button id="moveModeBtn" class="move-mode" type="button" hidden title="Quick: run on to the next fork or marker. Tactical: choose every step"></button>
-    <!-- Play demo: floating controls (work with the panel folded away). -->
-    <div id="playHud" class="play-hud" hidden>
-      <div class="die die-sm" id="hudDie" aria-label="Black die"></div>
-      <p class="hud-status" id="hudStatus"></p>
-      <button id="hudCase" class="hud-inv" type="button" aria-label="Casebook and Field Guide" title="Casebook and Field Guide (C)">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h10.5a3 3 0 0 1 3 3V20H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h10.5"/><circle cx="11.5" cy="8.6" r="2"/><path d="M13 10.1l1.8 1.8"/></svg>
-        <span class="hud-badge" id="caseBadge" hidden></span>
-      </button>
-      <button id="hudInv" class="hud-inv" type="button" aria-label="Inventory" title="Inventory (I)">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7V5.5a4 4 0 0 1 8 0V7"/><rect x="4.5" y="7" width="15" height="13.5" rx="3"/><path d="M8.5 13h7M10 13v2.5"/></svg>
-      </button>
-      <button id="hudRoll" class="hud-roll">Roll</button>
+    <!-- Play: the dock along the bottom. A status line, then four menus and the
+         big action button (src/play/dock.js). Each menu opens as a sheet over
+         the board, just above the dock; one at a time. -->
+    <div id="playHud" class="play-hud dock" hidden>
+      <div class="dock-status"><div class="die die-sm" id="hudDie" aria-label="Black die"></div><p class="hud-status" id="hudStatus"></p></div>
+      <div class="dock-row">
+        <button id="hudTeam" class="dock-btn" type="button" data-sheet="teamSheet" title="Team: investigators, injuries, the log">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19.5c.6-3.4 2.8-5.3 5.5-5.3s4.9 1.9 5.5 5.3"/><circle cx="16.8" cy="9" r="2.5"/><path d="M15.6 14.4c2.6-.4 4.4 1.4 4.9 4.6"/></svg>
+          <span>Team</span>
+        </button>
+        <button id="hudInv" class="dock-btn" type="button" data-sheet="inventory" title="Skills and Obolcraft (I)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2.8 5.5 13.2h5.6L10 21.2l8.5-11h-5.8z"/></svg>
+          <span>Skills</span>
+          <span class="hud-badge n" id="skillBadge" hidden></span>
+        </button>
+        <button id="hudCase" class="dock-btn" type="button" data-sheet="casebook" title="Casebook and Field Guide (C)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h10.5a3 3 0 0 1 3 3V20H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h10.5"/><circle cx="11.5" cy="8.6" r="2"/><path d="M13 10.1l1.8 1.8"/></svg>
+          <span>Case</span>
+          <span class="hud-badge" id="caseBadge" hidden></span>
+        </button>
+        <button id="hudMore" class="dock-btn" type="button" data-sheet="moreSheet" title="More: view, movement, settings, save and quit (Esc)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18.5" cy="12" r="1.6"/></svg>
+          <span>More</span>
+        </button>
+        <button id="hudRoll" class="hud-roll">Roll</button>
+      </div>
     </div>
-    <!-- Inventory: each player's own, with tabs (Equipment, Obolcraft). -->
-    <div id="inventory" class="dialog" hidden role="dialog" aria-modal="true" aria-labelledby="invTitle">
-      <div class="dialog-card inv-card">
-        <div class="inv-head">
-          <h3 id="invTitle">Inventory</h3>
+    <!-- Team: everyone's place, dice, injuries and Obols; one player's injuries in full; the log. -->
+    <div id="teamSheet" class="dialog sheet" hidden role="dialog" aria-labelledby="teamTitle">
+      <div class="dialog-card sheet-card">
+        <div class="inv-head sheet-head"><h3 id="teamTitle">Team</h3><button type="button" class="inv-close" data-close aria-label="Close">✕</button></div>
+        <div class="sheet-body">
+          <p class="play-stats" id="playStats"></p>
+          <div class="play-board" id="playBoard"></div>
+          <div class="team-detail" id="teamDetail"></div>
+          <b class="sheet-sub">Log</b>
+          <ol class="play-log" id="playLog"></ol>
+        </div>
+      </div>
+    </div>
+    <!-- More: view, movement, camera, settings, save / load / quit. -->
+    <div id="moreSheet" class="dialog sheet" hidden role="dialog" aria-labelledby="moreTitle">
+      <div class="dialog-card sheet-card">
+        <div class="inv-head sheet-head"><h3 id="moreTitle">More</h3><button type="button" class="inv-close" data-close aria-label="Close">✕</button></div>
+        <div class="sheet-body more-body">
+          <span class="vm-label">Movement</span>
+          <div class="vm-grid" id="moreMove">
+            <button type="button" data-movemode="quick">Quick</button>
+            <button type="button" data-movemode="tactical">Tactical</button>
+          </div>
+          <div class="more-checks">
+            <label class="check play-follow"><input type="checkbox" id="playFollow" checked /> Follow camera</label>
+            <label class="check play-follow" title="On streets, the start space and bridges, only move where the road goes (or through a door)"><input type="checkbox" id="playStreets" checked /> Follow streets</label>
+          </div>
+          <div id="moreView"></div>
+          <div class="more-menu" id="moreMenu"></div>
+        </div>
+      </div>
+    </div>
+    <!-- Skills: each player's Equipment skills (Ready first, or By item) and Obolcraft, in tabs. -->
+    <div id="inventory" class="dialog sheet" hidden role="dialog" aria-labelledby="invTitle">
+      <div class="dialog-card inv-card sheet-card">
+        <div class="inv-head sheet-head">
+          <h3 id="invTitle">Skills</h3>
           <button id="invClose" type="button" class="inv-close" aria-label="Close">✕</button>
         </div>
         <div class="inv-players" id="invPlayers" role="tablist" aria-label="Player"></div>
-        <div class="inv-tabs" id="invTabs" role="tablist" aria-label="Inventory tab"></div>
+        <div class="inv-tabs" id="invTabs" role="tablist" aria-label="Skills or Obolcraft"></div>
         <div class="inv-body" id="invBody" role="tabpanel"></div>
       </div>
     </div>
