@@ -462,6 +462,95 @@ function buildingKinds() {
     pharmCounter: merge(box(2.0, 1.0, 0.6, cream), box(2.1, 0.05, 0.66, '#6a8a7a', 0, 0, 1.0), box(0.5, 0.15, 0.05, '#2aa05a', 0, -0.2, 1.8), box(0.15, 0.5, 0.05, '#2aa05a', 0, -0.2, 1.62)),
     // Market: angled produce bins.
     produce: merge(box(1.8, 0.7, 0.9, '#7a5a3a'), ...[[-0.6, '#c8402a'], [0, '#e0a030'], [0.6, '#5a9a3a']].map(([x, c]) => ball(0.32, c, x, 0, 0.75, 0.45))),
+    ...clutterKinds(),
+  };
+}
+
+// --- Clutter: small things left where they fell -----------------------------------
+// For walkable cells: each fits in a cell's corner (within ~0.8 m of its
+// centre), clear of where people stand and walk. Built upright, then laid down.
+const lay = (geo, rx, rz, lift) => geo.rotateX(rx).rotateZ(rz).translate(0, m(lift), 0);
+function clutterKinds() {
+  const oak = '#5a3a24', darkOak = '#3e271a', steel = '#9aa0a4', paper = '#d8d2c0';
+  const chair = () => merge(box(0.44, 0.05, 0.44, oak, 0, 0, 0.45), box(0.44, 0.5, 0.05, oak, 0, -0.2, 0.47),
+    ...[[-0.19, -0.19], [0.19, -0.19], [-0.19, 0.19], [0.19, 0.19]].map(([x, z]) => box(0.04, 0.45, 0.04, darkOak, x, z)));
+  const stone = '#8b908c';
+  return {
+    // A chair knocked over on its back, legs in the air; a bar stool on its side.
+    chairTipped: lay(chair(), -Math.PI / 2, 0, 0.22),
+    // An armchair on its back; a side table on its side; a wardrobe fallen flat, doors split.
+    armchairTipped: lay(merge(box(0.9, 0.45, 0.9, '#6b4f5c'), box(0.9, 0.5, 0.2, '#6b4f5c', 0, -0.35, 0.45)), -Math.PI / 2, 0, 0.45),
+    tableTipped: lay(merge(box(0.9, 0.05, 0.6, '#6e4a2e', 0, 0, 0.7), ...[[-0.4, -0.25], [0.4, -0.25], [-0.4, 0.25], [0.4, 0.25]].map(([x, z]) => box(0.05, 0.7, 0.05, '#4e321e', x, z))), 0, Math.PI / 2, 0.3),
+    cabinetFallen: merge(box(1.4, 0.6, 2.0, '#5a3a24', 0, 0, 0), box(0.68, 0.03, 1.8, '#4a2e1c', -0.34, 0.12, 0.6), part(new THREE.BoxGeometry(m(0.66), m(0.03), m(1.7)).rotateY(0.4).translate(m(0.6), m(0.02), m(0.5)), '#4a2e1c')),
+    stoolTipped: lay(merge(cyl(0.2, 0.06, '#7a2a2a', 0, 0, 0.72), cyl(0.03, 0.72, steel), cyl(0.2, 0.03, steel)), 0, Math.PI / 2, 0.2),
+    // A slumped heap of books, one splayed open.
+    bookPile: merge(...[0, 1, 2, 3, 4].map((k) => part(new THREE.BoxGeometry(m(0.32), m(0.06), m(0.24)).rotateY(k * 0.7).translate(m((k % 3 - 1) * 0.12), m(0.03 + (k < 3 ? 0 : 0.06)), m((k % 2) * 0.1 - 0.05)), BOOKS[k])),
+      part(new THREE.BoxGeometry(m(0.5), m(0.02), m(0.3)).rotateY(2.2).translate(m(0.3), m(0.02), m(0.25)), paper)),
+    // Loose pages and letters across the floor.
+    papers: merge(...[[-0.3, -0.1, 0.3], [0.1, 0.2, 1.4], [0.35, -0.25, 2.2], [-0.05, 0.35, 0.8], [-0.35, 0.3, 2.9]].map(([x, z, r]) =>
+      part(new THREE.BoxGeometry(m(0.22), m(0.005), m(0.3)).rotateY(r).translate(m(x), m(0.004), m(z)), paper))),
+    // Bottles: one standing, one rolled over, green glass shards.
+    bottles: merge(cyl(0.04, 0.3, '#3a6a3a', -0.15, 0.1), lay(cyl(0.04, 0.3, '#5a3a1a', 0, 0), 0, Math.PI / 2, 0.04),
+      ...[[0.25, -0.1], [0.32, 0.05], [0.18, 0.15]].map(([x, z], k) => part(new THREE.TetrahedronGeometry(m(0.04)).rotateY(k).translate(m(x), m(0.02), m(z)), '#6a9a6a'))),
+    // A standing lamp fallen across the floor, its shade rolled off.
+    lampToppled: merge(cyl(0.16, 0.04, '#2a2a2a', -0.6), part(new THREE.CylinderGeometry(m(0.015), m(0.015), m(1.4), 6).rotateZ(Math.PI / 2).translate(m(0.1), m(0.05), 0), '#b08a3a'),
+      part(new THREE.CylinderGeometry(m(0.12), m(0.22), m(0.28), 10, 1, true).rotateZ(1.2).translate(m(0.85), m(0.16), m(0.1)), '#d8c890')),
+    // An old porcelain doll sitting against nothing, head tilted.
+    doll: merge(box(0.18, 0.2, 0.12, '#e8dcd0', 0, 0, 0.0), box(0.2, 0.06, 0.24, '#6a2a3a', 0, 0.06, 0), ball(0.09, '#efe6dc', 0.03, 0, 0.3),
+      box(0.04, 0.04, 0.02, '#1a1a1a', 0.0, 0.08, 0.32), box(0.16, 0.05, 0.05, '#4a2a1a', 0.03, -0.02, 0.38)),
+    // Candle stubs burned down in a pool of wax.
+    candles: merge(cyl(0.22, 0.01, '#e8e0c8'), cyl(0.04, 0.16, '#f0ead8', -0.08, 0.02), cyl(0.04, 0.09, '#f0ead8', 0.07, -0.05), lay(cyl(0.035, 0.2, '#f0ead8', 0, 0), 0, Math.PI / 2, 0.035)),
+    // A dark stain soaked into the floor.
+    stain: merge(part(new THREE.CircleGeometry(m(0.55), 9).rotateX(-Math.PI / 2).scale(1.3, 1, 0.8).translate(0, m(0.006), 0), '#2a0e0c'),
+      part(new THREE.CircleGeometry(m(0.18), 7).rotateX(-Math.PI / 2).translate(m(0.6), m(0.007), m(0.3)), '#2a0e0c')),
+    // A suitcase dropped open, clothes spilling out.
+    suitcase: merge(box(0.7, 0.12, 0.45, '#5a3a2a'), lay(box(0.7, 0.45, 0.06, '#5a3a2a', 0, 0, 0), -1.9, 0, 0.18).translate(0, 0, m(-0.28)),
+      box(0.5, 0.08, 0.3, '#8a8aa0', 0.05, 0.02, 0.1), box(0.3, 0.04, 0.3, '#a06a6a', 0.45, 0.2)),
+    // A picture frame face down, glass shards round it.
+    frameDown: merge(box(0.5, 0.04, 0.4, darkOak), ...[[0.35, 0.1], [0.3, -0.2], [-0.35, 0.2]].map(([x, z], k) => part(new THREE.TetrahedronGeometry(m(0.05)).rotateY(k * 2).translate(m(x), m(0.02), m(z)), '#b8c8cc'))),
+    // A stack of cardboard boxes, the top one slid off and split.
+    boxes: merge(box(0.6, 0.45, 0.5, '#9a7a4a'), box(0.5, 0.4, 0.45, '#8a6a3e', 0.05, 0.02, 0.45),
+      part(new THREE.BoxGeometry(m(0.45), m(0.35), m(0.4)).rotateZ(0.5).translate(m(0.55), m(0.2), m(0.1)), '#a6865a')),
+    // A tube television face down, its back cracked open.
+    tvBroken: merge(lay(merge(box(0.6, 0.5, 0.5, '#3a3a36'), box(0.5, 0.4, 0.02, '#1a1e22', 0, 0.26, 0.05)), -1.2, 0.2, 0.25)),
+    // A child's shoe on its side.
+    shoe: lay(merge(box(0.12, 0.08, 0.26, '#7a2a2a'), box(0.1, 0.06, 0.1, '#7a2a2a', 0, -0.07, 0.08)), 0, Math.PI / 2.4, 0.06),
+    // A florist's bucket on its side, dead flowers spilled brown across the floor.
+    bucketTipped: merge(lay(cyl(0.16, 0.35, '#7a8a8a'), 0, Math.PI / 2, 0.16), ...[[0.3, 0.05], [0.42, -0.1], [0.5, 0.12], [0.36, 0.2]].map(([x, z], k) =>
+      part(new THREE.BoxGeometry(m(0.4), m(0.02), m(0.03)).rotateY(k * 0.6).translate(m(x), m(0.02), m(z)), '#5a4a2a')), ...[[0.55, 0.0], [0.6, 0.18]].map(([x, z]) => ball(0.07, '#6a4a3a', x, z, 0.04, 0.6))),
+    deadFlowers: merge(box(0.3, 0.02, 0.5, paper, 0, 0, 0), ...[[-0.05, -0.15], [0.05, 0], [0, 0.12]].map(([x, z]) => ball(0.08, '#5a3a3a', x, z, 0.06, 0.6)),
+      box(0.04, 0.02, 0.4, '#4a5a2a', 0.02, 0.18, 0.02)),
+    // A pot plant knocked over, soil across the floor.
+    plantTipped: merge(lay(cyl(0.2, 0.36, '#8a4a2a'), 0, Math.PI / 2, 0.2), ball(0.36, '#3a4a2a', 0.5, 0, 0.25, 0.8), part(new THREE.CircleGeometry(m(0.3), 7).rotateX(-Math.PI / 2).translate(m(-0.3), m(0.006), m(0.2)), '#3a2a1e')),
+    // A mannequin fallen face down.
+    mannequinFallen: lay(merge(box(0.42, 0.6, 0.24, '#e6dcc4', 0, 0, 0.9), box(0.36, 0.45, 0.26, '#7a3a52', 0, 0, 0.95), ball(0.11, '#e6dcc4', 0, 0, 1.68), box(0.12, 0.9, 0.12, '#e6dcc4', 0, 0, 0)), Math.PI / 2, 0, 0.12).translate(0, 0, m(-0.7)),
+    // A wheelchair on its side; a drip stand fallen across the floor.
+    wheelchairTipped: lay(merge(
+      part(new THREE.CylinderGeometry(m(0.3), m(0.3), m(0.03), 14).rotateZ(Math.PI / 2).translate(m(-0.29), m(0.3), -m(0.08)), '#1e1f22'),
+      part(new THREE.CylinderGeometry(m(0.3), m(0.3), m(0.03), 14).rotateZ(Math.PI / 2).translate(m(0.29), m(0.3), -m(0.08)), '#1e1f22'),
+      box(0.46, 0.05, 0.44, '#2a2c30', 0, 0.02, 0.48), box(0.46, 0.42, 0.03, '#2a2c30', 0, -0.2, 0.56)), 0, Math.PI / 2, 0.31),
+    ivFallen: merge(part(new THREE.CylinderGeometry(m(0.015), m(0.015), m(1.85), 6).rotateZ(Math.PI / 2).translate(0, m(0.03), 0), '#c4c8c8'),
+      box(0.12, 0.05, 0.2, '#d4e4dc', 0.85, 0.15), cyl(0.2, 0.03, '#9a9e9e', -0.9)),
+    // Market: cans and fruit rolled across the floor.
+    spilled: merge(...[[-0.3, -0.2, '#c8402a'], [0.2, -0.3, '#e0a030'], [0.35, 0.15, '#5a9a3a'], [-0.1, 0.3, '#c8402a'], [0.05, 0.0, '#e0a030']].map(([x, z, c]) => ball(0.06, c, x, z, 0.05)),
+      ...[[-0.35, 0.15], [0.4, -0.05]].map(([x, z]) => lay(cyl(0.05, 0.12, '#b8b8b0', 0, 0), 0, Math.PI / 2, 0.05).translate(m(x), 0, m(z)))),
+    // Camping: a lantern on its side and a coil of rope.
+    lantern: merge(lay(merge(cyl(0.1, 0.05, '#2a3a2a'), cyl(0.08, 0.2, '#c8b878', 0, 0, 0.05), cyl(0.1, 0.05, '#2a3a2a', 0, 0, 0.25)), 0, Math.PI / 2, 0.1),
+      part(new THREE.TorusGeometry(m(0.2), m(0.03), 4, 12).rotateX(Math.PI / 2).translate(m(0.45), m(0.03), m(0.1)), '#a08a5a')),
+    // Planks fallen from boarded windows, a crowbar on top.
+    planks: merge(...[[0, 0.3], [0.08, -0.2], [-0.06, 0.9]].map(([z, r]) => part(new THREE.BoxGeometry(m(1.2), m(0.03), m(0.15)).rotateY(r).translate(0, m(0.02), m(z)), '#7a6a4a')),
+      part(new THREE.BoxGeometry(m(0.7), m(0.03), m(0.03)).rotateY(1.9).translate(m(0.1), m(0.06), m(0.05)), '#3a3a3a')),
+    // Cemetery: a headstone tipped over, a wilted bouquet, a toppled urn,
+    // a lantern left burning out, a dropped shovel by a sunken grave.
+    stoneTipped: merge(part(new THREE.BoxGeometry(m(0.6), m(0.9), m(0.2)).translate(0, m(0.45), 0).rotateX(-1.25).translate(0, m(0.1), 0), stone),
+      part(new THREE.BoxGeometry(m(0.7), m(0.1), m(0.3)).translate(0, m(0.05), m(0.45)), '#6c706c')),
+    bouquet: merge(box(0.06, 0.02, 0.4, '#3a4a2a'), ball(0.08, '#6a3a3a', 0, 0.2, 0.05, 0.6), ball(0.07, '#7a6a5a', 0.06, 0.25, 0.05, 0.6), box(0.1, 0.02, 0.1, '#c8c0b0', 0, -0.05, 0.02)),
+    urnTipped: merge(lay(merge(cyl(0.14, 0.4, stone), cyl(0.18, 0.06, stone, 0, 0, 0.4)), 0, Math.PI / 2, 0.16), ...[[0.4, 0.1], [0.5, -0.05]].map(([x, z]) => ball(0.06, '#4a3a2a', x, z, 0.03, 0.5))),
+    graveLantern: merge(box(0.18, 0.04, 0.18, '#2a2a2a'), box(0.14, 0.22, 0.14, '#c8a060', 0, 0, 0.04), box(0.18, 0.06, 0.18, '#2a2a2a', 0, 0, 0.26)),
+    shovel: merge(part(new THREE.BoxGeometry(m(1.1), m(0.04), m(0.04)).translate(m(-0.2), m(0.03), 0), '#6a5034'), box(0.28, 0.02, 0.22, '#5a5c5e', 0.45, 0, 0.01),
+      part(new THREE.CircleGeometry(m(0.5), 8).rotateX(-Math.PI / 2).scale(1, 1, 0.6).translate(m(0.1), m(0.005), m(0.35)), '#3a2e22')),
+    angelBroken: merge(box(0.4, 0.3, 0.4, stone), lay(merge(box(0.28, 0.7, 0.2, '#9a9e9a'), ball(0.12, '#9a9e9a', 0, 0, 0.8)), -Math.PI / 2, 0.3, 0.1).translate(m(0.35), 0, m(0.3)),
+      part(new THREE.BoxGeometry(m(0.35), m(0.03), m(0.12)).rotateY(0.7).translate(m(-0.35), m(0.02), m(0.25)), '#a4a8a4')),
   };
 }
 
@@ -521,14 +610,17 @@ const VARIANTS = {
     ],
   },
   cemetery: {
-    // A few small markers scattered loosely; plenty of room to walk.
+    // Markers in the corners (clear of where people walk), and something
+    // left behind or knocked down: a tipped headstone, a wilted bouquet, a
+    // toppled urn, a grave lantern, a shovel by a sunken grave, a broken angel.
     walkable: ({ rnd }) => {
-      const spots = [[-0.25, -0.25], [0.25, -0.25], [-0.25, 0.25], [0.25, 0.25]];
-      const count = 2 + (rnd() < 0.4 ? 1 : 0);
+      const spots = shuffled(rnd, CORNERS);
       const out = [];
-      for (let k = 0; k < count; k++) {
-        const [dx, dz] = spots.splice(Math.floor(rnd() * spots.length), 1)[0];
-        out.push([smallMarker(rnd), dx + jit(rnd, 0.12), dz + jit(rnd, 0.12), jit(rnd, 0.5), 0.9 + rnd() * 0.25]);
+      const n = 2 + (rnd() < 0.4 ? 1 : 0);
+      for (let k = 0; k < n; k++) out.push([smallMarker(rnd), spots[k][0] * CORNER, spots[k][1] * CORNER, jit(rnd, 0.5), 0.85 + rnd() * 0.2]);
+      if (n < 4 && rnd() < 0.85) {
+        const kind = GRAVE_CLUTTER[Math.floor(rnd() * GRAVE_CLUTTER.length)];
+        out.push([kind, spots[n][0] * CORNER, spots[n][1] * CORNER, rnd() * 6.28, 0.8 + rnd() * 0.15]);
       }
       return out;
     },
@@ -600,7 +692,7 @@ const VARIANTS = {
   // Condemned: rubble, junk and fallen boards inside.
   condemned: {
     blocked: ({ rnd }) => scatter(rnd, 2, 0.5, (k) => (k % 2 ? ['crate', 0.7 + rnd() * 0.3] : ['boulder', 0.5 + rnd() * 0.3])),
-    walkable: ({ rnd }) => [['crate', jit(rnd, 0.4), jit(rnd, 0.4), rnd() * 6, 0.6]],
+    walkable: (ctx) => litter(ctx, [], ['planks', 'boxes', 'stain', 'chairTipped', 'tvBroken', 'bottles', 'crate']),
   },
   carpet: {
     // A cluttered living room: two sofas facing over a coffee table, armchairs.
@@ -617,13 +709,10 @@ const VARIANTS = {
   // is a ward bay: two beds with a privacy screen between them, drip stands,
   // a monitor cart, and a gurney left across the front.
   hospital: {
-    walkable: ({ along, rnd }) => {
-      const v = rnd(), e = 0.36, s = rnd() < 0.5 ? 1 : -1;
-      if (v < 0.4) return [];
-      if (v < 0.65) return turn([['wheelchair', jit(rnd, 0.4), e * s, s > 0 ? Math.PI : 0]], along);
-      if (v < 0.85) return turn([['ivStand', e * s, jit(rnd, 0.5), rnd() * 6]], along);
-      return turn([['gurney', jit(rnd, 0.2), e * s, jit(rnd, 0.08)]], along);
-    },
+    // Against a wall: a parked wheelchair, a drip stand or a gurney; in the
+    // corners, one tipped over, a drip stand fallen, files, a stain.
+    walkable: (ctx) => litter(ctx, [[['wheelchair', 0.2, W + 0.05, 0]], [['ivStand', -0.25, W + 0.04, 0], ['ivStand', 0.1, W + 0.04, 0]], [['gurney', 0, W + 0.06, 0]]],
+      ['wheelchairTipped', 'ivFallen', 'papers', 'stain', 'boxes', 'frameDown']),
     blocked: ({ along, rnd }) => turn([
       ['hospitalBed', -0.2, -0.08, -Math.PI / 2],
       ['hospitalBed', 0.2, -0.08, -Math.PI / 2],
@@ -646,64 +735,99 @@ const VARIANTS = {
 // private room (a hotel room, a flat). Walkable cells only get something
 // against a wall, leaving the floor clear to walk; blocked cells are full.
 const W = -0.43;   // against the back wall (cell units)
+// Walkable cells: people stand at the quarter points (±0.2) and walk in
+// straight lines through them (monsters through the middle), so clutter goes
+// only in the four corners, and big pieces only against a real wall of the
+// cell (where no one crosses). Each corner piece stays within ~0.12 of its
+// spot. `walls`: lists of wall pieces to pick from; `pool`: corner clutter.
+const CORNER = 0.37;
+const CORNERS = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
+function shuffled(rnd, list) {
+  const a = list.slice();
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+// Pieces too long to turn freely in a corner are drawn smaller.
+const LONG = new Set(['lampToppled', 'ivFallen', 'cabinetFallen', 'plantTipped']);
+// Small things tucked in beside a corner's main piece.
+const BITS = ['papers', 'stain', 'bottles', 'shoe', 'frameDown', 'candles'];
+function litter(ctx, walls, pool, bits = BITS) {
+  const { rnd } = ctx;
+  const out = [];
+  if (ctx.walled && walls.length && rnd() < 0.8) out.push(...walls[Math.floor(rnd() * walls.length)]);
+  const n = 3 + (rnd() < 0.5 ? 1 : 0);
+  for (const [sx, sz] of shuffled(rnd, CORNERS).slice(0, n)) {
+    const kind = pool[Math.floor(rnd() * pool.length)];
+    const scale = LONG.has(kind) ? 0.78 + rnd() * 0.1 : 1.0 + rnd() * 0.15;
+    out.push([kind, sx * CORNER + jit(rnd, 0.03), sz * CORNER + jit(rnd, 0.03), rnd() * Math.PI * 2, scale]);
+    // Often something small beside it, further into the corner.
+    if (rnd() < 0.55) out.push([bits[Math.floor(rnd() * bits.length)], sx * 0.43, sz * 0.43 - sz * 0.1, rnd() * Math.PI * 2, 0.8]);
+  }
+  return turn(out, ctx.walled ? ctx.back : ctx.along);
+}
+const GRAVE_CLUTTER = ['stoneTipped', 'bouquet', 'urnTipped', 'graveLantern', 'shovel', 'angelBroken', 'candles', 'bouquet'];
+// Untyped indoor floor (hardwood, carpet) left walkable: the aftermath of whatever happened.
+const HOUSE_CLUTTER = ['chairTipped', 'bookPile', 'lampToppled', 'boxes', 'doll', 'tvBroken', 'armchairTipped', 'tableTipped', 'cabinetFallen', 'suitcase', 'chairTipped'];
 const atWall = (ctx, list) => turn(list, ctx.back);
 const BUILDING_VARIANTS = {
   hotel: {
-    walkable: (ctx) => atWall(ctx, ctx.unit ? [['dresser', 0.1, W + 0.02, 0]] : [['plant', 0.35, W + 0.05, 0], ['armchair', -0.15, W + 0.07, 0]]),
+    walkable: (ctx) => (ctx.unit ? litter(ctx, [[['dresser', 0, W + 0.02, 0]], [['nightstand', 0.1, W + 0.02, 0]]], ['suitcase', 'lampToppled', 'tableTipped', 'chairTipped', 'doll', 'armchairTipped'])
+      : litter(ctx, [[['armchair', 0, W + 0.07, 0]], [['plant', 0, W + 0.05, 0]]], ['chairTipped', 'armchairTipped', 'plantTipped', 'suitcase', 'tableTipped', 'boxes'])),
     blocked: (ctx) => atWall(ctx, ctx.unit
       ? [['bed', -0.05, -0.28, 0], ['nightstand', 0.35, W + 0.02, 0], ['dresser', 0.05, 0.36, Math.PI]]
       : ctx.rnd() < 0.45 ? [['frontDesk', 0, -0.25, 0], ['plant', 0.4, 0.3, 0]]
         : [['sofa', 0, -0.25, 0], ['table', 0, 0.05, 0], ['armchair', -0.33, 0.3, Math.PI * 0.85], ['armchair', 0.33, 0.3, -Math.PI * 0.85]]),
   },
   apartments: {
-    walkable: (ctx) => atWall(ctx, ctx.unit ? [[ctx.rnd() < 0.5 ? 'armchair' : 'dresser', 0, W + 0.06, 0]] : ctx.rnd() < 0.4 ? [['plant', 0.38, W + 0.05, 0]] : []),
+    walkable: (ctx) => (ctx.unit ? litter(ctx, [[['armchair', 0, W + 0.07, 0]], [['dresser', 0, W + 0.02, 0]]], ['tvBroken', 'doll', 'boxes', 'cabinetFallen', 'chairTipped', 'tableTipped', 'armchairTipped'])
+      : litter(ctx, [[['mailboxes', 0, W + 0.02, 0]], [['plant', 0, W + 0.05, 0]]], ['boxes', 'plantTipped', 'boxes', 'chairTipped', 'suitcase'])),
     blocked: (ctx) => atWall(ctx, ctx.unit
       ? (ctx.rnd() < 0.5 ? [['bed', -0.05, -0.28, 0], ['nightstand', 0.35, W + 0.02, 0], ['dresser', 0.05, 0.36, Math.PI]]
         : [['kitchenette', 0, W + 0.04, 0], ['table', 0, 0.12, 0], ['chair', -0.15, 0.3, Math.PI], ['sofa', 0, 0.38, Math.PI]])
       : [['mailboxes', 0, W + 0.02, 0], ['plant', 0.38, -0.1, 0], ['crate', -0.3, 0.2, 0.3, 0.6]]),
   },
   boutique: {
-    walkable: (ctx) => atWall(ctx, ctx.rnd() < 0.5 ? [['rack', 0, W + 0.05, 0]] : [['mannequin', -0.25, W + 0.06, 0], ['mannequin', 0.25, W + 0.06, 0.3]]),
+    walkable: (ctx) => litter(ctx, [[['rack', 0, W + 0.05, 0]], [['mannequinFallen', 0, W + 0.04, Math.PI / 2, 0.9]], [['mannequin', -0.1, W + 0.06, 0.3]]], ['shoe', 'boxes', 'papers', 'frameDown', 'shoe']),
     blocked: (ctx) => atWall(ctx, [['rack', 0, -0.3, 0], ['rack', 0, 0.05, 0], ['mannequin', -0.3, 0.35, 0.4], ['mannequin', 0.3, 0.35, -0.4], ['counter', 0, W + 0.0, 0, 0.0]].filter((p) => p[4] !== 0)),
   },
   market: {
-    walkable: (ctx) => atWall(ctx, [[ctx.rnd() < 0.5 ? 'produce' : 'storeShelf', 0, W + 0.04, 0]]),
+    walkable: (ctx) => litter(ctx, [[['produce', 0, W + 0.04, 0]], [['storeShelf', 0, W + 0.04, 0]]], ['spilled', 'boxes', 'papers', 'bottles', 'spilled']),
     blocked: (ctx) => atWall(ctx, [['storeShelf', 0, -0.03, Math.PI], ['storeShelf', 0, 0.03, 0], ['produce', 0, W + 0.04, 0], ['produce', 0, 0.42, Math.PI]]),
   },
   bar: {
-    walkable: (ctx) => atWall(ctx, [['stool', -0.2, -0.3, 0], ['stool', 0.2, -0.3, 0], ['cafeTable', 0, W + 0.04, 0, 0.8]]),
+    walkable: (ctx) => litter(ctx, [[['cafeTable', 0, W + 0.05, 0, 0.8], ['stool', -0.12, W + 0.07, 0]], [['backBar', 0, W + 0.02, 0, 0.7]]], ['stoolTipped', 'bottles', 'chairTipped', 'stain', 'papers']),
     blocked: (ctx) => atWall(ctx, [['backBar', 0, W + 0.02, 0], ['barCounter', 0, -0.05, Math.PI], ['stool', -0.3, 0.22, 0], ['stool', 0, 0.22, 0], ['stool', 0.3, 0.22, 0]]),
   },
   library: {
-    walkable: (ctx) => atWall(ctx, [['bookshelf', 0, W + 0.02, 0]]),
+    walkable: (ctx) => litter(ctx, [[['bookshelf', 0, W + 0.02, 0]]], ['bookPile', 'papers', 'chairTipped', 'lampToppled', 'candles', 'bookPile']),
     blocked: (ctx) => atWall(ctx, ctx.rnd() < 0.6
       ? [['bookshelf', 0, -0.03, Math.PI], ['bookshelf', 0, 0.03, 0], ['bookshelf', 0, W + 0.02, 0], ['bookshelf', 0, 0.45, Math.PI]]
       : [['bookshelf', 0, W + 0.02, 0], ['readingTable', 0, 0.1, 0], ['chair', -0.25, -0.1, 0], ['chair', 0.25, -0.1, 0], ['chair', -0.25, 0.3, Math.PI], ['chair', 0.25, 0.3, Math.PI]]),
   },
   curio: {
-    walkable: (ctx) => atWall(ctx, ctx.rnd() < 0.7 ? [['curioCabinet', 0, W + 0.04, 0]] : [['clock', 0.3, W + 0.03, 0]]),
+    walkable: (ctx) => litter(ctx, [[['curioCabinet', 0, W + 0.04, 0]], [['clock', 0, W + 0.03, 0]]], ['doll', 'candles', 'frameDown', 'boxes', 'tvBroken', 'doll']),
     blocked: (ctx) => atWall(ctx, [['curioCabinet', -0.2, W + 0.04, 0], ['clock', 0.3, W + 0.03, 0], ['curioCabinet', 0, 0.05, 0], ['crate', -0.3, 0.35, 0.4, 0.7], ['crate', 0.25, 0.3, -0.3, 0.6], ['armchair', 0.3, 0.05, -0.8]]),
   },
   florist: {
-    walkable: (ctx) => atWall(ctx, [['flowerBucket', -0.3, W + 0.05, 0], ['flowerBucket', 0, W + 0.05, 1], ['flowerBucket', 0.3, W + 0.05, 2]]),
+    walkable: (ctx) => litter(ctx, [[['flowerBucket', -0.12, W + 0.05, 0], ['flowerBucket', 0.12, W + 0.05, 1]]], ['bucketTipped', 'deadFlowers', 'plantTipped', 'papers', 'flowerBucket']),
     blocked: (ctx) => atWall(ctx, [['flowerStand', 0, -0.3, 0], ['flowerStand', 0, 0.3, Math.PI], ['flowerBucket', -0.4, 0, 0], ['flowerBucket', 0.4, 0, 1], ['counter', 0, 0.02, 0, 0.0]].filter((p) => p[4] !== 0)),
   },
   cafe: {
-    walkable: (ctx) => atWall(ctx, [['cafeTable', 0, -0.32, 0, 0.9], ['chair', -0.2, -0.32, Math.PI / 2], ['chair', 0.2, -0.32, -Math.PI / 2]]),
+    walkable: (ctx) => litter(ctx, [[['cafeTable', 0, W + 0.06, 0, 0.9], ['chair', -0.12, W + 0.07, Math.PI / 2]]], ['chairTipped', 'bottles', 'papers', 'stain', 'chair']),
     blocked: (ctx) => atWall(ctx, ctx.rnd() < 0.5
       ? [['backBar', 0, W + 0.02, 0], ['counter', 0, -0.05, Math.PI], ['stool', -0.25, 0.2, 0], ['stool', 0.25, 0.2, 0]]
       : [['cafeTable', -0.22, -0.2, 0], ['cafeTable', 0.22, 0.2, 0], ...[[-0.22, -0.2], [0.22, 0.2]].flatMap(([x, z]) => [['chair', x - 0.12, z, Math.PI / 2], ['chair', x + 0.12, z, -Math.PI / 2]])]),
   },
   outdoor: {
-    walkable: (ctx) => atWall(ctx, [['gearRack', 0, W + 0.04, 0]]),
+    walkable: (ctx) => litter(ctx, [[['gearRack', 0, W + 0.04, 0]]], ['lantern', 'boxes', 'shoe', 'papers', 'lantern']),
     blocked: (ctx) => atWall(ctx, [['gearRack', 0, W + 0.04, 0], ctx.rnd() < 0.5 ? ['tent', 0, 0.12, 0.4] : ['canoe', 0, 0.12, 0]]),
   },
   funeral: {
-    walkable: (ctx) => atWall(ctx, ctx.rnd() < 0.5 ? [['chairRow', 0, -0.25, Math.PI]] : [['wreath', 0.3, W + 0.04, 0]]),
+    walkable: (ctx) => litter(ctx, [[['wreath', 0, W + 0.04, 0]], [['chairRow', 0, W + 0.05, 0, 0.9]]], ['candles', 'deadFlowers', 'chairTipped', 'frameDown', 'stain']),
     blocked: (ctx) => atWall(ctx, [['casket', 0, -0.2, 0], ['wreath', -0.38, W + 0.04, 0.3], ['wreath', 0.38, W + 0.04, -0.3], ['chairRow', 0, 0.32, Math.PI]]),
   },
   pharmacy: {
-    walkable: (ctx) => atWall(ctx, [['storeShelf', 0, W + 0.04, 0]]),
+    walkable: (ctx) => litter(ctx, [[['storeShelf', 0, W + 0.04, 0]], [['pharmCounter', 0, W + 0.05, 0, 0.9]]], ['boxes', 'papers', 'bottles', 'chairTipped', 'stain']),
     blocked: (ctx) => atWall(ctx, ctx.rnd() < 0.4 ? [['pharmCounter', 0, W + 0.05, 0], ['storeShelf', 0, 0.3, Math.PI]]
       : [['storeShelf', 0, -0.03, Math.PI], ['storeShelf', 0, 0.03, 0], ['storeShelf', 0, W + 0.04, 0]]),
   },
@@ -932,11 +1056,19 @@ export function createProps(group, { firGeo, firMat }) {
           const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
           const axis = runAxis(grid, x, y, c);
           const along = axis === 'x' ? 0 : Math.PI / 2;
-          const back = wallTurn(grid, i, ids) ?? along;
+          const wt = wallTurn(grid, i, ids);
           const unit = !!BUILDING_TYPES[type]?.rooms && units.has(roomIds(grid)[i]);
           const v = type === 'hospital' ? VARIANTS.hospital : BUILDING_VARIANTS[type];
           const make = v[c.walkable ? 'walkable' : 'blocked'];
-          list = make ? make({ rnd, along, across: along + Math.PI / 2, back, unit }) : [];
+          list = make ? make({ rnd, along, across: along + Math.PI / 2, back: wt ?? along, walled: wt !== null, unit }) : [];
+        } else if (c.area === 'indoor' && c.walkable && (c.sub === 'hardwood' || c.sub === 'carpet' || c.sub === 'condemned')) {
+          // Plain indoor floor, walkable: things left where they fell.
+          let seed = (i * 2654435761) % 2147483647 || 1;
+          const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+          const along = runAxis(grid, x, y, c) === 'x' ? 0 : Math.PI / 2;
+          const wt = wallTurn(grid, i, ids);
+          const ctx = { rnd, along, back: wt ?? along, walled: wt !== null };
+          list = c.sub === 'condemned' ? VARIANTS.condemned.walkable(ctx) : rnd() < 0.8 ? litter(ctx, [], HOUSE_CLUTTER) : [];
         } else
         // Start space: the van, facing along the road.
         if (c.sub === 'start') {
