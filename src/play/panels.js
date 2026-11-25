@@ -20,7 +20,8 @@ import { checkRequirement } from '../game/cards/requirements.js';
 import { eventCard } from '../game/decks.js';
 import { choicesFor } from '../game/eventPlay.js';
 import { sacrificeSeat } from '../game/rules.js';
-import { scriptOf, mapSites } from '../game/objectives/scripts.js';
+import { scriptOf, mapSites, knownMonster } from '../game/objectives/scripts.js';
+import { progressLines } from '../game/objectives/verbs.js';
 
 // Module state: assigned by init() below, in the same order as before the split.
 export let OBOL_GLYPHS, DMG_SVG, ATTACK_GLYPH, cardQueue, caseUI, craftUI;
@@ -243,8 +244,16 @@ export function showCardNow(c) {
   } else if (c.kind === 'equipUse') {
     html = `<div class="pc-kind">${esc(c.e.player?.name ?? '')} uses ${esc(EQUIPMENT_BY_ID[c.e.item]?.name ?? '')}</div><div class="pc-title">${esc(c.e.ability)}</div>` +
       `<div class="pc-sub">${esc(c.e.text.replace(/^[^:]*: [^.(]*(\([^)]*\))?( on [^.]*)?\. /, ''))}</div>`;
+  } else if (c.kind === 'escaped') {
+    const e = c.e;
+    html = `<div class="pc-kind">Escaped</div><div class="pc-glyph">🚐</div><div class="pc-title">${esc(e.player?.name ?? '')} is out</div>` +
+      `<div class="pc-sub">${e.first ? 'The team has won. Play on until everyone has escaped or fallen.' : 'Safe across the river.'}</div>`;
   } else if (c.kind === 'won') {
-    html = '<div class="pc-kind">Dawn, at last</div><div class="pc-glyph">☀</div><div class="pc-title">The monster is destroyed</div><div class="pc-sub">The investigators survive the night.</div>';
+    const st = play.session.state;
+    const escaped = st?.players.filter((p) => p.escaped) ?? [];
+    html = escaped.length
+      ? `<div class="pc-kind">Dawn, at last</div><div class="pc-glyph">☀</div><div class="pc-title">They got away</div><div class="pc-sub">${esc(escaped.map((p) => p.name).join(', '))} escaped. The investigators win.</div>`
+      : '<div class="pc-kind">Dawn, at last</div><div class="pc-glyph">☀</div><div class="pc-title">The objective is achieved</div><div class="pc-sub">The investigators survive the night.</div>';
     stay = true;
   } else if (c.kind === 'over') {
     html = '<div class="pc-kind">The night wins</div><div class="pc-glyph">☠</div><div class="pc-title">Everyone is dead</div>' +
@@ -261,7 +270,7 @@ export function showCardNow(c) {
   } else if (c.kind === 'monster') {
     const m = MONSTER_BY_ID[c.monster];
     card.classList.add('monster');
-    html = `<div class="pc-kind" style="text-align:center">Midnight · it's here</div><div class="pc-title">The ${esc(m.name)}</div>` +
+    html = `<div class="pc-kind" style="text-align:center">${c.identified ? 'All the evidence is in · its objectives are marked' : 'Midnight · it\'s here'}</div><div class="pc-title">The ${esc(m.name)}</div>` +
       `<div class="pc-sub" style="text-align:center">${esc(m.traits.join(', '))}${c.correct ? ' · you named it right' : ''}</div>` +
       guideDetails(m, currentFound(), true);
     stay = true;
@@ -680,10 +689,11 @@ function renderUseSheet(body, pl, items) {
 
 // The monster's objective (from midnight): what wins the game.
 function objectiveHTML(my) {
-  if (!my.revealed) return '';
-  const card = MONSTER_BY_ID[my.monster];
-  if (!card) return '';
   const st = play.session.state;
+  // Known: revealed at midnight, identified by all the evidence, or named right early.
+  const card = MONSTER_BY_ID[st ? knownMonster(st) : null];
+  if (!card) return '';
+  void my;
   const kill = killObjective(card);
   const done = st?.objectiveDone;
   // The steps (src/game/objectives/scripts.js), with where each site is on this map.
@@ -694,9 +704,12 @@ function objectiveHTML(my) {
   return `<p class="case-note"><b>Objective:</b> ${esc(card.objective)}. ` +
     (kill ? 'Destroy it to win.'
       : done ? `Achieved.${st.monsters.length ? ' Now destroy it one more time.' : ''}`
-        : 'Achieve it to win (play it at the table, then mark it here). Until then, destroying it only sends it back to its Lair.') + '</p>' +
+        : sc?.played ? 'The game tracks it: reach the sites below.' : 'Achieve it to win (play it at the table, then mark it here). Until then, destroying it only sends it back to its Lair.') + '</p>' +
     steps +
-    (!kill && !done && !st?.won ? '<div class="case-actions"><button type="button" class="ink" id="objDone">Objective achieved</button></div>' : '');
+    // What the game is tracking (objectives/verbs.js).
+    (sc?.played ? `<ul class="obj-progress">${progressLines(st).map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : '') +
+    // Played by the game: no hand marking.
+    (!kill && !done && !st?.won && !sc?.played ? '<div class="case-actions"><button type="button" class="ink" id="objDone">Objective achieved</button></div>' : '');
 }
 
 // "Discard [element]" weakness effects the current monster offers.

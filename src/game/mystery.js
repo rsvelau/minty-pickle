@@ -84,9 +84,9 @@ export function publicState(state) {
   s.rng = 0; // the dice generator would let a phone predict draws
   const m = s.mystery;
   if (m) {
-    if (!m.revealed) m.monster = null;
+    if (!m.revealed && !m.identified) m.monster = null;
     m.deck = m.deck.map((c, i) => (m.flipped.includes(i) ? c : null));
-    if (!m.initiative && !m.revealed) m.spawnCell = -1;
+    if (!m.initiative && !m.revealed && !m.identified) m.spawnCell = -1;
   }
   return s;
 }
@@ -119,6 +119,18 @@ export function revealEvidence(state, board, index, ctx, events) {
   ctx.log(state, `${pl.name} found evidence at ${label(board, cell, ctx.cellLabel)}: ${evidenceLabel(card.kind, card.code)}` +
     `${card.kind === 'lair' ? ' (the Lair)' : ''}.`);
   events.push({ type: 'evidence', seat: pl.seat, cell, kind: card.kind, code: card.code, index });
+  identify(state, ctx, events);
+}
+
+// All five pieces of evidence (the three Observations, the Lair and the
+// Attack card) identify the monster before midnight: its objectives appear
+// and work can start on them (objectives/scripts.js knownMonster).
+function identify(state, ctx, events) {
+  const m = state.mystery;
+  if (!m || m.revealed || m.identified || m.flipped.length < m.deck.length || !m.attack) return;
+  m.identified = true;
+  ctx.log(state, `All the evidence is in: it's the ${MONSTER_BY_ID[m.monster].name}. Its objectives are marked.`);
+  events.push({ type: 'identified', monster: m.monster });
 }
 
 // The monster strikes an investigator (Attack Obol): one die of damage of
@@ -139,6 +151,7 @@ export function attackObol(state, board, cell, ctx, events) {
   // One die of damage against their slotted defense.
   const outcome = applyDamage(state, board, pl, type, amount, { log: ctx.log, source: 'Something unseen' }, events);
   events.push({ type: 'attacked', seat: pl.seat, cell, attack: type, amount, first, outcome, defense: events.at(-1)?.defense ?? 0 });
+  if (first) identify(state, ctx, events);
 }
 
 // The team names the monster (once, before midnight).

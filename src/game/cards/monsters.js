@@ -213,7 +213,7 @@ export const MONSTER_CARDS = [
     note: 'Has no singular body. Attacks erupt from lit spaces. Dark spaces smother lit objects. All defensive dice are exhausted upon use.',
     objective: 'Light the Dark Room ({11} → Lair × 4)',
     weakness: ['fire', 'crystal'], immune: ['salt', 'holy', 'iron', 'silver'],
-    weaknessTrack: [{ hits: null, text: 'Discard Fire & avoid 1 attack', react: 'attack' }, { hits: null, text: 'Discard Fire & keep candle lit' }, { hits: null, text: 'Discard Crystal & no light for ⌛' }],
+    weaknessTrack: [{ hits: null, text: 'Discard Fire & avoid 1 attack', react: 'attack' }, { hits: null, text: 'Discard Fire & keep candle lit', react: 'candle' }, { hits: null, text: 'Discard Crystal & no light for ⌛' }],
     abilities: [
       A('physical', 'Umbral Stab', 'Persistent', 'Attack (die) any player each time they enter a lit space', { darkness: true }),
       A('none', 'Suffocating Darkness', 'Persistent', 'A player with a lit candle who stops in the dark flips a coin. Tails: extinguish'),

@@ -11,7 +11,7 @@ import { OBSERVATIONS, LAIRS } from '../src/game/cards/evidence.js';
 
 // Objective sites a monster may need (src/core/sites.js), on row 0, away from the street.
 function withSites(g) {
-  ['church', 'hotel', 'bar', 'hospital'].forEach((site, k) => g.apply(g.index(k * 2, 0), { marker: 'objective', site }, { silent: true }));
+  ['church', 'hotel', 'bar', 'hospital', 'boutique', 'curio', 'funeral', 'outdoor'].forEach((site, k) => g.apply(g.index(k * 2, 0), { marker: 'objective', site }, { silent: true }));
   return g;
 }
 function street() {
@@ -212,7 +212,7 @@ function townWithBuildings() {
     g.apply(g.index(x0 + 1, 10), { marker: 'objective', site }, { silent: true });
   }
   // (street()'s row-0 sites stand aside: these are the victims' buildings.)
-  for (let x = 0; x < 8; x++) g.apply(g.index(x, 0), { marker: null, site: null }, { silent: true });
+  for (let x = 0; x < 16; x++) g.apply(g.index(x, 0), { marker: null, site: null }, { silent: true });
   return g;
 }
 const adzeGame = (seed = 4) => {

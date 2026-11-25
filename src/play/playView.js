@@ -11,6 +11,7 @@ import { toast } from '../app/files.js';
 import { $ } from '../app/dom.js';
 import { craftUI, dmgIcon, hitText, injuryPips, markCaseNew, obolHTML, renderAsk, renderSacrifice, renderCasebook, renderIntent, renderInventory, renderRevealSheet, showCard, showObol, renderEventChoice } from './panels.js';
 import { objectiveLive } from '../game/objectives/scripts.js';
+import { itemLabel } from '../game/objectives/verbs.js';
 import { __set_markerHidden, __set_markerUsed, markers, refreshMarkers, refreshPropsAndWalls, visibleTop } from '../render/board.js';
 import { camera, cellToWorld, controls, scene, wake } from '../render/scene.js';
 import { lightLevels } from '../render/tileLook.js';
@@ -59,6 +60,7 @@ export function init() {
     onCard: (e) => showCard({ kind: e.deck === 'events' ? 'event' : 'equipment', e }),
     onEquip: (e) => showCard({ kind: 'equipUse', e }),
     onSacrifice: (e) => showCard({ kind: 'sacrifice', e }),
+    onEscaped: (e) => showCard({ kind: 'escaped', e }),
     onMonsterRevealed: (e) => showCard({ kind: 'monster', monster: e.monster, correct: e.correct }),
     // A monster strikes: a brief, soft flash at the screen edges, in the colour
     // of its damage type (red, blue or green).
@@ -83,8 +85,7 @@ export function init() {
   });
   __set_markerUsed((i) => ui.tool === 'play' && play.state.shownUsed.has(i));
   // Objectives appear once the monster is known (midnight, or named early), and only its own sites.
-  __set_markerHidden((i) => ui.tool === 'play' && grid.cells[i].marker === 'objective'
-    && ((!play.midnight() && !play.state.mystery?.initiative) || !objectiveLive(play.session.state ?? {}, grid, i)));
+  __set_markerHidden((i) => ui.tool === 'play' && grid.cells[i].marker === 'objective' && !objectiveLive(play.session.state ?? {}, grid, i));
   $('#playRoll').addEventListener('click', () => play.roll());
   document.querySelectorAll('#trayTarget [data-to]').forEach((b) => b.addEventListener('click', () => { trayTarget = b.dataset.to; renderTray(); }));
 }
@@ -135,7 +136,10 @@ export function renderPlay() {
       `${!p.dead && p.spiritWard?.round === s.round ? ` <b style="color:#7fe0b4">${{ heal: 'Veiled', reflect: 'Penance', backlash: 'Backlash' }[p.spiritWard.kind]}</b>` : ''}` +
       // Rally (through the monster's turn), Toss (until injured), Drink (this turn); fallen, waiting on a Sacrifice.
       `${!p.dead && p.bonusDefense?.some((b) => b.round === s.round) ? ' <b style="color:#8fb6ff">Rallied</b>' : ''}${!p.dead && p.tossed ? ' <b style="color:#d9c27a">Steadied</b>' : ''}` +
-      `${!p.dead && p.drinking ? ' <b style="color:#e08a5a">Stimulated</b>' : ''}${p.dying ? ' <b style="color:#ff6a50">Fallen</b>' : ''}</span>` +
+      `${!p.dead && p.drinking ? ' <b style="color:#e08a5a">Stimulated</b>' : ''}${p.dying ? ' <b style="color:#ff6a50">Fallen</b>' : ''}` +
+      // Objectives: what they carry, cleansed, escaped.
+      `${(p.carry ?? []).map((c) => ` <b style="color:${c.lit === false ? '#8a8f98' : '#f3d27a'}">${itemLabel(c.item)}${c.lit === false ? ' (out)' : ''}</b>`).join('')}` +
+      `${!p.dead && p.status?.cleanse ? ' <b style="color:#9fe6ff">Cleansed</b>' : ''}${p.escaped ? ' <b style="color:#7fe08a">Escaped</b>' : ''}</span>` +
       `<span class="obol-row">${OBOL_TYPES.map((t) => `<span class="obol-count${counts[t] ? '' : ' zero'}" title="${OBOLS[t].label} Obols">${obolHTML(t)}${counts[t]}</span>`).join('')}</span></div>`;
   }).join('');
   $('#playBoard').innerHTML += s.monsters.map((mo) => {

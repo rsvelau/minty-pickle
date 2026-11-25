@@ -20,7 +20,7 @@ import { hurtMonster } from './equipmentPlay.js';
 export const injuries = (pl) => (pl.injuries ??= { P: 0, M: 0, S: 0 });
 export const atDeathsDoor = (pl) => Object.values(injuries(pl)).some((t) => t >= DEATHS_DOOR);
 // Still in the fight: not dead, and not down waiting on a Sacrifice.
-export const alive = (state) => state.players.filter((pl) => !pl.dead && !pl.dying);
+export const alive = (state) => state.players.filter((pl) => !pl.dead && !pl.dying && !pl.escaped);
 
 // Injuries whose effects count right now. Toss (Worry Stone): none, until the
 // player is injured again. Drink (Questionable Stimulant): no Physical ones

@@ -7,6 +7,8 @@
 //   anyCount  needs this many Objective markers of any kind (Poltergeist).
 //   pending   the card's numbered sites aren't all named yet: no check, and
 //             every Objective marker shows, as before.
+//   played    the game plays every step and decides the win (verbs.js);
+//             otherwise the Casebook's "Objective achieved" is still used.
 //   steps     { do, at, fixture?, item?, who?, text } in order. `do` is the
 //             verb: collect, deliver, cleanse, escape, defend, destroy,
 //             perform. `text` is what the Casebook shows.
@@ -17,6 +19,7 @@ import { SITES, siteOf, siteLabel } from '../../core/sites.js';
 export const OBJECTIVES = {
   barghest: {
     needs: ['church'],
+    played: true,
     steps: [
       { do: 'cleanse', at: 'church', fixture: 'holy-water-basin', who: 'each', text: 'Each investigator cleanses at the Church’s Holy Water Basin (the uncleansed can’t cross the river)' },
       { do: 'escape', at: 'start', requires: 'cleanse', text: 'Escape at the Start space: one escape wins for the team, and play goes on until everyone has escaped or died' },
@@ -31,9 +34,10 @@ export const OBJECTIVES = {
   },
   'shadow-people': {
     needs: ['church'],
+    played: true,
     steps: [
-      { do: 'collect', at: 'church', fixture: 'votive-candle-stand', item: 'candle', text: 'Take a candle from the Church’s Votive Candle Stand' },
-      { do: 'deliver', at: 'lair', item: 'candle', times: 4, text: 'Carry it, still lit, to the Lair (4 candles light the Dark Room)' },
+      { do: 'collect', at: 'church', fixture: 'votive-candle-stand', item: 'candle', text: 'Take a lit candle from the Church’s Votive Candle Stand (each investigator can carry one)' },
+      { do: 'deliver', at: 'lair', item: 'candle', times: 4, fewer: 2, text: 'Carry it, still lit, to the Lair: 4 candles light the Dark Room (2 with one or two players)' },
     ],
   },
   poltergeist: {
@@ -53,16 +57,23 @@ export const OBJECTIVES = {
     ],
   },
   strigoi: {
-    needs: ['hospital', 'church'],
+    needs: ['outdoor', 'church'],
     steps: [
-      { do: 'perform', at: 'lair', text: 'The Lair' },
-      { do: 'perform', at: 'hospital', text: 'Then the Hospital' },
-      { do: 'perform', at: 'church', text: 'Then the Church' },
-      { do: 'kill', at: 'lair', text: 'Back at the Lair: kill the Strigoi with the Blessed Cosor' },
+      { do: 'collect', at: 'lair', item: 'cosor', text: 'Find the Cosor (a Romanian knife) at the Lair' },
+      { do: 'perform', at: 'outdoor', text: 'Sharpen it at the Outdoor Store' },
+      { do: 'perform', at: 'church', text: 'Bless it at the Church: the Blessed Cosor ignores the Strigoi’s toughness, one die of damage a turn' },
+      { do: 'kill', at: 'lair', text: 'Kill the Strigoi with it' },
     ],
   },
-  // Perform Ceremony ({3}, {7}, Lair → {9} + 3 ⌛): sites {3} and {7} still to be named.
-  'white-lady': { pending: true, needs: ['church'], steps: [{ do: 'perform', at: 'church', text: 'Perform the Ceremony ({3}, {7}, the Lair, then the Church for 3 ⌛): played at the table for now' }] },
+  'white-lady': {
+    needs: ['boutique', 'curio', 'funeral', 'church'],
+    steps: [
+      { do: 'collect', at: 'boutique', item: 'gown', text: 'Pick up the Decayed Wedding Gown at the Boutique' },
+      { do: 'collect', at: 'curio', item: 'ring', text: 'Pick up the Tarnished Wedding Ring at the Curio Shop' },
+      { do: 'collect', at: 'funeral', item: 'finger-bone', text: 'Pick up the Desiccated Finger Bone at the Funeral Parlor' },
+      { do: 'perform', at: 'church', text: 'Bring all three to the Church: the wedding ritual is completed and her soul is set free' },
+    ],
+  },
 };
 
 export const scriptOf = (id) => OBJECTIVES[id] ?? null;
@@ -112,7 +123,12 @@ export function objectiveProblems(grid) {
 }
 
 // The monster the players know: revealed, or named correctly early (initiative).
-export const knownMonster = (state) => state.mystery?.monster ?? (state.mystery?.initiative ? state.mystery.guess?.id : null) ?? null;
+// (All five pieces of evidence found identify it too: mystery.js.)
+export function knownMonster(state) {
+  const m = state.mystery;
+  if (!m || !(m.revealed || m.identified || m.initiative)) return null;
+  return m.monster ?? m.guess?.id ?? null;
+}
 
 // Is the Objective marker in `cell` in play? Once the monster is known: only
 // its own sites. Without a mystery (no monster, or one placed by hand): all.

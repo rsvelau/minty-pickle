@@ -120,7 +120,19 @@ teammates in your space for heals like the Medical Kit). Obol costs (◉) take a
   missing one has that monster disabled (the Markers panel and Ready to play? list which and why; it's never
   drawn there). When the monster is known (midnight, or named early), only its own sites appear on the board
   and stop the pawn (none for a plain Kill), and the Casebook lists its objective's steps and where each site
-  is. The Adze's victims lie at the Hotel, the Bar and the Hospital.
+  is. The Adze's victims lie at the Hotel, the Bar and the Hospital. Finding all five pieces of evidence
+  (three Observations, the Lair, the Attack card) identifies the monster before midnight: its objectives
+  appear and work on them can start. The New game screen greys out monsters the chosen map can't host.
+  Sites: Hotel {1}, Boutique {3}, Bar {5}, Curio shop {7}, Church {9}, Funeral parlor {11}, Hospital {13},
+  Outdoor store.
+- **Objectives the game plays** (`src/game/objectives/verbs.js`; the others still use the Casebook's
+  Objective achieved): **Shadow People**: step on the Church to take a lit candle (one each at a time), carry
+  it to the Lair; 4 candles win (2 with one or two players). Ending your turn in the dark with a lit candle
+  flips a coin; tails, it goes out (Discard Fire & keep candle lit is offered then); relight it at the Church.
+  **Barghest**: each investigator steps on the Church to be cleansed; the uncleansed can't step onto a
+  bridge; a cleansed investigator reaching the Start space escapes (out of the turn order, out of the
+  monster's reach). The first escape wins for the team; play goes on until everyone has escaped or fallen.
+  Carried items, Cleansed and Escaped show in the player list; the Casebook shows the progress.
 - **Winning is the monster's objective.** "Kill": destroy it. Any other objective (Escape, Disrupt Ritual,
   Destroy Anchors…) is played at the table and marked in the Casebook (**Objective achieved**); until then,
   destroying the monster only sends it back to its Lair at full health. Once achieved, a monster with health

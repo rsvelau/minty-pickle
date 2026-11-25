@@ -20,7 +20,10 @@ export const SITES = {
   bar: { label: 'Bar', number: 5, fixtures: ['bed'] },
   church: { label: 'Church', number: 9, fixtures: ['votive-candle-stand', 'holy-water-basin'], floors: ['church'] },
   hospital: { label: 'Hospital', number: 13, fixtures: ['bed'], floors: ['hospital'] },
-  curio: { label: 'Curio shop', number: null, fixtures: ['antique-chest'] },
+  boutique: { label: 'Boutique', number: 3, fixtures: ['wedding-gown'] },
+  curio: { label: 'Curio shop', number: 7, fixtures: ['antique-chest'] },
+  funeral: { label: 'Funeral parlor', number: 11, fixtures: ['finger-bone'] },
+  outdoor: { label: 'Outdoor store', number: null, fixtures: ['whetstone'] },
 };
 
 // Fixtures: the things at a site the objectives use.
@@ -28,7 +31,10 @@ export const FIXTURES = {
   'votive-candle-stand': { label: 'Votive Candle Stand', note: 'Candles to carry (Shadow People)' },
   'holy-water-basin': { label: 'Holy Water Basin', note: 'Holy water to carry or cleanse with (Hellhounds, Barghest)' },
   bed: { label: 'A townsperson lies here', note: 'An unconscious victim to defend (Adze)' },
-  'antique-chest': { label: 'Antique chest', note: 'Could hold anything' },
+  'antique-chest': { label: 'Antique chest', note: 'Could hold anything: the Tarnished Wedding Ring (White Lady)' },
+  'wedding-gown': { label: 'Decayed Wedding Gown', note: 'For the White Lady’s wedding ritual' },
+  'finger-bone': { label: 'Desiccated Finger Bone', note: 'For the White Lady’s wedding ritual' },
+  whetstone: { label: 'Whetstone', note: 'Sharpens the Cosor (Strigoi)' },
 };
 
 export const IMPLICIT_SITES = {

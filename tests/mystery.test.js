@@ -10,7 +10,7 @@ import { OBSERVATIONS, LAIRS, ATTACK_TYPES } from '../src/game/cards/evidence.js
 
 // Objective sites a monster may need (src/core/sites.js), on row 0, away from the street.
 function withSites(g) {
-  ['church', 'hotel', 'bar', 'hospital'].forEach((site, k) => g.apply(g.index(k * 2, 0), { marker: 'objective', site }, { silent: true }));
+  ['church', 'hotel', 'bar', 'hospital', 'boutique', 'curio', 'funeral', 'outdoor'].forEach((site, k) => g.apply(g.index(k * 2, 0), { marker: 'objective', site }, { silent: true }));
   return g;
 }
 function street() {

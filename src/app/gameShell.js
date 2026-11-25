@@ -8,6 +8,7 @@
 // A game's map is loaded into the same board the editor uses, so the editor's
 // own board is set aside first and put back when you return to the editor;
 // a game never overwrites it.
+import { monsterAvailability, objectiveProblems } from '../game/objectives/scripts.js';
 import { MONSTER_CARDS, MONSTER_POOLS } from '../game/cards/monsters.js';
 import { RULES_VERSION, clockMinutes, formatClock, migrateState } from '../game/rules.js';
 import { readMap, writeMap, normalizeMeta } from '../core/mapFormat.js';
@@ -212,8 +213,18 @@ function showNewGame() {
         const { data } = readMap(file);
         const probe = new grid.constructor(data.cols, data.rows);
         probe.load(data);
-        const { ok, problems } = checkMap(probe);
+        const { ok, problems: base } = checkMap(probe);
+        const problems = [...base, ...objectiveProblems(probe)];
         chosen = ok ? { file, name: pick.name } : null;
+        // Monsters this map can't host (their objectives need sites it lacks): greyed out.
+        const { disabled } = monsterAvailability(probe);
+        const off = new Set(disabled.map((d) => d.id));
+        el.querySelectorAll('#ngMonster option[value^="pick:"]').forEach((o) => {
+          const id = o.value.slice(5);
+          o.disabled = off.has(id);
+          o.textContent = `${MONSTER_CARDS.find((c) => c.id === id)?.name ?? id}${off.has(id) ? ' (not on this map)' : ''}`;
+        });
+        if (el.querySelector('#ngMonster').selectedOptions[0]?.disabled) el.querySelector('#ngMonster').value = 'pool:all';
         html = !problems.length ? '<p class="ok">✓ Ready to play.</p>'
           : `<p class="${ok ? 'warn' : 'bad'}">${ok ? '✓ Playable, but:' : '✕ Not playable yet:'}</p><ul>${problems.map((p) => `<li class="${p.level}">${esc(p.text)}</li>`).join('')}</ul>`
             + (ok ? '' : '<p class="hint">Fix it in the Map editor (its "Ready to play?" button lists the same things).</p>');

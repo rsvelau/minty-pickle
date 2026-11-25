@@ -21,6 +21,8 @@ import { MONSTERS, spawnMonsters, monstersAct, farthestFromPlayers } from './mon
 import { turnLimits, injuries, applyDamage, sacrificeCarrier, killPlayer } from './combat.js';
 import { answer as answerReaction } from './reactions.js';
 import { objectiveLive } from './objectives/scripts.js';
+import { onSiteEnter, crossingBlocked, suffocate } from './objectives/verbs.js';
+import { siteOf, siteLabel } from '../core/sites.js';
 import { craft } from './obolcraft.js';
 import { refreshThreat, onPlayerEnters } from './monsterTurn.js';
 import { setupMystery, evidenceObol, revealEvidence, attackObol, nameMonster, revealMonster } from './mystery.js';
@@ -562,10 +564,10 @@ export function sacrificeSeat(state) {
 // whose player died moves on.
 function afterSacrifice(state, board, events) {
   if (state.reactions?.length || pendingSacrifice(state)) return;
-  if (state.players.every((p) => p.dead)) {
+  if (state.players.every((p) => p.dead || p.escaped)) {
     state.phase = 'over';
-    log(state, 'Everyone is dead. The night wins.');
-    events.push({ type: 'gameOver' });
+    log(state, state.won ? 'Everyone still standing has escaped. The investigators win.' : 'Everyone is dead. The night wins.');
+    events.push({ type: state.won ? 'won' : 'gameOver' });
     return;
   }
   if (curPlayer(state).dead && state.phase !== 'over') {
@@ -658,6 +660,7 @@ export function nextOptions(state, board, { back = false } = {}) {
     if (sides !== null && !(sides & bit)) continue;
     if (!grid.canStep(x, y, dx, dy, unlocked, override)) continue;
     const i = grid.index(x + dx, y + dy);
+    if (crossingBlocked(state, board, pl, i)) continue;   // Barghest: not across the river uncleansed
     const cost = playerStepCost(state, board, i, state.cur);
     if (cost !== Infinity && cost > state.steps) continue; // a Sinkhole needs 5 moves left
     all.push({ i, dx, dy, name });
@@ -709,9 +712,12 @@ function canStillAct(state) {
 function enter(state, board, i, events) {
   const m = board.grid.cells[i].marker;
   if (!m || !MARKERS[m]) return;
-  if (m === 'objective' && (!isMidnight(state) || !objectiveLive(state, board.grid, i))) return; // not there yet, or not this monster's
+  if (m === 'objective' && !objectiveLive(state, board.grid, i)) return; // the monster isn't known yet, or not its site
   if (m === 'key') keyTouched(state, eventCtx(state)); // Lockdown: any Key space opens every door
   if (state.config.stopAtMarkers) state.stopAt = i;
+  // An objective site is never used up (candles, again and again): what
+  // happens there is the objective's (objectives/verbs.js, from takeStep).
+  if (m === 'objective') { state.stopReason = siteLabel(siteOf(board.grid.cells[i])); return; }
   if (isUsed(state, i)) {
     state.stopReason = `${MARKERS[m].label} (already collected)`;
     return;
@@ -898,6 +904,7 @@ function takeStep(state, board, o, events) {
   events.push({ type: 'step', seat: state.cur, from, to: o.i });
   playerEnters(state, pl, o.i, eventCtx(state));
   enter(state, board, o.i, events);
+  onSiteEnter(state, board, pl, o.i, { state, log, randInt }, events);
   if (state.monsters.length) onPlayerEnters(state, board, pl, o.i, { state, log, randInt }, events);
 }
 function step(state, board, o, events) {
@@ -911,25 +918,32 @@ function step(state, board, o, events) {
 function nextPlayer(state, board, events) {
   delete curPlayer(state).drinking;              // Drink and Lucky last this turn only
   state.lucky = false;
+  // Out of play: dead, or escaped (Barghest).
+  const gone = (pl) => pl.dead || pl.escaped;
   for (let k = 0; k < state.players.length; k++) {
     state.cur = (state.cur + 1) % state.players.length;
     if (state.cur === 0) endRound(state, board, events);
-    if (state.players.every((pl) => pl.dead)) break;
+    if (state.players.every(gone)) break;
     // Chalk-Scrawled Narrative (after midnight): this player sits a turn out.
-    if (!curPlayer(state).dead && curPlayer(state).skipTurns > 0) {
+    if (!gone(curPlayer(state)) && curPlayer(state).skipTurns > 0) {
       curPlayer(state).skipTurns--;
       log(state, `${who(state)} skips this turn.`);
       continue;
     }
-    if (!curPlayer(state).dead) break;
+    if (!gone(curPlayer(state))) break;
   }
   state.stopAt = -1;
   state.stopReason = '';
   state.options = [];
-  if (state.players.every((pl) => pl.dead)) {
+  if (state.players.every(gone)) {
     state.phase = 'over';
-    log(state, 'Everyone is dead. The night wins.');
-    events.push({ type: 'gameOver' });
+    if (state.players.some((pl) => pl.escaped)) {
+      log(state, `Everyone still standing has escaped (${state.players.filter((pl) => pl.escaped).map((pl) => pl.name).join(', ')}). The investigators win.`);
+      events.push({ type: 'won' });
+    } else {
+      log(state, 'Everyone is dead. The night wins.');
+      events.push({ type: 'gameOver' });
+    }
     return;
   }
   state.phase = 'idle';
@@ -956,6 +970,7 @@ function endTurn(state, board, events) {
     log(state, `Lightning Storm: ${who(state)} ends the turn outside and flips a coin: ${heads ? 'heads, the lightning misses' : 'tails'}.`);
     if (!heads) applyDamage(state, board, pl, 'P', 1 + randInt(state, 6), { log, source: 'The lightning' }, events);
   }
+  suffocate(state, board, pl, { state, log, randInt }, events);   // Shadow People: a lit candle in the dark
   const left = unusedDice(state);
   pl.lastMove = state.pool.filter((d) => d.spent).map((d) => ({ ...d })); // for Exhaust (Movement die)
   const back = state.pool.filter((d) => d.resonant).length;

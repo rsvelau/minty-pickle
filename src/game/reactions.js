@@ -24,7 +24,7 @@ export function reactionFor(monster, what) {
 export const itemsOfKind = (pl, kind) => pl.inventory.equipment.map((it, i) => (EQUIPMENT_BY_ID[it.id]?.abilities.some((a) => a.kind === kind) ? i : -1)).filter((i) => i >= 0);
 
 // What a hit can change on its player (and the defense teammates lent).
-const FIELDS = ['injuries', 'defenseUsed', 'dead', 'dying', 'tossed', 'lostBlack', 'defense', 'lastMove'];
+const FIELDS = ['injuries', 'defenseUsed', 'dead', 'dying', 'tossed', 'lostBlack', 'defense', 'lastMove', 'carry'];
 const pick = (pl) => structuredClone(Object.fromEntries(FIELDS.map((f) => [f, pl[f]])));
 const same = (a, b) => JSON.stringify({ ...a, defenseUsed: 0 }) === JSON.stringify({ ...b, defenseUsed: 0 });
 

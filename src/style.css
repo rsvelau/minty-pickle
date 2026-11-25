@@ -1234,3 +1234,4 @@ body.stress-on #info { display: none !important; }
 .obj-steps { margin: 4px 0 8px; padding-left: 20px; font-size: 13px; line-height: 1.45; }
 .obj-steps li { margin: 2px 0; }
 .obj-where { color: var(--muted); font-size: 12px; }
+.obj-progress { margin: 0 0 8px; padding-left: 18px; font-size: 13px; color: #f3d27a; }

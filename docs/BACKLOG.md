@@ -97,14 +97,14 @@ over sites, `src/game/objectives/scripts.js`).
   Hospital floor), fixtures per site type, the map check and the Markers panel name the monsters a map can't
   host (they're never drawn there), only the revealed monster's sites appear and stop the pawn, the Adze's
   victims lie at the Hotel {1}, Bar {5} and Hospital {13}, the Casebook lists the steps and where they are.
-- [ ] Step 2: the verbs and carried items; Shadow People (candles from the Church to the Lair ×4, put out
-  by Suffocating Darkness) and Barghest (each investigator cleanses at the Church; the uncleansed can't
-  cross the river; one escape at the Start wins for the team, play goes on until everyone has escaped or
-  died) as the first two, replacing "Objective achieved".
+- [x] Step 2 (2026-11-25): the verbs (collect, deliver, cleanse, escape) and carried items; Shadow People
+  (candles, Suffocating Darkness, the Fire discard) and Barghest (cleanse, the river, escape) are played;
+  all five pieces of evidence identify the monster early.
 - [ ] Step 3, one monster at a time with its group 7 abilities: Hellhounds, Poltergeist, Strigoi, White
   Lady, Adze; Banshee Perch (what is the heirloom?).
-- Still to name: sites **{3}**, **{7}** (White Lady) and **{11}** (Shadow People's card; candles come from
-  the Church's Votive Candle Stand).
+- Sites named: Boutique {3} (the gown), Curio shop {7} (the ring), Funeral parlor {11} (the finger bone),
+  Outdoor store (sharpens the Cosor; number to confirm). Monster cards still print the old objective
+  lines (Shadow People's {11}, White Lady's "Lair + 3 ⏳", Strigoi's {13}): to update with the designer.
 ---
 
 ### Suggested order

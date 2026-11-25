@@ -57,7 +57,7 @@ export function createPlay({
   grid, scene, camera, controls, cellToWorld, cellTop, terrainify, cellLabel, onChange,
   onUsed = () => {}, onCollect = () => {}, onObol = () => {}, onAttack = () => {}, onMonster = () => {},
   onEvidence = () => {}, onAttacked = () => {}, onNamed = () => {}, onMonsterRevealed = () => {},
-  onDamage = () => {}, onIntent = () => {}, onGameOver = () => {}, onNpc = () => {}, onExhaust = () => {}, onCraft = () => {}, onCard = () => {}, onEquip = () => {}, onSacrifice = () => {},
+  onDamage = () => {}, onIntent = () => {}, onGameOver = () => {}, onNpc = () => {}, onExhaust = () => {}, onCraft = () => {}, onCard = () => {}, onEquip = () => {}, onSacrifice = () => {}, onEscaped = () => {},
   config = defaultConfig(),
 }) {
   const cfg = config; // live: Game settings edits this object; used at the next new game
@@ -737,6 +737,18 @@ export function createPlay({
             onAttack({ seat: e.seat, cell: e.cell, attack: e.attack });
             onAttacked({ ...e, player: g()?.players[e.seat] });
           });
+          break;
+        // Objectives (objectives/verbs.js): a word over the site as the pawn arrives.
+        case 'objStep':
+          attachToArrival(view.actors[e.seat], e.cell, () => onCollect(e.cell, 'objective', e.text));
+          break;
+        case 'escaped':
+          attachToArrival(view.actors[e.seat], g()?.players[e.seat]?.pos ?? -1, () => onEscaped({ ...e, player: g()?.players[e.seat] }));
+          break;
+        case 'identified':
+          onMonsterRevealed({ monster: e.monster, identified: true });
+          refreshDiscoveries();
+          onUsed(); // its objectives appear
           break;
         case 'named':
           onNamed(e);
