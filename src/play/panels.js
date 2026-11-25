@@ -100,6 +100,13 @@ export function renderAsk() {
   const cur = s.players[s.cur];
   const { x, y } = grid.coords(s.ask.i);
   const curious = !!s.ask.curious;
+  if (s.ask.anchor) {
+    // Poltergeist: spend a 6 to destroy the spiritual anchor here.
+    $('#askTitle').textContent = 'Destroy the anchor?';
+    $('#askSub').innerHTML = `<b style="color:${cur.colour}">${cur.name}</b> at ${cellLabel(x, y)} · spend a 6 to break the Poltergeist's hold here`;
+    $('#askDefense').hidden = true;
+    return;
+  }
   $('#askTitle').textContent = curious ? 'Keep investigating?' : 'Investigate?';
   const low = curious ? Math.min(...s.defSlots.map((n) => s.pool[n].v)) : 0;
   $('#askSub').innerHTML = `<b style="color:${cur.colour}">${cur.name}</b> at ${cellLabel(x, y)} · ` +

@@ -36,6 +36,29 @@ export function blockDoor(state, k) {
   return true;
 }
 
+// Every door between a building (the indoor cells joined to `cell`) and the
+// outside: edge keys. The White Lady's Block (all doors).
+export function buildingDoors(board, cell) {
+  const g = board.grid;
+  if (g.cells[cell]?.area !== 'indoor') return [];
+  const seen = new Set([cell]);
+  const queue = [cell];
+  const out = new Set();
+  for (let q = 0; q < queue.length; q++) {
+    const { x, y } = g.coords(queue[q]);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const k = dx ? edgeKey('v', dx > 0 ? x + 1 : x, y) : edgeKey('h', x, dy > 0 ? y + 1 : y);
+      const inB = g.inBounds(x + dx, y + dy) && g.cells[g.index(x + dx, y + dy)].area === 'indoor';
+      if (anyDoor(g.edgeAt(k)) && !inB) out.add(k);
+      if (inB) {
+        const j = g.index(x + dx, y + dy);
+        if (!seen.has(j)) { seen.add(j); queue.push(j); }
+      }
+    }
+  }
+  return [...out];
+}
+
 // The doors on the sides of a cell: [{ edge, side, type, status }] where side
 // is north/east/south/west and status is the game's change (or null).
 const SIDES = [[0, -1, 'north'], [1, 0, 'east'], [0, 1, 'south'], [-1, 0, 'west']];

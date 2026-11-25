@@ -21,7 +21,7 @@ import { RANGE, cellRange } from './cards/injuries.js';
 import { buildingOf } from '../core/mapCheck.js'; // the same grouping the map check uses
 import { endMonsterTurn, hurtMonster } from './equipmentPlay.js';
 import { monsterEnters, monsterDoorBanned } from './eventPlay.js';
-import { anyDoor } from './doors.js';
+import { anyDoor, blockDoor, buildingDoors } from './doors.js';
 import { edgeKey } from '../core/state.js';
 import { watch, offer } from './reactions.js';
 import { mapSites } from './objectives/scripts.js';
@@ -131,36 +131,53 @@ export function parseAbility(text) {
   if (/land adjacent to the nearest player/i.test(text)) ops.push({ op: 'teleport', to: 'player' });
   const rit = /\+1 ritual\.?\s*At (\d+) ritual:\s*Global Attack \(([^)]*)\)/i.exec(text);
   if (rit) text = text.replace(rit[0], '');
-  const re = /(Area Attack|Global Attack|LoS Attack|Attack|Exhaust|Pursue|Outflank|Retreat|Heal|Teleport)\s*(?:\(([^)]*)\)|\[(\d+)\]|to (Lair))?/g;
+  const re = /(Area Attack|Global Attack|LoS Attack|Attack|Exhaust|Pursue|Outflank|Retreat|Heal|Teleport)(?!\s*&)\s*(?:\(([^)]*)\)|\[(\d+)\]|to (Lair))?/g;
   let m;
+  const push = (o) => ops.push({ ...o, _at: m.index });   // in the card's order (see below)
   while ((m = re.exec(text))) {
     const [, word, paren, bracket, toLair] = m;
     const arg = paren ?? bracket ?? toLair ?? '';
     if (word === 'Exhaust') {
       // Exhaust (Defensive die | Movement die | All slotted dice).
-      ops.push({ op: 'exhaust', what: /all/i.test(arg) ? 'all' : /move/i.test(arg) ? 'movement' : 'defense' });
+      push({ op: 'exhaust', what: /all/i.test(arg) ? 'all' : /move/i.test(arg) ? 'movement' : 'defense' });
       continue;
     }
-    if (word === 'Pursue' || word === 'Outflank') ops.push({ op: 'pursue', n: parseInt(arg, 10) || 0, word });
-    else if (word === 'Retreat') ops.push({ op: 'retreat', n: parseInt(arg, 10) || 0 });
-    else if (word === 'Heal') ops.push({ op: 'heal', n: parseInt(arg, 10) || 0 });
-    else if (word === 'Teleport') ops.push({ op: 'teleport', to: /light/i.test(arg) ? 'light' : 'lair' });
+    if (word === 'Pursue' || word === 'Outflank') push({ op: 'pursue', n: parseInt(arg, 10) || 0, word });
+    else if (word === 'Retreat') push({ op: 'retreat', n: parseInt(arg, 10) || 0 });
+    else if (word === 'Heal') push({ op: 'heal', n: parseInt(arg, 10) || 0 });
+    else if (word === 'Teleport') push({ op: 'teleport', to: /light/i.test(arg) ? 'light' : 'lair' });
     else if (word === 'Area Attack') {
       const [dmg, rad] = arg.split(',');
       const r = /(\d+)/.exec(rad ?? '');
       // "all players inside": everyone in the monster's building (White Lady's Regret).
-      if (/inside/i.test(rad ?? '')) ops.push({ op: 'area', dmg: damageSpec(dmg), inside: true });
-      else ops.push({ op: 'area', dmg: damageSpec(dmg), radius: r ? Number(r[1]) : 2 });
-    } else if (word === 'Global Attack') ops.push({ op: 'global', dmg: damageSpec(arg) });
+      if (/inside/i.test(rad ?? '')) push({ op: 'area', dmg: damageSpec(dmg), inside: true });
+      // "nearest occupied building to Lair": everyone in that building (Poltergeist's Torment).
+      else if (/occupied building/i.test(rad ?? '')) push({ op: 'area', dmg: damageSpec(dmg), building: 'nearLair' });
+      else push({ op: 'area', dmg: damageSpec(dmg), radius: r ? Number(r[1]) : 2 });
+    } else if (word === 'Global Attack') push({ op: 'global', dmg: damageSpec(arg) });
     else if (word === 'LoS Attack') unknown.push('LoS Attack');
     else if (word === 'Attack') {
       const d = damageSpec(arg);
       const target = /^\{(\d+)\}/.exec(String(arg).trim());
-      if (d) ops.push({ op: 'attack', dmg: d, ...(target ? { target: Number(target[1]) } : {}) });
+      if (d) push({ op: 'attack', dmg: d, ...(target ? { target: Number(target[1]) } : {}) });
     }
   }
-  if (rit) ops.push({ op: 'ritual', at: Number(rit[1]), dmg: damageSpec(rit[2]) });
-  for (const w of ['Seize', 'Lure', 'Consume', 'Pin', 'Drag', 'Trap', 'Block', 'Unblock', 'Trample', 'Drop', 'Target', 'ritual']) {
+  if (rit) ops.push({ op: 'ritual', at: Number(rit[1]), dmg: damageSpec(rit[2]), _at: text.length });
+  // Target, Pin, Drop, appear, Block / Unblock (group 7, for the objective monsters).
+  const more = /(Target & appear inside \(occupied building nearest \{(\d+)\}\)|Target \(([^)]*)\)|Pin \((\d+)\)|Drop \(([^)]*)\)|Unblock \(all doors\)|Block \(all doors\))/g;
+  let k;
+  while ((k = more.exec(text))) {
+    const [all, , near, who, pin, drop] = k;
+    if (near) ops.push({ op: 'appear', near: Number(near), _at: k.index });
+    else if (who !== undefined) ops.push({ op: 'target', who: /least injured/i.test(who) ? 'leastInjuredInside' : /lair/i.test(who) ? 'nearestLair' : 'nearest', _at: k.index });
+    else if (pin) ops.push({ op: 'pin', dmg: { fixed: Number(pin) }, _at: k.index });
+    else if (drop !== undefined) ops.push({ op: 'drop', item: drop.trim().toLowerCase(), _at: k.index });
+    else if (/^Unblock/.test(all)) ops.push({ op: 'unblock', _at: k.index });
+    else ops.push({ op: 'block', _at: k.index });
+  }
+  ops.sort((a, b) => (a._at ?? -1) - (b._at ?? -1));
+  for (const o of ops) delete o._at;
+  for (const w of ['Seize', 'Lure', 'Consume', 'Drag', 'Trap', 'Trample']) {
     if (new RegExp(`\\b${w}\\b`).test(text)) unknown.push(w);
   }
   return { ops, unknown };
@@ -176,11 +193,18 @@ const label = (board, i) => { const { x, y } = board.grid.coords(i); return cell
 const targetable = (state) => alive(state).filter((pl) => pl.hiddenRound !== state.round);
 // Who it will come for (and strike up close): not the camouflaged (Viper Hood).
 const chaseable = (state) => targetable(state).filter((pl) => pl.camoRound !== state.round);
+// The Strigoi always targets the Cosor holder (while someone holds it).
+function prey(state, monster) {
+  const all = chaseable(state);
+  if (monster?.kind !== 'strigoi') return all;
+  const holder = all.find((pl) => (pl.carry ?? []).some((c) => c.item === 'cosor'));
+  return holder ? [holder] : all;
+}
 function nearestTarget(state, board, from, monster = null) {
   const { x, y } = board.grid.coords(from);
   const field = monster ? monsterField(state, board, monster, from) : board.grid.moveField(x, y, { keys: false });
   let best = null;
-  for (const pl of chaseable(state)) {
+  for (const pl of prey(state, monster)) {
     const d = pl.pos === from ? 0 : field.dist[pl.pos];
     if (d < 0) continue;
     if (!best || d < best.d) best = { pl, d, path: field.path(pl.pos) };
@@ -302,10 +326,11 @@ export function swarmRouteTo(board, from, targets) {
 const swarmVictim = (state, path) => (path ? alive(state).find((pl) => pl.pos === path[path.length - 1]) : null);
 
 // The player a melee Attack goes for: in Close range, nearest first.
-function closeTarget(state, board, pos) {
-  const near = inClose(state, board, pos).filter((pl) => pl.hiddenRound !== state.round && pl.camoRound !== state.round);
+function closeTarget(state, board, pos, monster = null) {
+  const allowed = new Set(prey(state, monster));
+  const near = inClose(state, board, pos).filter((pl) => pl.hiddenRound !== state.round && allowed.has(pl));
   if (!near.length) return null;
-  const t = nearestTarget(state, board, pos);
+  const t = nearestTarget(state, board, pos, monster);
   return near.find((pl) => pl === t?.pl) ?? near[0];
 }
 
@@ -339,7 +364,10 @@ function predictVictims(state, board, monster, intents) {
         const v = swarmVictim(state, swarmRoute(state, board, pos));
         if (v) seats.add(v.seat);
       } else if (o.op === 'attack') {
-        const t = closeTarget(state, board, pos);
+        const t = closeTarget(state, board, pos, monster);
+        if (t) seats.add(t.seat);
+      } else if (o.op === 'target') {
+        const t = pickTarget(state, board, { ...monster, pos }, o.who);
         if (t) seats.add(t.seat);
       } else if (o.op === 'area') {
         for (const pl of areaTargets(state, board, pos, o, alive(state))) seats.add(pl.seat);
@@ -356,12 +384,67 @@ function predictVictims(state, board, monster, intents) {
 // Who an Area Attack from `pos` reaches: within its radius, or (inside) every
 // player in the monster's building; outside any building, everyone indoors.
 function areaTargets(state, board, pos, o, players) {
+  if (o.building === 'nearLair') {
+    // Everyone in the occupied building nearest the Lair.
+    const lair = lairCell(state);
+    const g = board.grid;
+    const inside = players.filter((pl) => g.cells[pl.pos]?.area === 'indoor');
+    if (!inside.length || lair < 0) return [];
+    const near = inside.reduce((a, pl) => (gridDist(board, lair, pl.pos) < gridDist(board, lair, a.pos) ? pl : a));
+    const b = buildingOf(g, near.pos);
+    return inside.filter((pl) => buildingOf(g, pl.pos) === b);
+  }
   if (!o.inside) return players.filter((pl) => gridDist(board, pos, pl.pos) <= o.radius);
   const g = board.grid;
   const indoor = (i) => g.cells[i]?.area === 'indoor';
   if (!indoor(pos)) return players.filter((pl) => indoor(pl.pos));
   const b = buildingOf(g, pos);
   return players.filter((pl) => indoor(pl.pos) && buildingOf(g, pl.pos) === b);
+}
+
+// Target (…): the player an action is aimed at, wherever they are.
+//   nearestLair         the player nearest the Lair (Poltergeist's Heave)
+//   leastInjuredInside  the least injured player inside the monster's building (White Lady's Wrath)
+function pickTarget(state, board, monster, who) {
+  const players = prey(state, monster);
+  if (who === 'leastInjuredInside') {
+    const inside = areaTargets(state, board, monster.pos, { inside: true }, players);
+    const tiers = (pl) => Object.values(pl.injuries ?? {}).reduce((a, b) => a + b, 0);
+    return inside.sort((a, b) => tiers(a) - tiers(b) || a.seat - b.seat)[0] ?? null;
+  }
+  const from = who === 'nearestLair' ? lairCell(state) : monster.pos;
+  if (from < 0) return null;
+  return [...players].sort((a, b) => gridDist(board, from, a.pos) - gridDist(board, from, b.pos) || a.seat - b.seat)[0] ?? null;
+}
+
+// Infatuation: a free space inside the occupied building nearest the site
+// numbered `near` (the Church {9}); -1 if no building has anyone inside.
+function appearCell(state, board, near) {
+  const g = board.grid;
+  const site = mapSites(g)[siteByNumber(near)]?.[0];
+  const inside = alive(state).filter((pl) => g.cells[pl.pos]?.area === 'indoor');
+  if (!inside.length) return -1;
+  const from = site ?? inside[0].pos;
+  const pl = inside.reduce((a, p) => (gridDist(board, from, p.pos) < gridDist(board, from, a.pos) ? p : a));
+  const b = buildingOf(g, pl.pos);
+  const taken = new Set(state.players.map((p) => p.pos));
+  let best = -1, bd = Infinity;
+  g.cells.forEach((c, i) => {
+    if (c.area !== 'indoor' || !c.walkable || taken.has(i) || buildingOf(g, i) !== b) return;
+    const d = gridDist(board, pl.pos, i);
+    if (d < bd) { bd = d; best = i; }
+  });
+  return best >= 0 ? best : pl.pos;
+}
+
+// The White Lady: if no one is inside her building, Wrath and Regret give way
+// to Infatuation (whatever the die).
+function fallbackIntent(state, board, monster, card, intent, ctx) {
+  if (card.id !== 'white-lady' || intent.name === 'Infatuation' || intent.ability < 0) return intent;
+  if (areaTargets(state, board, monster.pos, { inside: true }, targetable(state)).length && board.grid.cells[monster.pos]?.area === 'indoor') return intent;
+  const a = card.abilities.find((x) => x.name === 'Infatuation');
+  ctx.log(state, `No one is inside with the ${card.name}: ${intent.name} becomes Infatuation.`);
+  return { ...intent, name: a.name, kind: a.kind, text: a.text, ...parseAbility(a.text) };
 }
 
 // An ability carried out at once, outside the monster's turn (a weakness
@@ -514,10 +597,15 @@ export function executeIntent(state, board, monster, ctx, events) {
   // Traps (Rusty Bear Trap, Summoning Circle...): immobilized for whole turns.
   if ((monster.immobileRounds ?? 0) > 0) { mods.immobile = true; monster.immobileRounds--; }
   if (mods.immobile) ctx.log(state, `The ${card.name} is held in place this turn.`);
-  for (const [at, intent] of monster.intents.entries()) {
+  // Hellhounds' Demonic Fire: their attacks ignore the lowest defense die.
+  const demonic = card.abilities.some((a) => a.name === 'Demonic Fire');
+  for (const [at, declared] of monster.intents.entries()) {
     if (!alive(state).length) break;
+    // White Lady: with no one inside her building, Wrath and Regret become Infatuation.
+    const intent = fallbackIntent(state, board, monster, card, declared, ctx);
     const type = KIND_TO_TYPE[intent.kind] ?? card.evidence.attack;
     const source = `The ${card.name}'s ${intent.name}`;
+    const opts = { log: ctx.log, source, ignoreLowest: demonic };
     // Move first (less if Bound, not at all if immobilized).
     const move = planMovement(state, board, monster, intent.ops, ctx);
     if (mods.moveDown) {
@@ -552,8 +640,10 @@ export function executeIntent(state, board, monster, ctx, events) {
     // Police Patrol's sirens pull one move; Distract holds for the whole turn.
     if (monster.lure && monster.lure.round === undefined && move.steps.length) { delete monster.lure; }
     if (monster.mods?.interrupted) { ctx.log(state, `The ${card.name} is interrupted.`); break; }
-    // Then the rest in card order; `hit` = who the action is aimed at (for Exhaust).
+    // Then the rest in card order; `hit` = who the action is aimed at (for
+    // Exhaust); `aim` = the player a Target picked (attacks go to them).
     let hit = [];
+    let aim = null;
     for (const o of intent.ops) {
       if (o.op === 'attack' && o.target !== undefined && card.actsBy === 'swarm' && livingVictims(state).length) {
         const defender = attackVictim(state, board, monster, card, intent, o, ctx, events);
@@ -565,7 +655,7 @@ export function executeIntent(state, board, monster, ctx, events) {
         ctx.log(state, `${source}: with no victims left, the swarms fall on everyone.`);
         events.push({ type: 'monsterAttack', id: monster.id, seat: alive(state)[0].seat, cell: monster.pos, area: true, attack: type });
         hit = alive(state);
-        for (const pl of hit) applyDamage(state, board, pl, type, roll(o.dmg), { log: ctx.log, source }, events);
+        for (const pl of hit) applyDamage(state, board, pl, type, roll(o.dmg), opts, events);
         continue;
       }
       if (o.op === 'attack' && card.actsBy === 'swarm') {
@@ -578,25 +668,76 @@ export function executeIntent(state, board, monster, ctx, events) {
         continue;
       }
       if (o.op === 'exhaust') {
-        const targets = hit.length ? hit : [closeTarget(state, board, monster.pos)].filter(Boolean);
+        const targets = hit.length ? hit : [closeTarget(state, board, monster.pos, monster)].filter(Boolean);
         for (const pl of targets) struck(state, monster, 'exhaust', pl, ctx, () => exhaust(state, pl, o.what, ctx, events));
         hit = targets;
         continue;
       }
+      if (o.op === 'target') {
+        // Target: who the rest of the action is aimed at, wherever they are.
+        aim = pickTarget(state, board, monster, o.who);
+        if (aim) { hit = [aim]; ctx.log(state, `${source} singles out ${aim.name}.`); } else ctx.log(state, `${source} finds no one to single out.`);
+        continue;
+      }
+      if (o.op === 'pin') {
+        // Pin (n): an attack of n; if it gets through, the player can't move on their next turn.
+        const t = aim ?? closeTarget(state, board, monster.pos, monster);
+        if (!t) { ctx.log(state, `${source} finds no one to pin.`); continue; }
+        hit = [t];
+        events.push({ type: 'monsterAttack', id: monster.id, seat: t.seat, cell: t.pos, attack: type });
+        let out = null;
+        struck(state, monster, intent.name, t, ctx, () => { out = applyDamage(state, board, t, type, roll(o.dmg), opts, events); });
+        if (out === 'injured' && !t.dead) { t.pinned = true; ctx.log(state, `${t.name} is pinned: no moving on their next turn.`); events.push({ type: 'pinned', seat: t.seat }); }
+        continue;
+      }
+      if (o.op === 'drop') {
+        // Drop (Cosor): the holder loses it on their space; anyone can pick it up there.
+        const holder = state.players.find((p) => (p.carry ?? []).some((c) => c.item === o.item));
+        if (!holder) continue;
+        const k = holder.carry.findIndex((c) => c.item === o.item);
+        const [thing] = holder.carry.splice(k, 1);
+        (state.objective ??= { delivered: {} }).dropped = [...(state.objective.dropped ?? []), { ...thing, cell: holder.pos }];
+        ctx.log(state, `${source}: ${holder.name} drops the ${o.item} at ${label(board, holder.pos)}.`);
+        events.push({ type: 'objStep', seat: holder.seat, cell: holder.pos, text: `${holder.name} drops the ${o.item}` });
+        continue;
+      }
+      if (o.op === 'appear') {
+        // Infatuation: she appears inside the occupied building nearest the site {near}.
+        const cell = appearCell(state, board, o.near);
+        if (cell < 0) { ctx.log(state, `${source}: no building has anyone inside.`); continue; }
+        events.push({ type: 'monsterTeleport', id: monster.id, from: monster.pos, to: cell });
+        monster.pos = cell;
+        ctx.log(state, `${source}: she appears inside at ${label(board, cell)}.`);
+        continue;
+      }
+      if (o.op === 'block' || o.op === 'unblock') {
+        // Block / Unblock (all doors) of the building she is in.
+        if (o.op === 'block') {
+          const doors = buildingDoors(board, monster.pos).filter((k) => blockDoor(state, k));
+          monster.blockedDoors = [...new Set([...(monster.blockedDoors ?? []), ...doors])];
+          if (doors.length) { ctx.log(state, `${source}: every door of the building slams shut.`); for (const k of doors) events.push({ type: 'doors', edge: k, change: 'block' }); }
+        } else {
+          const doors = (monster.blockedDoors ?? []).filter((k) => state.doors?.[k] === 'blocked');
+          for (const k of doors) { delete state.doors[k]; events.push({ type: 'doors', edge: k, change: 'unblock' }); }
+          monster.blockedDoors = [];
+          if (doors.length) ctx.log(state, `${source}: the doors she shut swing open.`);
+        }
+        continue;
+      }
       if (o.op === 'attack') {
-        const t = closeTarget(state, board, monster.pos);
+        const t = aim ?? closeTarget(state, board, monster.pos, monster);
         if (!t && bash(state, board, monster, card, monster.intents.slice(at + 1), roll, ctx, events)) continue;
         if (!t) { ctx.log(state, `${source} finds no one in reach.`); continue; }
         hit = [t];
         events.push({ type: 'monsterAttack', id: monster.id, seat: t.seat, cell: t.pos, attack: type });
-        struck(state, monster, intent.name, t, ctx, () => applyDamage(state, board, t, type, roll(o.dmg), { log: ctx.log, source }, events));
+        struck(state, monster, intent.name, t, ctx, () => applyDamage(state, board, t, type, roll(o.dmg), opts, events));
       } else if (o.op === 'area' || o.op === 'global') {
         const targets = o.op === 'global' ? targetable(state) : areaTargets(state, board, monster.pos, o, targetable(state));
         if (!targets.length && bash(state, board, monster, card, monster.intents.slice(at + 1), roll, ctx, events)) continue;
         if (!targets.length) { ctx.log(state, `${source} strikes at nothing.`); continue; }
         hit = targets;
         events.push({ type: 'monsterAttack', id: monster.id, seat: targets[0].seat, cell: monster.pos, area: true, attack: type });
-        for (const pl of targets) struck(state, monster, intent.name, pl, ctx, () => applyDamage(state, board, pl, type, roll(o.dmg), { log: ctx.log, source }, events));
+        for (const pl of targets) struck(state, monster, intent.name, pl, ctx, () => applyDamage(state, board, pl, type, roll(o.dmg), opts, events));
       } else if (o.op === 'heal') {
         ctx.log(state, `The ${card.name} heals ${o.n}.`);
       } else if (o.op === 'ritual') {
@@ -609,7 +750,7 @@ export function executeIntent(state, board, monster, ctx, events) {
         if (!targets.length) continue;
         hit = targets;
         events.push({ type: 'monsterAttack', id: monster.id, seat: targets[0].seat, cell: monster.pos, area: true, attack: type });
-        for (const pl of targets) applyDamage(state, board, pl, type, roll(o.dmg), { log: ctx.log, source }, events);
+        for (const pl of targets) applyDamage(state, board, pl, type, roll(o.dmg), opts, events);
       }
     }
     if (intent.unknown.length) ctx.log(state, `(${intent.name}: ${intent.unknown.join(', ')} not played yet.)`);

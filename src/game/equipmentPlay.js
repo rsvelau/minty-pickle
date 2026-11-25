@@ -380,6 +380,20 @@ function applyTrackEffect(monster, mcard, text) {
   return trig && mcard.abilities.some((ab) => ab.name === trig[1].trim()) ? trig[1].trim() : null;
 }
 
+// The Blessed Cosor (Strigoi): `dmg` straight off its health, ignoring
+// toughness; a Holy hit counts on its weakness track. Returns the health lost.
+export function strikeMonster(state, board, monster, dmg, kind, ctx, events) {
+  const mcard = MONSTER_BY_ID[monster.kind];
+  if (!mcard || monster.hp === null || monster.hp === undefined) return 0;
+  const before = monster.hp;
+  monster.hp = Math.max(0, monster.hp - dmg);
+  ctx.log(state, `The ${mcard.name} takes ${dmg}, its toughness no help (${monster.hp}/${monster.maxHp}).`);
+  events.push({ type: 'monsterHurt', id: monster.id, amount: before - monster.hp, hp: monster.hp });
+  if (kind && mcard.weakness.includes(kind)) weaknessHit(state, board, monster, mcard, ctx, events);
+  checkDefeat(state, board, monster, mcard, ctx, events);
+  return before - monster.hp;
+}
+
 // Achieving the monster's objective wins. A plain "Kill" objective is achieved
 // by destroying it. Any other objective (Escape, Disrupt Ritual, Destroy
 // Anchors...) is marked achieved by the players (the 'objective' action); until

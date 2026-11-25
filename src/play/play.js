@@ -880,6 +880,8 @@ export function createPlay({
     const s = g();
     return !!s && session.dispatch({ type: 'react', yes: !!yes, seat: sacrificeSeat(s) }).ok;
   }
+  // The Blessed Cosor's strike (Strigoi).
+  function strike() { return act({ type: 'strike' }); }
   // Lucky: set a die's value.
   function setDie(n, v) { return act({ type: 'setDie', die: n, v }); }
   function revealCard(n) { return act({ type: 'reveal', card: n }); }
@@ -1220,7 +1222,7 @@ export function createPlay({
     // Game settings changed outside a game: the next game starts fresh with them.
     invalidate: () => { stale = true; },
     state, session, board, roll, reset, setStartMode, saveState, loadState, useEquipment, answerInvestigate, choose, chooseByKey, tick, setActive,
-    boardChanged, setPlayers, toggleSlot, confirmMove, endTurn, unusedCount, slotTotal, rollWhite, busy, revealCard, nameMonster, craft, sacrifice, setDie, react,
+    boardChanged, setPlayers, toggleSlot, confirmMove, endTurn, unusedCount, slotTotal, rollWhite, busy, revealCard, nameMonster, craft, sacrifice, setDie, react, strike,
     clockMinutes: () => (g() ? rulesClockMinutes(g()) : rulesStartMinutesFor(cfg)),
     startMinutes: () => (g() ? rulesStartMinutes(g()) : rulesStartMinutesFor(cfg)),
     midnight: () => (g() ? isMidnight(g()) : false),

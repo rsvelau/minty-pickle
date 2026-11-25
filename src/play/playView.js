@@ -11,7 +11,8 @@ import { toast } from '../app/files.js';
 import { $ } from '../app/dom.js';
 import { craftUI, dmgIcon, hitText, injuryPips, markCaseNew, obolHTML, renderAsk, renderSacrifice, renderCasebook, renderIntent, renderInventory, renderRevealSheet, showCard, showObol, renderEventChoice } from './panels.js';
 import { objectiveLive } from '../game/objectives/scripts.js';
-import { itemLabel } from '../game/objectives/verbs.js';
+import { describeItem } from '../game/objectives/verbs.js';
+import { RANGE, cellRange } from '../game/cards/injuries.js';
 import { __set_markerHidden, __set_markerUsed, markers, refreshMarkers, refreshPropsAndWalls, visibleTop } from '../render/board.js';
 import { camera, cellToWorld, controls, scene, wake } from '../render/scene.js';
 import { lightLevels } from '../render/tileLook.js';
@@ -138,8 +139,9 @@ export function renderPlay() {
       `${!p.dead && p.bonusDefense?.some((b) => b.round === s.round) ? ' <b style="color:#8fb6ff">Rallied</b>' : ''}${!p.dead && p.tossed ? ' <b style="color:#d9c27a">Steadied</b>' : ''}` +
       `${!p.dead && p.drinking ? ' <b style="color:#e08a5a">Stimulated</b>' : ''}${p.dying ? ' <b style="color:#ff6a50">Fallen</b>' : ''}` +
       // Objectives: what they carry, cleansed, escaped.
-      `${(p.carry ?? []).map((c) => ` <b style="color:${c.lit === false ? '#8a8f98' : '#f3d27a'}">${itemLabel(c.item)}${c.lit === false ? ' (out)' : ''}</b>`).join('')}` +
-      `${!p.dead && p.status?.cleanse ? ' <b style="color:#9fe6ff">Cleansed</b>' : ''}${p.escaped ? ' <b style="color:#7fe08a">Escaped</b>' : ''}</span>` +
+      `${(p.carry ?? []).map((c) => ` <b style="color:${c.lit === false ? '#8a8f98' : '#f3d27a'}">${describeItem(c)}</b>`).join('')}` +
+      `${!p.dead && p.status?.cleanse ? ' <b style="color:#9fe6ff">Cleansed</b>' : ''}${p.escaped ? ' <b style="color:#7fe08a">Escaped</b>' : ''}` +
+      `${!p.dead && p.pinned ? ' <b style="color:#ff9a5a">Pinned</b>' : ''}</span>` +
       `<span class="obol-row">${OBOL_TYPES.map((t) => `<span class="obol-count${counts[t] ? '' : ' zero'}" title="${OBOLS[t].label} Obols">${obolHTML(t)}${counts[t]}</span>`).join('')}</span></div>`;
   }).join('');
   $('#playBoard').innerHTML += s.monsters.map((mo) => {
@@ -343,6 +345,13 @@ export function renderTray() {
   // At a fork the arrows move: dice slotted now join the move.
   $('#trayMove').hidden = !play.slotTotal() || choosing;
   $('#trayMove').textContent = `Move ${play.slotTotal()}`;
+  // The Blessed Cosor (Strigoi): Strike when it's in Close range, once a turn.
+  const st = play.session.state;
+  const me = st?.players[st.cur];
+  const canStrike = !!st && !rolling && (me?.carry ?? []).some((c) => c.item === 'cosor' && c.blessed) && st.struck !== st.turn
+    && st.monsters.some((m) => m.kind === 'strigoi' && cellRange(grid, me.pos, m.pos) <= RANGE.close);
+  $('#trayStrike').hidden = !canStrike;
+  $('#trayStrike').onclick = () => play.strike();
   $('#trayEnd').disabled = rolling;
   $('#trayEnd').textContent = choosing ? 'Stop here & end turn' : moved || s.defSlots.length ? 'End turn' : 'Stay put & end turn';
   $('#trayHint').textContent = rolling ? 'Rolling…' : s.deathsDoor ? "Death's Door: one die only"

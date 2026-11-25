@@ -27,9 +27,11 @@ export const OBJECTIVES = {
   },
   hellhounds: {
     needs: ['church'],
+    played: true,
     steps: [
       { do: 'collect', at: 'church', fixture: 'holy-water-basin', item: 'holy-water', text: 'Collect holy water at the Church’s Holy Water Basin' },
-      { do: 'deliver', at: 'lair', item: 'holy-water', text: 'Bring it to the Lair to cleanse the ritual' },
+      { do: 'deliver', at: 'lair', item: 'holy-water', text: 'Bring it to the Lair: the ritual is disrupted and the pack stops coming back' },
+      { do: 'kill', at: 'lair', text: 'Then destroy the pack (until then, a destroyed pack rises again at the Lair)' },
     ],
   },
   'shadow-people': {
@@ -42,9 +44,10 @@ export const OBJECTIVES = {
   },
   poltergeist: {
     anyCount: 4,
+    played: true,
     steps: [
-      { do: 'destroy', at: 'any', count: 4, req: '6', text: 'Destroy 4 spiritual anchors at Objective markers: slot a 6 at each' },
-      { do: 'destroy', at: 'lair', req: '6', text: 'Destroy the anchor at the Lair' },
+      { do: 'destroy', at: 'any', count: 4, text: 'Stop on Objective markers and spend a 6 to destroy the spiritual anchor there: 4 of them' },
+      { do: 'destroy', at: 'lair', after: 4, text: 'Then destroy the last anchor at the Lair (another 6): it’s gone' },
     ],
   },
   adze: {
@@ -58,20 +61,25 @@ export const OBJECTIVES = {
   },
   strigoi: {
     needs: ['outdoor', 'church'],
+    played: true,
     steps: [
-      { do: 'collect', at: 'lair', item: 'cosor', text: 'Find the Cosor (a Romanian knife) at the Lair' },
-      { do: 'perform', at: 'outdoor', text: 'Sharpen it at the Outdoor Store {12}' },
-      { do: 'perform', at: 'church', text: 'Bless it at the Church: the Blessed Cosor ignores the Strigoi’s toughness, one die of damage a turn' },
-      { do: 'kill', at: 'lair', text: 'Kill the Strigoi with it' },
+      { do: 'collect', at: 'lair', item: 'cosor', unique: true, text: 'Find the Cosor (a Romanian knife) at the Lair: the Strigoi always goes for whoever holds it' },
+      { do: 'upgrade', at: 'outdoor', item: 'cosor', set: 'sharp', text: 'Sharpen it at the Outdoor Store {12}' },
+      { do: 'upgrade', at: 'church', item: 'cosor', set: 'blessed', requires: 'sharp', completes: true, text: 'Bless it at the Church {9}' },
+      { do: 'kill', at: 'lair', text: 'Strike the Strigoi with the Blessed Cosor (Close range, once a turn: one die, ignoring its toughness) until it falls' },
     ],
   },
   'white-lady': {
     needs: ['boutique', 'curio', 'funeral', 'church'],
+    played: true,
     steps: [
-      { do: 'collect', at: 'boutique', item: 'gown', text: 'Pick up the Decayed Wedding Gown at the Boutique' },
-      { do: 'collect', at: 'curio', item: 'ring', text: 'Pick up the Tarnished Wedding Ring at the Curio Shop' },
-      { do: 'collect', at: 'funeral', item: 'finger-bone', text: 'Pick up the Desiccated Finger Bone at the Funeral Parlor' },
-      { do: 'perform', at: 'church', text: 'Bring all three to the Church: the wedding ritual is completed and her soul is set free' },
+      { do: 'collect', at: 'boutique', item: 'gown', unique: true, text: 'Pick up the Decayed Wedding Gown at the Boutique {3}' },
+      { do: 'collect', at: 'curio', item: 'ring', unique: true, text: 'Pick up the Tarnished Wedding Ring at the Curio Shop {7}' },
+      { do: 'collect', at: 'funeral', item: 'finger-bone', unique: true, text: 'Pick up the Desiccated Finger Bone at the Funeral Parlor {11}' },
+      { do: 'deliver', at: 'church', item: 'gown', completes: false, text: 'Bring the gown to the Church {9}' },
+      { do: 'deliver', at: 'church', item: 'ring', completes: false, text: 'Bring the ring to the Church' },
+      { do: 'deliver', at: 'church', item: 'finger-bone', completes: false, text: 'Bring the finger bone to the Church' },
+      { do: 'hold', at: 'church', rounds: 3, after: ['gown', 'ring', 'finger-bone'], text: 'With all three there, keep someone inside the Church for 3 ⏳ while she rages: her soul is set free' },
     ],
   },
 };

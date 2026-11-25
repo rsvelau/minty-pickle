@@ -88,8 +88,9 @@ test('Trigger Regret (White Lady): a Salt hit sets off Regret at once, on every 
   assert.ok(r.events.findIndex((e) => e.type === 'equipUse') < r.events.findIndex((e) => e.type === 'damage'), 'after the shot itself');
 });
 
-test('Regret on her own turn: an Area Attack on everyone inside (outside a building: everyone indoors)', () => {
+test('Regret on her own turn: an Area Attack on everyone inside her building', () => {
   const s = setup('white-lady');
+  s.monster.pos = s.g.index(6, 3);
   s.pl.pos = s.g.index(6, 4);
   const ev = s.turn('Regret');
   assert.deepEqual(ev.filter((e) => e.type === 'damage').map((e) => e.seat), [0]);

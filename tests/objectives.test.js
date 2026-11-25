@@ -178,3 +178,175 @@ test('all five pieces of evidence identify the monster before midnight: its obje
   const church = mapSites(board.grid).church[0];
   assert.ok(objectiveLive(state, board.grid, church), 'its site is in play before midnight');
 });
+
+// --- Step 3: Hellhounds, Poltergeist, Strigoi, White Lady -----------------------------
+import { executeIntent, parseAbility } from '../src/game/monsterTurn.js';
+import { MONSTER_BY_ID } from '../src/game/cards/monsters.js';
+import { holdRound } from '../src/game/objectives/verbs.js';
+
+// Every site on row 0 (church at (0,0) ... outdoor at (14,0)); the Lair at (6,2).
+function fight3(kind, { players = 2 } = {}) {
+  const g = map(['church', 'hotel', 'bar', 'hospital', 'boutique', 'curio', 'funeral', 'outdoor']);
+  const board = createBoard(g);
+  const { state } = newGame(board, { seed: 2, config: { players, monster: 'none' } });
+  state.mystery = { monster: kind, revealed: true, spawnCell: g.index(6, 2), deck: [], flipped: [], found: [], pool: [kind] };
+  const monster = { id: 'm1', kind, pos: g.index(19, 11), prev: -1, revealed: true };
+  armMonster(monster);
+  state.monsters = [monster];
+  const ctx = { state, log: () => {}, randInt: () => 3 };          // dice roll 4
+  const at = (pl, x, y) => { pl.pos = g.index(x, y); const ev = []; onSiteEnter(state, board, pl, pl.pos, ctx, ev); return ev; };
+  const turn = (...names) => {
+    monster.intents = names.map((n) => { const a = MONSTER_BY_ID[kind].abilities.find((x) => x.name === n); return { roll: 1, ability: 0, name: a.name, kind: a.kind, text: a.text, ...parseAbility(a.text) }; });
+    const ev = [];
+    executeIntent(state, board, monster, ctx, ev);
+    return ev;
+  };
+  return { g, board, state, monster, ctx, at, turn };
+}
+const site = (s, id) => mapSites(s.g)[id][0];
+const xy = (s, i) => Object.values(s.g.coords(i));
+
+test('Hellhounds: holy water to the Lair stops the pack coming back; then destroying it wins', () => {
+  const s = fight3('hellhounds');
+  const pl = s.state.players[0];
+  s.monster.hp = 0;
+  s.at(pl, ...xy(s, site(s, 'church')));
+  assert.deepEqual(pl.carry, [{ item: 'holy-water' }]);
+  s.at(pl, 6, 2);
+  assert.ok(s.state.objectiveDone, 'the ritual is disrupted');
+  assert.ok(!s.state.won, 'not yet: the pack must still be destroyed');
+});
+
+test('Pin: an attack of 5 that gets through pins; the pinned player can’t move on their next turn', () => {
+  const s = fight3('hellhounds', { players: 1 });
+  const pl = s.state.players[0];
+  pl.pos = s.g.index(10, 5);
+  s.monster.pos = s.g.index(11, 5);
+  s.turn('Pin');
+  assert.ok(pl.pinned);
+  assert.ok(applyAction(s.state, s.board, { type: 'roll', seat: 0 }).ok);
+  assert.ok(!pl.pinned && s.state.noMove);
+  s.state.pool = [{ kind: 'black', v: 3 }];
+  assert.ok(applyAction(s.state, s.board, { type: 'slot', die: 0, to: 'move', seat: 0 }).ok);
+  assert.match(applyAction(s.state, s.board, { type: 'move', seat: 0 }).error, /can’t move/);
+});
+
+test('Demonic Fire: the hounds’ attacks ignore the lowest defense die', () => {
+  const s = fight3('hellhounds', { players: 1 });
+  const pl = s.state.players[0];
+  pl.pos = s.g.index(10, 5);
+  s.monster.pos = s.g.index(11, 5);
+  pl.defense = [{ v: 1 }, { v: 3 }];                                 // 4, but 3 counts: Harrow's 3 is blocked
+  s.turn('Harrow');
+  assert.deepEqual(pl.injuries, { P: 0, M: 0, S: 0 });
+  pl.defense = [{ v: 2 }, { v: 2 }]; pl.defenseUsed = 0;              // 4, but 2 counts
+  s.turn('Harrow');
+  assert.equal(pl.injuries.P, 1);
+});
+
+test('Poltergeist: spend a 6 at 4 Objective markers, then the Lair, to win', () => {
+  const s = fight3('poltergeist', { players: 1 });
+  const pl = s.state.players[0];
+  assert.ok(applyAction(s.state, s.board, { type: 'roll', seat: 0 }).ok);
+  const sites = mapSites(s.g).all;
+  s.at(pl, 6, 2);
+  assert.equal(s.state.ask, null, 'the Lair waits for the other four');
+  for (const c of sites.slice(0, 4)) {
+    s.state.pool = [{ kind: 'black', v: 6 }];
+    s.state.slots = []; s.state.defSlots = [];
+    s.at(pl, ...xy(s, c));
+    assert.ok(s.state.ask?.anchor);
+    s.state.phase = 'asking';
+    assert.ok(applyAction(s.state, s.board, { type: 'investigate', yes: true, seat: 0 }).ok);
+    if (s.state.phase !== 'slotting') s.state.phase = 'slotting';
+  }
+  assert.equal(s.state.objective.anchors.length, 4);
+  s.state.pool = [{ kind: 'black', v: 5 }];
+  s.at(pl, ...xy(s, sites[5]));
+  assert.equal(s.state.ask, null, 'no 6: no asking');
+  s.state.pool = [{ kind: 'black', v: 6 }];
+  s.at(pl, 6, 2);
+  s.state.phase = 'asking';
+  assert.ok(applyAction(s.state, s.board, { type: 'investigate', yes: true, seat: 0 }).ok);
+  assert.ok(s.state.won);
+});
+
+test('Heave: Target the player nearest the Lair, wherever they are, and Pin them', () => {
+  const s = fight3('poltergeist');
+  const [a, b] = s.state.players;
+  a.pos = s.g.index(6, 5); b.pos = s.g.index(18, 5);
+  s.turn('Heave');
+  assert.ok(a.pinned && !b.pinned);
+});
+
+test('Strigoi: Cosor at the Lair (once), sharpened, then blessed; the strike ignores toughness; it hunts the holder', () => {
+  const s = fight3('strigoi');
+  const [a, b] = s.state.players;
+  s.at(a, 6, 2);
+  assert.deepEqual(a.carry, [{ item: 'cosor' }]);
+  s.at(b, 6, 2);
+  assert.ok(!b.carry?.length, 'only one Cosor');
+  s.at(a, ...xy(s, site(s, 'church')));
+  assert.ok(!a.carry[0].blessed, 'sharpen it first');
+  s.at(a, ...xy(s, site(s, 'outdoor')));
+  s.at(a, ...xy(s, site(s, 'church')));
+  assert.ok(a.carry[0].blessed && s.state.objectiveDone);
+  // The strike.
+  a.pos = s.g.index(10, 5); s.monster.pos = s.g.index(11, 5);
+  assert.ok(applyAction(s.state, s.board, { type: 'roll', seat: 0 }).ok);
+  const r = applyAction(s.state, s.board, { type: 'strike', seat: 0 });
+  assert.ok(r.ok, r.error);
+  assert.ok(s.monster.hp < 10);
+  assert.match(applyAction(s.state, s.board, { type: 'strike', seat: 0 }).error, /once a turn/);
+});
+
+test('Unholy Burn drops the Cosor on the holder’s space; stepping there picks it up, still blessed', () => {
+  const s = fight3('strigoi');
+  const [a, b] = s.state.players;
+  a.carry = [{ item: 'cosor', sharp: true, blessed: true }];
+  a.pos = s.g.index(10, 5); b.pos = s.g.index(12, 5);
+  s.monster.pos = s.g.index(9, 5);
+  s.turn('Unholy Burn');
+  assert.deepEqual(a.carry, []);
+  s.at(b, 10, 5);
+  assert.deepEqual(b.carry, [{ item: 'cosor', sharp: true, blessed: true }]);
+});
+
+test('White Lady: three items to the Church, then 3 rounds with someone inside sets her free', () => {
+  const s = fight3('white-lady');
+  const [a] = s.state.players;
+  for (const id of ['boutique', 'curio', 'funeral']) s.at(a, ...xy(s, site(s, id)));
+  assert.equal(a.carry.length, 3);
+  s.at(a, ...xy(s, site(s, 'church')));
+  assert.ok(s.state.objective.ceremony);
+  a.pos = s.g.index(3, 9);                                       // outdoors: nobody inside the Church
+  s.g.cells[site(s, 'church')].area = 'indoor';
+  holdRound(s.state, s.board, s.ctx, []);
+  assert.equal(s.state.objective.ceremony.held, 0, 'it waits');
+  a.pos = site(s, 'church');
+  for (let k = 0; k < 3; k++) holdRound(s.state, s.board, s.ctx, []);
+  assert.ok(s.state.won);
+});
+
+test('White Lady’s Infatuation: she appears inside the occupied building and shuts every door; Regret opens them', () => {
+  const g = new GridState(20, 12);
+  for (let x = 0; x < 20; x++) g.apply(g.index(x, 5), { area: 'outdoor', sub: 'street' }, { silent: true });
+  g.apply(g.index(19, 5), { area: 'outdoor', sub: 'start', walkable: false, facing: 3 }, { silent: true });
+  for (let y = 2; y < 5; y++) for (let x = 5; x < 8; x++) g.apply(g.index(x, y), { area: 'indoor', sub: 'hardwood' }, { silent: true });
+  for (let x = 5; x < 8; x++) { g.setEdge('h', x, 2, 'wall'); g.setEdge('h', x, 5, x === 6 ? 'door' : 'wall'); }
+  for (let y = 2; y < 5; y++) { g.setEdge('v', 5, y, 'wall'); g.setEdge('v', 8, y, 'wall'); }
+  const board = createBoard(g);
+  const { state } = newGame(board, { seed: 2, config: { players: 1, monster: 'none' } });
+  state.players[0].pos = g.index(6, 3);
+  const monster = { id: 'm1', kind: 'white-lady', pos: g.index(15, 5), prev: -1, revealed: true };
+  armMonster(monster);
+  state.monsters = [monster];
+  const ctx = { state, log: () => {}, randInt: () => 0 };
+  const act = (n) => { const a = MONSTER_BY_ID['white-lady'].abilities.find((x) => x.name === n); monster.intents = [{ roll: 1, ability: 1, name: a.name, kind: a.kind, text: a.text, ...parseAbility(a.text) }]; executeIntent(state, board, monster, ctx, []); };
+  act('Wrath');                                                   // no one inside with her: Infatuation instead
+  assert.equal(g.cells[monster.pos].area, 'indoor');
+  assert.equal(Object.values(state.doors).filter((d) => d === 'blocked').length, 1, 'the door is shut');
+  act('Regret');
+  assert.equal(Object.values(state.doors).filter((d) => d === 'blocked').length, 0);
+  assert.equal(state.players[0].injuries.M, 1, 'and Regret strikes inside');
+});

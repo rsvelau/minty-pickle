@@ -20,14 +20,15 @@ import { gameDoorOverride } from './doors.js';
 import { MONSTERS, spawnMonsters, monstersAct, farthestFromPlayers } from './monsters.js';
 import { turnLimits, injuries, applyDamage, sacrificeCarrier, killPlayer } from './combat.js';
 import { answer as answerReaction } from './reactions.js';
+import { RANGE, cellRange } from './cards/injuries.js';
 import { objectiveLive } from './objectives/scripts.js';
-import { onSiteEnter, crossingBlocked, suffocate } from './objectives/verbs.js';
+import { onSiteEnter, crossingBlocked, suffocate, destroyAnchor, holdRound } from './objectives/verbs.js';
 import { siteOf, siteLabel } from '../core/sites.js';
 import { craft } from './obolcraft.js';
 import { refreshThreat, onPlayerEnters } from './monsterTurn.js';
 import { setupMystery, evidenceObol, revealEvidence, attackObol, nameMonster, revealMonster } from './mystery.js';
 import { setupDecks, drawEquipment, drawCard, eventCard, isMindset } from './decks.js';
-import { useEquipment, armMonster, achieveObjective, discardForWeakness } from './equipmentPlay.js';
+import { useEquipment, armMonster, achieveObjective, discardForWeakness, strikeMonster } from './equipmentPlay.js';
 import { EVENT_CATEGORIES } from './cards/events.js';
 import {
   resolveEvent, answerEvent, runQueue, doorOverride, startOfTurn, keyTouched, playerStepCost, playerEnters, summon,
@@ -245,7 +246,7 @@ export function newGame(board, setup = {}) {
 // equipment and Obolcraft.
 const STOPPED = ['slotting', 'choosing', 'asking'];
 // Every action: { type, seat? }. Returns { ok, error?, events }.
-export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective', 'event', 'setting', 'sacrifice', 'setDie', 'react'];
+export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective', 'event', 'setting', 'sacrifice', 'setDie', 'react', 'strike'];
 
 export function applyAction(state, board, action) {
   // Doors the game changed (nailed, breached) count for every move made while
@@ -290,6 +291,8 @@ function applyActionNow(state, board, action) {
       state.moveBonus = 0;
       state.windDouble = false;
       state.noMove = false;                          // Camouflage: can't move the rest of that turn
+      // Pinned (Hellhounds' and the Poltergeist's Pin): no moving this turn.
+      if (pl.pinned) { delete pl.pinned; state.noMove = true; log(state, `${who(state)} is pinned: no moving this turn.`); }
       // Discard Crystal & no light for ⌛ (Shadow People): over when its player's turn comes round again.
       if (state.flags?.noLight && state.flags.noLight.seat === state.cur && state.flags.noLight.round !== state.round) delete state.flags.noLight;
       startOfTurn(state, eventCtx(state));
@@ -359,7 +362,7 @@ function applyActionNow(state, board, action) {
       // turn carries on afterwards: slot more dice, adjust defense, move
       // again, or end it. With nothing new slotted, this ends the turn.
       if (state.phase !== 'slotting') return fail('not slotting');
-      if (state.noMove && state.slots.some((n) => !state.pool[n].spent)) return fail('camouflaged: you can’t move this turn');
+      if (state.noMove && state.slots.some((n) => !state.pool[n].spent)) return fail('you can’t move this turn (camouflaged or pinned)');
       const fresh = commitFresh(state);
       if (!fresh) { endTurn(state, board, events); break; }
       state.roll = fresh.total;
@@ -396,9 +399,13 @@ function applyActionNow(state, board, action) {
     case 'investigate': {
       // The answer to "Investigate?": yes draws an Obol; no runs on through.
       if (state.phase !== 'asking' || !state.ask) return fail('nothing to investigate');
-      const { i, curious } = state.ask;
+      const { i, curious, anchor } = state.ask;
       state.ask = null;
-      if (curious) {
+      if (anchor) {
+        // Poltergeist: spend a 6 to destroy the anchor here.
+        if (action.yes) destroyAnchor(state, i, { log, randInt, state }, events);
+        if (state.phase === 'over') break;
+      } else if (curious) {
         // Curious: another Obol at the same spot, for a Defense die.
         if (action.yes) {
           const n = state.defSlots.reduce((a, k) => (a < 0 || state.pool[k].v < state.pool[a].v ? k : a), -1);
@@ -449,6 +456,24 @@ function applyActionNow(state, board, action) {
       if (err) return fail(err);
       // Toss or Drink mid-turn: injuries held off now give back what they took.
       if (before) relimit(state, board, pl, before, events);
+      restop(state, board, events);
+      break;
+    }
+    case 'strike': {
+      // The Blessed Cosor (Strigoi): once a turn, from Close range, one die
+      // of Holy damage that ignores its toughness.
+      if (!['idle', ...STOPPED].includes(state.phase)) return fail('finish moving first');
+      const pl = curPlayer(state);
+      const cosor = (pl.carry ?? []).find((c) => c.item === 'cosor');
+      if (!cosor?.blessed) return fail('only with the Blessed Cosor');
+      if (state.struck === state.turn) return fail('once a turn');
+      const m = state.monsters.find((x) => x.kind === 'strigoi' && cellRange(board.grid, pl.pos, x.pos) <= RANGE.close);
+      if (!m) return fail('the Strigoi is not in Close range');
+      state.struck = state.turn;
+      const dmg = d6(state);
+      log(state, `${who(state)} strikes the Strigoi with the Blessed Cosor: ${dmg}.`);
+      strikeMonster(state, board, m, dmg, 'holy', { log, state, randInt }, events);
+      events.push({ type: 'cosorStrike', seat: state.cur, id: m.id, amount: dmg });
       restop(state, board, events);
       break;
     }
@@ -991,6 +1016,7 @@ function endRound(state, board, events) {
   const was = isMidnight(state);
   // Monsters already out carry out the action they declared, and declare the next.
   if (was && state.monsters.length) monstersAct(state, board, events, random, log);
+  holdRound(state, board, { state, log, randInt }, events);   // White Lady: the ceremony counts a round
   state.round++;
   // Rally's defense lasts through the monster's turn: gone now.
   for (const p of state.players) if (p.bonusDefense) p.bonusDefense = p.bonusDefense.filter((b) => b.round === undefined);

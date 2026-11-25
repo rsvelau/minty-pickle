@@ -9,15 +9,27 @@
 //   escape   with the required status, the investigator leaves the board: the
 //            first escape is a team win, and play goes on until everyone has
 //            escaped or died (Barghest)
-// Other verbs (defend, destroy, perform, kill) are played by the monster's
-// own rules or at the table for now.
+//   upgrade  the carried item gains a mark (`set`), maybe needing another
+//            first (`requires`); `completes` achieves the objective (the
+//            Strigoi's Cosor: sharpened, then blessed)
+//   destroy  with a 6 to spend, asks "Destroy the anchor?" (the 'investigate'
+//            answer in rules.js); `count` of them at any Objective marker,
+//            then the one `after` them (Poltergeist)
+//   hold     once the `after` items are all delivered, someone inside the
+//            site's building at the end of each round counts down `rounds`
+//            (holdRound, from rules.js endRound; the White Lady's ceremony)
+// `unique` items exist once: taken, they're gone from the site. Dropped items
+// (Drop) lie where they fell: stepping there picks them up again.
+// Defend and kill are the monster's own rules (victims, its health).
 //
-// On a player: carry [{ item, lit? }], status { cleanse: true }, escaped.
-// On the state: objective { delivered: { item: n } }.
+// On a player: carry [{ item, lit?, sharp?, blessed? }], status { cleanse }, escaped.
+// On the state: objective { delivered: { item: n }, taken: { item }, dropped:
+// [{ item, cell, ... }], anchors: [cells], ceremony: { held } }.
 import { scriptOf, mapSites, knownMonster } from './scripts.js';
 import { siteLabel } from '../../core/sites.js';
 import { achieveObjective } from '../equipmentPlay.js';
 import { watch, offer } from '../reactions.js';
+import { buildingOf } from '../../core/mapCheck.js';
 
 export const ITEMS = {
   candle: { label: 'Candle', lit: true },
@@ -28,6 +40,11 @@ export const ITEMS = {
   cosor: { label: 'Cosor' },
 };
 export const itemLabel = (id) => ITEMS[id]?.label ?? id;
+// An item with its marks: "Cosor (sharpened, blessed)", "Candle (out)".
+export const describeItem = (c) => {
+  const marks = [c.lit === false && 'out', c.sharp && 'sharpened', c.blessed && 'blessed'].filter(Boolean);
+  return `${c.blessed ? 'Blessed ' : ''}${itemLabel(c.item)}${marks.length && !c.blessed ? ` (${marks.join(', ')})` : c.lit === false ? ' (out)' : ''}`;
+};
 
 // How many deliveries a step needs: `times`, halved (Shadow People: 2) with one or two players.
 export function deliveriesNeeded(state, step) {
@@ -39,7 +56,8 @@ export function deliveriesNeeded(state, step) {
 function siteCells(state, board, at) {
   if (at === 'lair') return state.mystery?.spawnCell >= 0 ? [state.mystery.spawnCell] : [];
   if (at === 'start') { const s = board.startCell(); return s >= 0 ? [s] : []; }
-  return mapSites(board.grid)[at] ?? [];
+  const sites = mapSites(board.grid);
+  return at === 'any' ? sites.all : sites[at] ?? [];
 }
 
 // A player has stepped onto `cell`: play any objective step there.
@@ -48,15 +66,24 @@ export function onSiteEnter(state, board, pl, cell, ctx, events) {
   const sc = scriptOf(id);
   if (!sc || pl.dead || pl.dying || pl.escaped || state.phase === 'over') return;
   const say = (text) => { ctx.log(state, text); events.push({ type: 'objStep', seat: pl.seat, cell, text }); };
+  const ob = (state.objective ??= { delivered: {} });
+  // Something dropped here: picked up again, as it was.
+  const here = (ob.dropped ?? []).filter((d) => d.cell === cell);
+  if (here.length) {
+    ob.dropped = ob.dropped.filter((d) => d.cell !== cell);
+    for (const { cell: _c, ...thing } of here) { (pl.carry ??= []).push(thing); say(`${pl.name} picks up the ${itemLabel(thing.item).toLowerCase()}.`); }
+  }
   for (const step of sc.steps) {
     if (!siteCells(state, board, step.at).includes(cell)) continue;
     const where = siteLabel(step.at);
     if (step.do === 'collect') {
       pl.carry ??= [];
+      if (step.unique && ob.taken?.[step.item]) continue;                  // only one of it, already taken
       const have = pl.carry.find((c) => c.item === step.item);
       if (have && (!ITEMS[step.item]?.lit || have.lit)) continue;           // one at a time
       if (have) have.lit = true;                                          // a candle that went out is lit again
       else pl.carry.push({ item: step.item, ...(ITEMS[step.item]?.lit ? { lit: true } : {}) });
+      if (step.unique) (ob.taken ??= {})[step.item] = true;
       say(`${pl.name} takes ${ITEMS[step.item]?.lit ? 'a lit ' : ''}${itemLabel(step.item).toLowerCase()} at ${where}.`);
     } else if (step.do === 'deliver') {
       const k = (pl.carry ?? []).findIndex((c) => c.item === step.item && (!ITEMS[step.item]?.lit || c.lit));
@@ -65,8 +92,30 @@ export function onSiteEnter(state, board, pl, cell, ctx, events) {
       state.objective ??= { delivered: {} };
       const n = state.objective.delivered[step.item] = (state.objective.delivered[step.item] ?? 0) + 1;
       const need = deliveriesNeeded(state, step);
-      say(`${pl.name} brings the ${itemLabel(step.item).toLowerCase()} to ${where}: ${Math.min(n, need)} of ${need}.`);
-      if (n >= need && !state.objectiveDone) achieveObjective(state, ctx, events);
+      say(`${pl.name} brings the ${itemLabel(step.item).toLowerCase()} to ${where}${need > 1 ? `: ${Math.min(n, need)} of ${need}` : ''}.`);
+      if (n >= need && step.completes !== false && !state.objectiveDone) achieveObjective(state, ctx, events);
+      // Everything a hold waits for is in: the ceremony starts.
+      const hold = sc.steps.find((x) => x.do === 'hold');
+      if (hold && !ob.ceremony && hold.after.every((it) => ob.delivered[it])) {
+        ob.ceremony = { held: 0 };
+        say(`Everything is at ${siteLabel(hold.at)}: the ceremony begins. Keep someone inside for ${hold.rounds} rounds.`);
+      }
+    } else if (step.do === 'upgrade') {
+      const thing = (pl.carry ?? []).find((c) => c.item === step.item);
+      if (!thing || thing[step.set] || (step.requires && !thing[step.requires])) {
+        if (thing && step.requires && !thing[step.requires]) say(`The ${itemLabel(step.item).toLowerCase()} must be ${step.requires === 'sharp' ? 'sharpened' : step.requires} first.`);
+        continue;
+      }
+      thing[step.set] = true;
+      say(`${pl.name}'s ${itemLabel(step.item).toLowerCase()} is ${step.set === 'sharp' ? 'sharpened' : step.set} at ${where}.`);
+      if (step.completes && !state.objectiveDone) achieveObjective(state, ctx, events);
+    } else if (step.do === 'destroy') {
+      ob.anchors ??= [];
+      if (ob.anchors.includes(cell) || state.ask) continue;
+      if (step.count && ob.anchors.filter((c) => c !== lairOf(state)).length >= step.count) continue;
+      if (step.after && ob.anchors.length < step.after) { say(`The anchor at ${where} holds until ${step.after} others are destroyed.`); continue; }
+      if (!sixToSpend(state)) { say(`${pl.name} needs a 6 to destroy the anchor at ${where}.`); continue; }
+      state.ask = { i: cell, anchor: true };
     } else if (step.do === 'cleanse') {
       if (pl.status?.cleanse) continue;
       (pl.status ??= {}).cleanse = true;
@@ -79,6 +128,49 @@ export function onSiteEnter(state, board, pl, cell, ctx, events) {
       escape(state, pl, ctx, events, where);
     }
   }
+}
+
+const lairOf = (state) => state.mystery?.spawnCell ?? -1;
+// A rolled 6 the current player can spend (not moved with): free first, else in Defense.
+export function sixToSpend(state) {
+  const free = state.pool.findIndex((d, n) => d.v === 6 && !d.spent && !state.slots.includes(n) && !state.defSlots.includes(n));
+  if (free >= 0) return { n: free };
+  const def = state.defSlots.find((n) => state.pool[n]?.v === 6 && !state.pool[n].spent);
+  return def !== undefined ? { n: def, fromDefense: true } : null;
+}
+// The answer to "Destroy the anchor?": the 6 is spent. Returns true if done.
+export function destroyAnchor(state, cell, ctx, events) {
+  const six = sixToSpend(state);
+  if (!six) return false;
+  if (six.fromDefense) state.defSlots.splice(state.defSlots.indexOf(six.n), 1);
+  state.pool[six.n].spent = true;
+  state.pool[six.n].usedFor = 'Anchor';
+  const ob = (state.objective ??= { delivered: {} });
+  (ob.anchors ??= []).push(cell);
+  const lair = cell === lairOf(state);
+  const pl = state.players[state.cur];
+  ctx.log(state, lair ? `${pl.name} destroys the last anchor, at the Lair.` : `${pl.name} destroys a spiritual anchor (${ob.anchors.length} of 4).`);
+  events.push({ type: 'objStep', seat: pl.seat, cell, text: lair ? 'The last anchor breaks' : `Anchor destroyed (${ob.anchors.length} of 4)` });
+  if (lair && !state.objectiveDone) achieveObjective(state, ctx, events);
+  return true;
+}
+
+// End of a round: a ceremony in progress counts a round if someone is inside
+// the site's building; nobody there, it waits (White Lady).
+export function holdRound(state, board, ctx, events) {
+  const ob = state.objective;
+  const sc = scriptOf(knownMonster(state));
+  const hold = sc?.steps.find((x) => x.do === 'hold');
+  if (!hold || !ob?.ceremony || state.objectiveDone) return;
+  const g = board.grid;
+  const sites = siteCells(state, board, hold.at);
+  const buildings = new Set(sites.map((c) => buildingOf(g, c)));
+  const inside = state.players.filter((p) => !p.dead && !p.dying && !p.escaped && g.cells[p.pos]?.area === 'indoor' && buildings.has(buildingOf(g, p.pos)));
+  if (!inside.length) { ctx.log(state, `No one is in ${siteLabel(hold.at)}: the ceremony waits.`); return; }
+  ob.ceremony.held++;
+  ctx.log(state, `The ceremony holds (${ob.ceremony.held} of ${hold.rounds}), ${inside.map((p) => p.name).join(' and ')} keeping vigil.`);
+  events.push({ type: 'objStep', seat: inside[0].seat, cell: inside[0].pos, text: `Ceremony ${ob.ceremony.held} of ${hold.rounds}` });
+  if (ob.ceremony.held >= hold.rounds) achieveObjective(state, ctx, events);
 }
 
 // An investigator gets away. The first one wins it for the team; the game
@@ -125,11 +217,15 @@ export function progressLines(state) {
   if (!sc) return [];
   const out = [];
   for (const step of sc.steps) {
-    if (step.do === 'deliver') out.push(`${itemLabel(step.item)}s brought: ${state.objective?.delivered?.[step.item] ?? 0} of ${deliveriesNeeded(state, step)}`);
+    if (step.do === 'deliver' && deliveriesNeeded(state, step) > 1) out.push(`${itemLabel(step.item)}s brought: ${state.objective?.delivered?.[step.item] ?? 0} of ${deliveriesNeeded(state, step)}`);
+    if (step.do === 'deliver' && deliveriesNeeded(state, step) === 1) out.push(`${itemLabel(step.item)}: ${state.objective?.delivered?.[step.item] ? 'brought' : 'not yet'}`);
+    if (step.do === 'destroy' && step.count) out.push(`Anchors destroyed: ${(state.objective?.anchors ?? []).length} of ${step.count + 1}`);
+    if (step.do === 'hold' && state.objective?.ceremony) out.push(`Ceremony: ${state.objective.ceremony.held} of ${step.rounds} rounds`);
     if (step.do === 'cleanse') out.push(`Cleansed: ${state.players.filter((p) => p.status?.cleanse).map((p) => p.name).join(', ') || 'no one yet'}`);
     if (step.do === 'escape') out.push(`Escaped: ${state.players.filter((p) => p.escaped).map((p) => p.name).join(', ') || 'no one yet'}`);
   }
-  const carrying = state.players.filter((p) => p.carry?.length).map((p) => `${p.name}: ${p.carry.map((c) => `${itemLabel(c.item)}${c.lit === false ? ' (out)' : ''}`).join(', ')}`);
+  const carrying = state.players.filter((p) => p.carry?.length).map((p) => `${p.name}: ${p.carry.map(describeItem).join(', ')}`);
   if (carrying.length) out.push(`Carrying: ${carrying.join('; ')}`);
+  for (const d of state.objective?.dropped ?? []) out.push(`The ${describeItem(d)} lies where it was dropped`);
   return out;
 }

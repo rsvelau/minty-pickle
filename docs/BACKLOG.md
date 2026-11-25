@@ -54,7 +54,7 @@ at the same spot.
 ## 7. Monster abilities not played yet (logged as "not played yet")
 Keywords in the monster cards' abilities the monster turn doesn't do yet. Each monster's rules
 need going through with the designer.
-- [ ] **Pin** (Hellhounds: Pin (5); "Pinned players cannot move")
+- [x] **Pin** (an attack; if it injures, no moving next turn)
 - [ ] **Seize / Drop / Carry** (Ushi-Oni: Abduct... Seize player; "Seized players are at Death's Door.
   Carried to Lair = killed"; weakness: "drop player")
 - [ ] **Drag** (Skinwalker: Bear Maul, Drag (die, 5M into nearest building))
@@ -62,8 +62,8 @@ need going through with the designer.
 - [ ] **Consume** (Wendigo: Feed, Consume (die); "Consume heals equal to damage")
 - [ ] **Trap** (Barghest: Shadow Trap: Teleport (nearest lightsource) and Trap (🎲🎲))
 - [ ] **Trample** (Ushi-Oni: Run Down, Trample (die, 5))
-- [ ] **Block / Unblock (All Doors)** (White Lady: Infatuation, Regret)
-- [ ] **Target** (White Lady: Wrath; Poltergeist: Heave)
+- [x] **Block / Unblock (All Doors)** (White Lady: Infatuation, Regret)
+- [x] **Target** (White Lady: Wrath; Poltergeist: Heave)
 - [ ] **LoS Attack** (Barghest: Death Gaze, line of sight)
 - [ ] **Ritual** (Skinwalker: Curseblood Ritual, Teleport to Lair, +1 ritual; at 3 rituals: Global Attack (10))
 - [ ] Persistent rules on cards: Banshee Perch (rooftops), Shadow People Suffocating Darkness
@@ -100,8 +100,12 @@ over sites, `src/game/objectives/scripts.js`).
 - [x] Step 2 (2026-11-25): the verbs (collect, deliver, cleanse, escape) and carried items; Shadow People
   (candles, Suffocating Darkness, the Fire discard) and Barghest (cleanse, the river, escape) are played;
   all five pieces of evidence identify the monster early.
-- [ ] Step 3, one monster at a time with its group 7 abilities: Hellhounds, Poltergeist, Strigoi, White
-  Lady, Adze; Banshee Perch (what is the heirloom?).
+- [x] Step 3 (2026-11-25): Hellhounds (holy water stops the respawn), Poltergeist (anchors: a 6 at 4
+  markers, then the Lair), Strigoi (Cosor: Lair → sharpen at the Outdoor Store {12} → bless at the Church;
+  Close strike, one die ignoring toughness, once a turn; it hunts the holder; Drop), White Lady (gown, ring,
+  finger bone to the Church, then hold it 3 rounds), with Pin, Target, Demonic Fire, Torment, Infatuation,
+  Block / Unblock and Drop from group 7. The Adze already plays its objective (kill the nest, defend the
+  victims). Left: Banshee Perch (what is the heirloom?).
 - Sites named: Boutique {3} (the gown), Curio shop {7} (the ring), Funeral parlor {11} (the finger bone),
   Outdoor store (sharpens the Cosor; number to confirm). Monster cards still print the old objective
   lines (Shadow People's {11}, White Lady's "Lair + 3 ⏳", Strigoi's {13}): to update with the designer.

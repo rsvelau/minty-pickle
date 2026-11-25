@@ -80,7 +80,7 @@ export const defenseLeft = (pl, type = null) => Math.max(0, defenseValue(pl, typ
 const where = (board, i) => { const { x, y } = board.grid.coords(i); return cellLabel(x, y); };
 
 // Deal `amount` damage of `type` (P/M/S) to a player. Returns the outcome.
-export function applyDamage(state, board, pl, type, amount, { log, source = 'An attack' }, events) {
+export function applyDamage(state, board, pl, type, amount, { log, source = 'An attack', ignoreLowest = false }, events) {
   if (pl.dead || pl.dying) return 'dead';
   if (pl.mods?.negateAll) {                                // Purity Seal
     log(state, `${source} hits ${pl.name} for ${amount}, but the Purity Seal negates it.`);
@@ -104,7 +104,8 @@ export function applyDamage(state, board, pl, type, amount, { log, source = 'An 
   }
   let own = Math.max(0, defenseValue(pl, type) - (pl.defenseUsed ?? 0));
   // Flickering Lights (Hazard): Physical damage within 4 ignores the lowest defense die.
-  if (type === 'P' && board && flickeringNear(state, board, pl) && pl.defense?.length) own = Math.max(0, own - Math.min(...pl.defense.map((d) => d.v)));
+  // Demonic Fire (Hellhounds): their attacks ignore it too.
+  if (((type === 'P' && board && flickeringNear(state, board, pl)) || ignoreLowest) && pl.defense?.length) own = Math.max(0, own - Math.min(...pl.defense.map((d) => d.v)));
   // Protective: a teammate in Close range can lend their defense.
   const guard = board && state.players.find((o) => o !== pl && !o.dead && o.mindset === 'protective'
     && cellRange(board.grid, o.pos, pl.pos) <= RANGE.close && Math.max(0, defenseValue(o, type) - (o.defenseUsed ?? 0)) > own);

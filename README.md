@@ -132,7 +132,24 @@ teammates in your space for heals like the Medical Kit). Obol costs (◉) take a
   **Barghest**: each investigator steps on the Church to be cleansed; the uncleansed can't step onto a
   bridge; a cleansed investigator reaching the Start space escapes (out of the turn order, out of the
   monster's reach). The first escape wins for the team; play goes on until everyone has escaped or fallen.
-  Carried items, Cleansed and Escaped show in the player list; the Casebook shows the progress.
+  **Hellhounds**: holy water from the Church to the Lair disrupts the ritual: until then a destroyed pack
+  rises again at the Lair; after, destroying it wins. **Poltergeist**: stopping on an Objective marker with
+  a rolled 6 asks "Destroy the anchor?" (the 6 is spent, from Defense if need be); after 4, the last anchor
+  is at the Lair, and destroying it wins. **Strigoi**: the Cosor lies at the Lair (one only; the Strigoi
+  always goes for whoever holds it); sharpen it at the Outdoor Store {12}, bless it at the Church; then a
+  **Strike ✝** button in the dice tray, with the Strigoi in Close range, deals one die ignoring its
+  toughness, once a turn. Unholy Burn drops the Cosor where its holder stands: step there to pick it up,
+  still blessed. **White Lady**: the Gown (Boutique {3}), Ring (Curio Shop {7}) and Finger Bone (Funeral
+  Parlor {11}) to the Church; then each round ending with someone inside the Church counts (nobody there,
+  it waits): after 3, her soul is set free.
+  Carried items, Cleansed, Escaped and Pinned show in the player list; the Casebook shows the progress.
+- **Monster abilities played with them**: **Pin (n)**: an attack of n; if it injures, that player can't move
+  on their next turn (dice still go to Defense, equipment still works). **Target**: the action goes to the
+  player it names, wherever they are (Heave: nearest the Lair; Wrath: the least injured inside her
+  building). **Demonic Fire**: the hounds ignore your lowest defense die. **Torment** hits everyone in the
+  occupied building nearest the Lair. **Infatuation**: the White Lady appears inside the occupied building
+  nearest the Church and shuts every door of it; **Regret** opens them; with no one inside her building,
+  Wrath and Regret become Infatuation. **Drop (Cosor)**: see the Strigoi.
 - **Winning is the monster's objective.** "Kill": destroy it. Any other objective (Escape, Disrupt Ritual,
   Destroy Anchors…) is played at the table and marked in the Casebook (**Objective achieved**); until then,
   destroying the monster only sends it back to its Lair at full health. Once achieved, a monster with health
