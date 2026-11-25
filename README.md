@@ -311,13 +311,16 @@ Types: **Church, Hotel, Apartments, Boutique, Market, Bar, Library, Curio Shop, 
 Store, Funeral Parlor, Hospital, Pharmacy** (`src/core/buildings.js`). Each one sets:
 
 - **Furniture** (`src/render/props.js` BUILDING_VARIANTS): **blocked** cells hold the heavy pieces, **walkable**
-  cells get what's been left lying about: tipped chairs, toppled lamps, a fallen cabinet, broken dolls,
-  scattered papers, bottles, guttered candles, stains (each type has its own mix; Hospital has tipped
-  wheelchairs and fallen drip stands, Condemned has planks). Clutter sits only in a cell's four corners and,
+  cells get ordinary things: chairs, armchairs, small tables, a dresser, a floor lamp, an old TV set,
+  plants, boxes, book stacks, papers, bottles, candles (each type has its own mix; Hospital has wheelchairs
+  and drip stands). About 1 in 10 of them is knocked over or broken instead (a tipped chair, a toppled
+  lamp, a smashed TV, a broken doll, a stain) so the ones you see stand out (`BROKEN_CHANCE`, `UPRIGHT`
+  in props.js). Condemned floor stays wrecked throughout (planks, tipped furniture). Clutter sits only in a cell's four corners and,
   where the cell has a real wall, along that wall: the four pawn spots (a quarter cell in from the centre),
   the lines between them and the centre (where monsters walk) stay clear, so nobody clips through it.
   Untyped indoor floor gets the same household clutter. Cemetery walkable cells: grave markers in two or
-  three corners and often a tipped headstone, a fallen urn, a dropped shovel, a grave lantern or a broken angel. Pieces back onto a wall or window
+  three corners and often a bouquet, a grave lantern, an urn or a stone angel; now and then a tipped
+  headstone, a fallen urn, a dropped shovel or a broken angel. Pieces back onto a wall or window
   of their own cell (never a door), so shelves, counters and beds face into the room. Church: walkable cells
   are four short pews facing the pulpit, a pair each side of an aisle, in the cell's corners (the pawn
   lanes stay clear), blocked cells the pulpit (as the old Church floor). Hospital: ward bays and the

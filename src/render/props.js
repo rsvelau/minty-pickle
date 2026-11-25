@@ -540,6 +540,16 @@ function clutterKinds() {
     // Planks fallen from boarded windows, a crowbar on top.
     planks: merge(...[[0, 0.3], [0.08, -0.2], [-0.06, 0.9]].map(([z, r]) => part(new THREE.BoxGeometry(m(1.2), m(0.03), m(0.15)).rotateY(r).translate(0, m(0.02), m(z)), '#7a6a4a')),
       part(new THREE.BoxGeometry(m(0.7), m(0.03), m(0.03)).rotateY(1.9).translate(m(0.1), m(0.06), m(0.05)), '#3a3a3a')),
+    // Upright, ordinary versions of the knocked-over things.
+    floorLamp: merge(cyl(0.16, 0.04, '#2a2a2a'), cyl(0.015, 1.4, '#b08a3a', 0, 0, 0.04),
+      part(new THREE.CylinderGeometry(m(0.14), m(0.22), m(0.28), 10, 1, true).translate(0, m(1.5), 0), '#d8c8a0')),
+    tvSet: merge(box(0.7, 0.45, 0.45, darkOak), box(0.6, 0.5, 0.5, '#3a3a36', 0, 0, 0.45), box(0.48, 0.38, 0.02, '#1a1e22', 0, 0.26, 0.51)),
+    urn: merge(cyl(0.16, 0.06, stone), cyl(0.14, 0.4, stone, 0, 0, 0.06), cyl(0.18, 0.06, stone, 0, 0, 0.46),
+      ball(0.08, '#5a3a3a', 0, 0, 0.55, 0.6), ball(0.07, '#6a6a4a', 0.06, 0.04, 0.56, 0.6)),
+    lanternUp: merge(cyl(0.1, 0.05, '#2a3a2a'), cyl(0.08, 0.2, '#c8b878', 0, 0, 0.05), cyl(0.1, 0.05, '#2a3a2a', 0, 0, 0.25),
+      part(new THREE.TorusGeometry(m(0.2), m(0.03), 4, 12).rotateX(Math.PI / 2).translate(m(0.45), m(0.03), m(0.1)), '#a08a5a')),
+    angel: merge(box(0.4, 0.3, 0.4, stone), box(0.28, 0.7, 0.2, '#9a9e9a', 0, 0, 0.3), ball(0.12, '#9a9e9a', 0, 0, 1.1),
+      box(0.5, 0.35, 0.04, '#a4a8a4', 0, -0.12, 0.65)),
     // Cemetery: a headstone tipped over, a wilted bouquet, a toppled urn,
     // a lantern left burning out, a dropped shovel by a sunken grave.
     stoneTipped: merge(part(new THREE.BoxGeometry(m(0.6), m(0.9), m(0.2)).translate(0, m(0.45), 0).rotateX(-1.25).translate(0, m(0.1), 0), stone),
@@ -619,7 +629,7 @@ const VARIANTS = {
       const n = 2 + (rnd() < 0.4 ? 1 : 0);
       for (let k = 0; k < n; k++) out.push([smallMarker(rnd), spots[k][0] * CORNER, spots[k][1] * CORNER, jit(rnd, 0.5), 0.85 + rnd() * 0.2]);
       if (n < 4 && rnd() < 0.85) {
-        const kind = GRAVE_CLUTTER[Math.floor(rnd() * GRAVE_CLUTTER.length)];
+        const kind = calmKind(rnd, GRAVE_CLUTTER[Math.floor(rnd() * GRAVE_CLUTTER.length)]);
         out.push([kind, spots[n][0] * CORNER, spots[n][1] * CORNER, rnd() * 6.28, 0.8 + rnd() * 0.15]);
       }
       return out;
@@ -692,7 +702,7 @@ const VARIANTS = {
   // Condemned: rubble, junk and fallen boards inside.
   condemned: {
     blocked: ({ rnd }) => scatter(rnd, 2, 0.5, (k) => (k % 2 ? ['crate', 0.7 + rnd() * 0.3] : ['boulder', 0.5 + rnd() * 0.3])),
-    walkable: (ctx) => litter(ctx, [], ['planks', 'boxes', 'stain', 'chairTipped', 'tvBroken', 'bottles', 'crate']),
+    walkable: (ctx) => litter({ ...ctx, wrecked: true }, [], ['planks', 'boxes', 'stain', 'chairTipped', 'tvBroken', 'bottles', 'crate']),
   },
   carpet: {
     // A cluttered living room: two sofas facing over a coffee table, armchairs.
@@ -750,18 +760,34 @@ function shuffled(rnd, list) {
 // Pieces too long to turn freely in a corner are drawn smaller.
 const LONG = new Set(['lampToppled', 'ivFallen', 'cabinetFallen', 'plantTipped']);
 // Small things tucked in beside a corner's main piece.
-const BITS = ['papers', 'stain', 'bottles', 'shoe', 'frameDown', 'candles'];
+const BITS = ['papers', 'stain', 'bottles', 'shoe', 'frameDown', 'candles', 'bookPile'];
+// Knocked-over and broken things only unsettle if they're rare: each one
+// stays that way 1 time in 10, otherwise it's drawn as its ordinary,
+// upright self (a tipped chair is just a chair; a stain is a stack of books).
+const BROKEN_CHANCE = 0.1;
+const UPRIGHT = {
+  chairTipped: 'chair', armchairTipped: 'armchair', tableTipped: 'table', cabinetFallen: 'dresser',
+  stoolTipped: 'stool', lampToppled: 'floorLamp', tvBroken: 'tvSet', plantTipped: 'plant',
+  bucketTipped: 'flowerBucket', mannequinFallen: 'mannequin', wheelchairTipped: 'wheelchair',
+  ivFallen: 'ivStand', stoneTipped: 'headstone', urnTipped: 'urn', angelBroken: 'angel',
+  lantern: 'lanternUp', deadFlowers: 'flowerBucket', spilled: 'boxes', stain: 'bookPile',
+  shoe: 'bookPile', frameDown: 'bookPile', shovel: 'bouquet', doll: 'bookPile',
+};
+const calmKind = (rnd, kind) => (UPRIGHT[kind] && rnd() >= BROKEN_CHANCE ? UPRIGHT[kind] : kind);
 function litter(ctx, walls, pool, bits = BITS) {
   const { rnd } = ctx;
+  // A condemned building is wrecked throughout: nothing gets set upright.
+  const calm = ctx.wrecked ? (r, k) => k : calmKind;
+  const calmList = (r, list) => list.map(([kind, ...rest]) => [calm(r, kind), ...rest]);
   const out = [];
-  if (ctx.walled && walls.length && rnd() < 0.8) out.push(...walls[Math.floor(rnd() * walls.length)]);
+  if (ctx.walled && walls.length && rnd() < 0.8) out.push(...calmList(rnd, walls[Math.floor(rnd() * walls.length)]));
   const n = 3 + (rnd() < 0.5 ? 1 : 0);
   for (const [sx, sz] of shuffled(rnd, CORNERS).slice(0, n)) {
-    const kind = pool[Math.floor(rnd() * pool.length)];
+    const kind = calm(rnd, pool[Math.floor(rnd() * pool.length)]);
     const scale = LONG.has(kind) ? 0.78 + rnd() * 0.1 : 1.0 + rnd() * 0.15;
     out.push([kind, sx * CORNER + jit(rnd, 0.03), sz * CORNER + jit(rnd, 0.03), rnd() * Math.PI * 2, scale]);
     // Often something small beside it, further into the corner.
-    if (rnd() < 0.55) out.push([bits[Math.floor(rnd() * bits.length)], sx * 0.43, sz * 0.43 - sz * 0.1, rnd() * Math.PI * 2, 0.8]);
+    if (rnd() < 0.4) out.push([calm(rnd, bits[Math.floor(rnd() * bits.length)]), sx * 0.43, sz * 0.43 - sz * 0.1, rnd() * Math.PI * 2, 0.8]);
   }
   return turn(out, ctx.walled ? ctx.back : ctx.along);
 }
