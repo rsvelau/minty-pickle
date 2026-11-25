@@ -8,10 +8,16 @@ import { publicState, matchesEvidence } from '../src/game/mystery.js';
 import { MONSTER_CARDS, MONSTER_BY_ID, MONSTER_POOLS } from '../src/game/cards/monsters.js';
 import { OBSERVATIONS, LAIRS, ATTACK_TYPES } from '../src/game/cards/evidence.js';
 
+// Objective sites a monster may need (src/core/sites.js), on row 0, away from the street.
+function withSites(g) {
+  ['church', 'hotel', 'bar', 'hospital'].forEach((site, k) => g.apply(g.index(k * 2, 0), { marker: 'objective', site }, { silent: true }));
+  return g;
+}
 function street() {
   const g = new GridState(20, 26);
   for (let x = 0; x < 20; x++) g.apply(g.index(x, 12), { area: 'outdoor', sub: 'street' }, { silent: true });
   g.apply(g.index(19, 12), { area: 'outdoor', sub: 'start', walkable: false, facing: 3 }, { silent: true });
+  withSites(g);
   for (let x = 10; x < 18; x++) g.apply(g.index(x, 12), { marker: 'investigation' }, { silent: true });
   return g;
 }

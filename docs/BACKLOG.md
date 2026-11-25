@@ -89,17 +89,22 @@ need going through with the designer.
   discarding undoes it. Known gap: an Exhaust undone after the same action's Attack doesn't change that
   Attack (Drain).
 
-## 10. Objectives other than "Kill"  ·  marked by hand today (Casebook → Objective achieved)
-- [ ] Barghest: **Escape (to the start point)**
-- [ ] Hellhounds: **Disrupt Ritual ({9} → Lair)**
-- [ ] Poltergeist: **Destroy Anchors (Lair + 4 POI, die [6])**
-- [ ] White Lady: **Perform Ceremony ({3}, {7}, Lair → {9} + 3 ⏳)**
-- [ ] Strigoi: **Kill with the Blessed Cosor (Lair → {13} → {9} → Lair)**
-- [ ] Shadow People: **Light the Dark Room ({11} → Lair × 4)**
-- [ ] (Adze: "Kill Nest (Lair)" is treated as Kill: confirm)
-- Needs: what the numbered spots **{3} {7} {9} {11} {13}** are on the map (map markers the editor can
-  place?), "POI", "die [6]", the Blessed Cosor item, the candle.
-
+## 10. Objectives other than "Kill"  ·  in progress (the objective system)
+Three layers: **sites** (what an Objective marker stands for, `src/core/sites.js`), **verbs** (collect,
+deliver, cleanse, escape, defend, destroy, perform: shared handlers, next) and **monster scripts** (steps
+over sites, `src/game/objectives/scripts.js`).
+- [x] Step 1 (2026-11-25): site types on Objective markers (picked in Markers → Objective, or from a Church /
+  Hospital floor), fixtures per site type, the map check and the Markers panel name the monsters a map can't
+  host (they're never drawn there), only the revealed monster's sites appear and stop the pawn, the Adze's
+  victims lie at the Hotel {1}, Bar {5} and Hospital {13}, the Casebook lists the steps and where they are.
+- [ ] Step 2: the verbs and carried items; Shadow People (candles from the Church to the Lair ×4, put out
+  by Suffocating Darkness) and Barghest (each investigator cleanses at the Church; the uncleansed can't
+  cross the river; one escape at the Start wins for the team, play goes on until everyone has escaped or
+  died) as the first two, replacing "Objective achieved".
+- [ ] Step 3, one monster at a time with its group 7 abilities: Hellhounds, Poltergeist, Strigoi, White
+  Lady, Adze; Banshee Perch (what is the heirloom?).
+- Still to name: sites **{3}**, **{7}** (White Lady) and **{11}** (Shadow People's card; candles come from
+  the Church's Votive Candle Stand).
 ---
 
 ### Suggested order

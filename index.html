@@ -106,6 +106,13 @@
               <span class="row-label"></span>
               <button class="brush wide" data-marker="erase"><i class="sw sw-erase"></i>Remove marker</button>
             </div>
+            <!-- Objective markers: which site (src/core/sites.js) the marker stands for. -->
+            <div class="site-row" id="siteRow" hidden>
+              <label for="siteBrush" class="row-label">Site</label>
+              <select id="siteBrush"></select>
+            </div>
+            <p class="note site-note" id="siteNote" hidden></p>
+            <p class="note site-avail" id="siteAvail"></p>
             <p class="note">Click or drag to place on walkable cells (Shift-drag fills a rectangle). Markers sit on top of a cell and never change it. Hover a Key to see the locked and one-way doors it unlocks in its building.</p>
           </div>
 

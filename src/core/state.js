@@ -1,5 +1,6 @@
 // Grid data model: cell attributes, strokes with undo/redo, and (de)serialization.
 
+import { SITES } from './sites.js';
 export const COLS = 20;
 export const ROWS = 26;
 export const FORMAT_VERSION = 3;
@@ -136,7 +137,7 @@ export function landmarkDims(sub, face) {
   return face % 2 === 0 ? [long, short] : [short, long];
 }
 
-export const CELL_KEYS = ['area', 'sub', 'lit', 'radius', 'walkable', 'bridge', 'lamp', 'marker', 'facing', 'flip'];
+export const CELL_KEYS = ['area', 'sub', 'lit', 'radius', 'walkable', 'bridge', 'lamp', 'marker', 'site', 'facing', 'flip'];
 
 // Directions as [dx, dy], indexed 0..3 = north, east, south, west.
 export const FACINGS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
@@ -158,6 +159,7 @@ export const defaultWalkable = (area, sub) =>
 //         sits on top of the cell and never changes the cell itself.
 export const defaultCell = () => ({
   area: 'outdoor', sub: 'ground', lit: false, radius: 0, walkable: true, bridge: false, lamp: false, marker: null,
+  site: null,   // Objective marker: the site it stands for (src/core/sites.js), null = from its floor, or none
   facing: null, // start space / premade building: which way it faces (index into FACINGS); null = automatic
   flip: false,  // premade building: mirrored left to right
 });
@@ -269,6 +271,7 @@ export function normalizeCell(c = {}) {
     bridge: water && !!c.bridge,
     lamp: !!c.lamp,
     marker: MARKERS[c.marker] ? c.marker : null,
+    site: c.marker === 'objective' && SITES[c.site] ? c.site : null,
     facing: (sub === 'start' || hasFixedFootprint(sub)) && Number.isInteger(c.facing) && c.facing >= 0 && c.facing < 4 ? c.facing : null,
     flip: hasFixedFootprint(sub) && !!c.flip,
   };
@@ -1053,6 +1056,7 @@ export class GridState {
           ...(c.lit ? { radius: c.radius } : {}),
           lamp: this.lampOn(i),
           marker: c.marker,
+          ...(c.marker === 'objective' && c.site ? { site: c.site } : {}),
           ...(hasFixedFootprint(c.sub) && c.facing !== null ? { facing: c.facing, faces: FACING_NAMES[c.facing], flip: !!c.flip } : {}),
           ...(c.sub === 'start' ? (() => {
             const f = this.startFacing(i);

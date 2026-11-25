@@ -73,10 +73,11 @@ export const paintAllowed = () => !ui.orbitMode && !ui.spaceHeld;
 // What a stroke paints: a cell brush, or (Markers tool) just the marker.
 export function currentPatch() {
   if (ui.tool !== 'markers') return BRUSHES[ui.brush];
-  if (ui.markerBrush === 'erase') return (c) => (c.marker ? { marker: null } : null);
+  if (ui.markerBrush === 'erase') return (c) => (c.marker ? { marker: null, site: null } : null);
   return (c) => {
     if (!c.walkable) { if (painting) painting.skipped = true; return null; }
-    return { marker: ui.markerBrush };
+    // An Objective marker carries the chosen site (null: from its floor).
+    return { marker: ui.markerBrush, site: ui.markerBrush === 'objective' ? (ui.siteBrush || null) : null };
   };
 }
 

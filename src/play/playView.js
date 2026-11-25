@@ -10,6 +10,7 @@ import { WATER_Y, grid, ui } from '../app/config.js';
 import { toast } from '../app/files.js';
 import { $ } from '../app/dom.js';
 import { craftUI, dmgIcon, hitText, injuryPips, markCaseNew, obolHTML, renderAsk, renderSacrifice, renderCasebook, renderIntent, renderInventory, renderRevealSheet, showCard, showObol, renderEventChoice } from './panels.js';
+import { objectiveLive } from '../game/objectives/scripts.js';
 import { __set_markerHidden, __set_markerUsed, markers, refreshMarkers, refreshPropsAndWalls, visibleTop } from '../render/board.js';
 import { camera, cellToWorld, controls, scene, wake } from '../render/scene.js';
 import { lightLevels } from '../render/tileLook.js';
@@ -81,7 +82,9 @@ export function init() {
     },
   });
   __set_markerUsed((i) => ui.tool === 'play' && play.state.shownUsed.has(i));
-  __set_markerHidden((i) => ui.tool === 'play' && grid.cells[i].marker === 'objective' && !play.midnight() && !play.state.mystery?.initiative);
+  // Objectives appear once the monster is known (midnight, or named early), and only its own sites.
+  __set_markerHidden((i) => ui.tool === 'play' && grid.cells[i].marker === 'objective'
+    && ((!play.midnight() && !play.state.mystery?.initiative) || !objectiveLive(play.session.state ?? {}, grid, i)));
   $('#playRoll').addEventListener('click', () => play.roll());
   document.querySelectorAll('#trayTarget [data-to]').forEach((b) => b.addEventListener('click', () => { trayTarget = b.dataset.to; renderTray(); }));
 }

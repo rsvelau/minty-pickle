@@ -9,10 +9,16 @@ import { parseAbility } from '../src/game/monsterTurn.js';
 import { MONSTER_CARDS } from '../src/game/cards/monsters.js';
 import { OBSERVATIONS, LAIRS } from '../src/game/cards/evidence.js';
 
+// Objective sites a monster may need (src/core/sites.js), on row 0, away from the street.
+function withSites(g) {
+  ['church', 'hotel', 'bar', 'hospital'].forEach((site, k) => g.apply(g.index(k * 2, 0), { marker: 'objective', site }, { silent: true }));
+  return g;
+}
 function street() {
   const g = new GridState(20, 26);
   for (let x = 0; x < 20; x++) g.apply(g.index(x, 12), { area: 'outdoor', sub: 'street' }, { silent: true });
   g.apply(g.index(19, 12), { area: 'outdoor', sub: 'start', walkable: false, facing: 3 }, { silent: true });
+  withSites(g);
   return g;
 }
 const quiet = { log: () => {} };
@@ -169,7 +175,7 @@ test('the Adze stays in its cocoon and sends swarms over any terrain, not throug
   const { x, y } = g2.coords(s2.players[0].pos);
   for (const [o, ex, ey] of [['v', x, y], ['v', x + 1, y], ['h', x, y], ['h', x, y + 1]]) g2.setEdge(o, ex, ey, 'wall', { silent: true });
   board2.invalidate();
-  s2.monsters[0].intents = mo.intents;
+  s2.monsters[0].intents = [{ roll: 1, ability: 0, name: 'Hotel Victim', kind: 'spiritual', text: '', ops: [{ op: 'attack', dmg: { fixed: 9 } }], unknown: [] }];
   applyAction(s2, board2, { type: 'roll', seat: 0 });
   const r2 = applyAction(s2, board2, { type: 'end', seat: 0 });
   assert.ok(!r2.events.some((e) => e.type === 'monsterSwarm'));
@@ -201,10 +207,12 @@ test('Adze attacks name a target spot and a damage die', () => {
 // Three buildings along the street, each with an Objective marker.
 function townWithBuildings() {
   const g = street();
-  for (const x0 of [2, 7, 12]) {
+  for (const [x0, site] of [[2, 'hotel'], [7, 'bar'], [12, 'hospital']]) {
     for (let x = x0; x < x0 + 3; x++) for (let y = 9; y < 12; y++) g.apply(g.index(x, y), { area: 'indoor', sub: 'hardwood' }, { silent: true });
-    g.apply(g.index(x0 + 1, 10), { marker: 'objective' }, { silent: true });
+    g.apply(g.index(x0 + 1, 10), { marker: 'objective', site }, { silent: true });
   }
+  // (street()'s row-0 sites stand aside: these are the victims' buildings.)
+  for (let x = 0; x < 8; x++) g.apply(g.index(x, 0), { marker: null, site: null }, { silent: true });
   return g;
 }
 const adzeGame = (seed = 4) => {
@@ -215,7 +223,7 @@ const adzeGame = (seed = 4) => {
 };
 const victimAction = (n, ops) => ({ roll: n, ability: 0, name: 'Hotel Victim', kind: 'spiritual', text: '', ops, unknown: [] });
 
-test('the Adze picks three victims at Objective markers in three different buildings', () => {
+test('the Adze’s three victims lie at the Hotel, the Bar and the Hospital', () => {
   const { g, state } = adzeGame();
   assert.equal(state.npcs.length, 3);
   assert.deepEqual(state.npcs.map((v) => v.target).sort((a, b) => a - b), [1, 5, 13]);

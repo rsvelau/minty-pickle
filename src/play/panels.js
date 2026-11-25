@@ -20,6 +20,7 @@ import { checkRequirement } from '../game/cards/requirements.js';
 import { eventCard } from '../game/decks.js';
 import { choicesFor } from '../game/eventPlay.js';
 import { sacrificeSeat } from '../game/rules.js';
+import { scriptOf, mapSites } from '../game/objectives/scripts.js';
 
 // Module state: assigned by init() below, in the same order as before the split.
 export let OBOL_GLYPHS, DMG_SVG, ATTACK_GLYPH, cardQueue, caseUI, craftUI;
@@ -685,10 +686,16 @@ function objectiveHTML(my) {
   const st = play.session.state;
   const kill = killObjective(card);
   const done = st?.objectiveDone;
+  // The steps (src/game/objectives/scripts.js), with where each site is on this map.
+  const sc = scriptOf(card.id);
+  const sites = mapSites(grid);
+  const where = (at) => (at === 'lair' || at === 'start' || at === 'any' ? '' : (sites[at] ?? []).map(placeLabel).join(', '));
+  const steps = sc ? `<ol class="obj-steps">${sc.steps.map((stp) => `<li>${esc(stp.text)}${where(stp.at) ? ` <span class="obj-where">${where(stp.at)}</span>` : ''}</li>`).join('')}</ol>` : '';
   return `<p class="case-note"><b>Objective:</b> ${esc(card.objective)}. ` +
     (kill ? 'Destroy it to win.'
       : done ? `Achieved.${st.monsters.length ? ' Now destroy it one more time.' : ''}`
         : 'Achieve it to win (play it at the table, then mark it here). Until then, destroying it only sends it back to its Lair.') + '</p>' +
+    steps +
     (!kill && !done && !st?.won ? '<div class="case-actions"><button type="button" class="ink" id="objDone">Objective achieved</button></div>' : '');
 }
 

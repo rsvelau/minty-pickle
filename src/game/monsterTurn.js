@@ -24,6 +24,8 @@ import { monsterEnters, monsterDoorBanned } from './eventPlay.js';
 import { anyDoor } from './doors.js';
 import { edgeKey } from '../core/state.js';
 import { watch, offer } from './reactions.js';
+import { mapSites } from './objectives/scripts.js';
+import { siteByNumber } from '../core/sites.js';
 
 // --- Bodies: how a monster gets past walls and doors ------------------------------
 // Corporeal: stopped by locked, nailed, chained, boarded and one-way doors, but
@@ -428,8 +430,9 @@ export function exhaust(state, pl, what, ctx, events) {
 }
 
 // --- Victims (Adze): townspeople its swarms prey on ------------------------------------
-// At midnight each {n} target on the card becomes a victim placed at an
-// Objective marker, each in a different building where the map allows.
+// At midnight each {n} target on the card becomes a victim at that site's
+// Objective marker ({1} the Hotel, {5} the Bar, {13} the Hospital: see
+// src/core/sites.js); a map without them has the monster disabled.
 export function setupVictims(state, board, monster, ctx, events) {
   const card = MONSTER_BY_ID[monster.kind];
   const targets = [];
@@ -438,22 +441,13 @@ export function setupVictims(state, board, monster, ctx, events) {
     if (t && !targets.some((v) => v.target === Number(t[1]))) targets.push({ target: Number(t[1]), name: a.name });
   }
   if (!targets.length) return;
-  // Objective markers grouped by building; one per building first.
-  const byBuilding = new Map();
-  board.grid.cells.forEach((c, i) => {
-    if (c.marker !== 'objective') return;
-    const b = buildingOf(board.grid, i);
-    if (!byBuilding.has(b)) byBuilding.set(b, []);
-    byBuilding.get(b).push(i);
-  });
-  const groups = [...byBuilding.values()];
-  for (let i = groups.length - 1; i > 0; i--) { const j = ctx.randInt(state, i + 1); [groups[i], groups[j]] = [groups[j], groups[i]]; }
-  const picks = groups.map((g) => g[ctx.randInt(state, g.length)]);
-  // Not enough buildings: fall back to more markers in the same ones.
-  for (const g of groups) for (const c of g) if (picks.length < targets.length && !picks.includes(c)) picks.push(c);
-  state.npcs = targets.slice(0, picks.length).map((t, k) => ({
-    id: `v${t.target}`, target: t.target, name: t.name, cell: picks[k], alive: true,
-  }));
+  const sites = mapSites(board.grid);
+  state.npcs = [];
+  for (const t of targets) {
+    const cells = sites[siteByNumber(t.target)] ?? [];
+    if (!cells.length) continue;
+    state.npcs.push({ id: `v${t.target}`, target: t.target, name: t.name, cell: cells[ctx.randInt(state, cells.length)], alive: true });
+  }
   for (const v of state.npcs) ctx.log(state, `${v.name}: a townsperson at ${label(board, v.cell)} is in the ${card.name}'s sights.`);
   events.push({ type: 'npcs', npcs: state.npcs.map((v) => ({ ...v })) });
 }

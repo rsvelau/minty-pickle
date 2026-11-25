@@ -4,6 +4,8 @@
 import { MAX_RADIUS, MARKERS, centreBrightness, lightKind, MIN_SIZE, MAX_SIZE, defaultCell } from '../core/state.js';
 import { setTerrain, terrainId, TERRAIN_PRESETS } from '../render/terrain.js';
 import { drawMarkerIcon } from '../render/markers.js';
+import { SITES, FIXTURES } from '../core/sites.js';
+import { monsterAvailability } from '../game/objectives/scripts.js';
 import { METERS_PER_CELL } from '../core/scale.js';
 import { grid, ui } from './config.js';
 import { toast } from './files.js';
@@ -50,6 +52,14 @@ export function init() {
     }
     b.addEventListener('click', () => { setTool('markers'); setMarkerBrush(t); });
   });
+  // Objective sites: the picker, and what the map's sites let it host.
+  $('#siteBrush').innerHTML = '<option value="">From the floor (Church, Hospital) or none</option>' +
+    Object.entries(SITES).map(([id, s]) => `<option value="${id}">${s.label}${s.number ? ` {${s.number}}` : ''}</option>`).join('');
+  $('#siteBrush').value = ui.siteBrush;
+  $('#siteBrush').addEventListener('change', (e) => { ui.siteBrush = e.target.value; renderSiteNote(); });
+  let availTimer = 0;
+  grid.onChange(() => { clearTimeout(availTimer); availTimer = setTimeout(renderSiteAvail, 250); });
+  renderSiteAvail();
   setMarkerBrush(ui.markerBrush);
   $('#lightRadius').max = MAX_RADIUS;
   $('#lightRadius').addEventListener('input', (e) => {
@@ -100,6 +110,22 @@ export function applyTerrain(id) {
 export function setMarkerBrush(name) {
   ui.markerBrush = name;
   document.querySelectorAll('[data-marker]').forEach((b) => b.classList.toggle('on', b.dataset.marker === name));
+  $('#siteRow').hidden = name !== 'objective';
+  renderSiteNote();
+}
+// What the chosen site always holds.
+function renderSiteNote() {
+  const s = SITES[ui.siteBrush];
+  $('#siteNote').hidden = ui.markerBrush !== 'objective';
+  $('#siteNote').textContent = s ? `${s.label}: ${s.fixtures.map((f) => FIXTURES[f]?.label ?? f).join(', ')}.`
+    : 'A marker on a Church or Hospital floor is that site; elsewhere it is a plain objective (still an anchor for the Poltergeist).';
+}
+// Which monsters this map can host: the rest are disabled (their objectives need sites it lacks).
+export function renderSiteAvail() {
+  const { available, disabled } = monsterAvailability(grid);
+  $('#siteAvail').innerHTML = disabled.length
+    ? `<b>${available.length} of ${available.length + disabled.length} monsters</b> can be played on this map. Disabled: ${disabled.map((d) => `${d.name} (needs ${d.missing.join(', ')})`).join('; ')}.`
+    : `All ${available.length} monsters can be played on this map.`;
 }
 
 // Light source radius: the centre brightness follows the size of the light.

@@ -9,6 +9,7 @@ import { camera, renderer, scene } from '../render/scene.js';
 import { hoverBox } from '../render/tileLook.js';
 import { readMap } from '../core/mapFormat.js';
 import { MAP_TRIANGLE_BUDGET, checkMap } from '../core/mapCheck.js';
+import { objectiveProblems } from '../game/objectives/scripts.js';
 import { MAX_SIZE } from '../core/state.js';
 import { boardTriangles } from '../render/board.js';
 
@@ -152,7 +153,8 @@ export const stamp = () => new Date().toISOString().slice(0, 16).replace(/[:T]/g
 // "Ready to play?": what the game needs from this map (src/core/mapCheck.js).
 export function showMapCheck() {
   const triangles = boardTriangles();
-  const { ok, problems } = checkMap(grid, { triangles });
+  const { ok, problems: base } = checkMap(grid, { triangles });
+  const problems = [...base, ...objectiveProblems(grid)];   // monsters this map can't host
   const errors = problems.filter((p) => p.level === 'error');
   const warnings = problems.filter((p) => p.level === 'warning');
   const text = !problems.length ? 'Yes: this map has everything the game needs.'

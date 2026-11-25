@@ -7,7 +7,6 @@
 import { MAX_SIZE, cellLabel } from './state.js';
 
 export const EVIDENCE_CARDS = 4;     // 3 observations + the lair (src/game/mystery.js)
-export const VICTIM_BUILDINGS = 3;   // monsters like the Adze target objectives in 3 buildings
 
 // Triangles the board itself may draw (everything on it, not the forest
 // ring): the whole board in view must still hold 30 fps with 1.5x headroom on
@@ -61,13 +60,10 @@ export function checkMap(grid, { triangles = null } = {}) {
   }
 
   const objectives = (byMarker.objective ?? []).filter((i) => grid.cells[i].walkable);
+  // Which monsters the map's objective sites can host is checked by the
+  // objective scripts (src/game/objectives/scripts.js objectiveProblems).
   if (!objectives.length) {
-    add('warning', 'no-objectives', 'There are no Objective markers. They appear at midnight; some monsters target them.');
-  } else {
-    const buildings = new Set(objectives.map((i) => buildingOf(grid, i)));
-    if (buildings.size < VICTIM_BUILDINGS) {
-      add('warning', 'few-objective-buildings', `Objectives are in only ${buildings.size} place${buildings.size === 1 ? '' : 's'}; monsters that hunt townspeople (like the Adze) want them in ${VICTIM_BUILDINGS} separate buildings.`, objectives);
-    }
+    add('warning', 'no-objectives', 'There are no Objective markers. They appear when the monster is revealed; most monsters need them.');
   }
 
   // Can every marker be reached from the start (doors, locks and keys included)?

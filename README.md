@@ -113,6 +113,14 @@ teammates in your space for heals like the Medical Kit). Obol costs (◉) take a
 - On yourself: healing, bonus defense (typed, until your next turn), refreshed dice (back with a new value,
   ready to slot), raising other dice, +movement, Purity Seal.
 - **1️⃣** once until refreshed (Retrieval refreshes Piercing Tip); **🔗 breaks**: the card is discarded.
+- **Objective sites**: each Objective marker stands for a site (Markers → Objective → Site: Hotel {1},
+  Bar {5}, Church {9}, Hospital {13}, Curio shop; a marker on a Church or Hospital floor is that site without
+  picking). A site type always has the same fixtures (the Church: a Votive Candle Stand and a Holy Water
+  Basin). Each monster's objective script (`src/game/objectives/scripts.js`) names the sites it needs: a map
+  missing one has that monster disabled (the Markers panel and Ready to play? list which and why; it's never
+  drawn there). When the monster is known (midnight, or named early), only its own sites appear on the board
+  and stop the pawn (none for a plain Kill), and the Casebook lists its objective's steps and where each site
+  is. The Adze's victims lie at the Hotel, the Bar and the Hospital.
 - **Winning is the monster's objective.** "Kill": destroy it. Any other objective (Escape, Disrupt Ritual,
   Destroy Anchors…) is played at the table and marked in the Casebook (**Objective achieved**); until then,
   destroying the monster only sends it back to its Lair at full health. Once achieved, a monster with health

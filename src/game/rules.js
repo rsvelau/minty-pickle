@@ -20,6 +20,7 @@ import { gameDoorOverride } from './doors.js';
 import { MONSTERS, spawnMonsters, monstersAct, farthestFromPlayers } from './monsters.js';
 import { turnLimits, injuries, applyDamage, sacrificeCarrier, killPlayer } from './combat.js';
 import { answer as answerReaction } from './reactions.js';
+import { objectiveLive } from './objectives/scripts.js';
 import { craft } from './obolcraft.js';
 import { refreshThreat, onPlayerEnters } from './monsterTurn.js';
 import { setupMystery, evidenceObol, revealEvidence, attackObol, nameMonster, revealMonster } from './mystery.js';
@@ -708,7 +709,7 @@ function canStillAct(state) {
 function enter(state, board, i, events) {
   const m = board.grid.cells[i].marker;
   if (!m || !MARKERS[m]) return;
-  if (m === 'objective' && !isMidnight(state)) return; // not there yet
+  if (m === 'objective' && (!isMidnight(state) || !objectiveLive(state, board.grid, i))) return; // not there yet, or not this monster's
   if (m === 'key') keyTouched(state, eventCtx(state)); // Lockdown: any Key space opens every door
   if (state.config.stopAtMarkers) state.stopAt = i;
   if (isUsed(state, i)) {

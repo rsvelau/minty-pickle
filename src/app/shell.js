@@ -16,6 +16,7 @@ import { closeSettings, requestEndTurn } from '../play/gameSettings.js';
 import { closeCasebook, closeInventory, hideCard, openCasebook, openInventory } from '../play/panels.js';
 import { play } from '../play/playView.js';
 import { markerHidden, markerUsed } from '../render/board.js';
+import { siteOf, siteLabel } from '../core/sites.js';
 import { buildingSeeds, buildingStyle, focusHovered, interiorStyle, renderer, setCamera } from '../render/scene.js';
 import { lampsOn, lightLevels } from '../render/tileLook.js';
 import { editorBoardShown } from './gameShell.js';
@@ -170,7 +171,8 @@ export function edgeLabel(o, x, y, type) {
 }
 
 export function markerLabel(c, i) {
-  const label = `${MARKERS[c.marker].label} marker`;
+  const site = c.marker === 'objective' ? siteOf(c) : null;
+  const label = site ? `Objective: ${siteLabel(site)}` : `${MARKERS[c.marker].label} marker`;
   if (!c.walkable) return `${label} (cell is blocked)`;
   if (markerUsed(i)) return `${label} (${{ whiteDice: 'collected', blackDice: 'attuned', key: 'picked up', investigation: 'visited', objective: 'visited' }[c.marker] ?? 'used'})`;
   if (c.marker === 'key') {

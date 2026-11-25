@@ -15,6 +15,7 @@
 //
 // Everything secret lives in state.mystery; publicState() strips it, so a
 // multiplayer host can send each phone only what the players know.
+import { monsterAvailability } from './objectives/scripts.js';
 import { MONSTER_BY_ID, MONSTER_POOLS } from './cards/monsters.js';
 import { ATTACK_TYPES, evidenceLabel } from './cards/evidence.js';
 import { applyDamage } from './combat.js';
@@ -46,11 +47,14 @@ function lairSpot(state, board, randInt, current) {
 
 export function setupMystery(state, board, { random, randInt, farthestCell }) {
   // The pool, minus monsters taken out in Settings → Cards in the game (if any are left).
-  const base = (MONSTER_POOLS[state.config.monsterPool] ?? MONSTER_POOLS.all).ids.filter((id) => MONSTER_BY_ID[id]);
+  // Monsters whose objectives need sites this map lacks are disabled here.
+  const { available } = monsterAvailability(board.grid);
+  const all = (MONSTER_POOLS[state.config.monsterPool] ?? MONSTER_POOLS.all).ids.filter((id) => MONSTER_BY_ID[id]);
+  const base = all.filter((id) => available.includes(id)).length ? all.filter((id) => available.includes(id)) : available;
   const kept = base.filter((id) => state.config.deckCounts?.[`monsters:${id}`] !== 0);
   const pool = kept.length ? kept : base;
   // A specific monster (Game settings, for testing), else a random one from the pool.
-  const pick = MONSTER_BY_ID[state.config.monsterPick] ? state.config.monsterPick : null;
+  const pick = MONSTER_BY_ID[state.config.monsterPick] && available.includes(state.config.monsterPick) ? state.config.monsterPick : null;
   const id = pick ?? pool[randInt(state, pool.length)];
   if (pick && !pool.includes(pick)) pool.push(pick);
   const card = MONSTER_BY_ID[id];
