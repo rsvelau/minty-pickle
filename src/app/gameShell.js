@@ -60,7 +60,7 @@ function setMode(mode) {
   if (mode === 'game') { $('#moreView').append(list); list.hidden = false; } else if (list.parentElement !== $('#viewMenu')) {
     $('#viewMenu').append(list); list.hidden = true; $('#viewToggle').setAttribute('aria-expanded', 'false');
   }
-  if (mode !== 'game') hideSheets();
+  if (mode !== 'game') { hideSheets(); $('#scoutScreen').hidden = true; }
 }
 
 // Put the editor's board back on the board (after a game used it).

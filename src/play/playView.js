@@ -9,7 +9,7 @@ import { defenseLeft, defenseValue } from '../game/combat.js';
 import { WATER_Y, grid, ui } from '../app/config.js';
 import { toast } from '../app/files.js';
 import { $ } from '../app/dom.js';
-import { craftUI, dmgIcon, hitText, injuryPips, markCaseNew, obolHTML, renderAsk, renderSacrifice, renderCasebook, renderIntent, renderInventory, renderTeam, renderSkillBadge, openStrike, renderRevealSheet, showCard, showObol, renderEventChoice } from './panels.js';
+import { craftUI, dmgIcon, hitText, injuryPips, markCaseNew, obolHTML, renderAsk, renderSacrifice, renderCasebook, renderIntent, renderInventory, renderTeam, renderSkillBadge, openStrike, renderScouting, renderRevealSheet, showCard, showObol, renderEventChoice } from './panels.js';
 import { objectiveLive } from '../game/objectives/scripts.js';
 import { feedUpdate, feedReset } from './feed.js';
 import { describeItem } from '../game/objectives/verbs.js';
@@ -165,6 +165,7 @@ export function renderPlay() {
   if (!$('#inventory').hidden) renderInventory();
   if (!$('#teamSheet').hidden) renderTeam();
   renderSkillBadge();
+  renderScouting();
   feedUpdate(play.session.state);
   // Floating bar.
   [...$('#hudDie').children].forEach((el, n) => el.classList.toggle('on', !!face && PIPS[face].includes(n)));
@@ -186,6 +187,7 @@ export function renderPlay() {
     moving: s.fast ? `Fast-forward ⏩ <b>${s.steps}</b> left` : `Running… <b>${s.steps}</b> left · hold to fast-forward`,
     choosing: `${s.stopReason ? `<b>${s.stopReason}</b> · ` : ''}Tap an arrow · <b>${s.steps}</b> left${play.slotTotal() ? ` +${play.slotTotal()}` : ''}`,
     asking: `Investigate? · <b>${s.steps}</b> left`,
+    scouting: 'Scouting: choose a card',
     revealing: 'Evidence! Choose a card',
     eventing: 'An event: make your choice',
     over: 'Everyone is dead. Restart to play again.',

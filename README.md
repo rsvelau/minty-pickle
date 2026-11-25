@@ -15,6 +15,13 @@ The app opens on the **title screen** (`src/app/gameShell.js`):
 - **Map editor**: the planner described below, exactly as before (⌂ in its panel goes back to the title).
 - **Game settings**: the rules settings (Obols, slots, turn length...), the defaults for new games.
 
+**Scouting** (the start of every new game; Game settings → Start → Scouting turns it off): someone got
+here first, and what they gathered was left at the edge of town. Players + 1 Equipment cards are drawn from
+the deck, dealt face down and turned over; the investigators take turns in seat order, each tapping a card
+and **Take**-ing it into their Skills (marked "From Scouting"). Once everyone has chosen, the card left over
+goes back under the deck and P1's first turn begins. Rules: `newGame(board, { scout: true })` starts the
+phase (`state.scouting`: the offer, the order, who took what) and the `scout` action takes a card.
+
 In a game the editor's tools are hidden and everything you press is in the **dock** along the bottom
 (`src/play/sheets.js`, `panels.js`): a status line, four menus and the big action button.
 

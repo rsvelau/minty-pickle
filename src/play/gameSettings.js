@@ -34,6 +34,8 @@ export function init() {
     { section: 'Clock' },
     { key: 'turnMinutes', label: 'Minutes per turn', min: 1, max: 15, fmt: (v) => `${v} min` },
     { key: 'turnsToMidnight', label: 'Turns until midnight', note: 'start', min: 1, max: 24 },
+    { section: 'Start' },
+    { key: 'scouting', label: 'Scouting', note: 'Before the first turn, each investigator takes one of the Equipment cards left at the edge of town (players + 1)', bool: true },
     { section: 'Markers' },
     { key: 'stopAtMarkers', label: 'Stop on every marker', note: 'Choose a way on at each marker', bool: true },
     { key: 'askInvestigate', label: 'Ask before investigating', note: '"Investigate?" on Investigation spaces', bool: true },

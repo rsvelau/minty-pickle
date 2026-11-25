@@ -321,6 +321,16 @@
         <button id="hudRoll" class="hud-roll">Roll</button>
       </div>
     </div>
+    <!-- Scouting (start of the game): pick one of the cards left at the edge of town. -->
+    <div id="scoutScreen" class="scout-screen" hidden role="dialog" aria-modal="true" aria-labelledby="scoutTitle">
+      <div class="scout-inner">
+        <h2 id="scoutTitle" class="scout-title">Scouting</h2>
+        <p class="scout-story">Someone got here first. An earlier crew never made it back, but what they gathered was left at the edge of town.</p>
+        <p class="scout-who" id="scoutWho"></p>
+        <div class="scout-cards" id="scoutCards"></div>
+        <button id="scoutTake" type="button" class="scout-take" disabled>Choose a card</button>
+      </div>
+    </div>
     <!-- The message feed (src/play/feed.js): what just happened, colour-coded, fading. -->
     <div id="feed" class="feed" role="log" aria-live="polite" title="Tap for recent messages"><div id="feedLines" class="feed-lines"></div></div>
     <!-- Team: everyone's place, dice, injuries and Obols; one player's injuries in full; the log. -->

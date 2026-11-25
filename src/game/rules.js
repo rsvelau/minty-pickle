@@ -28,6 +28,7 @@ import { craft } from './obolcraft.js';
 import { refreshThreat, onPlayerEnters } from './monsterTurn.js';
 import { setupMystery, evidenceObol, revealEvidence, attackObol, nameMonster, revealMonster } from './mystery.js';
 import { setupDecks, drawEquipment, drawCard, eventCard, isMindset } from './decks.js';
+import { EQUIPMENT_BY_ID } from './cards/equipment.js';
 import { useEquipment, armMonster, achieveObjective, discardForWeakness, strikeMonster } from './equipmentPlay.js';
 import { EVENT_CATEGORIES } from './cards/events.js';
 import {
@@ -117,6 +118,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   defenseSlots: 1,       // Defense slots (+1 when the turn starts in light)
   monsterPick: 'random', // or a monster id: always fight that one (testing)
   deckCounts: Object.freeze({}), // cards in the game: changes from 1 copy each (decks.js)
+  scouting: true,        // a Scouting phase before the first turn (newGame with setup.scout)
 });
 export const defaultConfig = () => ({ ...DEFAULT_CONFIG, obols: { ...DEFAULT_CONFIG.obols }, deckCounts: {} });
 
@@ -234,8 +236,55 @@ export function newGame(board, setup = {}) {
       revealMonster(state, board, mysteryCtx(state), events);
       spawnMonsters(state, board, events, random, log);
     }
+    if (setup.scout && config.scouting !== false) startScouting(state, events);
   }
   return { state, events };
+}
+
+// --- Scouting ------------------------------------------------------------------------
+// Before the first turn: someone (an ally, or an earlier crew that never came
+// back) left what they could gather at the edge of town. Players + 1 Equipment
+// cards are drawn and shown face up; the players take turns, in seat order,
+// each taking one (the 'scout' action, { card: index into the offer }). Once
+// everyone has chosen, what's left goes back under the deck and the first
+// turn begins.
+//   state.scouting = { offer: [card ids], order: [seats], at: index into order, took: { seat: id } }
+function startScouting(state, events) {
+  const offer = [];
+  for (let k = 0; k <= state.players.length; k++) {
+    const id = drawCard(state, 'equipment');
+    if (id) offer.push(id);
+  }
+  if (!offer.length) return;
+  state.scouting = { offer, order: state.players.map((p) => p.seat), at: 0, took: {} };
+  state.phase = 'scouting';
+  state.cur = state.scouting.order[0];
+  log(state, `Scouting: someone left ${offer.length} item${offer.length === 1 ? '' : 's'} at the edge of town. ` +
+    `${state.players.length === 1 ? `${who(state)} takes one` : `Each investigator takes one, ${who(state)} first`}.`);
+  events.push({ type: 'scouting', offer: [...offer] });
+}
+function scout(state, action, events) {
+  const sc = state.scouting;
+  const pl = state.players[sc.order[sc.at]];
+  const k = action.card | 0;
+  const id = sc.offer[k];
+  if (!id) return 'choose one of the cards';
+  const card = EQUIPMENT_BY_ID[id];
+  sc.offer.splice(k, 1);
+  pl.inventory.equipment.push({ id, label: card?.name ?? id, from: 'Scouting' });
+  sc.took[pl.seat] = id;
+  log(state, `${pl.name} takes the ${card?.name ?? id}.`);
+  events.push({ type: 'scouted', seat: pl.seat, id });
+  sc.at++;
+  if (sc.at < sc.order.length && sc.offer.length) { state.cur = sc.order[sc.at]; return null; }
+  // Everyone has chosen: the rest go back under the deck; the first turn begins.
+  state.decks.equipment.unshift(...sc.offer);
+  state.scouting = null;
+  state.phase = 'idle';
+  state.cur = 0;
+  log(state, `The scouting is done. ${who(state)} rolls first.`);
+  events.push({ type: 'scoutDone' });
+  return null;
 }
 
 // --- actions ------------------------------------------------------------------------
@@ -246,7 +295,7 @@ export function newGame(board, setup = {}) {
 // equipment and Obolcraft.
 const STOPPED = ['slotting', 'choosing', 'asking'];
 // Every action: { type, seat? }. Returns { ok, error?, events }.
-export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective', 'event', 'setting', 'sacrifice', 'setDie', 'react', 'strike'];
+export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective', 'event', 'setting', 'sacrifice', 'setDie', 'react', 'strike', 'scout'];
 
 export function applyAction(state, board, action) {
   // Doors the game changed (nailed, breached) count for every move made while
@@ -459,6 +508,12 @@ function applyActionNow(state, board, action) {
       // Toss or Drink mid-turn: injuries held off now give back what they took.
       if (before) relimit(state, board, pl, before, events);
       restop(state, board, events);
+      break;
+    }
+    case 'scout': {
+      if (state.phase !== 'scouting' || !state.scouting) return fail('not scouting');
+      const err = scout(state, action, events);
+      if (err) return fail(err);
       break;
     }
     case 'strike': {

@@ -1380,3 +1380,53 @@ body:not(.playing) .feed { display: none; }
 }
 .feed-toggle svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
 .feed-toggle.on { color: #f3e3cf; border-color: var(--accent); }
+
+/* --- Scouting: the cards at the edge of town (start of the game). --------------------- */
+.scout-screen {
+  position: fixed; inset: 0; z-index: 22; overflow: auto; overscroll-behavior: contain;
+  background: radial-gradient(ellipse at 50% 30%, rgba(30, 24, 18, 0.82), rgba(4, 5, 8, 0.94));
+  padding: calc(18px + env(safe-area-inset-top, 0px)) 14px calc(18px + env(safe-area-inset-bottom, 0px));
+  animation: scoutIn 0.35s ease-out;
+}
+.scout-screen[hidden] { display: none; }
+.scout-screen.closing { opacity: 0; transition: opacity 0.35s; }
+@keyframes scoutIn { from { opacity: 0; } }
+.scout-inner { width: min(920px, 100%); margin: 0 auto; display: grid; gap: 10px; justify-items: center; text-align: center; }
+.scout-title { margin: 4px 0 0; font: 700 40px/1 var(--hand); color: #f3e3cf; letter-spacing: 0.02em; }
+.scout-story { margin: 0; max-width: 520px; color: #c9bca4; font: 14px/1.45 var(--type); }
+.scout-who { margin: 4px 0 2px; color: #f3e3cf; font-size: 15px; }
+.scout-cards { justify-self: stretch; width: 100%; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; align-items: flex-start; }
+.scout-cards .scout-card { flex: 1 1 140px; max-width: 210px; }
+.scout-card {
+  position: relative; display: grid; min-height: 200px; padding: 0; border: 0; background: none;
+  perspective: 900px; cursor: pointer; text-align: left; touch-action: manipulation;
+}
+.sc-face {
+  grid-area: 1 / 1; border-radius: 12px; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  transition: transform 0.6s cubic-bezier(0.3, 0.7, 0.3, 1); transition-delay: var(--d, 0s);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55);
+}
+.sc-back {
+  display: grid; place-items: center; align-content: center; gap: 6px;
+  background: repeating-linear-gradient(45deg, #2a2018 0 8px, #241b14 8px 16px); border: 2px solid #6a5030; color: #c9a24a;
+}
+.sc-mark { font-size: 40px; }
+.sc-word { font: 12px var(--type); letter-spacing: 0.2em; text-transform: uppercase; }
+.sc-front {
+  transform: rotateY(180deg); padding: 11px 10px;
+  background: var(--paper); color: var(--ink); border: 2px solid var(--paper-dark);
+}
+.scout-card.up .sc-back { transform: rotateY(-180deg); }
+.scout-card.up .sc-front { transform: rotateY(0deg); }
+.sc-name { display: block; font: 700 22px/1.05 var(--hand); margin-bottom: 4px; }
+.sc-front .eq-abilities { font-size: 11.5px; margin-top: 4px; color: var(--ink); gap: 5px; }
+.sc-front .eq-abilities li { grid-template-columns: 14px 1fr; }
+.sc-front .eq-range { grid-column: 1 / 3; font-size: 9.5px; letter-spacing: 0.08em; color: var(--ink-soft); margin-bottom: -4px; }
+.sc-front .eq-range { color: var(--ink-soft); }
+.sc-taken { display: block; margin-top: 8px; font: 12px var(--type); color: var(--ink-soft); }
+.scout-card.picked .sc-front { border-color: #3aa070; box-shadow: 0 0 0 3px #58e0a0, 0 10px 26px rgba(0, 0, 0, 0.55); }
+.scout-card.taken { cursor: default; }
+.scout-card.taken .sc-front { filter: grayscale(0.6) brightness(0.72); }
+.scout-take { position: sticky; bottom: calc(6px + env(safe-area-inset-bottom, 0px)); z-index: 2; box-shadow: 0 6px 22px rgba(0, 0, 0, 0.7); backdrop-filter: blur(6px); min-height: 52px; min-width: min(320px, 100%); margin-top: 4px; font-size: 16px; font-weight: 600; border-color: #58e0a0; background: rgba(88, 224, 160, 0.18); color: #e6fff2; }
+.scout-take:disabled { border-color: var(--line); background: rgba(10, 12, 16, 0.9); color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { .sc-face { transition: none; } }

@@ -1010,6 +1010,8 @@ export function createPlay({
     return !!s && session.dispatch({ type: 'react', yes: !!yes, seat: sacrificeSeat(s) }).ok;
   }
   // The Blessed Cosor's strike (Strigoi).
+  // Scouting: take one of the cards on offer.
+  function scout(card) { const s = g(); return s ? session.dispatch({ type: 'scout', card, seat: s.cur }) : { ok: false }; }
   function strike(die) { const s = g(); return s ? session.dispatch({ type: 'strike', die, seat: s.cur }) : { ok: false }; }
   // Lucky: set a die's value.
   function setDie(n, v) { return act({ type: 'setDie', die: n, v }); }
@@ -1061,6 +1063,7 @@ export function createPlay({
       startMode: view.startMode,
       followStreets: view.followStreets,
       seed: (Math.random() * 2 ** 32) >>> 0,
+      scout: true,            // Scouting first (if the setting is on)
     });
   }
   // Saved games: the full rules state out, and back in.
@@ -1352,7 +1355,7 @@ export function createPlay({
     // Game settings changed outside a game: the next game starts fresh with them.
     invalidate: () => { stale = true; },
     state, session, board, roll, reset, setStartMode, saveState, loadState, useEquipment, answerInvestigate, choose, chooseByKey, tick, setActive,
-    boardChanged, setPlayers, toggleSlot, confirmMove, endTurn, unusedCount, slotTotal, rollWhite, busy, revealCard, nameMonster, craft, sacrifice, setDie, react, strike,
+    boardChanged, setPlayers, toggleSlot, confirmMove, endTurn, unusedCount, slotTotal, rollWhite, busy, revealCard, nameMonster, craft, sacrifice, setDie, react, strike, scout,
     clockMinutes: () => (g() ? rulesClockMinutes(g()) : rulesStartMinutesFor(cfg)),
     startMinutes: () => (g() ? rulesStartMinutes(g()) : rulesStartMinutesFor(cfg)),
     midnight: () => (g() ? isMidnight(g()) : false),

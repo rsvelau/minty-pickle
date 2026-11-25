@@ -750,6 +750,72 @@ export function abilitiesHTML(card, use = null) {
   }).join('')}</ul>`;
 }
 
+// --- Scouting: the cards left at the edge of town, one each, in seat order. -------------
+// The cards are dealt face down and turn over one after another; tap one, then
+// Take it. Taken cards stay in the row with the taker's colour.
+const scoutUI = { key: null, cards: [], pick: null };
+export function renderScouting() {
+  const st = play.session.state;
+  const sc = st?.scouting;
+  const host = $('#scoutScreen');
+  if (!sc || st.phase !== 'scouting') {
+    if (!host.hidden) { host.classList.add('closing'); setTimeout(() => { host.hidden = true; host.classList.remove('closing'); }, 380); }
+    scoutUI.key = null;
+    return;
+  }
+  // The whole spread (taken ones first, in the order they went), built once.
+  const taken = Object.entries(sc.took).map(([seat, id]) => ({ id, seat: Number(seat) }));
+  const all = [...taken, ...sc.offer.map((id) => ({ id, seat: null }))];
+  const key = all.map((c) => c.id).sort().join(',');
+  const fresh = scoutUI.key !== key;
+  if (fresh) {
+    scoutUI.key = key;
+    scoutUI.pick = null;
+    $('#scoutCards').innerHTML = all.map((c, k) => {
+      const card = EQUIPMENT_BY_ID[c.id];
+      return `<button type="button" class="scout-card" data-k="${k}" style="--d:${0.25 + k * 0.18}s">` +
+        `<span class="sc-face sc-back"><span class="sc-mark">✦</span><span class="sc-word">Equipment</span></span>` +
+        `<span class="sc-face sc-front"><b class="sc-name">${esc(card?.name ?? c.id)}</b>${card ? abilitiesHTML(card) : ''}<span class="sc-taken"></span></span></button>`;
+    }).join('');
+    scoutUI.cards = all.map((c) => c.id);
+    $('#scoutCards').querySelectorAll('.scout-card').forEach((b) => { b.onclick = () => {
+      if (b.classList.contains('taken')) return;
+      scoutUI.pick = Number(b.dataset.k);
+      renderScouting();
+    }; });
+    host.hidden = false;
+    requestAnimationFrame(() => requestAnimationFrame(() => host.querySelectorAll('.scout-card').forEach((b) => b.classList.add('up'))));
+  }
+  // Who has what.
+  const takenBy = new Map();
+  for (const [seat, id] of Object.entries(sc.took)) {
+    const k = scoutUI.cards.findIndex((x, n) => x === id && !takenBy.has(n));
+    if (k >= 0) takenBy.set(k, st.players[Number(seat)]);
+  }
+  host.querySelectorAll('.scout-card').forEach((b) => {
+    const k = Number(b.dataset.k);
+    const who = takenBy.get(k);
+    b.classList.toggle('taken', !!who);
+    b.classList.toggle('picked', scoutUI.pick === k && !who);
+    b.disabled = !!who;
+    b.querySelector('.sc-taken').innerHTML = who ? `<span class="who-chip" style="background:${who.colour}">${esc(who.name)}</span> took this` : '';
+  });
+  if (takenBy.has(scoutUI.pick)) scoutUI.pick = null;
+  const pl = st.players[st.cur];
+  $('#scoutWho').innerHTML = `<span class="who-chip" style="background:${pl.colour}">${esc(pl.name)}</span> ` +
+    (st.players.length === 1 ? 'choose one to take with you' : `choose one · ${sc.order.length - sc.at} still to choose`);
+  const btn = $('#scoutTake');
+  const id = scoutUI.pick === null ? null : scoutUI.cards[scoutUI.pick];
+  btn.disabled = !id;
+  btn.textContent = id ? `Take the ${EQUIPMENT_BY_ID[id]?.name ?? id}` : 'Choose a card';
+  btn.onclick = () => {
+    if (!id) return;
+    const r = play.scout(sc.offer.indexOf(id));
+    if (!r?.ok) toast(r?.error ?? 'That can’t be taken now.');
+    scoutUI.pick = null;
+  };
+}
+
 // --- The Blessed Cosor's Strike: one of your dice, its value as damage. -----------
 export function openStrike() {
   const st = play.session.state;
