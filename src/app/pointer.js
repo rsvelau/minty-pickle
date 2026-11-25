@@ -1,6 +1,8 @@
 // Pointer input on the board (mouse and touch) for every tool, hover, and
 // switching tools.
 
+import { BUILDING_TYPES } from '../core/buildings.js';
+import { isLandmark, areaLabel } from '../core/state.js';
 import * as THREE from 'three';
 import { FACINGS } from '../core/state.js';
 import { __set_hoverIndex, grid, hoverIndex, ui } from './config.js';
@@ -111,6 +113,18 @@ export function finishPainting(ev) {
   if (painting.placingDrag) { __set_painting(null); return; }
   if (painting.edges) endEdgeStroke();
   if (painting.skipped) toast('Markers only go on walkable cells; blocked cells were skipped.');
+  // Buildings tool: always say what happened.
+  if (ui.tool === 'buildings') {
+    const label = ui.buildingBrush ? BUILDING_TYPES[ui.buildingBrush].label : 'generic';
+    const n = painting.buildings?.size ?? 0;
+    if (n) toast(n === 1 ? `That building is now ${ui.buildingBrush ? `a ${label}` : 'generic'}.` : `${n} buildings are now ${ui.buildingBrush ? `${label}s` : 'generic'}.`);
+    else if (painting.missed !== undefined) {
+      const c = grid.cells[painting.missed];
+      toast(isLandmark(c.sub)
+        ? `The ${areaLabel(c).toLowerCase()} is a premade building with its own look; it can't take a type. Building types are for buildings laid out with indoor floor (Hardwood, Carpet), walls and doors.`
+        : 'Tap a building laid out with indoor floor (Hardwood or Carpet), walls and doors.');
+    }
+  }
   __set_painting(null);
   grid.endStroke();
   updateUndoButtons();

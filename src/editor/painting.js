@@ -96,7 +96,13 @@ export function brushFootprint() {
 export function applyAt(x, y, patch, opts) {
   // Buildings tool: the whole building under the pointer takes the type.
   if (ui.tool === 'buildings') {
-    const cells = buildingCells(grid, grid.index(x, y));
+    const at = grid.index(x, y);
+    const cells = buildingCells(grid, at);
+    // Remember what the stroke hit, to say so when it ends (pointer.js finishPainting).
+    if (painting) {
+      if (cells.length) (painting.buildings ??= new Set()).add(cells[0]);
+      else painting.missed ??= at;
+    }
     const out = cells.filter((i) => grid.apply(i, patch, { silent: true }));
     if (out.length && !opts?.silent) grid.emit(out);
     return out;

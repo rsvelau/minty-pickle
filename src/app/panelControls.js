@@ -11,7 +11,7 @@ import { METERS_PER_CELL } from '../core/scale.js';
 import { grid, ui } from './config.js';
 import { toast } from './files.js';
 import { setTool } from './pointer.js';
-import { scheduleSave, updateUndoButtons } from './shell.js';
+import { scheduleSave, updateUndoButtons, minimizePanel } from './shell.js';
 import { setBrush } from '../editor/toolbar.js';
 import { $ } from './dom.js';
 import { N, labelGroup, refreshMarkers, refreshPropsAndWalls, refreshWaterAndBridges } from '../render/board.js';
@@ -61,7 +61,15 @@ export function init() {
   // Buildings tool: one button per type, and Generic to clear.
   $('#buildingTypes').innerHTML = [['', 'Generic'], ...BUILDING_ORDER.map((t) => [t, BUILDING_TYPES[t].label])]
     .map(([t, label]) => `<button class="brush" data-btype="${t}">${label}</button>`).join('');
-  document.querySelectorAll('[data-btype]').forEach((b) => b.addEventListener('click', () => { setTool('buildings'); setBuildingBrush(b.dataset.btype); }));
+  document.querySelectorAll('[data-btype]').forEach((b) => b.addEventListener('click', () => {
+    setTool('buildings');
+    setBuildingBrush(b.dataset.btype);
+    // On a phone the panel covers the board: get it out of the way so the next tap tags a building.
+    if (window.innerWidth < 700) {
+      minimizePanel();
+      toast(`Tap a building to make it ${b.dataset.btype ? `a ${BUILDING_TYPES[b.dataset.btype].label}` : 'generic'}.`);
+    }
+  }));
   setBuildingBrush(ui.buildingBrush);
   let availTimer = 0;
   grid.onChange(() => { clearTimeout(availTimer); availTimer = setTimeout(() => { renderSiteAvail(); renderBuildingList(); }, 250); });
