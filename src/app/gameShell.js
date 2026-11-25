@@ -11,7 +11,7 @@
 import { monsterAvailability, objectiveProblems } from '../game/objectives/scripts.js';
 import { MONSTER_CARDS, MONSTER_POOLS } from '../game/cards/monsters.js';
 import { RULES_VERSION, clockMinutes, formatClock, migrateState } from '../game/rules.js';
-import { readMap, writeMap, normalizeMeta } from '../core/mapFormat.js';
+import { readMap, writeMap, normalizeMeta, newId } from '../core/mapFormat.js';
 import { makeSave, readSave } from '../core/saveFormat.js';
 import { checkMap } from '../core/mapCheck.js';
 import builtinHawthorn from '../maps/hawthorn-bend.json';
@@ -400,24 +400,69 @@ export function showPauseMenu() {
 }
 
 // --- My maps (editor) ----------------------------------------------------------------------
+// The name the board was opened under: a built-in or a copy is saved as
+// "<name> (copy)", so the original is never overwritten.
+let boardName = '';
+// Put a map file on the editor's board (undoable).
+function openOnBoard(file) {
+  const { data } = readMap(file);
+  applyTerrain(data.terrain ?? 'flat');
+  grid.replaceAll(data.cols, data.rows, data.cells, data.edges);
+  updateUndoButtons();
+}
+// A name not taken in My maps: "Name (copy)", "Name (copy 2)"...
+function copyName(name, maps) {
+  const taken = new Set(maps.map((m) => m.name.toLowerCase()));
+  name = name.replace(/ \(copy(?: \d+)?\)$/, '');   // a copy of a copy is "Name (copy 2)"
+  let n = `${name} (copy)`;
+  for (let k = 2; taken.has(n.toLowerCase()); k++) n = `${name} (copy ${k})`;
+  return n;
+}
 export function showMyMaps() {
   const maps = storage.maps.list();
   openScreen(`
     ${back()}
     <h2 class="screen-title">My maps</h2>
     <div class="save-map">
-      <input type="text" id="mmName" class="screen-input" placeholder="Name this map" maxlength="80" />
+      <input type="text" id="mmName" class="screen-input" placeholder="Name this map" maxlength="80" value="${esc(boardName)}" />
       <button class="primary" id="mmSave">Save current board</button>
     </div>
     ${maps.length ? `<div class="slot-list">${maps.map((m) => `
       <div class="slot">
         <div class="slot-info"><b>${esc(m.name)}</b><small>${m.cols}×${m.rows} · ${esc(when(m.updated))}</small></div>
         <button data-open="${m.id}">Open</button>
+        <button class="ghost" data-copy="${m.id}" title="Save a copy of this map to My maps">Copy</button>
         <button class="ghost" data-del="${m.id}" aria-label="Delete ${esc(m.name)}">✕</button>
-      </div>`).join('')}</div>` : '<p class="screen-note">No saved maps yet. Saved maps appear in New game.</p>'}`, (el) => {
+      </div>`).join('')}</div>` : '<p class="screen-note">No saved maps yet. Saved maps appear in New game.</p>'}
+    <h3 class="screen-sub">Built-in maps</h3>
+    <p class="screen-note">Opens a copy on the board: the built-in map itself never changes. Save it here under a new name, or Export JSON to send it in.</p>
+    <div class="slot-list">${BUILTIN_MAPS.map((m) => `
+      <div class="slot">
+        <div class="slot-info"><b>${esc(m.meta.name)}</b><small>${m.cols}×${m.rows} · Built-in</small></div>
+        <button data-builtin="${esc(m.meta.id)}">Open a copy</button>
+      </div>`).join('')}</div>`, (el) => {
     el.querySelector('[data-back]').addEventListener('click', closeScreen);
+    el.querySelectorAll('[data-builtin]').forEach((b) => b.addEventListener('click', () => {
+      if (!b.dataset.confirm) { b.dataset.confirm = '1'; b.textContent = 'Replace board?'; return; }
+      const m = BUILTIN_MAPS.find((x) => x.meta.id === b.dataset.builtin);
+      try {
+        openOnBoard(m);
+        boardName = copyName(m.meta.name, maps);
+        closeScreen();
+        toast(`${m.meta.name} opened as a copy: the built-in stays as it is. Undo puts your previous board back.`);
+      } catch (err) { toast(`Couldn't open: ${err.message}`); }
+    }));
+    el.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', () => {
+      const src = storage.maps.get(b.dataset.copy);
+      const name = copyName(maps.find((m) => m.id === b.dataset.copy)?.name ?? 'Map', maps);
+      const id = newId('map');
+      const now = new Date().toISOString();
+      const file = { ...src, meta: { ...(src?.meta ?? {}), id, name, created: now, updated: now } };
+      if (storage.maps.put(file, id)) { toast(`Saved "${name}".`); showMyMaps(); } else toast('Copying failed: storage is full or blocked here.');
+    }));
     el.querySelector('#mmSave').addEventListener('click', () => {
       const name = el.querySelector('#mmName').value.trim() || 'Untitled map';
+      boardName = name;
       const existing = maps.find((m) => m.name.toLowerCase() === name.toLowerCase());
       const file = writeMap(grid, { id: existing?.id, name, created: existing ? storage.maps.get(existing.id)?.meta?.created : undefined });
       if (storage.maps.put(file, file.meta.id)) { toast(`Saved "${name}" to My maps.`); showMyMaps(); } else toast('Saving failed: storage is full or blocked here.');
@@ -425,10 +470,8 @@ export function showMyMaps() {
     el.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => {
       if (!b.dataset.confirm) { b.dataset.confirm = '1'; b.textContent = 'Replace board?'; return; }
       try {
-        const { data } = readMap(storage.maps.get(b.dataset.open));
-        applyTerrain(data.terrain ?? 'flat');
-        grid.replaceAll(data.cols, data.rows, data.cells, data.edges); // undoable
-        updateUndoButtons();
+        openOnBoard(storage.maps.get(b.dataset.open));
+        boardName = maps.find((m) => m.id === b.dataset.open)?.name ?? '';
         closeScreen();
         toast('Map opened. Undo puts your previous board back.');
       } catch (err) { toast(`Couldn't open: ${err.message}`); }

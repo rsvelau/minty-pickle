@@ -27,6 +27,9 @@ return to the map editor. The editor's **Play demo** still test-plays the editor
 
 **My maps** (File section of the editor): name the current board and save it; saved maps appear in New game.
 **Open** puts a saved map on the editor's board (Undo puts your previous board back).
+**Copy** saves a duplicate of one of your maps ("Name (copy)"). Under **Built-in maps**, **Open a copy** puts
+Hawthorn Bend on the board without touching the built-in one; the name field then reads "Hawthorn Bend (copy)",
+so saving never overwrites anything. To change the built-in map, tweak the copy and send its **Export JSON**.
 
 The built-in map is the designer's own board: `maps-src/hawthorn-bend.export.json` is the file exported from
 the editor (File → Export JSON). To update it, export the board again, replace that file, and run
