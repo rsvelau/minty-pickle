@@ -202,12 +202,15 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     p.halfBarrel(bd / 2 + 0.15, bw + 0.2, [0, 3.7, 0], '#9aa0a4');  // barrel roof sitting on top, slight overhang
     p.box(bw - 0.4, 0.5, bd - 0.4, [0, 0, 0], '#4a4c4e');                  // skirt, tucked under
     p.box(2.2, 0.3, 1.6, [bw * 0.3, 0, bd / 2 + 0.8], '#6a6a66');          // steps
+    const sz = bd / 2 + 0.4;                                                // the sign's face, out past the eave
+    for (const sx of [-1.8, 1.8]) p.box(0.08, 0.08, 0.6, [-bw * 0.2 + sx, 4.4, sz - 0.3], '#3a3c3e');   // its brackets
     g.add(p.mesh());
     for (let k = 0; k < 6; k++) g.add(lightPanel(1.4, 1.1, [-bw / 2 + 1.6 + k * (bw - 3) / 5, 2.4, bd / 2 + 0.09], k === 4 ? '#ffd890' : '#1a2228', { flick: k === 4 }));
     const sign = plane(signTex('DINER', { fg: '#40e0ff', glowCol: '#40e0ff', font: '800 96px Georgia, serif' }), 5, 1.4, { flick: true });
-    sign.position.set(-bw * 0.2, m(4.9), m(0.2));
+    // Over the front, just clear of the roof's curve at the eave, on two brackets.
+    sign.position.set(m(-bw * 0.2), m(4.95), m(sz));
     const closed = plane(signTex('CLOSED', { fg: '#ff4040', bg: '#200a0a', font: '800 60px system-ui', w: 256, h: 96 }), 1.2, 0.45);
-    closed.position.set(bw * 0.3, m(2.3), m(bd / 2 + 0.16));
+    closed.position.set(m(bw * 0.3), m(2.3), m(bd / 2 + 0.16));
     g.add(sign, closed);
     ticks.push((t) => { sign.material.opacity = Math.sin(t * 2.3) > 0.97 ? 0.15 : 1; });
     return { g, ticks };
@@ -276,7 +279,7 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     const sign = plane(signTex('ARCADE', { fg: '#ffe040', glowCol: '#ff8020', font: '900 96px system-ui' }), bw * 0.6, 1.4, { flick: true });
     sign.position.set(0, m(4.0), m(bz + bd / 2 + 0.12));
     const over = plane(signTex('GAME OVER', { fg: '#ff3030', glowCol: '#ff3030', font: '800 64px monospace' }), 3, 0.6);
-    over.position.set(-bw * 0.25, m(2), m(bz + bd / 2 + 0.18));
+    over.position.set(m(-bw * 0.25), m(2), m(bz + bd / 2 + 0.18));
     g.add(door, sign, over);
     ticks.push((t) => { door.material.color.setHSL((t * 0.15) % 1, 0.9, 0.55); over.visible = Math.sin(t * 3) > 0; });
     return { g, ticks };
