@@ -95,7 +95,7 @@ export const MONSTER_TEXT = {
     goal: 'Kill it: wear its health down to 0.',
     says: {
       Abduct: '{move} 10 toward the nearest player and Seizes them.',
-      'Run Down': 'Charges 5 spaces, trampling everyone in its path for 🎲.',
+      'Run Down': 'Charges {move} 5 at the nearest player, then tramples them for 🎲.',
       Miasma: '{area} Everyone within 3 spaces takes 4.',
     },
     track: ['−1 toughness; drops whoever it carries', '−1 toughness; drops whoever it carries', '−1 toughness; drops whoever it carries'],

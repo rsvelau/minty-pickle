@@ -163,6 +163,13 @@ export function parseAbility(text) {
     }
   }
   if (rit) ops.push({ op: 'ritual', at: Number(rit[1]), dmg: damageSpec(rit[2]), _at: text.length });
+  // Trample (dmg, n): a charge, n spaces at the nearest player, then the damage (Ushi-Oni's Run Down).
+  const tr = /Trample \(([^,)]*),\s*(\d+)\)/.exec(text);
+  if (tr) {
+    ops.push({ op: 'pursue', n: Number(tr[2]), word: 'Trample', _at: tr.index });
+    ops.push({ op: 'attack', dmg: damageSpec(tr[1]), _at: tr.index + 1 });
+    text = text.replace(tr[0], '');
+  }
   // Target, Pin, Drop, appear, Block / Unblock (group 7, for the objective monsters).
   const more = /(Target & appear inside \(occupied building nearest \{(\d+)\}\)|Target \(([^)]*)\)|Pin \((\d+)\)|Drop \(([^)]*)\)|Pull \((\d+)\)|Unblock \(all doors\)|Block \(all doors\))/g;
   let k;
@@ -649,6 +656,7 @@ export function executeIntent(state, board, monster, ctx, events) {
     let hit = [];
     let aim = null;
     let attacked = false;   // after an attack, Exhaust / Pull fall on `hit` alone (even no one)
+    let bashed = false;
     for (const o of intent.ops) {
       if (o.op === 'attack' && o.target !== undefined && card.actsBy === 'swarm' && livingVictims(state).length) {
         const defender = attackVictim(state, board, monster, card, intent, o, ctx, events);
@@ -742,7 +750,7 @@ export function executeIntent(state, board, monster, ctx, events) {
       }
       if (o.op === 'attack') {
         const t = aim ?? closeTarget(state, board, monster.pos, monster);
-        if (!t && bash(state, board, monster, card, monster.intents.slice(at + 1), roll, ctx, events)) continue;
+        if (!t && bash(state, board, monster, card, monster.intents.slice(at + 1), roll, ctx, events)) { bashed = true; continue; }
         if (!t) { ctx.log(state, `${source} finds no one in reach.`); continue; }
         hit = [t];
         attacked = true;
@@ -750,7 +758,7 @@ export function executeIntent(state, board, monster, ctx, events) {
         struck(state, monster, intent.name, t, ctx, () => applyDamage(state, board, t, type, roll(o.dmg), opts, events));
       } else if (o.op === 'area' || o.op === 'global') {
         const targets = o.op === 'global' ? targetable(state) : areaTargets(state, board, monster.pos, o, targetable(state));
-        if (!targets.length && bash(state, board, monster, card, monster.intents.slice(at + 1), roll, ctx, events)) continue;
+        if (!targets.length && bash(state, board, monster, card, monster.intents.slice(at + 1), roll, ctx, events)) { bashed = true; continue; }
         if (!targets.length) { ctx.log(state, `${source} strikes at nothing.`); continue; }
         attacked = true;
         events.push({ type: 'monsterAttack', id: monster.id, seat: targets[0].seat, cell: monster.pos, area: true, attack: type });
@@ -775,6 +783,12 @@ export function executeIntent(state, board, monster, ctx, events) {
         events.push({ type: 'monsterAttack', id: monster.id, seat: targets[0].seat, cell: monster.pos, area: true, attack: type });
         for (const pl of targets) applyDamage(state, board, pl, type, roll(o.dmg), opts, events);
       }
+    }
+    // An action that came for someone (it moved toward them, or does something
+    // to them the game doesn't play yet: Seize, Trample, Drag...) but reached
+    // no one and is stuck at a door: it bashes the door instead.
+    if (!attacked && !bashed && !hit.length && (intent.ops.some((o) => o.op === 'pursue') || intent.unknown.length)) {
+      bash(state, board, monster, card, monster.intents.slice(at + 1), roll, ctx, events);
     }
     if (intent.unknown.length) ctx.log(state, `(${intent.name}: ${intent.unknown.join(', ')} not played yet.)`);
   }

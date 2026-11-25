@@ -198,3 +198,30 @@ test('a locked door whose key the investigators found stands open for monsters t
   assert.ok(!ev.some((e) => e.type === 'doorBash'), 'no need to bash');
   assert.equal(s.monster.pos, s.g.index(6, 4), 'straight through, next to the player');
 });
+
+test('Ushi-Oni: Abduct (Pursue and Seize) and Run Down (Trample) stuck at a locked door bash it too', async () => {
+  const { parseAbility } = await import('../src/game/monsterTurn.js');
+  const { MONSTER_BY_ID } = await import('../src/game/cards/monsters.js');
+  const card = MONSTER_BY_ID['ushi-oni'];
+  const ops = (name) => parseAbility(card.abilities.find((a) => a.name === name).text);
+  for (const name of ['Abduct', 'Run Down']) {
+    const s = hunt('ushi-oni', { doorType: 'lockedDoor' });
+    const { ops: o, unknown } = ops(name);
+    s.monster.intents = null;
+    const ev = (() => {
+      s.monster.intents = [{ roll: 1, ability: 0, name, kind: 'physical', text: '', ops: o, unknown }];
+      const events = [];
+      s.board.grid.edgeOverride = gameDoorOverride(s.state, s.board);
+      executeIntent(s.state, s.board, s.monster, { state: s.state, log: () => {}, randInt: () => 3 }, events);
+      s.board.grid.edgeOverride = null;
+      return events;
+    })();
+    assert.ok(ev.some((e) => e.type === 'doorBash'), `${name} bashes the door`);
+  }
+});
+
+test('a monster moving away (Retreat, Heal) doesn’t bash doors', () => {
+  const s = hunt('werewolf', { blocked: 'nail' });
+  const ev = s.round([{ op: 'retreat', n: 5 }, { op: 'heal', n: 6 }]);
+  assert.ok(!ev.some((e) => e.type === 'doorBash'));
+});
