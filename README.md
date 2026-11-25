@@ -17,8 +17,9 @@ The app opens on the **title screen** (`src/app/gameShell.js`):
 
 **Scouting** (the start of every new game; Game settings → Start → Scouting turns it off): someone got
 here first, and what they gathered was left at the edge of town. How it went depends on the night's monster's
-**difficulty**, 1 to 5 stars on its card (`stars` in `src/game/cards/monsters.js`; shown in the Field Guide
-and the card list; every monster is 1 star for now). The screen shows the stars and that story
+**difficulty**, 1 to 5 stars on its card (`stars` in `src/game/cards/monsters.js`; every monster is 1 star
+for now). Difficulty isn't evidence: the stars only show when the monster's identity comes out (on its card,
+with its name), and in the card list under Game settings. The Scouting screen shows only the story
 (`SCOUTING_STORY` in rules.js): 1 ★ whoever called us left supplies; 2 ★ somebody left in a hurry; 3 ★ a
 scouting team found this much before things got too hot; 4 ★ paid for in blood; 5 ★ a slaughter, the
 equipment pulled out by remote arcane manipulation. Players + 1 Equipment cards are drawn from
@@ -977,6 +978,16 @@ The game is split so the same rules can run on one phone today and on a server f
 - **Tests** (`tests/rules.test.js`, `npm test`): whole games played headless by a bot, determinism, JSON
   round-trips, rejected moves, Obols, midnight, monsters stalking and attacking, the board travelling as
   JSON, and a host with two phones staying in sync with seats enforced.
+
+### Monster cards as players read them
+
+`src/game/cards/monsterText.js` holds each card's player-facing wording: short constant rules, what each
+ability does, each weakness-track step, and the objective, in plain words with icons (👣 moves, 🎲 a die of
+damage, ◎ everyone in reach, ✚ heals, ⛓ exhaust, ⌛ a round, numbered site badges). The rules still read the
+card text in `monsters.js`, so rewording a card there never changes how it plays. The Field Guide and the
+reveal card draw it the same way (`guideDetails` in panels.js): health, toughness and action dice up top;
+traits, weak to, immune to; the rules; each ability with the die faces that call it and its damage type in
+colour; the weakness track as numbered steps; the objective; and the evidence (Field Guide only).
 
 ### The mystery (evidence, Casebook, Field Guide)
 

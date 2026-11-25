@@ -23,6 +23,7 @@ import { sacrificeSeat, SCOUTING_STORY } from '../game/rules.js';
 import { scriptOf, mapSites, knownMonster } from '../game/objectives/scripts.js';
 import { progressLines } from '../game/objectives/verbs.js';
 import { skillStatus, COSOR_CARD } from '../game/skills.js';
+import { MONSTER_TEXT } from '../game/cards/monsterText.js';
 import { showSheet, hideSheet, sheetOpen, dragToClose } from './sheets.js';
 import { initFeed } from './feed.js';
 
@@ -311,8 +312,9 @@ export function showCardNow(c) {
     const m = MONSTER_BY_ID[c.monster];
     card.classList.add('monster');
     html = `<div class="pc-kind" style="text-align:center">${c.identified ? 'All the evidence is in · its objectives are marked' : 'Midnight · it\'s here'}</div><div class="pc-title">The ${esc(m.name)}</div>` +
-      `<div class="pc-sub" style="text-align:center">${esc(m.traits.join(', '))}${c.correct ? ' · you named it right' : ''}</div>` +
-      guideDetails(m, currentFound(), true);
+      `<div class="pc-stars" title="Difficulty ${m.stars ?? 1} of 5">${starsText(m.stars ?? 1)}</div>` +
+      (c.correct ? '<div class="pc-sub" style="text-align:center">You named it right</div>' : '') +
+      guideDetails(m, currentFound(), true, { reveal: true });
     stay = true;
   }
   card.innerHTML = html;
@@ -413,25 +415,66 @@ export function casebookHTML(my) {
     `<div class="case-actions"><button type="button" class="ink" id="openGuide">Open the Field Guide</button></div>`;
 }
 
-export function guideDetails(c, found, open) {
+// A monster card as players read it (Field Guide, and the card when it is
+// revealed): health, toughness and action dice up top; traits, weak to,
+// immune to; its constant rules; each ability with the die faces that call it
+// and its damage type; the weakness track as steps; the objective; and (in the
+// Field Guide) its evidence, lit where it matches. Wording and icons come from
+// cards/monsterText.js. `reveal`: its difficulty stars show too.
+const MI = {
+  move: '<span class="mi mi-move" title="Moves (spaces)">👣</span>',
+  heal: '<span class="mi mi-heal" title="Heals">✚</span>',
+  exhaust: '<span class="mi mi-ex" title="Exhausted: gone for the rest of the game">⛓ exhaust</span>',
+  area: '<span class="mi mi-area" title="Everyone within reach">◎</span>',
+  round: '<span class="mi mi-round" title="One round">⌛ 1 round</span>',
+};
+export function monsterText(text) {
+  const sites = [];
+  // Sites first, as placeholders without digits (so numbers bolding skips them).
+  let t = esc(text).replace(/\{(\d+)\}/g, (_, n) => { sites.push(n); return `\u0001${String.fromCharCode(97 + sites.length - 1)}\u0002`; });
+  t = t.replace(/(−?\+?\d+)/g, '<b class="mn">$1</b>');
+  t = t.replace(/\{(move|heal|exhaust|area|round)\}/g, (_, k) => MI[k]);
+  t = t.replace(/\{([PMS])\}/g, (_, k) => dmgIcon(k));
+  t = t.replace(/🎲/g, '<span class="mi mi-die" title="One die">🎲</span>');
+  return t.replace(/\u0001([a-z])\u0002/g, (_, c) => { const n = sites[c.charCodeAt(0) - 97]; return `<span class="mi-site" title="Site {${n}} on the map">${n}</span>`; });
+}
+export function guideDetails(c, found, open, { reveal = false } = {}) {
+  const tx = MONSTER_TEXT[c.id] ?? {};
   const hitObs = new Set(found.cards.filter((f) => f.kind === 'observation').map((f) => f.code));
   const hitLair = found.cards.find((f) => f.kind === 'lair')?.code;
-  const chip = (text, cls) => `<span class="ge-chip ${cls}">${esc(text)}</span>`;
+  const chip = (text, cls, title = '') => `<span class="ge-chip ${cls}"${title ? ` title="${esc(title)}"` : ''}>${text}</span>`;
   const ev = c.evidence;
   const evChips = [
-    chip(`Attack: ${ATTACK_TYPES[ev.attack].label}`, `atk-${ev.attack}${found.attack === ev.attack ? ' hit' : ''}`),
-    ...ev.observations.map((o) => chip(OBSERVATIONS[o].label, hitObs.has(o) ? 'hit' : '')),
-    chip(`Lair: ${LAIRS[ev.lair].label}`, `lair${hitLair === ev.lair ? ' hit' : ''}`),
+    chip(`${dmgIcon(ev.attack)} ${esc(ATTACK_TYPES[ev.attack].label)} attack`, `atk-${ev.attack}${found.attack === ev.attack ? ' hit' : ''}`),
+    ...ev.observations.map((o) => chip(esc(OBSERVATIONS[o].label), hitObs.has(o) ? 'hit' : '')),
+    chip(`⚰ ${esc(LAIRS[ev.lair].label)}`, `lair${hitLair === ev.lair ? ' hit' : ''}`),
   ].join('');
-  const stat = (v) => (v === null ? '∞' : v);
-  const dmg = (list, cls, word) => (list.length ? `<div class="ge-chips">${list.map((k) => chip(`${word} ${DAMAGE_KINDS[k].icon} ${DAMAGE_KINDS[k].label}`, cls)).join('')}</div>` : '');
-  return `<div class="ge-body"${open ? '' : ''}>` +
-    `<p><b>Evidence:</b></p><div class="ge-chips">${evChips}</div>` +
-    `<p>Difficulty <b class="ge-stars" title="${c.stars ?? 1} of 5">${starsText(c.stars ?? 1)}</b> · Health <b>${stat(c.hp)}</b> · Toughness <b>${stat(c.toughness)}</b></p>` +
-    dmg(c.weakness, 'weak', 'Weak to') + dmg(c.immune, 'imm', 'Immune to') +
-    `<p>${esc(c.note)}</p><p><b>Objective:</b> ${esc(c.objective)}</p>` +
-    c.abilities.map((a) => `<p class="ge-abil ${a.kind}">${kindType(a.kind) ? dmgIcon(kindType(a.kind)) + ' ' : ''}<b>${esc(a.name)}</b> <i>[${esc(a.roll)}]</i> ${esc(a.text)}</p>`).join('') +
-    (c.weaknessTrack.length ? `<p><b>Weakness track</b> (hits by its weakness): ${c.weaknessTrack.map((w) => `${w.hits === null ? '∞' : w.hits}: ${esc(w.text)}`).join(' · ')}</p>` : '') +
+  const stat = (v) => (v === null || v === undefined ? '∞' : v);
+  const kinds = (list, cls, word) => list.map((k) => chip(`${word} ${DAMAGE_KINDS[k].icon} ${esc(DAMAGE_KINDS[k].label)}`, cls)).join('');
+  const roll = (r) => (r === 'Persistent' ? 'Always' : String(r).replace('-', '–'));
+  const abil = c.abilities.map((a) => {
+    const t = kindType(a.kind);
+    return `<div class="mc-ab k-${t ?? 'none'}"><span class="mc-roll${a.roll === 'Persistent' ? ' always' : ''}" title="${a.roll === 'Persistent' ? 'Always in effect' : `Its action die rolls ${roll(a.roll)}`}">${roll(a.roll)}</span>` +
+      `<div class="mc-ab-body"><b class="mc-ab-name">${t ? dmgIcon(t) : '<span class="mc-none">◇</span>'} ${esc(a.name)}</b>` +
+      `<span class="mc-ab-text">${monsterText(tx.says?.[a.name] ?? a.text)}</span></div></div>`;
+  }).join('');
+  const weak = c.weakness.map((k) => `${DAMAGE_KINDS[k].icon} ${esc(DAMAGE_KINDS[k].label)}`).join(' or ');
+  const track = c.weaknessTrack.length ? `<div class="mc-track"><span class="mc-label">Weakness track · hits with ${weak}</span><ol>${c.weaknessTrack.map((w, k) =>
+    `<li><span class="mc-hits" title="${w.hits === null ? 'Any time' : `After ${w.hits} hit${w.hits === 1 ? '' : 's'}`}">${w.hits === null ? '∞' : w.hits}</span><span>${monsterText(tx.track?.[k] ?? w.text)}</span></li>`).join('')}</ol></div>` : '';
+  const rules = (tx.rules ?? [c.note]).filter(Boolean);
+  return `<div class="ge-body mc">` +
+    `<div class="mc-stats">` +
+      `<span class="mc-stat" title="Health"><i>♥</i>${stat(c.hp)}<small>health</small></span>` +
+      `<span class="mc-stat" title="Toughness: damage up to this much doesn’t get through"><i>⛨</i>${stat(c.toughness)}<small>tough</small></span>` +
+      `<span class="mc-stat" title="Action dice it rolls each round"><i>🎲</i>${c.badge}<small>actions</small></span>` +
+      (reveal ? `<span class="mc-stat mc-stars" title="Difficulty ${c.stars ?? 1} of 5">${starsText(c.stars ?? 1)}<small>difficulty</small></span>` : '') +
+    `</div>` +
+    `<div class="ge-chips">${c.traits.map((t) => chip(esc(t), 'trait')).join('')}${kinds(c.weakness, 'weak', 'Weak:')}${kinds(c.immune, 'imm', 'Immune:')}</div>` +
+    (rules.length ? `<ul class="mc-rules">${rules.map((r) => `<li>${monsterText(r)}</li>`).join('')}</ul>` : '') +
+    `<div class="mc-abils">${abil}</div>` +
+    track +
+    `<p class="mc-goal"><span class="mc-label">Objective</span>${monsterText(tx.goal ?? c.objective)}</p>` +
+    (reveal ? '' : `<div class="mc-ev"><span class="mc-label">Evidence</span><div class="ge-chips">${evChips}</div></div>`) +
     `</div>`;
 }
 
@@ -446,7 +489,7 @@ export function fieldGuideHTML(my) {
     const hits = (found.attack && c.evidence.attack === found.attack ? 1 : 0)
       + found.cards.filter((f) => (f.kind === 'lair' ? f.code === c.evidence.lair : c.evidence.observations.includes(f.code))).length;
     return `<details class="guide-entry${ruledOut ? ' out' : ''}"${fits.length <= 2 && !ruledOut ? ' open' : ''}>` +
-      `<summary><span class="ge-name">${esc(c.name)} <span class="ge-stars" title="Difficulty ${c.stars ?? 1} of 5">${starsText(c.stars ?? 1)}</span></span><span class="ge-traits">${esc(c.traits.join(', '))}</span>` +
+      `<summary><span class="ge-name">${esc(c.name)}</span><span class="ge-traits">${esc(c.traits.join(', '))}</span>` +
       `<span class="ge-fit">${ruledOut ? 'ruled out' : nFound ? `fits ${hits}/${nFound}` : ''}</span></summary>` +
       guideDetails(c, found) +
       (!ruledOut && canName ? `<div class="case-actions"><button type="button" class="ink" data-name="${c.id}">Name the ${esc(c.name)}</button></div>` : '') +
@@ -772,8 +815,6 @@ export function renderScouting() {
     scoutUI.key = key;
     scoutUI.pick = null;
     // The story depends on how deadly tonight's monster is (its stars).
-    $('#scoutStars').textContent = starsText(sc.stars ?? 1);
-    $('#scoutStars').title = `Difficulty: ${sc.stars ?? 1} of 5`;
     $('#scoutStory').textContent = sc.story ?? SCOUTING_STORY[sc.stars ?? 1];
     $('#scoutCards').innerHTML = all.map((c, k) => {
       const card = EQUIPMENT_BY_ID[c.id];
