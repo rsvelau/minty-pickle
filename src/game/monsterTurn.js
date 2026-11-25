@@ -139,7 +139,7 @@ export function parseAbility(text) {
     const arg = paren ?? bracket ?? toLair ?? '';
     if (word === 'Exhaust') {
       // Exhaust (Defensive die | Movement die | All slotted dice).
-      push({ op: 'exhaust', what: /all/i.test(arg) ? 'all' : /move/i.test(arg) ? 'movement' : 'defense' });
+      push({ op: 'exhaust', what: /all defens/i.test(arg) ? 'allDefense' : /all/i.test(arg) ? 'all' : /move/i.test(arg) ? 'movement' : 'defense' });
       continue;
     }
     if (word === 'Pursue' || word === 'Outflank') push({ op: 'pursue', n: parseInt(arg, 10) || 0, word });
@@ -164,12 +164,13 @@ export function parseAbility(text) {
   }
   if (rit) ops.push({ op: 'ritual', at: Number(rit[1]), dmg: damageSpec(rit[2]), _at: text.length });
   // Target, Pin, Drop, appear, Block / Unblock (group 7, for the objective monsters).
-  const more = /(Target & appear inside \(occupied building nearest \{(\d+)\}\)|Target \(([^)]*)\)|Pin \((\d+)\)|Drop \(([^)]*)\)|Unblock \(all doors\)|Block \(all doors\))/g;
+  const more = /(Target & appear inside \(occupied building nearest \{(\d+)\}\)|Target \(([^)]*)\)|Pin \((\d+)\)|Drop \(([^)]*)\)|Pull \((\d+)\)|Unblock \(all doors\)|Block \(all doors\))/g;
   let k;
   while ((k = more.exec(text))) {
-    const [all, , near, who, pin, drop] = k;
+    const [all, , near, who, pin, drop, pull] = k;
     if (near) ops.push({ op: 'appear', near: Number(near), _at: k.index });
-    else if (who !== undefined) ops.push({ op: 'target', who: /least injured/i.test(who) ? 'leastInjuredInside' : /lair/i.test(who) ? 'nearestLair' : 'nearest', _at: k.index });
+    else if (pull) ops.push({ op: 'pull', n: Number(pull), _at: k.index });
+    else if (who !== undefined) ops.push({ op: 'target', who: /least injured/i.test(who) ? 'leastInjuredInside' : /lair/i.test(who) ? 'nearestLair' : /cosor/i.test(who) ? 'cosor' : 'nearest', _at: k.index });
     else if (pin) ops.push({ op: 'pin', dmg: { fixed: Number(pin) }, _at: k.index });
     else if (drop !== undefined) ops.push({ op: 'drop', item: drop.trim().toLowerCase(), _at: k.index });
     else if (/^Unblock/.test(all)) ops.push({ op: 'unblock', _at: k.index });
@@ -406,6 +407,8 @@ function areaTargets(state, board, pos, o, players) {
 //   nearestLair         the player nearest the Lair (Poltergeist's Heave)
 //   leastInjuredInside  the least injured player inside the monster's building (White Lady's Wrath)
 function pickTarget(state, board, monster, who) {
+  // The Strigoi's Drain and Unholy Burn: whoever holds the Cosor, wherever they are.
+  if (who === 'cosor') return chaseable(state).find((pl) => (pl.carry ?? []).some((c) => c.item === 'cosor')) ?? null;
   const players = prey(state, monster);
   if (who === 'leastInjuredInside') {
     const inside = areaTargets(state, board, monster.pos, { inside: true }, players);
@@ -494,11 +497,12 @@ export function refreshThreat(state, board) {
 // black die too: that player rolls one fewer from now on).
 export function exhaust(state, pl, what, ctx, events) {
   const takeFrom = what === 'movement' ? ['lastMove'] : what === 'all' ? ['defense', 'lastMove'] : ['defense'];
+  const every = what === 'all' || what === 'allDefense';
   const gone = [];
   for (const key of takeFrom) {
     const list = pl[key] ?? [];
     if (!list.length) continue;
-    if (what === 'all') { gone.push(...list.splice(0)); continue; }
+    if (every) { gone.push(...list.splice(0)); continue; }
     // One die: the strongest.
     let best = 0;
     list.forEach((d, k) => { if (d.v > list[best].v) best = k; });
@@ -644,6 +648,7 @@ export function executeIntent(state, board, monster, ctx, events) {
     // Exhaust); `aim` = the player a Target picked (attacks go to them).
     let hit = [];
     let aim = null;
+    let attacked = false;   // after an attack, Exhaust / Pull fall on `hit` alone (even no one)
     for (const o of intent.ops) {
       if (o.op === 'attack' && o.target !== undefined && card.actsBy === 'swarm' && livingVictims(state).length) {
         const defender = attackVictim(state, board, monster, card, intent, o, ctx, events);
@@ -668,7 +673,7 @@ export function executeIntent(state, board, monster, ctx, events) {
         continue;
       }
       if (o.op === 'exhaust') {
-        const targets = hit.length ? hit : [closeTarget(state, board, monster.pos, monster)].filter(Boolean);
+        const targets = hit.length || attacked ? hit : [closeTarget(state, board, monster.pos, monster)].filter(Boolean);
         for (const pl of targets) struck(state, monster, 'exhaust', pl, ctx, () => exhaust(state, pl, o.what, ctx, events));
         hit = targets;
         continue;
@@ -676,7 +681,13 @@ export function executeIntent(state, board, monster, ctx, events) {
       if (o.op === 'target') {
         // Target: who the rest of the action is aimed at, wherever they are.
         aim = pickTarget(state, board, monster, o.who);
-        if (aim) { hit = [aim]; ctx.log(state, `${source} singles out ${aim.name}.`); } else ctx.log(state, `${source} finds no one to single out.`);
+        if (aim) { hit = [aim]; ctx.log(state, `${source} singles out ${aim.name}${o.who === 'cosor' ? ', who holds the Cosor' : ''}.`); }
+        else if (o.who !== 'cosor') ctx.log(state, `${source} finds no one to single out.`);   // no Cosor holder: it strikes up close
+        continue;
+      }
+      if (o.op === 'pull') {
+        // Pull (n): everyone just hurt is dragged up to n spaces toward the monster.
+        for (const pl of hit) if (!pl.dead && !pl.dying) pull(state, board, pl, monster, o.n, ctx, events);
         continue;
       }
       if (o.op === 'pin') {
@@ -692,13 +703,18 @@ export function executeIntent(state, board, monster, ctx, events) {
       }
       if (o.op === 'drop') {
         // Drop (Cosor): the holder loses it on their space; anyone can pick it up there.
+        // Unholy Burn: they can't move or pick it back up on their next turn.
         const holder = state.players.find((p) => (p.carry ?? []).some((c) => c.item === o.item));
         if (!holder) continue;
         const k = holder.carry.findIndex((c) => c.item === o.item);
         const [thing] = holder.carry.splice(k, 1);
-        (state.objective ??= { delivered: {} }).dropped = [...(state.objective.dropped ?? []), { ...thing, cell: holder.pos }];
-        ctx.log(state, `${source}: ${holder.name} drops the ${o.item} at ${label(board, holder.pos)}.`);
-        events.push({ type: 'objStep', seat: holder.seat, cell: holder.pos, text: `${holder.name} drops the ${o.item}` });
+        const burnt = !holder.dead && !holder.dying;
+        (state.objective ??= { delivered: {} }).dropped = [...(state.objective.dropped ?? []),
+          { ...thing, cell: holder.pos, ...(burnt ? { banned: holder.seat, until: state.round + 1 } : {}) }];
+        if (burnt) holder.pinned = true;
+        const name = o.item[0].toUpperCase() + o.item.slice(1);
+        ctx.log(state, `${source}: ${holder.name} drops the ${name} at ${label(board, holder.pos)}${burnt ? `, and can't move or pick it up on their next turn` : ''}.`);
+        events.push({ type: 'objStep', seat: holder.seat, cell: holder.pos, text: `${name} dropped` });
         continue;
       }
       if (o.op === 'appear') {
@@ -729,15 +745,22 @@ export function executeIntent(state, board, monster, ctx, events) {
         if (!t && bash(state, board, monster, card, monster.intents.slice(at + 1), roll, ctx, events)) continue;
         if (!t) { ctx.log(state, `${source} finds no one in reach.`); continue; }
         hit = [t];
-        events.push({ type: 'monsterAttack', id: monster.id, seat: t.seat, cell: t.pos, attack: type });
+        attacked = true;
+        events.push({ type: 'monsterAttack', id: monster.id, seat: t.seat, cell: t.pos, attack: type, ranged: aim === t && cellRange(board.grid, monster.pos, t.pos) > RANGE.close });
         struck(state, monster, intent.name, t, ctx, () => applyDamage(state, board, t, type, roll(o.dmg), opts, events));
       } else if (o.op === 'area' || o.op === 'global') {
         const targets = o.op === 'global' ? targetable(state) : areaTargets(state, board, monster.pos, o, targetable(state));
         if (!targets.length && bash(state, board, monster, card, monster.intents.slice(at + 1), roll, ctx, events)) continue;
         if (!targets.length) { ctx.log(state, `${source} strikes at nothing.`); continue; }
-        hit = targets;
+        attacked = true;
         events.push({ type: 'monsterAttack', id: monster.id, seat: targets[0].seat, cell: monster.pos, area: true, attack: type });
-        for (const pl of targets) struck(state, monster, intent.name, pl, ctx, () => applyDamage(state, board, pl, type, roll(o.dmg), opts, events));
+        // What follows (Pull, Exhaust) falls on those it hurt: not the ones whose defense held.
+        hit = [];
+        for (const pl of targets) {
+          let out = null;
+          struck(state, monster, intent.name, pl, ctx, () => { out = applyDamage(state, board, pl, type, roll(o.dmg), opts, events); });
+          if (out && out !== 'blocked' && out !== 'dead') hit.push(pl);
+        }
       } else if (o.op === 'heal') {
         ctx.log(state, `The ${card.name} heals ${o.n}.`);
       } else if (o.op === 'ritual') {
@@ -788,6 +811,25 @@ function struck(state, monster, what, pl, ctx, hit) {
 }
 
 export { describeDamage };
+
+// Pull (n): `pl` is dragged up to n spaces along their walking route toward
+// the monster, stopping beside it (Charm). The view walks them there.
+function pull(state, board, pl, monster, n, ctx, events) {
+  const { x, y } = board.grid.coords(pl.pos);
+  const field = board.grid.moveField(x, y, { keys: false });
+  // To the monster's space, or (if no one can stand there) the nearest space beside it.
+  let route = field.path(monster.pos);
+  if (route) route = route.slice(0, -1);
+  else {
+    const { x: mx, y: my } = board.grid.coords(monster.pos);
+    route = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => board.grid.inBounds(mx + dx, my + dy))
+      .map(([dx, dy]) => field.path(board.grid.index(mx + dx, my + dy))).filter(Boolean).sort((a, b) => a.length - b.length)[0] ?? null;
+  }
+  if (!route || route.length < 2) return;             // unreachable, or already beside it
+  const steps = route.slice(1).slice(0, n);
+  for (const to of steps) { events.push({ type: 'step', seat: pl.seat, from: pl.pos, to, pulled: true }); pl.pos = to; }
+  ctx.log(state, `${pl.name} is pulled ${steps.length} space${steps.length === 1 ? '' : 's'} toward the ${MONSTER_BY_ID[monster.kind].name}, to ${label(board, pl.pos)}.`);
+}
 
 // A queued attack with no one in reach becomes a Bash on the door in the
 // monster's way (Corporeal and Semi-Corporeal). Returns true if it bashed.

@@ -60,6 +60,18 @@ function siteCells(state, board, at) {
   return at === 'any' ? sites.all : sites[at] ?? [];
 }
 
+// Something dropped on `cell` is picked up again, as it was; except by the
+// player it was burnt out of the hands of (Unholy Burn), until their next
+// turn is over (`banned` seat, `until` round).
+export function pickUpHere(state, pl, cell, say) {
+  const ob = state.objective;
+  const mayTake = (d) => d.cell === cell && !(d.banned === pl.seat && state.round <= d.until);
+  const here = (ob?.dropped ?? []).filter(mayTake);
+  if (!here.length) return;
+  ob.dropped = ob.dropped.filter((d) => !mayTake(d));
+  for (const { cell: _c, banned: _b, until: _u, ...thing } of here) { (pl.carry ??= []).push(thing); say(`${pl.name} picks up the ${itemLabel(thing.item)}.`); }
+}
+
 // A player has stepped onto `cell`: play any objective step there.
 export function onSiteEnter(state, board, pl, cell, ctx, events) {
   const id = knownMonster(state);
@@ -67,12 +79,7 @@ export function onSiteEnter(state, board, pl, cell, ctx, events) {
   if (!sc || pl.dead || pl.dying || pl.escaped || state.phase === 'over') return;
   const say = (text) => { ctx.log(state, text); events.push({ type: 'objStep', seat: pl.seat, cell, text }); };
   const ob = (state.objective ??= { delivered: {} });
-  // Something dropped here: picked up again, as it was.
-  const here = (ob.dropped ?? []).filter((d) => d.cell === cell);
-  if (here.length) {
-    ob.dropped = ob.dropped.filter((d) => d.cell !== cell);
-    for (const { cell: _c, ...thing } of here) { (pl.carry ??= []).push(thing); say(`${pl.name} picks up the ${itemLabel(thing.item).toLowerCase()}.`); }
-  }
+  pickUpHere(state, pl, cell, say);
   for (const step of sc.steps) {
     if (!siteCells(state, board, step.at).includes(cell)) continue;
     const where = siteLabel(step.at);

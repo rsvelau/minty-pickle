@@ -2,6 +2,7 @@
 // system): what a marker stands for, which monsters a map can host, and which
 // markers a revealed monster uses.
 import { test } from 'node:test';
+import { skillStatus } from '../src/game/skills.js';
 import assert from 'node:assert/strict';
 import { GridState } from '../src/core/state.js';
 import { siteOf, siteByNumber } from '../src/core/sites.js';
@@ -294,10 +295,16 @@ test('Strigoi: Cosor at the Lair (once), sharpened, then blessed; the strike ign
   // The strike.
   a.pos = s.g.index(10, 5); s.monster.pos = s.g.index(11, 5);
   assert.ok(applyAction(s.state, s.board, { type: 'roll', seat: 0 }).ok);
-  const r = applyAction(s.state, s.board, { type: 'strike', seat: 0 });
+  s.state.pool = [{ kind: 'black', v: 2 }, { kind: 'black', v: 5 }];
+  s.state.slots = []; s.state.defSlots = [];
+  const ready = skillStatus(s.state, s.board, a).find((e) => e.item === 'cosor');
+  assert.equal(ready.status, 'now', 'listed with the skills');
+  assert.deepEqual(ready.action.die, 1, 'the 5: the most damage');
+  const r = applyAction(s.state, s.board, ready.action);
   assert.ok(r.ok, r.error);
-  assert.ok(s.monster.hp < 10);
-  assert.match(applyAction(s.state, s.board, { type: 'strike', seat: 0 }).error, /once a turn/);
+  assert.equal(s.monster.hp, 5, 'the die’s value, toughness ignored');
+  assert.ok(s.state.pool[1].spent, 'the die is used');
+  assert.match(applyAction(s.state, s.board, { type: 'strike', seat: 0, die: 0 }).error, /once a turn/);
 });
 
 test('Unholy Burn drops the Cosor on the holder’s space; stepping there picks it up, still blessed', () => {

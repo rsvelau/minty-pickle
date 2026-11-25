@@ -138,7 +138,15 @@ function drawLabel(text, colour) {
   c.width = 512;
   c.height = 128;
   const g = c.getContext('2d');
-  g.font = '700 58px system-ui, -apple-system, "Segoe UI", sans-serif';
+  // Shrink long words to fit the label (the message feed has the whole line).
+  let size = 58;
+  const font = (px) => `700 ${px}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+  g.font = font(size);
+  while (size > 30 && g.measureText(text).width > 488) g.font = font(size -= 2);
+  if (g.measureText(text).width > 488) {
+    while (text.length > 4 && g.measureText(`${text}…`).width > 488) text = text.slice(0, -1);
+    text = `${text.trimEnd()}…`;
+  }
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.lineWidth = 12;

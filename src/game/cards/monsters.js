@@ -176,14 +176,15 @@ export const MONSTER_CARDS = [
   {
     id: 'strigoi', name: 'Strigoi', hp: 10, toughness: null, badge: 1,
     traits: ['Corporeal', 'Revenant'],
-    note: 'Only damaged by the Blessed Cosor (Piercing die). Always targets the Cosor holder.',
+    note: 'Only damaged by the Blessed Cosor (one of your dice, ignoring toughness). Drain and Unholy Burn always target the Cosor holder, wherever they are; with no one holding it, they strike whoever is in Close range.',
     objective: 'Kill with the Blessed Cosor: take the Cosor (a Romanian knife) from the Lair, sharpen it at the Outdoor Store {12}, bless it at the Church {9}, then strike the Strigoi with it.',
     weakness: ['holy'], immune: [],
     weaknessTrack: [{ hits: null, text: 'Discard Holy to prevent Exhaust', react: 'exhaust' }],
     abilities: [
-      A('spiritual', 'Drain', '1-3', 'Exhaust (defensive die) and Attack (die)'),
-      A('spiritual', 'Charm', '4-5', 'Exhaust (movement die) and Attack (6)'),
-      A('physical', 'Unholy Burn', '6', 'Drop (Cosor), Exhaust (all slotted dice) and Attack (4)'),
+      // Reworked by the designer (Nov 2026): every attack hunts the Cosor holder or reels players in.
+      A('spiritual', 'Drain', '1-3', 'Target (Cosor holder) and Attack (die), then Exhaust (defensive die)'),
+      A('spiritual', 'Charm', '4-5', 'Area Attack (4, Rad 8); everyone it hurts: Pull (4) toward it and Exhaust (all defensive dice)'),
+      A('physical', 'Unholy Burn', '6', 'Target (Cosor holder) and Attack (4), then Drop (Cosor): it lies there, and they can’t move or pick it up on their next turn'),
     ],
     evidence: { attack: 'S', observations: ['WR', 'IS', 'PB'], lair: 'UG' },
   },

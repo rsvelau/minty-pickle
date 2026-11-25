@@ -22,8 +22,9 @@ import { choicesFor } from '../game/eventPlay.js';
 import { sacrificeSeat } from '../game/rules.js';
 import { scriptOf, mapSites, knownMonster } from '../game/objectives/scripts.js';
 import { progressLines } from '../game/objectives/verbs.js';
-import { skillStatus } from '../game/skills.js';
+import { skillStatus, COSOR_CARD } from '../game/skills.js';
 import { showSheet, hideSheet, sheetOpen, dragToClose } from './sheets.js';
+import { initFeed } from './feed.js';
 
 // Module state: assigned by init() below, in the same order as before the split.
 export let OBOL_GLYPHS, DMG_SVG, ATTACK_GLYPH, cardQueue, caseUI, craftUI;
@@ -105,6 +106,12 @@ export function init() {
     root.setProperty('--dock-w', rail.matches ? `${d.offsetWidth}px` : '0px');
   };
   new ResizeObserver(measure).observe($('#playHud'));
+  // The message feed sits above the dice tray when it's up.
+  new ResizeObserver(() => {
+    const t = $('#playTray');
+    document.documentElement.style.setProperty('--tray-h', t.hidden || !t.offsetHeight ? '0px' : `${t.offsetHeight + 8}px`);
+  }).observe($('#playTray'));
+  initFeed();
   rail.addEventListener('change', measure);
   // Team: tap someone to see their injuries in full (and their skills).
   teamUI = { player: null };
@@ -604,9 +611,11 @@ function renderInventoryTab(s, pl, body) {
     return;
   }
   const mine = inv.player === s.cur && ['idle', 'slotting', 'choosing', 'asking'].includes(s.phase); // before rolling or at any stop
+  if (useUI.item === 'cosor' && mine) { renderStrikeSheet(body, pl); return; }
   if (useUI.item !== null && mine && items[useUI.item]) { renderUseSheet(body, pl, items); return; }
   useUI.item = null;
-  if (!items.length) { body.innerHTML = `<p class="inv-empty">${INVENTORY_TABS.equipment.empty}</p>`; return; }
+  const cosor = (pl.carry ?? []).some((c) => c.item === 'cosor' && c.blessed);
+  if (!items.length && !cosor) { body.innerHTML = `<p class="inv-empty">${INVENTORY_TABS.equipment.empty}</p>`; return; }
   const viewSeg = `<div class="seg skill-view" role="group" aria-label="Order">` +
     `<button type="button" data-view="ready" class="${inv.view === 'ready' ? 'on' : ''}">Ready first</button>` +
     `<button type="button" data-view="items" class="${inv.view === 'items' ? 'on' : ''}">By item</button></div>`;
@@ -617,7 +626,7 @@ function renderInventoryTab(s, pl, body) {
       const card = EQUIPMENT_BY_ID[e.id];
       return `<div class="eq-card"><b>${esc(e.label ?? card?.name ?? 'Item')}</b>${card ? abilitiesHTML(card, mine ? { item: e, i, status } : null) : ''}` +
         `${e.from ? `<small class="eq-from">From ${esc(e.from)}</small>` : ''}</div>`;
-    }).join('')}</div>` + (mine ? discardHTML(pl) : '') + (mine ? '' : `<p class="inv-empty" style="padding:8px 4px">${inv.player === s.cur ? 'Equipment can be used during your turn: roll first if a skill needs dice.' : 'Only usable on this investigator’s own turn.'}</p>`);
+    }).join('')}${cosor ? `<div class="eq-card"><b>Blessed Cosor</b>${abilitiesHTML(COSOR_CARD, mine ? { item: { spent: [] }, i: 'cosor', status } : null)}<small class="eq-from">The Strigoi’s bane: sharpened and blessed</small></div>` : ''}</div>` + (mine ? discardHTML(pl) : '') + (mine ? '' : `<p class="inv-empty" style="padding:8px 4px">${inv.player === s.cur ? 'Equipment can be used during your turn: roll first if a skill needs dice.' : 'Only usable on this investigator’s own turn.'}</p>`);
   }
   body.querySelectorAll('[data-view]').forEach((b) => { b.onclick = () => {
     inv.view = b.dataset.view;
@@ -632,8 +641,14 @@ function renderInventoryTab(s, pl, body) {
   }; });
   // Use: open the use sheet with the dice and target that work already picked.
   body.querySelectorAll('[data-use]').forEach((b) => { b.onclick = () => {
-    const [i, k] = b.dataset.use.split(':').map(Number);
-    const st = statusByKey(pl).get(`${i}:${k}`);
+    const [i0, k0] = b.dataset.use.split(':');
+    const st = statusByKey(pl).get(b.dataset.use);
+    if (i0 === 'cosor') {
+      Object.assign(useUI, { item: 'cosor', ability: 0, dice: st?.action ? [st.action.die] : [], target: null, raise: [], error: '' });
+      renderInventory();
+      return;
+    }
+    const i = Number(i0), k = Number(k0);
     Object.assign(useUI, { item: i, ability: k, dice: [...(st?.action?.dice ?? [])], target: st?.action?.target ?? null, raise: [], error: '' });
     renderInventory();
   }; });
@@ -733,6 +748,41 @@ export function abilitiesHTML(card, use = null) {
       : `<button type="button" class="eq-use${st?.status === 'now' ? ' go' : ''}" data-use="${use.i}:${k}" ${abilityReady(use.item, k) ? '' : 'disabled title="Used up until refreshed"'}>Use</button>`;
     return abilityRow(a, '', button, use && !auto && st && st.status !== 'now' ? st.why : '');
   }).join('')}</ul>`;
+}
+
+// --- The Blessed Cosor's Strike: one of your dice, its value as damage. -----------
+export function openStrike() {
+  const st = play.session.state;
+  const e = skillStatus(st, play.board, st.players[st.cur]).find((x) => x.item === 'cosor');
+  Object.assign(useUI, { item: 'cosor', ability: 0, dice: e?.action ? [e.action.die] : [], target: null, raise: [], error: '' });
+  openInventory(st.cur, 'skills');
+}
+function renderStrikeSheet(body, pl) {
+  const s = play.state;
+  const st = play.session.state;
+  const free = s.pool.map((d, n) => ({ ...d, n })).filter((d) => !d.spent && !s.defSlots.includes(d.n) && !s.slots.includes(d.n));
+  const status = skillStatus(st, play.board, st.players[pl.seat]).find((x) => x.item === 'cosor');
+  const m = st.monsters.find((x) => x.kind === 'strigoi');
+  const pick = useUI.dice[0];
+  const ok = status?.status === 'now' && free.some((d) => d.n === pick);
+  body.innerHTML = `<div class="use-sheet">
+    <button type="button" class="screen-back use-back">‹ Skills</button>
+    <b class="use-title">Blessed Cosor · Strike</b>
+    ${abilitiesHTML(COSOR_CARD)}
+    ${m ? `<p class="use-label">The Strigoi: <b>${m.hp}</b> of ${m.maxHp} health left.</p>` : ''}
+    <p class="use-label">Strike with one die: its value is the damage.</p>
+    <div class="use-dice">${free.map((d) => `<button type="button" class="use-die${d.n === pick ? ' on' : ''}" data-die="${d.n}">${d.v}<small>${d.kind === 'white' ? 'white' : ''}</small></button>`).join('') || '<span class="inv-empty">No free dice: roll first, or unslot one.</span>'}</div>
+    <p class="use-status ${ok ? 'ok' : ''}">${useUI.error ? esc(useUI.error) : status && status.status !== 'now' ? esc(status.why) : ok ? `✓ ${s.pool[pick].v} damage` : 'Pick a die'}</p>
+    <button type="button" class="use-go" ${ok ? '' : 'disabled'}>Strike${ok ? ` for ${s.pool[pick].v}` : ''}</button>
+  </div>`;
+  body.querySelector('.use-back').onclick = () => { useUI.item = null; renderInventory(); };
+  body.querySelectorAll('[data-die]').forEach((b) => { b.onclick = () => { useUI.dice = [Number(b.dataset.die)]; useUI.error = ''; renderInventory(); }; });
+  body.querySelector('.use-go').onclick = () => {
+    const r = play.strike(pick);
+    if (!r?.ok) { useUI.error = r?.error ? r.error[0].toUpperCase() + r.error.slice(1) + '.' : 'That can’t be done now.'; renderInventory(); return; }
+    useUI.item = null;
+    closeInventory();
+  };
 }
 
 // --- Using equipment: choose dice (and a target), then Use. -----------------------------

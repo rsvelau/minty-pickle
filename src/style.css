@@ -1342,3 +1342,41 @@ body.mode-game #camMode { display: none; }
   .play-tray, .ask-card { margin-left: calc(var(--dock-w) / -2); }
   .game-clock, .intent-banner { margin-left: calc(var(--dock-w) / -2); }
 }
+
+/* --- The message feed: colour-coded lines over the board, above the dock and tray. --- */
+:root { --tray-h: 0px; }
+.feed {
+  position: fixed; z-index: 7; left: calc(8px + env(safe-area-inset-left, 0px));
+  bottom: calc(var(--dock-h) + var(--tray-h) + 8px);
+  width: min(360px, calc(100% - 16px - var(--dock-w))); pointer-events: none;
+}
+.feed[hidden] { display: none; }
+body:not(.playing) .feed { display: none; }
+.feed-lines { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.feed-line {
+  pointer-events: auto; cursor: pointer; max-width: 100%;
+  padding: 3px 8px 3px 7px; border-radius: 6px; border-left: 3px solid #8a8f98;
+  background: rgba(8, 10, 14, 0.78); color: #d8dde2; font: 12.5px/1.35 system-ui, sans-serif;
+  animation: feedIn 0.25s ease-out;
+}
+.feed-line.gone { opacity: 0; transform: translateY(-4px); transition: opacity 0.6s, transform 0.6s; }
+@keyframes feedIn { from { opacity: 0; transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { .feed-line { animation: none; } }
+.fk-monster { border-left-color: #ff5a4a; color: #ffc8c0; }
+.fk-hurt { border-left-color: #c58aff; color: #e6d2ff; }
+.fk-objective { border-left-color: #f3c84a; color: #fbe6a8; }
+.fk-evidence { border-left-color: #4ac8e0; color: #c4eef6; }
+.fk-skill { border-left-color: #58e0a0; color: #c8f5df; }
+.fk-night { border-left-color: #8a7aff; color: #d6d0ff; }
+.feed.open { pointer-events: auto; }
+.feed.open .feed-lines {
+  max-height: min(42vh, 320px); overflow: auto; padding: 6px; border-radius: 10px;
+  background: rgba(8, 10, 14, 0.86); border: 1px solid var(--line);
+}
+.feed.open .feed-line { background: none; animation: none; }
+.feed-toggle {
+  flex: none; width: 34px; height: 26px; min-height: 0; padding: 0; margin-left: auto; display: grid; place-items: center;
+  border-radius: 8px; color: var(--muted); touch-action: manipulation;
+}
+.feed-toggle svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+.feed-toggle.on { color: #f3e3cf; border-color: var(--accent); }

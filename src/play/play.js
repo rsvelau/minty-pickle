@@ -55,7 +55,7 @@ const LUNGE_TIME = 0.7;   // a monster's attack lunge
 
 export function createPlay({
   grid, scene, camera, controls, cellToWorld, cellTop, terrainify, cellLabel, onChange,
-  onUsed = () => {}, onCollect = () => {}, onObol = () => {}, onAttack = () => {}, onMonster = () => {},
+  onUsed = () => {}, onReset = () => {}, onCollect = () => {}, onObol = () => {}, onAttack = () => {}, onMonster = () => {},
   onEvidence = () => {}, onAttacked = () => {}, onNamed = () => {}, onMonsterRevealed = () => {},
   onDamage = () => {}, onIntent = () => {}, onGameOver = () => {}, onNpc = () => {}, onExhaust = () => {}, onCraft = () => {}, onCard = () => {}, onEquip = () => {}, onSacrifice = () => {}, onEscaped = () => {},
   config = defaultConfig(),
@@ -414,7 +414,7 @@ export function createPlay({
   function syncMonsters(force = false) {
     const s = g();
     const ids = new Set((s?.monsters ?? []).map((mo) => mo.id));
-    for (const [id, mv] of view.monsters) if (!ids.has(id)) { group.remove(mv.fig); view.monsters.delete(id); }
+    for (const [id, mv] of view.monsters) if (!ids.has(id)) { group.remove(mv.fig); if (mv.hp) group.remove(mv.hp.g); view.monsters.delete(id); }
     for (const mo of s?.monsters ?? []) {
       let mv = view.monsters.get(mo.id);
       if (!mv) {
@@ -424,6 +424,91 @@ export function createPlay({
         force = true;
       }
       if (inBoard(mo.pos) && (force || !running(mv))) { mv.at = centreOf(mo.pos); mv.vis = mo.pos; if (force) { mv.queue = []; mv.anim = null; } }
+    }
+  }
+
+  // --- monster health: a ring at its feet, and the damage rising off it ------------------------
+  // The bright arc is the health left (green, then amber, then red as it
+  // falls), the dim red arc what it has lost; a monster nothing can wear down
+  // (∞ health) has none. A hit floats its damage up from the monster.
+  const hpLeftMat = new THREE.MeshBasicMaterial({ color: 0x58e0a0, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide });
+  const hpLostMat = new THREE.MeshBasicMaterial({ color: 0x6a1010, transparent: true, opacity: 0.75, depthWrite: false, side: THREE.DoubleSide });
+  const hpBackMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide });
+  for (const mat of [hpLeftMat, hpLostMat, hpBackMat]) terrainify(mat, { bridge: true });
+  const R0 = 0.33, R1 = 0.4;
+  const arc = (from, len) => new THREE.RingGeometry(R0, R1, Math.max(3, Math.ceil(48 * len / (Math.PI * 2))), 1, from, len).rotateX(-Math.PI / 2);
+  function healthRing(mv, mo) {
+    if (mo.hp === null || mo.hp === undefined || !mo.maxHp) { if (mv.hp) { group.remove(mv.hp.g); mv.hp = null; } return; }
+    if (!mv.hp) {
+      const g2 = new THREE.Group();
+      const back = new THREE.Mesh(new THREE.RingGeometry(R0 - 0.015, R1 + 0.015, 48).rotateX(-Math.PI / 2), hpBackMat);
+      g2.add(back);
+      for (const o of [back]) { o.raycast = () => {}; o.renderOrder = 4; }
+      group.add(g2);
+      mv.hp = { g: g2, shown: null, left: null, lost: null, mat: hpLeftMat.clone() };
+      terrainify(mv.hp.mat, { bridge: true });
+    }
+    const h = mv.hp;
+    if (h.shown === mo.hp && h.max === mo.maxHp) return;
+    // Damage taken since last shown: float it up.
+    if (h.shown !== null && mo.hp < h.shown) damagePop(mv, h.shown - mo.hp);
+    h.shown = mo.hp; h.max = mo.maxHp;
+    for (const k of ['left', 'lost']) if (h[k]) { h.g.remove(h[k]); h[k].geometry.dispose(); h[k] = null; }
+    const f = Math.max(0, Math.min(1, mo.hp / mo.maxHp));
+    const full = Math.PI * 2, start = Math.PI / 2;       // from the top, clockwise as seen from above
+    h.mat.color.set(f > 0.5 ? 0x58e0a0 : f > 0.25 ? 0xf0c040 : 0xff4a3a);
+    if (f > 0) { h.left = new THREE.Mesh(arc(start, full * f), h.mat); h.g.add(h.left); }
+    if (f < 1) { h.lost = new THREE.Mesh(arc(start + full * f, full * (1 - f)), hpLostMat); h.g.add(h.lost); }
+    for (const o of [h.left, h.lost]) if (o) { o.raycast = () => {}; o.renderOrder = 5; o.position.y = 0.002; }
+    // "6/10" in front of the ring.
+    if (!h.label) {
+      h.canvas = document.createElement('canvas');
+      h.canvas.width = 256; h.canvas.height = 96;
+      h.tex = new THREE.CanvasTexture(h.canvas);
+      h.tex.colorSpace = THREE.SRGBColorSpace;
+      h.label = new THREE.Sprite(new THREE.SpriteMaterial({ map: h.tex, transparent: true, depthTest: false, fog: false }));
+      h.label.renderOrder = 30; h.label.raycast = () => {};
+      h.label.scale.set(0.34, 0.13, 1);
+      h.label.position.set(0, 0.06, R1 + 0.08);
+      h.g.add(h.label);
+    }
+    const x = h.canvas.getContext('2d');
+    x.clearRect(0, 0, 256, 96);
+    x.font = '800 60px system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.lineWidth = 10; x.strokeStyle = 'rgba(0,0,0,0.85)'; x.strokeText(`${mo.hp}/${mo.maxHp}`, 128, 50);
+    x.fillStyle = `#${h.mat.color.getHexString()}`; x.fillText(`${mo.hp}/${mo.maxHp}`, 128, 50);
+    h.tex.needsUpdate = true;
+  }
+  const pops = [];
+  function damagePop(mv, amount) {
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 128;
+    const x = c.getContext('2d');
+    x.font = '800 84px system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.lineWidth = 12; x.strokeStyle = 'rgba(0,0,0,0.85)'; x.strokeText(`−${amount}`, 128, 66);
+    x.fillStyle = '#ff6a5a'; x.fillText(`−${amount}`, 128, 66);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, fog: false }));
+    sp.renderOrder = 31; sp.raycast = () => {};
+    sp.scale.set(0.6, 0.3, 1);
+    group.add(sp);
+    pops.push({ sp, mv, age: 0 });
+  }
+  function tickHealth(s, dt) {
+    for (const mo of s.monsters ?? []) {
+      const mv = view.monsters.get(mo.id);
+      if (!mv) continue;
+      healthRing(mv, mo);
+      if (mv.hp) { mv.hp.g.visible = !!mv.at && mv.fig.visible; if (mv.at) mv.hp.g.position.set(mv.at.x, mv.at.y + 0.012, mv.at.z); }
+    }
+    for (let k = pops.length - 1; k >= 0; k--) {
+      const p = pops[k];
+      p.age += dt;
+      const at = p.mv.at ?? p.sp.position;
+      p.sp.position.set(at.x, at.y + 0.9 + p.age * 0.45, at.z);
+      p.sp.material.opacity = Math.max(0, 1 - Math.max(0, p.age - 0.9) / 0.8);
+      if (p.age > 1.7) { group.remove(p.sp); p.sp.material.map.dispose(); p.sp.material.dispose(); pops.splice(k, 1); }
     }
   }
 
@@ -569,6 +654,39 @@ export function createPlay({
     }
   }
 
+  // Things dropped on the ground (the Cosor after Unholy Burn): the item lying
+  // there in a soft gold glow until someone picks it up.
+  const droppedTokens = new Map(); // item:cell -> group
+  function syncDropped() {
+    const want = new Map((g()?.objective?.dropped ?? []).map((d) => [`${d.item}:${d.cell}`, d]));
+    for (const [k, obj] of droppedTokens) if (!want.has(k)) { group.remove(obj); droppedTokens.delete(k); }
+    for (const [k, d] of want) {
+      if (droppedTokens.has(k) || !inBoard(d.cell)) continue;
+      const obj = new THREE.Group();
+      const glowMat = new THREE.MeshBasicMaterial({ color: d.blessed ? 0xffe08a : 0xd8c8a0, transparent: true, opacity: 0.55, depthWrite: false });
+      terrainify(glowMat, { bridge: true });
+      const glow = new THREE.Mesh(new THREE.RingGeometry(0.1, 0.17, 28).rotateX(-Math.PI / 2), glowMat);
+      glow.renderOrder = 3;
+      const steel = new THREE.MeshLambertMaterial({ color: 0xc8ccd0 });
+      const wood = new THREE.MeshLambertMaterial({ color: 0x5a3a24 });
+      terrainify(steel, { bridge: true }); terrainify(wood, { bridge: true });
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.008, 0.03), steel);
+      blade.position.set(0.05, 0.012, 0);
+      const grip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.016, 0.026), wood);
+      grip.position.set(-0.055, 0.014, 0);
+      const knife = new THREE.Group();
+      knife.add(blade, grip);
+      knife.rotation.y = 0.6;
+      obj.add(glow, knife);
+      for (const m of [glow, blade, grip]) m.raycast = () => {};
+      const at = centreOf(d.cell);
+      obj.position.set(at.x - 0.2, at.y + 0.01, at.z - 0.2);
+      obj.userData.glow = glowMat;
+      group.add(obj);
+      droppedTokens.set(k, obj);
+    }
+  }
+
   // Holding the monster back, on the board: a ring of salt on each Salt
   // Circle, and the boombox (with its sound) on a Distract space. They go when
   // the effect does (after the monster's turn).
@@ -641,6 +759,7 @@ export function createPlay({
 
   function refreshDiscoveries() {
     syncHazards();
+    syncDropped();
     syncWards();
     const my = g()?.mystery;
     const list = (my?.found ?? []).slice(0, view.shownFinds).map((f) => ({
@@ -663,13 +782,14 @@ export function createPlay({
       switch (e.type) {
         case 'loaded':
         case 'start':
+          onReset();
           // A loaded game shows what had already happened: markers used,
           // doors unlocked, evidence found, monsters where they stood.
           view.shownUsed = new Set(e.type === 'loaded' ? state.used ?? [] : []);
           view.shownKeys = e.type === 'loaded' ? state.keys ?? 0 : 0;
           view.rollT = ROLL_TIME;
           view.pan = true;
-          for (const [, mv] of view.monsters) group.remove(mv.fig);
+          for (const [, mv] of view.monsters) { group.remove(mv.fig); if (mv.hp) group.remove(mv.hp.g); }
           view.monsters.clear();
           view.shownFinds = state.mystery?.found.length ?? 0;
           syncNpcs(true);
@@ -740,7 +860,7 @@ export function createPlay({
           break;
         // Objectives (objectives/verbs.js): a word over the site as the pawn arrives.
         case 'objStep':
-          attachToArrival(view.actors[e.seat], e.cell, () => onCollect(e.cell, 'objective', e.text));
+          attachToArrival(view.actors[e.seat], e.cell, () => { syncDropped(); onCollect(e.cell, 'objective', e.text); });
           break;
         case 'escaped':
           attachToArrival(view.actors[e.seat], g()?.players[e.seat]?.pos ?? -1, () => onEscaped({ ...e, player: g()?.players[e.seat] }));
@@ -772,6 +892,15 @@ export function createPlay({
           break;
         }
         case 'monsterAttack': {
+          if (e.ranged) {
+            // The Strigoi reaching the Cosor holder from afar: shadows rise
+            // around them where they stand (no lunge across the map).
+            const strike = { fx: [] };
+            view.lastStrike = strike;
+            startGrab(e.seat, strike, e.attack);
+            view.watch = { id: e.id, until: performance.now() + 1500 };
+            break;
+          }
           if (e.grab) {
             // Shadow People: silhouettes rise around the player when they
             // visibly step into the light, reaching for their shadow.
@@ -881,7 +1010,7 @@ export function createPlay({
     return !!s && session.dispatch({ type: 'react', yes: !!yes, seat: sacrificeSeat(s) }).ok;
   }
   // The Blessed Cosor's strike (Strigoi).
-  function strike() { return act({ type: 'strike' }); }
+  function strike(die) { const s = g(); return s ? session.dispatch({ type: 'strike', die, seat: s.cur }) : { ok: false }; }
   // Lucky: set a die's value.
   function setDie(n, v) { return act({ type: 'setDie', die: n, v }); }
   function revealCard(n) { return act({ type: 'reveal', card: n }); }
@@ -956,7 +1085,7 @@ export function createPlay({
   let last = performance.now();
   // Is anything animating (so the renderer should run at full rate)?
   function busy() {
-    return rolling() || !!view.watch || grabs.length > 0 || view.actors.some(running) || [...view.monsters.values()].some((mv) => running(mv) || mv.lunge > 0)
+    return rolling() || !!view.watch || grabs.length > 0 || pops.length > 0 || view.actors.some(running) || [...view.monsters.values()].some((mv) => running(mv) || mv.lunge > 0)
       || (view.pan && group.visible);
   }
   function tick(_dt, t) {
@@ -1045,6 +1174,7 @@ export function createPlay({
       if (idle) idle(t, dt);
       else body.position.y = m(0.04) * Math.sin(t * 2.1);                    // a slow, uneasy sway
     }
+    tickHealth(s, dt);
     // Figures, the turn ring and name tags.
     const danger = new Set((s.monsters ?? []).flatMap((mo) => mo.danger ?? []));
     dangerMat.opacity = 0.55 + 0.4 * Math.sin(t * 6);

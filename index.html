@@ -295,7 +295,10 @@
          big action button (src/play/dock.js). Each menu opens as a sheet over
          the board, just above the dock; one at a time. -->
     <div id="playHud" class="play-hud dock" hidden>
-      <div class="dock-status"><div class="die die-sm" id="hudDie" aria-label="Black die"></div><p class="hud-status" id="hudStatus"></p></div>
+      <div class="dock-status"><div class="die die-sm" id="hudDie" aria-label="Black die"></div><p class="hud-status" id="hudStatus"></p>
+        <button id="feedToggle" class="feed-toggle" type="button" aria-label="Messages on or off" aria-pressed="true">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 5.5h15v10h-9l-4.5 3.5v-3.5h-1.5z"/><path d="M8 9.5h8M8 12.5h5"/></svg>
+        </button></div>
       <div class="dock-row">
         <button id="hudTeam" class="dock-btn" type="button" data-sheet="teamSheet" title="Team: investigators, injuries, the log">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19.5c.6-3.4 2.8-5.3 5.5-5.3s4.9 1.9 5.5 5.3"/><circle cx="16.8" cy="9" r="2.5"/><path d="M15.6 14.4c2.6-.4 4.4 1.4 4.9 4.6"/></svg>
@@ -318,6 +321,8 @@
         <button id="hudRoll" class="hud-roll">Roll</button>
       </div>
     </div>
+    <!-- The message feed (src/play/feed.js): what just happened, colour-coded, fading. -->
+    <div id="feed" class="feed" role="log" aria-live="polite" title="Tap for recent messages"><div id="feedLines" class="feed-lines"></div></div>
     <!-- Team: everyone's place, dice, injuries and Obols; one player's injuries in full; the log. -->
     <div id="teamSheet" class="dialog sheet" hidden role="dialog" aria-labelledby="teamTitle">
       <div class="dialog-card sheet-card">

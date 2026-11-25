@@ -22,7 +22,7 @@ import { turnLimits, injuries, applyDamage, sacrificeCarrier, killPlayer } from 
 import { answer as answerReaction } from './reactions.js';
 import { RANGE, cellRange } from './cards/injuries.js';
 import { objectiveLive } from './objectives/scripts.js';
-import { onSiteEnter, crossingBlocked, suffocate, destroyAnchor, holdRound } from './objectives/verbs.js';
+import { onSiteEnter, crossingBlocked, suffocate, destroyAnchor, holdRound, pickUpHere } from './objectives/verbs.js';
 import { siteOf, siteLabel } from '../core/sites.js';
 import { craft } from './obolcraft.js';
 import { refreshThreat, onPlayerEnters } from './monsterTurn.js';
@@ -296,6 +296,8 @@ function applyActionNow(state, board, action) {
       // Discard Crystal & no light for ⌛ (Shadow People): over when its player's turn comes round again.
       if (state.flags?.noLight && state.flags.noLight.seat === state.cur && state.flags.noLight.round !== state.round) delete state.flags.noLight;
       startOfTurn(state, eventCtx(state));
+      // Standing on something dropped (the Cosor after Unholy Burn): pick it up, once allowed.
+      pickUpHere(state, pl, pl.pos, (text) => { log(state, text); events.push({ type: 'objStep', seat: pl.seat, cell: pl.pos, text }); });
       state.pool = Array.from({ length: lim.dice }, () => ({ kind: 'black', v: d6(state) }));
       state.slots = [];
       state.defSlots = [];
@@ -469,9 +471,16 @@ function applyActionNow(state, board, action) {
       if (state.struck === state.turn) return fail('once a turn');
       const m = state.monsters.find((x) => x.kind === 'strigoi' && cellRange(board.grid, pl.pos, x.pos) <= RANGE.close);
       if (!m) return fail('the Strigoi is not in Close range');
+      // One of your rolled dice, not slotted or spent: its value is the damage.
+      const n = action.die | 0;
+      const die = state.pool[n];
+      if (!state.pool.length) return fail('roll first, then strike with one of your dice');
+      if (!die || die.spent || state.slots.includes(n) || state.defSlots.includes(n)) return fail('strike with a rolled die that is not slotted or spent');
       state.struck = state.turn;
-      const dmg = d6(state);
-      log(state, `${who(state)} strikes the Strigoi with the Blessed Cosor: ${dmg}.`);
+      die.spent = true;
+      die.usedFor = 'Blessed Cosor';
+      const dmg = die.v;
+      log(state, `${who(state)} strikes the Strigoi with the Blessed Cosor, a ${dmg}.`);
       strikeMonster(state, board, m, dmg, 'holy', { log, state, randInt }, events);
       events.push({ type: 'cosorStrike', seat: state.cur, id: m.id, amount: dmg });
       restop(state, board, events);
@@ -643,7 +652,8 @@ const who = (state) => curPlayer(state)?.name ?? '';
 const label = (board, i) => { const { x, y } = board.grid.coords(i); return cellLabel(x, y); };
 export function log(state, msg) {
   state.log.unshift(msg);
-  state.log.length = Math.min(state.log.length, 6);
+  state.log.length = Math.min(state.log.length, 40);
+  state.logN = (state.logN ?? 0) + 1;      // lines ever logged: the message feed shows the new ones
 }
 const isUsed = (state, i) => state.used.includes(i);
 

@@ -35,6 +35,15 @@ In a game the editor's tools are hidden and everything you press is in the **doc
   map, Quit to title**.
 - **The action button** does what comes next: **Roll**, then **Move** (the dice slotted), then **End turn**.
 
+**Messages** (`src/play/feed.js`): what just happened appears in a few colour-coded lines over the board,
+above the dock: red the monster's actions, purple damage to a monster, gold objectives, teal evidence and
+Obols, green skills and crafting, violet the night. Each fades after a few seconds; tap them for the recent
+history, and the 💬 button in the dock's status line turns them off or on (the full log is under Team).
+
+**Monster health**: a ring at the monster's feet, the bright arc its health left (green, amber, then red)
+and the dim red arc what it has lost, with "6/10" beside it; each hit floats its damage up from the monster.
+Monsters with ∞ health have no ring.
+
 Each menu opens as a sheet over the board just above the dock, one at a time: tap its button again, ✕, or drag
 its top edge down to close it. A phone held sideways gets the dock as a strip down the right edge, with sheets
 beside it.
@@ -158,11 +167,17 @@ teammates in your space for heals like the Medical Kit). Obol costs (◉) take a
   **Hellhounds**: holy water from the Church to the Lair disrupts the ritual: until then a destroyed pack
   rises again at the Lair; after, destroying it wins. **Poltergeist**: stopping on an Objective marker with
   a rolled 6 asks "Destroy the anchor?" (the 6 is spent, from Defense if need be); after 4, the last anchor
-  is at the Lair, and destroying it wins. **Strigoi**: the Cosor lies at the Lair (one only; the Strigoi
-  always goes for whoever holds it); sharpen it at the Outdoor Store {12}, bless it at the Church; then a
-  **Strike ✝** button in the dice tray, with the Strigoi in Close range, deals one die ignoring its
-  toughness, once a turn. Unholy Burn drops the Cosor where its holder stands: step there to pick it up,
-  still blessed. **White Lady**: the Gown (Boutique {3}), Ring (Curio Shop {7}) and Finger Bone (Funeral
+  is at the Lair, and destroying it wins. **Strigoi**: the Cosor lies at the Lair (one only); sharpen it at the
+  Outdoor Store {12}, bless it at the Church; then **Strike** (listed in Skills, or **Strike ✝** in the dice
+  tray), with the Strigoi in Close range and once a turn: pick one of your rolled dice and its value comes
+  off the Strigoi's health, toughness ignored (the highest free die is picked for you). Its attacks
+  (reworked): **Drain** (1-3) targets the Cosor holder wherever they are, one die of damage, then exhausts
+  their strongest slotted defense die; **Charm** (4-5) is an Area Attack of 4 within 8 spaces, and everyone
+  it hurts is pulled 4 spaces toward it and loses every slotted defense die; **Unholy Burn** (6) hits the
+  Cosor holder for 4 and the Cosor drops on their space (a gold-lit knife on the board): they can't move or
+  pick it up on their next turn; anyone else can, and after that so can they (standing on it, at the start
+  of their turn). With no one holding the Cosor, Drain and Unholy Burn strike whoever is in Close range.
+  From afar, the strike shows as shadows rising around the holder. **White Lady**: the Gown (Boutique {3}), Ring (Curio Shop {7}) and Finger Bone (Funeral
   Parlor {11}) to the Church; then each round ending with someone inside the Church counts (nobody there,
   it waits): after 3, her soul is set free.
   Carried items, Cleansed, Escaped and Pinned show in the player list; the Casebook shows the progress.

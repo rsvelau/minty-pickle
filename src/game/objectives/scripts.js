@@ -63,10 +63,10 @@ export const OBJECTIVES = {
     needs: ['outdoor', 'church'],
     played: true,
     steps: [
-      { do: 'collect', at: 'lair', item: 'cosor', unique: true, text: 'Find the Cosor (a Romanian knife) at the Lair: the Strigoi always goes for whoever holds it' },
+      { do: 'collect', at: 'lair', item: 'cosor', unique: true, text: 'Find the Cosor (a Romanian knife) at the Lair: the Strigoi’s Drain and Unholy Burn reach whoever holds it, anywhere' },
       { do: 'upgrade', at: 'outdoor', item: 'cosor', set: 'sharp', text: 'Sharpen it at the Outdoor Store {12}' },
       { do: 'upgrade', at: 'church', item: 'cosor', set: 'blessed', requires: 'sharp', completes: true, text: 'Bless it at the Church {9}' },
-      { do: 'kill', at: 'lair', text: 'Strike the Strigoi with the Blessed Cosor (Close range, once a turn: one die, ignoring its toughness) until it falls' },
+      { do: 'kill', at: 'lair', text: 'Strike the Strigoi with the Blessed Cosor (Close range, once a turn: one of your rolled dice as damage, ignoring its toughness) until it falls' },
     ],
   },
   'white-lady': {

@@ -138,11 +138,8 @@ test('Strigoi: discard Holy and the Exhaust is undone (the die is back)', () => 
   s.monster.pos = s.g.index(9, 5);
   s.give(s.pl, ['heavy-silver-crucifix']);                    // Smite is Holy
   s.pl.defense = [{ kind: 'black', v: 2 }];
-  s.turn('Charm');                                            // Exhaust (movement die) and Attack (6)
-  s.pl.lastMove = [{ kind: 'black', v: 5 }];
   s.state.reactions = [];
-  s.pl.injuries = { P: 0, M: 0, S: 0 };
-  s.turn('Drain');                                            // Exhaust (defensive die) and Attack (die)
+  s.turn('Drain');                                            // no Cosor holder: Attack (die) up close, then Exhaust (defensive die)
   assert.equal(s.pl.lostBlack, 1);
   const r = s.state.reactions.find((x) => x.what === 'exhaust');
   assert.ok(r, 'offered for the Exhaust');
@@ -150,6 +147,56 @@ test('Strigoi: discard Holy and the Exhaust is undone (the die is back)', () => 
   assert.ok(s.act({ type: 'react', yes: true }, 0).ok);
   assert.equal(s.pl.lostBlack ?? 0, 0);
   assert.deepEqual(s.pl.defense, [{ kind: 'black', v: 2 }]);
+});
+
+test('Strigoi Drain: the Cosor holder, wherever they are; one die, then their strongest defense die is exhausted', () => {
+  const s = setup('strigoi');
+  s.monster.pos = s.g.index(1, 5);                            // far from everyone
+  s.mate.carry = [{ item: 'cosor', sharp: true }];
+  s.mate.defense = [{ kind: 'black', v: 1 }, { kind: 'black', v: 2 }];
+  const ev = s.turn('Drain');
+  assert.equal(s.mate.injuries.S, 1, 'the die (4) beats defense 3');
+  assert.equal(s.pl.injuries.S, 0, 'not P1, though nearer');
+  assert.deepEqual(s.mate.defense, [{ kind: 'black', v: 1 }], 'the 2 is exhausted');
+  assert.equal(s.mate.lostBlack, 1);
+  assert.ok(ev.some((e) => e.type === 'monsterAttack' && e.seat === 1 && e.ranged), 'a ranged strike');
+});
+
+test('Strigoi Charm: everyone within 8 takes 4; the ones it hurts are pulled 4 toward it and lose every defense die', () => {
+  const s = setup('strigoi');
+  s.monster.pos = s.g.index(4, 5);
+  s.pl.defense = [{ kind: 'black', v: 1 }];                   // P1 at 10: 6 away, hurt
+  s.mate.defense = [{ kind: 'black', v: 6 }];                 // P2 at 12: 8 away, blocks
+  const ev = s.turn('Charm');
+  assert.equal(s.pl.injuries.S, 1);
+  assert.equal(s.mate.injuries.S, 0);
+  assert.equal(s.pl.pos, s.g.index(6, 5), 'pulled 4 spaces toward it');
+  assert.equal(s.mate.pos, s.g.index(12, 5), 'its defense held: not pulled');
+  assert.equal(s.pl.defense.length, 0, 'its defense dice exhausted');
+  assert.deepEqual(s.mate.defense, [{ kind: 'black', v: 6 }]);
+  assert.equal(ev.filter((e) => e.type === 'step' && e.seat === 0).length, 4);
+});
+
+test('Strigoi Unholy Burn: 4 to the Cosor holder, the Cosor drops, and they can’t move or take it back next turn', () => {
+  const s = setup('strigoi');
+  s.monster.pos = s.g.index(1, 5);
+  s.pl.carry = [{ item: 'cosor', sharp: true, blessed: true }];
+  s.turn('Unholy Burn');
+  assert.equal(s.pl.injuries.P, 1);
+  assert.equal(s.pl.carry.length, 0);
+  assert.deepEqual(s.state.objective.dropped.map((d) => [d.item, d.cell, d.banned]), [['cosor', s.g.index(10, 5), 0]]);
+  assert.ok(s.pl.pinned);
+  // Their next turn: pinned, and the Cosor stays on the ground.
+  s.state.round += 1;
+  assert.ok(s.act({ type: 'roll' }).ok);
+  assert.equal(s.pl.carry.length, 0);
+  assert.ok(s.state.noMove);
+  // The turn after: they pick it up where they stand.
+  s.state.round += 1;
+  s.state.phase = 'idle'; s.state.pool = []; s.state.cur = 0;
+  assert.ok(s.act({ type: 'roll' }).ok);
+  assert.equal(s.pl.carry[0]?.item, 'cosor');
+  assert.equal(s.pl.carry[0].blessed, true, 'still blessed');
 });
 
 test('Shadow People: Fire undoes an Umbral Stab; Crystal keeps lit spaces safe until your next turn', () => {

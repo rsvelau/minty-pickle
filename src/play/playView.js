@@ -9,8 +9,9 @@ import { defenseLeft, defenseValue } from '../game/combat.js';
 import { WATER_Y, grid, ui } from '../app/config.js';
 import { toast } from '../app/files.js';
 import { $ } from '../app/dom.js';
-import { craftUI, dmgIcon, hitText, injuryPips, markCaseNew, obolHTML, renderAsk, renderSacrifice, renderCasebook, renderIntent, renderInventory, renderTeam, renderSkillBadge, renderRevealSheet, showCard, showObol, renderEventChoice } from './panels.js';
+import { craftUI, dmgIcon, hitText, injuryPips, markCaseNew, obolHTML, renderAsk, renderSacrifice, renderCasebook, renderIntent, renderInventory, renderTeam, renderSkillBadge, openStrike, renderRevealSheet, showCard, showObol, renderEventChoice } from './panels.js';
 import { objectiveLive } from '../game/objectives/scripts.js';
+import { feedUpdate, feedReset } from './feed.js';
 import { describeItem } from '../game/objectives/verbs.js';
 import { RANGE, cellRange } from '../game/cards/injuries.js';
 import { __set_markerHidden, __set_markerUsed, markers, refreshMarkers, refreshPropsAndWalls, visibleTop } from '../render/board.js';
@@ -58,6 +59,7 @@ export function init() {
     onNpc: (e) => showCard({ kind: 'npc', e }),
     onExhaust: (e) => showCard({ kind: 'exhaust', e }),
     onCraft: (e) => { craftUI.recipe = null; showCard({ kind: 'craft', e }); },
+    onReset: () => feedReset(),
     onCard: (e) => showCard({ kind: e.deck === 'events' ? 'event' : 'equipment', e }),
     onEquip: (e) => showCard({ kind: 'equipUse', e }),
     onSacrifice: (e) => showCard({ kind: 'sacrifice', e }),
@@ -163,6 +165,7 @@ export function renderPlay() {
   if (!$('#inventory').hidden) renderInventory();
   if (!$('#teamSheet').hidden) renderTeam();
   renderSkillBadge();
+  feedUpdate(play.session.state);
   // Floating bar.
   [...$('#hudDie').children].forEach((el, n) => el.classList.toggle('on', !!face && PIPS[face].includes(n)));
   // The dock's big button does what comes next: Roll, then Move (the dice
@@ -362,7 +365,7 @@ export function renderTray() {
   const canStrike = !!st && !rolling && (me?.carry ?? []).some((c) => c.item === 'cosor' && c.blessed) && st.struck !== st.turn
     && st.monsters.some((m) => m.kind === 'strigoi' && cellRange(grid, me.pos, m.pos) <= RANGE.close);
   $('#trayStrike').hidden = !canStrike;
-  $('#trayStrike').onclick = () => play.strike();
+  $('#trayStrike').onclick = () => openStrike();   // choose the die in the Skills sheet
   $('#trayEnd').disabled = rolling;
   $('#trayEnd').textContent = choosing ? 'Stop here & end turn' : moved || s.defSlots.length ? 'End turn' : 'Stay put & end turn';
   $('#trayHint').textContent = rolling ? 'Rolling…' : s.deathsDoor ? "Death's Door: one die only"

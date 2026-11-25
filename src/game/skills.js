@@ -22,6 +22,7 @@ import { EQUIPMENT_BY_ID } from './cards/equipment.js';
 import { checkRequirement } from './cards/requirements.js';
 import { abilityReady, targetsFor, actionRoll } from './equipmentPlay.js';
 import { applyAction } from './rules.js';
+import { RANGE, cellRange } from './cards/injuries.js';
 
 const USE_PHASES = ['idle', 'slotting', 'choosing', 'asking'];
 const RANGE_WORD = { close: 'Close', mid: 'Mid', long: 'Long', self: 'Self', all: 'All' };
@@ -114,7 +115,36 @@ export function skillStatus(state, board, pl) {
       set('now');
     });
   });
+  // The Blessed Cosor (Strigoi objective): Strike, listed with the skills.
+  if ((pl.carry ?? []).some((c) => c.item === 'cosor' && c.blessed)) out.push(cosorStrike(state, board, pl, mine, free));
   return out;
+}
+
+// The Blessed Cosor's Strike, shaped like an Equipment skill (item 'cosor').
+export const COSOR_CARD = {
+  name: 'Blessed Cosor',
+  abilities: [{ range: 'close', kind: 'holy', name: 'Strike', dice: 1, req: 'Any', limit: null,
+    text: 'Deal the die’s value to the Strigoi, ignoring its toughness. Once a turn.', fx: { target: 'monster' } }],
+};
+function cosorStrike(state, board, pl, mine, free) {
+  const e = { item: 'cosor', ability: 0, name: 'Strike', card: COSOR_CARD, status: 'not', why: '', action: null, manual: false };
+  const set = (status, why = '') => { e.status = status; e.why = why; return e; };
+  const strigoi = state.monsters.find((m) => m.kind === 'strigoi');
+  if (pl.dead) return set('not', `${pl.name} is dead`);
+  if (!mine) return set('not', `On ${pl.name}’s turn`);
+  if (state.struck === state.turn) return set('not', 'Once a turn: struck already');
+  if (!USE_PHASES.includes(state.phase)) return set('not', state.phase === 'moving' ? 'Finish moving first' : 'Not right now');
+  if (!strigoi) return set('not', 'The Strigoi is not on the board');
+  if (state.phase === 'idle' && !(state.pool ?? []).length) return set('almost', 'Roll first: strike with one of your dice');
+  if (cellRange(board.grid, pl.pos, strigoi.pos) > RANGE.close) return set('almost', 'The Strigoi is not in Close range');
+  if (!free.length) return set('almost', 'Needs a free die: unslot one');
+  // The highest free die: the most damage.
+  const best = free.reduce((a, d) => (d.v > a.v ? d : a));
+  const action = { type: 'strike', seat: state.cur, die: best.n };
+  const r = applyAction(structuredClone(state), board, action);
+  if (!r.ok) return set('not', r.error ? r.error[0].toUpperCase() + r.error.slice(1) : 'Not right now');
+  e.action = action;
+  return set('now');
 }
 
 // How many skills the player could use this moment (the dock's badge).
