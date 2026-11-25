@@ -272,6 +272,11 @@ cells become Street when loaded. The street surface lives in `src/render/street.
 - **An antique street lamp**: the town is a late-1800s logging town kept historic, so lamps are cast-iron posts
   in old dark-green paint (flared base, fluted shaft, ladder bar) with an acorn glass globe, cap and finial,
   about 4.4 m tall. At a T it stands on the sidewalk opposite the side street; at a crossing, on a corner.
+- **Lamp posts along the streets**: each run of street between two ends (junctions, the van, a bridge or a
+  dead end) gets the same post spaced evenly about every 4 cells (~28 m), measured from its ends: on the
+  south sidewalk of east-west streets, the east one of north-south streets, the outer corner of a bend. A
+  post is never placed within one cell of another lamp (a junction's, or one on a parallel street), so they
+  never bunch up. All start dark (`streetLampCells` in `src/core/state.js`).
 
 ### Building finishes
 
@@ -387,7 +392,7 @@ add up. **Light travels in straight lines: walls and closed (locked or one-way) 
 windows and open (unlocked) doors let it through**,
 so a lit shop spills light onto the street through its storefront but not through its side walls.
 
-**Lit lamp** (`L`) switches on the street lamp at a street T-junction or crossing (it does nothing elsewhere).
+**Lit lamp** (`L`) switches on a street lamp: at a junction, or one of the posts along a street (it does nothing elsewhere).
 A street lamp is a light source of radius 1.5 at full brightness.
 
 Light levels are data: hovering a cell shows its light (`Light 50 %`, `Light source r 3 (Floodlight)`), the

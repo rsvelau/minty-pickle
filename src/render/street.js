@@ -93,7 +93,8 @@ export function createStreets(group) {
         const { x, y } = grid.coords(i);
         const mask = streetMask(grid, x, y);
         const lamp = !!lampsOn?.[i];
-        if (c.sub === 'street') placeFurniture(items, mask, cellToWorld(x, y), surfaceY + CURB, lamp, x * 31 + y * 17);
+        const post = !!grid.streetLamps?.().has(i);   // a lamp post stands here (junction or along the street)
+        if (c.sub === 'street') placeFurniture(items, mask, cellToWorld(x, y), surfaceY + CURB, lamp, x * 31 + y * 17, post);
         const wear = ((x * 73856093) ^ (y * 19349663)) >>> 0 & 1;
         const lvl = levelIndex(lightLevels?.[i] ?? 0, lamp);
         const key = `${mask}:${wear}:${lvl}`;
@@ -419,9 +420,27 @@ const FACE = { [N]: Math.PI, [S]: 0, [E]: Math.PI / 2, [W]: -Math.PI / 2 };
 // Traffic keeps right: a car arriving from side d stops at this corner.
 const RIGHT_CORNER = { [N]: [-1, -1], [E]: [1, -1], [S]: [1, 1], [W]: [-1, 1] };
 
-function placeFurniture(items, mask, centre, y, lit, hash) {
+function placeFurniture(items, mask, centre, y, lit, hash, post = false) {
   const open = [N, E, S, W].filter((b) => mask & b);
-  if (open.length < 3) return;
+  if (open.length < 3) {
+    if (!post) return;
+    // A post along the street, at the curb side of a sidewalk: east-west
+    // streets on the south side, north-south ones on the east; a corner on
+    // its outer corner square; a dead end at its closed end.
+    let lx, lz;
+    const ew = (mask & (E | W)) && !(mask & (N | S)), ns = (mask & (N | S)) && !(mask & (E | W));
+    if (open.length === 0 || ew) [lx, lz] = [0, CORNER - SW * 0.15];
+    else if (ns) [lx, lz] = [CORNER - SW * 0.15, 0];
+    else if (open.length === 2) {
+      const [a, b] = [N, E, S, W].filter((d) => !(mask & d));
+      [lx, lz] = [DIR[a][0] + DIR[b][0], DIR[a][1] + DIR[b][1]].map((v) => v * (CORNER - SW * 0.1));
+    } else [lx, lz] = DIR[opposite(open[0])].map((v) => v * (CORNER - SW * 0.15));
+    const rot = ew || open.length === 0 ? Math.PI / 2 : 0;   // the ladder bar along the street
+    items.push(['lampPost', centre.x + lx, y, centre.z + lz, rot]);
+    items.push([lit ? 'globeOn' : 'globeOff', centre.x + lx, y, centre.z + lz, rot]);
+    if (lit) items.push(['lampHalo', centre.x + lx, y, centre.z + lz, rot]);
+    return;
+  }
   const stops = open.length === 4 ? open : open.filter((b) => !(mask & opposite(b))); // T: the stem only
   for (const d of stops) {
     const [cx, cz] = RIGHT_CORNER[d];

@@ -152,8 +152,9 @@ export const defaultWalkable = (area, sub) =>
 
 // bridge: a walkable deck over a water cell (only valid when area is water).
 // lamp:   the cell's street lamp is switched on ("Lit lamp"). Only street
-//         cells with a lamp (T-junctions and crossings) can have one; it
-//         lights the cell fully and spills dimmer light onto its neighbours.
+//         cells with a lamp post (junctions, and posts spaced along the
+//         streets: streetLampCells) can have one; it lights the cell fully
+//         and spills dimmer light onto its neighbours.
 // lit:    the cell holds a light source of the given `radius` (in cells).
 // marker: an optional gameplay marker on a walkable cell (see MARKERS). It
 //         sits on top of the cell and never changes the cell itself.
@@ -217,12 +218,74 @@ export function streetMask(grid, x, y) {
   return mask;
 }
 
-// Street lamps stand at intersections: street cells open on 3 or 4 sides.
+// Street lamps: one at every intersection (a street cell open on 3 or 4
+// sides), and posts along the streets between them (streetLampCells).
+const openSides = (mask) => { let n = 0; while (mask) { n += mask & 1; mask >>= 1; } return n; };
+export function isJunction(grid, x, y) {
+  return grid.inBounds(x, y) && grid.cells[grid.index(x, y)].sub === 'street' && openSides(streetMask(grid, x, y)) >= 3;
+}
 export function hasStreetLamp(grid, x, y) {
-  if (!grid.inBounds(x, y) || grid.cells[grid.index(x, y)].sub !== 'street') return false;
-  let mask = streetMask(grid, x, y), n = 0;
-  while (mask) { n += mask & 1; mask >>= 1; }
-  return n >= 3;
+  if (!grid.inBounds(x, y)) return false;
+  return grid.streetLamps ? grid.streetLamps().has(grid.index(x, y)) : isJunction(grid, x, y);
+}
+
+// Lamp posts along the streets. Each run of plain street cells between two
+// ends (a junction, the van, a bridge or a dead end) gets posts spread evenly
+// about every LAMP_SPACING cells, measured from the ends, so the gaps are
+// even. A post never stands within one cell of another lamp (a junction's,
+// or one on a parallel street): those are left out, so lamps never cluster.
+export const LAMP_SPACING = 4;
+export function streetLampCells(grid) {
+  const out = new Set();
+  const street = (i) => grid.cells[i]?.sub === 'street';
+  const N = 1, E = 2, S = 4, W = 8;
+  const step = { [N]: [0, -1], [E]: [1, 0], [S]: [0, 1], [W]: [-1, 0] };
+  // Junctions first.
+  grid.cells.forEach((c, i) => { const { x, y } = grid.coords(i); if (isJunction(grid, x, y)) out.add(i); });
+  const near = (i) => {
+    const { x, y } = grid.coords(i);
+    for (const j of out) { const q = grid.coords(j); if (Math.max(Math.abs(q.x - x), Math.abs(q.y - y)) <= 1) return true; }
+    return false;
+  };
+  // A run: plain street cells (open on 1 or 2 sides) joined along the road.
+  const inRun = (i) => { const { x, y } = grid.coords(i); return street(i) && openSides(streetMask(grid, x, y)) <= 2; };
+  const next = (i) => {
+    const { x, y } = grid.coords(i);
+    const mask = streetMask(grid, x, y);
+    const out2 = [];
+    for (const b of [N, E, S, W]) {
+      if (!(mask & b)) continue;
+      const [dx, dy] = step[b];
+      if (grid.inBounds(x + dx, y + dy)) out2.push(grid.index(x + dx, y + dy));
+    }
+    return out2;
+  };
+  const seen = new Set();
+  grid.cells.forEach((_, i) => {
+    if (seen.has(i) || !inRun(i)) return;
+    // Walk to one end of the run, then collect it in order.
+    let a = i, prev = -1;
+    for (let guard = 0; guard < grid.cells.length; guard++) {
+      const on = next(a).filter((j) => j !== prev && inRun(j));
+      if (!on.length || on[0] === i) break;
+      prev = a; a = on[0];
+    }
+    const run = [];
+    prev = -1;
+    for (let c = a; c >= 0 && !seen.has(c);) {
+      seen.add(c); run.push(c);
+      const on = next(c).filter((j) => j !== prev && inRun(j) && !seen.has(j));
+      prev = c; c = on.length ? on[0] : -1;
+    }
+    // Even posts between the ends (at -1 and run.length).
+    const n = run.length;
+    const k = Math.max(0, Math.round((n + 1) / LAMP_SPACING) - 1);
+    for (let j = 1; j <= k; j++) {
+      const at = run[Math.round((j * (n + 1)) / (k + 1)) - 1];
+      if (at !== undefined && !near(at)) out.add(at);
+    }
+  });
+  return out;
 }
 
 // Walls and doors live on the edges between cells, not in cells.
@@ -326,6 +389,7 @@ export class GridState {
   // `resized` tells listeners the board dimensions changed (rebuild needed).
   emit(indices, resized = false) {
     this._auto = null;
+    this._lamps = null;
     for (const fn of this.listeners) fn(indices, resized);
   }
 
@@ -422,6 +486,7 @@ export class GridState {
     const cell = this.cells[i];
     if (typeof patch === 'function') patch = patch(cell, i, this);
     this._auto = null;
+    this._lamps = null;
     if (!patch) return false;
     let changed = false;
     for (const k in patch) if (cell[k] !== patch[k]) { changed = true; break; }
@@ -573,6 +638,8 @@ export class GridState {
 
   // Is this cell's street lamp switched on? (A lamp flag left on a cell that
   // is no longer an intersection does nothing.)
+  // Every cell with a street lamp post (cached until the board changes).
+  streetLamps() { return (this._lamps ??= streetLampCells(this)); }
   lampOn(i) {
     if (!this.cells[i].lamp) return false;
     const { x, y } = this.coords(i);
