@@ -647,7 +647,13 @@ export function createLandmarks(parent, { terrainify, flickerize }) {
     const p = parts(), g = new THREE.Group(), r = ctx.rnd;
     for (let k = 0; k < 6; k++) { const s = 0.4 + r() * 0.4; p.cyl(s, s * 1.15, 0.5 + r() * 0.4, [(r() - 0.5) * 5.5, 0, (r() - 0.5) * 5.5], '#7a5a3a', [0, 0, 0], 7); }
     for (let k = 0; k < 2; k++) { const x = (r() - 0.5) * 4, z = (r() - 0.5) * 4; for (let j = 0; j < 6; j++) p.beam([x + (r() - 0.5) * 2, 0.1, z + (r() - 0.5) * 2], [x + (r() - 0.5) * 2, 0.6 + r() * 0.5, z + (r() - 0.5) * 2], 0.06, '#5a4630'); }
-    if (r() < 0.3) { const x = (r() - 0.5) * 4, z = (r() - 0.5) * 4; p.cyl(0.35, 0.5, 9 + r() * 5, [x, 0, z], '#8a8a84', [0, 0, (r() - 0.5) * 0.15], 6); }
+    // Now and then a broken snag: a short, thick trunk snapped off, splinters on top
+    // (not a tall bare pole: those read as glitches across a whole clear-cut).
+    if (r() < 0.15) {
+      const x = (r() - 0.5) * 3, z = (r() - 0.5) * 3, h = 2 + r() * 1.5;
+      p.cyl(0.38, 0.5, h, [x, 0, z], '#5e4a36', [0, 0, 0], 7);
+      for (let j = 0; j < 3; j++) { const a = r() * 6.28; p.cone(0.14, 0.5 + r() * 0.6, [x + Math.cos(a) * 0.2, h - 0.05, z + Math.sin(a) * 0.2], '#8a7458', [(r() - 0.5) * 0.4, 0, (r() - 0.5) * 0.4], 4); }
+    }
     g.add(p.mesh());
     return { g, ticks: [] };
   };
