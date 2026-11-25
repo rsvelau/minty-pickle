@@ -5,7 +5,7 @@
 //
 // Each card:
 //   id, name, hp, toughness (null = ∞), badge (the number in the top-right
-//   corner), traits, note (the rules text under the name), objective,
+//   corner), stars (difficulty, 1 to 5: sets the Scouting story), traits, note (the rules text under the name), objective,
 //   weakness / immune (damage kinds, see DAMAGE_KINDS), weaknessTrack (the
 //   arrows on the art: after `hits` attacks with a weapon of a weakness element,
 //   that effect happens, once; hits null = the purple ∞, an effect that can
@@ -20,6 +20,9 @@
 // Phase A uses the evidence and the descriptive text (Casebook, Field Guide).
 // The abilities and wounds are here as data so later phases can play them.
 
+// Difficulty, as stars on the card. "★☆☆☆☆".
+export const starsText = (n) => '★'.repeat(n) + '☆'.repeat(Math.max(0, 5 - n));
+
 export const DAMAGE_KINDS = {
   silver: { label: 'Silver', icon: '☾' },
   salt: { label: 'Salt', icon: '⛰' },
@@ -33,7 +36,7 @@ const A = (kind, name, roll, text, tags = {}) => ({ kind, name, roll, text, ...t
 
 export const MONSTER_CARDS = [
   {
-    id: 'werewolf', name: 'Werewolf', hp: 20, toughness: 4, badge: 3,
+    id: 'werewolf', name: 'Werewolf', hp: 20, toughness: 4, badge: 3, stars: 1,
     traits: ['Corporeal', 'Beast'],
     note: 'Half speed indoors.',
     objective: 'Kill: wear its health down to 0.',
@@ -47,7 +50,7 @@ export const MONSTER_CARDS = [
     evidence: { attack: 'P', observations: ['CM', 'MW', 'SH'], lair: 'TS' },
   },
   {
-    id: 'barghest', name: 'Barghest', hp: null, toughness: null, badge: 2,
+    id: 'barghest', name: 'Barghest', hp: null, toughness: null, badge: 2, stars: 1,
     traits: ['Semi-Corporeal', 'Dissipating'],
     note: 'Start: Town Entrance. Can’t enter buildings. Midnight: all players Corrupted. Cleanse at {9}.',
     objective: 'Escape: every investigator must be cleansed at the Holy Water Basin in the Church {9} before they can cross the river. One cleansed investigator reaching the Start space wins for the team.',
@@ -61,7 +64,7 @@ export const MONSTER_CARDS = [
     evidence: { attack: 'M', observations: ['CS', 'DT', 'SH'], lair: 'UD' },
   },
   {
-    id: 'hellhounds', name: 'Hellhounds', hp: 3, toughness: 2, badge: 4,
+    id: 'hellhounds', name: 'Hellhounds', hp: 3, toughness: 2, badge: 4, stars: 1,
     // Later (monster health): killing a hound sends the whole pack back to the
     // Lair; the pack only shrinks through its weakness.
     pack: true,
@@ -78,7 +81,7 @@ export const MONSTER_CARDS = [
     evidence: { attack: 'P', observations: ['CM', 'SS', 'SH'], lair: 'OR' },
   },
   {
-    id: 'skinwalker', name: 'Skinwalker', hp: 20, toughness: 4, badge: 2,
+    id: 'skinwalker', name: 'Skinwalker', hp: 20, toughness: 4, badge: 2, stars: 1,
     traits: ['Corporeal', 'Intelligent', 'Cursed'],
     note: 'Avoids traps. When the first player reaches the Lair, stun Skinwalker and reduce its toughness to 0 for ⌛.',
     objective: 'Kill: wear its health down to 0.',
@@ -92,7 +95,7 @@ export const MONSTER_CARDS = [
     evidence: { attack: 'S', observations: ['SD', 'SH', 'ES'], lair: 'TS' },
   },
   {
-    id: 'wendigo', name: 'Wendigo', hp: 20, toughness: 1, badge: 2,
+    id: 'wendigo', name: 'Wendigo', hp: 20, toughness: 1, badge: 2, stars: 1,
     traits: ['Corporeal', 'Intelligent', 'Regenerative'],
     note: 'Avoids traps. Consume heals equal to damage. Lure causes players to move towards Wendigo.',
     objective: 'Kill: wear its health down to 0.',
@@ -106,7 +109,7 @@ export const MONSTER_CARDS = [
     evidence: { attack: 'M', observations: ['CM', 'IS', 'SD'], lair: 'HC' }, // card prints HS; the ref sheet says Inhuman Shriek
   },
   {
-    id: 'banshee', name: 'Banshee', hp: 15, toughness: 2, badge: 1,
+    id: 'banshee', name: 'Banshee', hp: 15, toughness: 2, badge: 1, stars: 1,
     traits: ['Corporeal', 'Fae'],
     note: 'While on rooftops, Banshee is outside Close range.',
     objective: 'Kill: wear its health down to 0.',
@@ -120,7 +123,7 @@ export const MONSTER_CARDS = [
     evidence: { attack: 'M', observations: ['CS', 'LT', 'IS'], lair: 'UG' },
   },
   {
-    id: 'ushi-oni', name: 'Ushi-Oni', hp: 30, toughness: 5, badge: 1,
+    id: 'ushi-oni', name: 'Ushi-Oni', hp: 30, toughness: 5, badge: 1, stars: 1,
     traits: ['Corporeal', 'Demon'],
     note: 'End of turn: Move (10) toward Lair. Ignores walls; can’t cross salt. Seized players are at Death’s Door. Carried to Lair = killed.',
     objective: 'Kill: wear its health down to 0.',
@@ -134,7 +137,7 @@ export const MONSTER_CARDS = [
     evidence: { attack: 'P', observations: ['OT', 'LT', 'WT'], lair: 'HC' },
   },
   {
-    id: 'redcap', name: 'Redcap', hp: 9, toughness: 10, badge: 1,
+    id: 'redcap', name: 'Redcap', hp: 9, toughness: 10, badge: 1, stars: 1,
     traits: ['Corporeal', 'Fae'],
     note: 'Piercing attacks can damage Redcap, but can’t land the killing blow.',
     objective: 'Kill: wear its health down to 0.',
@@ -147,7 +150,7 @@ export const MONSTER_CARDS = [
     evidence: { attack: 'P', observations: ['FW', 'PB', 'MW'], lair: 'BR' },
   },
   {
-    id: 'poltergeist', name: 'Poltergeist', hp: null, toughness: null, badge: 1,
+    id: 'poltergeist', name: 'Poltergeist', hp: null, toughness: null, badge: 1, stars: 1,
     traits: ['Incorporeal', 'Spirit'],
     note: 'Has no physical body. Discard salt items inside targeted buildings to trigger its weakness.',
     objective: 'Destroy the Anchors: at 4 Objective markers, then at the Lair, slot a 6 to destroy the spiritual anchor there.',
@@ -160,7 +163,7 @@ export const MONSTER_CARDS = [
     evidence: { attack: 'M', observations: ['CS', 'FW', 'LT'], lair: 'UR' },
   },
   {
-    id: 'white-lady', name: 'White Lady', hp: null, toughness: null, badge: 1,
+    id: 'white-lady', name: 'White Lady', hp: null, toughness: null, badge: 1, stars: 1,
     traits: ['Incorporeal', 'Spirit'],
     note: 'If no occupied building is targeted, uses Infatuation (ignore die).',
     objective: 'Set her soul free: bring the Decayed Wedding Gown (Boutique {3}), the Tarnished Wedding Ring (Curio Shop {7}) and the Desiccated Finger Bone (Funeral Parlor {11}) to the Church {9} to complete the wedding ritual.',
@@ -174,7 +177,7 @@ export const MONSTER_CARDS = [
     evidence: { attack: 'M', observations: ['CS', 'WT', 'EV'], lair: 'UG' },
   },
   {
-    id: 'strigoi', name: 'Strigoi', hp: 10, toughness: null, badge: 1,
+    id: 'strigoi', name: 'Strigoi', hp: 10, toughness: null, badge: 1, stars: 1,
     traits: ['Corporeal', 'Revenant'],
     note: 'Only damaged by the Blessed Cosor (one of your dice, ignoring toughness). Drain and Unholy Burn always target the Cosor holder, wherever they are; with no one holding it, they strike whoever is in Close range.',
     objective: 'Kill with the Blessed Cosor: take the Cosor (a Romanian knife) from the Lair, sharpen it at the Outdoor Store {12}, bless it at the Church {9}, then strike the Strigoi with it.',
@@ -189,7 +192,7 @@ export const MONSTER_CARDS = [
     evidence: { attack: 'S', observations: ['WR', 'IS', 'PB'], lair: 'UG' },
   },
   {
-    id: 'adze', name: 'Adze', hp: 30, toughness: 3, badge: 3,
+    id: 'adze', name: 'Adze', hp: 30, toughness: 3, badge: 3, stars: 1,
     // It stays in its cocoon in the Lair; its actions are carried out by fly
     // swarms that cross any terrain but not walls.
     body: 'cocoon', actsBy: 'swarm',
@@ -206,7 +209,7 @@ export const MONSTER_CARDS = [
     evidence: { attack: 'S', observations: ['UI', 'FW', 'SL'], lair: 'TS' },
   },
   {
-    id: 'shadow-people', name: 'Shadow People', hp: null, toughness: null, badge: 0,
+    id: 'shadow-people', name: 'Shadow People', hp: null, toughness: null, badge: 0, stars: 1,
     // No body: the darkness around players ripples; it only takes shape to
     // strike (Umbral Stab, when a player enters a lit space).
     body: 'none', onEnterLit: { kind: 'physical', dmg: 'die' },

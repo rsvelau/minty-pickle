@@ -16,7 +16,12 @@ The app opens on the **title screen** (`src/app/gameShell.js`):
 - **Game settings**: the rules settings (Obols, slots, turn length...), the defaults for new games.
 
 **Scouting** (the start of every new game; Game settings → Start → Scouting turns it off): someone got
-here first, and what they gathered was left at the edge of town. Players + 1 Equipment cards are drawn from
+here first, and what they gathered was left at the edge of town. How it went depends on the night's monster's
+**difficulty**, 1 to 5 stars on its card (`stars` in `src/game/cards/monsters.js`; shown in the Field Guide
+and the card list; every monster is 1 star for now). The screen shows the stars and that story
+(`SCOUTING_STORY` in rules.js): 1 ★ whoever called us left supplies; 2 ★ somebody left in a hurry; 3 ★ a
+scouting team found this much before things got too hot; 4 ★ paid for in blood; 5 ★ a slaughter, the
+equipment pulled out by remote arcane manipulation. Players + 1 Equipment cards are drawn from
 the deck, dealt face down and turned over; the investigators take turns in seat order, each tapping a card
 and **Take**-ing it into their Skills (marked "From Scouting"). Once everyone has chosen, the card left over
 is shuffled back into the deck and P1's first turn begins. Rules: `newGame(board, { scout: true })` starts the

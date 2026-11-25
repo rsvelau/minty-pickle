@@ -6,7 +6,7 @@ import { OBOLS, monsterDef, obolCounts, OBOL_TYPES, INVENTORY_TABS } from './pla
 import { evidenceLabel, ATTACK_TYPES, LAIRS, OBSERVATIONS } from '../game/cards/evidence.js';
 import { INJURY_TRACKS } from '../game/cards/injuries.js';
 import { RECIPE_BY_ID, RECIPES, blocked as craftBlocked, ANY, payFits, autoPay } from '../game/obolcraft.js';
-import { MONSTER_BY_ID, DAMAGE_KINDS } from '../game/cards/monsters.js';
+import { MONSTER_BY_ID, DAMAGE_KINDS, starsText } from '../game/cards/monsters.js';
 import { matchesEvidence } from '../game/mystery.js';
 import { grid, ui } from '../app/config.js';
 import { $ } from '../app/dom.js';
@@ -19,7 +19,7 @@ import { targetsFor, actionRoll, abilityReady, killObjective, discardOptions } f
 import { checkRequirement } from '../game/cards/requirements.js';
 import { eventCard } from '../game/decks.js';
 import { choicesFor } from '../game/eventPlay.js';
-import { sacrificeSeat } from '../game/rules.js';
+import { sacrificeSeat, SCOUTING_STORY } from '../game/rules.js';
 import { scriptOf, mapSites, knownMonster } from '../game/objectives/scripts.js';
 import { progressLines } from '../game/objectives/verbs.js';
 import { skillStatus, COSOR_CARD } from '../game/skills.js';
@@ -427,7 +427,7 @@ export function guideDetails(c, found, open) {
   const dmg = (list, cls, word) => (list.length ? `<div class="ge-chips">${list.map((k) => chip(`${word} ${DAMAGE_KINDS[k].icon} ${DAMAGE_KINDS[k].label}`, cls)).join('')}</div>` : '');
   return `<div class="ge-body"${open ? '' : ''}>` +
     `<p><b>Evidence:</b></p><div class="ge-chips">${evChips}</div>` +
-    `<p>Health <b>${stat(c.hp)}</b> · Toughness <b>${stat(c.toughness)}</b></p>` +
+    `<p>Difficulty <b class="ge-stars" title="${c.stars ?? 1} of 5">${starsText(c.stars ?? 1)}</b> · Health <b>${stat(c.hp)}</b> · Toughness <b>${stat(c.toughness)}</b></p>` +
     dmg(c.weakness, 'weak', 'Weak to') + dmg(c.immune, 'imm', 'Immune to') +
     `<p>${esc(c.note)}</p><p><b>Objective:</b> ${esc(c.objective)}</p>` +
     c.abilities.map((a) => `<p class="ge-abil ${a.kind}">${kindType(a.kind) ? dmgIcon(kindType(a.kind)) + ' ' : ''}<b>${esc(a.name)}</b> <i>[${esc(a.roll)}]</i> ${esc(a.text)}</p>`).join('') +
@@ -446,7 +446,7 @@ export function fieldGuideHTML(my) {
     const hits = (found.attack && c.evidence.attack === found.attack ? 1 : 0)
       + found.cards.filter((f) => (f.kind === 'lair' ? f.code === c.evidence.lair : c.evidence.observations.includes(f.code))).length;
     return `<details class="guide-entry${ruledOut ? ' out' : ''}"${fits.length <= 2 && !ruledOut ? ' open' : ''}>` +
-      `<summary><span class="ge-name">${esc(c.name)}</span><span class="ge-traits">${esc(c.traits.join(', '))}</span>` +
+      `<summary><span class="ge-name">${esc(c.name)} <span class="ge-stars" title="Difficulty ${c.stars ?? 1} of 5">${starsText(c.stars ?? 1)}</span></span><span class="ge-traits">${esc(c.traits.join(', '))}</span>` +
       `<span class="ge-fit">${ruledOut ? 'ruled out' : nFound ? `fits ${hits}/${nFound}` : ''}</span></summary>` +
       guideDetails(c, found) +
       (!ruledOut && canName ? `<div class="case-actions"><button type="button" class="ink" data-name="${c.id}">Name the ${esc(c.name)}</button></div>` : '') +
@@ -771,6 +771,10 @@ export function renderScouting() {
   if (fresh) {
     scoutUI.key = key;
     scoutUI.pick = null;
+    // The story depends on how deadly tonight's monster is (its stars).
+    $('#scoutStars').textContent = starsText(sc.stars ?? 1);
+    $('#scoutStars').title = `Difficulty: ${sc.stars ?? 1} of 5`;
+    $('#scoutStory').textContent = sc.story ?? SCOUTING_STORY[sc.stars ?? 1];
     $('#scoutCards').innerHTML = all.map((c, k) => {
       const card = EQUIPMENT_BY_ID[c.id];
       return `<button type="button" class="scout-card" data-k="${k}" style="--d:${0.25 + k * 0.18}s">` +

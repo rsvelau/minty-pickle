@@ -29,6 +29,7 @@ import { refreshThreat, onPlayerEnters } from './monsterTurn.js';
 import { setupMystery, evidenceObol, revealEvidence, attackObol, nameMonster, revealMonster } from './mystery.js';
 import { setupDecks, drawEquipment, drawCard, eventCard, isMindset } from './decks.js';
 import { EQUIPMENT_BY_ID } from './cards/equipment.js';
+import { MONSTER_BY_ID } from './cards/monsters.js';
 import { useEquipment, armMonster, achieveObjective, discardForWeakness, strikeMonster } from './equipmentPlay.js';
 import { EVENT_CATEGORIES } from './cards/events.js';
 import {
@@ -242,13 +243,27 @@ export function newGame(board, setup = {}) {
 }
 
 // --- Scouting ------------------------------------------------------------------------
-// Before the first turn: someone (an ally, or an earlier crew that never came
-// back) left what they could gather at the edge of town. Players + 1 Equipment
+// Before the first turn: someone left what they could gather at the edge of
+// town (who, and how it went, is the SCOUTING_STORY for the monster's stars). Players + 1 Equipment
 // cards are drawn and shown face up; the players take turns, in seat order,
 // each taking one (the 'scout' action, { card: index into the offer }). Once
 // everyone has chosen, what's left is shuffled back into the deck and the
 // first turn begins.
 //   state.scouting = { offer: [card ids], order: [seats], at: index into order, took: { seat: id } }
+// What the investigators find depends on how deadly the night's monster is
+// (its card's stars, 1-5): the Scouting screen tells this story.
+export const SCOUTING_STORY = {
+  1: 'Whoever called us must have left these supplies here. Help is always appreciated.',
+  2: 'Somebody must have been leaving in a hurry. These supplies must have been slowing them down.',
+  3: 'A scouting team was deployed here earlier tonight. Unfortunately, this is all they could find before things got too hot.',
+  4: 'This equipment was paid for in blood. Some of the scouts didn’t make it back.',
+  5: 'It was a slaughter. The scouts were torn apart before they even knew they were in danger. The equipment had to be exfiltrated by remote arcane manipulation.',
+};
+// The night's monster's stars: the mystery monster's card (or the one picked); 1 without one.
+function nightStars(state) {
+  const id = state.mystery?.monster ?? (MONSTER_BY_ID[state.config.monster] ? state.config.monster : null);
+  return Math.max(1, Math.min(5, MONSTER_BY_ID[id]?.stars ?? 1));
+}
 function startScouting(state, events) {
   const offer = [];
   for (let k = 0; k <= state.players.length; k++) {
@@ -256,10 +271,11 @@ function startScouting(state, events) {
     if (id) offer.push(id);
   }
   if (!offer.length) return;
-  state.scouting = { offer, order: state.players.map((p) => p.seat), at: 0, took: {} };
+  const stars = nightStars(state);
+  state.scouting = { offer, order: state.players.map((p) => p.seat), at: 0, took: {}, stars, story: SCOUTING_STORY[stars] };
   state.phase = 'scouting';
   state.cur = state.scouting.order[0];
-  log(state, `Scouting: someone left ${offer.length} item${offer.length === 1 ? '' : 's'} at the edge of town. ` +
+  log(state, `Scouting: ${offer.length} item${offer.length === 1 ? '' : 's'} at the edge of town. ${SCOUTING_STORY[stars]} ` +
     `${state.players.length === 1 ? `${who(state)} takes one` : `Each investigator takes one, ${who(state)} first`}.`);
   events.push({ type: 'scouting', offer: [...offer] });
 }

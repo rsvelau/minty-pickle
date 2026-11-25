@@ -2,6 +2,7 @@
 // copies of each (0-3; monsters in or out). Saved with the other game
 // settings as gameConfig.deckCounts (only the changes from 1 copy each); new
 // games deal their decks from it (src/game/decks.js).
+import { starsText } from '../game/cards/monsters.js';
 import { DECKS, copiesOf, deckList, MAX_COPIES } from '../game/decks.js';
 import { EVENT_CATEGORIES } from '../game/cards/events.js';
 import { KEYWORDS } from '../game/cards/keywords.js';
@@ -29,7 +30,7 @@ function cardDetail(deck, c) {
   if (deck === 'events') return `<p class="dk-text"><span class="dk-cat">${esc(EVENT_CATEGORIES[c.category].label)}</span> ${esc(c.text)}</p>` +
     (c.afterMidnight ? `<p class="dk-text"><span class="dk-cat">After midnight</span> ${esc(c.afterMidnight)}</p>` : '');
   if (deck === 'mindsets') return `<p class="dk-text">${esc(c.text)}</p>`;
-  return `<p class="dk-text">${esc(c.traits.join(', '))}</p>`;
+  return `<p class="dk-text"><span class="ge-stars" title="Difficulty ${c.stars ?? 1} of 5">${starsText(c.stars ?? 1)}</span> ${esc(c.traits.join(', '))}</p>`;
 }
 
 const tabsHTML = () => Object.entries(DECKS).map(([id, d]) => `<button data-tab="${id}" class="${id === tab ? 'on' : ''}">${esc(d.label)}<small>${deckList(gameConfig, id).length}</small></button>`).join('')
