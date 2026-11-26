@@ -210,3 +210,8 @@ to heal. Second pass: 25 of 2,080.
 Undecided: 0 of 2,080 (was 25). Wins 1,365, losses 675, of which 67 (3%) are Lost in the night: Adze solo 12,
 Strigoi 18 across sizes, White Lady 12, Redcap 8, Shadow People 6, others 1-4. Adze solo fell to 2 wins of 40
 (was 14 before the limit: its solo games ran about 41 rounds).
+
+### Adze solo: 2-health swarms one at a time, Nest toughness 0 (and the solo bot hunts the Nest)
+
+Adze wins: solo 26, 2p 27, 3p 29, 4p 35 of 40. All monsters: 1,389 wins, 651 losses (55 Lost in the night), 0
+undecided, 0 anomalies.
