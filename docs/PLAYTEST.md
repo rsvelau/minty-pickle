@@ -161,3 +161,18 @@ Solo and two-player teams are far behind three and four.
 | Shadow People | 2 | 5 | 4 | 3 | 45.3 | 1.0 | 5 |
 | Shadow People | 3 | 2 | 3 | 7 | 48.9 | 1.6 | 2 |
 | Shadow People | 4 | 5 | 5 | 2 | 38.4 | 2.7 | 5 |
+
+## Shadow People analysis (expert bot, 40 games per team size)
+
+After fixing a bot stall (a candle snuffed while standing on the Votive Candle Stand: relighting
+needs stepping onto the stand, so the bot now steps off first), wins: solo 8, 2p 18, 3p 9, 4p 16 of 40.
+
+- Nearly every death (≈98%) is Umbral Stab. A move along lit streets often triggers 3-4+ stabs in one move;
+  four landed stabs kill a healthy investigator outright. Standing in the dark gives 0 defense slots, and
+  Defense dice are exhausted once used, so most stabs land at defense 0.
+- About a third of all snuffed candles go out on the stand itself (the Church is dark), the same stop
+  they were taken.
+- Only 28-46% of candles taken reach the Lair.
+- 3 players need 4 candles but 2 players only 2: why 3p does worse than 2p.
+- The Lair's walking distance from the Church decides most games: under 15 spaces 55% wins, 15-24
+  16%, 25-34 20%.
