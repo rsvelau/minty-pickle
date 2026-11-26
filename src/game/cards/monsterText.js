@@ -152,14 +152,16 @@ export const MONSTER_TEXT = {
   adze: {
     rules: [
       'It never leaves its Lair: fly swarms do its attacks, only at the townspeople (victims).',
-      'Victims are Frail. Stand with one to Defend them.',
+      'The victims show as soon as you know it’s the Adze (or at midnight). The turn it rises, its swarms only gather.',
+      'A swarm flies from the Lair to its victim, walls in the way, and gets there within two turns. Watch it come.',
+      'A victim survives the first hit that gets through (wounded); the second kills them. Stand beside one to Defend them.',
       'A victim dies: everyone takes 🎲 × the number of dead victims. No victims left: every attack hits everyone.',
     ],
     goal: 'Kill the Nest at its Lair, while defending the victims at the Hotel {1}, the Bar {5} and the Hospital {13}.',
     says: {
-      'Hotel Victim': 'A swarm attacks the Hotel {1} victim for 🎲. Whoever defends them: {exhaust} a Defense die.',
-      'Bar Victim': 'A swarm attacks the Bar {5} victim for 🎲. Whoever defends them: {exhaust} a Defense die.',
-      'Infirmary Victim': 'A swarm attacks the Hospital {13} victim for 🎲. Whoever defends them: {exhaust} a Defense die.',
+      'Hotel Victim': 'A swarm sets out for the Hotel {1} victim; when it gets there it attacks for 🎲. Whoever defends them: {exhaust} a Defense die.',
+      'Bar Victim': 'A swarm sets out for the Bar {5} victim; when it gets there it attacks for 🎲. Whoever defends them: {exhaust} a Defense die.',
+      'Infirmary Victim': 'A swarm sets out for the Hospital {13} victim; when it gets there it attacks for 🎲. Whoever defends them: {exhaust} a Defense die.',
     },
     track: ['−1 toughness', '−1 toughness', 'One fewer action die'],
   },

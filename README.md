@@ -993,8 +993,12 @@ toughness or a weakness hit frees them); at the end of its turn it heads 10 towa
 her turn, to the rooftop (a building floor or a premade building, not fences, wrecks or towers) nearest the
 player closest to the heirloom; on a roof she's out of Close range; Keen only reaches outdoor spaces; the
 heirloom (a signed ring) is picked up at the Funeral Parlor and set down from Team (Set down); brought to
-the Unmarked Grave (any Objective marker on a cemetery space, or one set to that site), it defeats her at once. Adze: a
-victim's death costs everyone one die × the dead. Redcap: toughness-ignoring (Piercing) hits can't kill it.
+the Unmarked Grave (any Objective marker on a cemetery space, or one set to that site), it defeats her at once. Adze: its
+victims come out as soon as the team knows it's the Adze (all its evidence, or named right), or at midnight;
+the turn it rises its swarms only gather; then each swarm flies from the Lair to its victim (walls stop it,
+nothing else) at a speed that reaches the farthest victim in two turns, shown as a cloud on the board, and
+strikes when it arrives (on the nearest living victim if its own is dead); a victim survives the first hit
+that gets through (wounded) and dies to the second; a victim's death costs everyone one die × the dead. Redcap: toughness-ignoring (Piercing) hits can't kill it.
 Monster heals now really heal.
 
 ### Monster cards as players read them

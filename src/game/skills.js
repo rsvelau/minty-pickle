@@ -19,6 +19,7 @@
 // the state with applyAction, so this never says "now" for something the
 // game would refuse.
 import { EQUIPMENT_BY_ID } from './cards/equipment.js';
+import { MONSTER_BY_ID, DAMAGE_KINDS } from './cards/monsters.js';
 import { checkRequirement } from './cards/requirements.js';
 import { abilityReady, targetsFor, actionRoll } from './equipmentPlay.js';
 import { applyAction } from './rules.js';
@@ -73,6 +74,16 @@ export function skillStatus(state, board, pl) {
 
       // Nothing rolled yet: dice skills wait for the roll.
       if (a.dice && state.phase === 'idle' && !(state.pool ?? []).length) return set('almost', `Roll first: needs ${a.dice === 1 ? 'a die' : `${a.dice} dice`}${a.req ? ` [${a.req}]` : ''}`);
+
+      // A monster immune to the skill's element: nothing would happen.
+      if (a.kind && fx.target === 'monster') {
+        const hurtable = options.filter((o) => !MONSTER_BY_ID[state.monsters.find((m) => m.id === o.monster)?.kind]?.immune.includes(a.kind));
+        if (options.length && !hurtable.length) {
+          const name = MONSTER_BY_ID[state.monsters.find((m) => m.id === options[0].monster)?.kind]?.name ?? 'monster';
+          return set('not', `The ${name} is immune to ${DAMAGE_KINDS[a.kind]?.label ?? a.kind}`);
+        }
+        options.splice(0, options.length, ...hurtable);
+      }
 
       if (targeted && !options.length) {
         if (fx.door) return set('not', 'No door next to you');

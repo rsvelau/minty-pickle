@@ -21,11 +21,11 @@ import { MONSTERS, spawnMonsters, monstersAct, farthestFromPlayers } from './mon
 import { turnLimits, injuries, applyDamage, sacrificeCarrier, killPlayer } from './combat.js';
 import { answer as answerReaction } from './reactions.js';
 import { RANGE, cellRange } from './cards/injuries.js';
-import { objectiveLive } from './objectives/scripts.js';
+import { objectiveLive, knownMonster } from './objectives/scripts.js';
 import { onSiteEnter, crossingBlocked, suffocate, destroyAnchor, holdRound, pickUpHere, itemLabel } from './objectives/verbs.js';
 import { siteOf, siteLabel } from '../core/sites.js';
 import { craft } from './obolcraft.js';
-import { refreshThreat, onPlayerEnters } from './monsterTurn.js';
+import { refreshThreat, onPlayerEnters, setupVictims } from './monsterTurn.js';
 import { setupMystery, evidenceObol, revealEvidence, attackObol, nameMonster, revealMonster } from './mystery.js';
 import { setupDecks, drawEquipment, drawCard, eventCard, isMindset } from './decks.js';
 import { EQUIPMENT_BY_ID } from './cards/equipment.js';
@@ -655,6 +655,11 @@ function applyActionNow(state, board, action) {
     }
     default:
       return fail('unknown action');
+  }
+  // The Adze's victims come out as soon as the team knows it's the Adze.
+  const known = knownMonster(state);
+  if (known && MONSTER_BY_ID[known]?.actsBy === 'swarm' && !state.npcs?.length) {
+    setupVictims(state, board, { kind: known }, { state, log, randInt }, events);
   }
   refreshThreat(state, board);
   return { ok: true, events };

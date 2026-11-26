@@ -100,8 +100,12 @@ function makeBot(state, board) {
           return at;
         } else if (st.do === 'defend') {
           // Adze: stand with a victim (each investigator its own, in seat order).
+          // One guard per victim; anyone left over goes for the Nest.
           const victims = (state.npcs ?? []).filter((v) => v.alive);
-          if (victims.length) return [victims[pl.seat % victims.length].cell];
+          const guards = state.players.filter((p) => !p.dead).sort((a, b) => a.seat - b.seat);
+          const k = guards.indexOf(pl);
+          if (victims.length && k < victims.length && (guards.length > victims.length || k < guards.length - 1 || guards.length === 1)) return [victims[k].cell];
+          if (monster) return [monster.pos];
         }
         else if (st.do === 'upgrade') {
           const it = carrying(pl, st.item);

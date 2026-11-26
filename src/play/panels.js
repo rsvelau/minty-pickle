@@ -241,12 +241,13 @@ export function showCardNow(c) {
   } else if (c.kind === 'npc') {
     const e = c.e;
     const saved = e.outcome === 'saved';
+    const wounded = e.outcome === 'wounded';
     card.classList.add('hurt');
     card.style.setProperty('--atk', saved ? '#3fae5a' : '#7a1a10');
     html = `<div class="pc-kind">The swarm falls on a townsperson</div><div class="pc-glyph">${saved ? '🛡' : '☠'}</div>` +
-      `<div class="pc-title">${esc(e.npc?.name ?? 'A victim')} ${saved ? 'is saved' : 'dies'}</div>` +
+      `<div class="pc-title">${esc(e.npc?.name ?? 'A victim')} ${saved ? 'is saved' : wounded ? 'is wounded' : 'dies'}</div>` +
       `<div class="pc-sub">${saved ? `${esc(e.defenderPlayer?.name ?? '')}'s defense ${e.defense} holds against ${e.amount}.`
-        : `${e.amount} damage${e.defenderPlayer ? ` against ${esc(e.defenderPlayer.name)}'s defense ${e.defense}` : ', and no one was close enough to defend them'}. Every player suffers its rage.`}</div>`;
+        : `${e.amount} damage${e.defenderPlayer ? ` against ${esc(e.defenderPlayer.name)}'s defense ${e.defense}` : ', and no one was close enough to defend them'}. ${wounded ? 'They survive this once: one more hit will kill them.' : 'Every player suffers its rage.'}`}</div>`;
   } else if (c.kind === 'sacrifice' && c.e.reacted) {
     const e = c.e;
     card.classList.add('hurt');

@@ -138,7 +138,10 @@ export function spawnMonsters(state, board, events, random, log) {
   log(state, `Something stirs at ${label(board, cell)}.`);
   events.push({ type: 'monsterSpawn', id: monster.id, kind: monster.kind, cell });
   // Card monsters declare their first action straight away.
-  if (MONSTER_BY_ID[kind]?.actsBy === 'swarm') setupVictims(state, board, monster, context(state, board, random, log), events);
+  if (MONSTER_BY_ID[kind]?.actsBy === 'swarm') {
+    setupVictims(state, board, monster, context(state, board, random, log), events);
+    monster.gathering = true;              // a round's warning: its swarms set out next turn
+  }
   if (MONSTER_BY_ID[kind]) declareIntent(state, board, monster, context(state, board, random, log), events);
 }
 

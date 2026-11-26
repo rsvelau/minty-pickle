@@ -512,6 +512,25 @@ export function createPlay({
     }
   }
 
+  // --- swarms in flight (Adze): a cloud where each one is, drifting on --------------------------
+  const swarmClouds = new Map();   // swarm id -> cloud
+  function syncSwarms() {
+    const live = new Map((g()?.swarms ?? []).map((sw) => [sw.id, sw]));
+    for (const [id, c] of swarmClouds) if (!live.has(id)) { group.remove(c); swarmClouds.delete(id); }
+    for (const [id, sw] of live) {
+      if (!inBoard(sw.pos)) continue;
+      let c = swarmClouds.get(id);
+      if (!c) { c = models.makeSwarm(); c.userData.goal = centreOf(sw.pos); c.position.copy(c.userData.goal); group.add(c); swarmClouds.set(id, c); }
+      c.userData.goal = centreOf(sw.pos);
+    }
+  }
+  function tickSwarms(t, dt) {
+    for (const [, c] of swarmClouds) {
+      c.position.lerp(c.userData.goal, Math.min(1, dt * 1.5));
+      c.userData.tick(t);
+    }
+  }
+
   // --- townspeople (the Adze's victims) ------------------------------------------------------
   view.npcs = new Map();
   function syncNpcs(reset = false) {
@@ -981,6 +1000,7 @@ export function createPlay({
       }
     }
     refreshDiscoveries();
+    syncSwarms();
     applyVisibility();
     showOptions();
     onChange();
@@ -1096,7 +1116,7 @@ export function createPlay({
   let last = performance.now();
   // Is anything animating (so the renderer should run at full rate)?
   function busy() {
-    return rolling() || !!view.watch || grabs.length > 0 || pops.length > 0 || view.actors.some(running) || [...view.monsters.values()].some((mv) => running(mv) || mv.lunge > 0)
+    return rolling() || !!view.watch || grabs.length > 0 || pops.length > 0 || swarmClouds.size > 0 || view.actors.some(running) || [...view.monsters.values()].some((mv) => running(mv) || mv.lunge > 0)
       || (view.pan && group.visible);
   }
   function tick(_dt, t) {
@@ -1139,6 +1159,7 @@ export function createPlay({
     tickGrabs(dt);
     tickDarkness(t, s);
     tickNpcs(t, s);
+    tickSwarms(t, dt);
     for (const [, mv] of view.monsters) {
       if (!mv.anim && mv.queue.length) mv.anim = Object.assign(mv.queue.shift(), { t: 0 });
       const an = mv.anim;

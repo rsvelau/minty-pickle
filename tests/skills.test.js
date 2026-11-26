@@ -83,3 +83,14 @@ test('no monster at all: monster skills are Not now', () => {
   assert.equal(e.status, 'not');
   assert.match(e.why, /No monster on the board/);
 });
+
+test('a monster immune to the skill’s element: Not now, and why', () => {
+  const s = setup();
+  s.monster.kind = 'adze';                                  // immune to Silver, Iron, Salt, Crystal
+  s.monster.pos = s.g.index(11, 5);
+  s.give(s.pl, ['cursebreaker-dagger']);
+  s.roll([6, 6, 6]);
+  const e = skillStatus(s.state, s.board, s.pl).find((x) => x.card.abilities[x.ability].kind === 'silver');
+  assert.equal(e.status, 'not');
+  assert.match(e.why, /immune to Silver/);
+});
