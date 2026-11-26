@@ -122,6 +122,28 @@ export function createSkyMoon(scene) {
   const right = new THREE.Vector3(), up = new THREE.Vector3(), centre = new THREE.Vector3();
   let span = 0, cloudW = 0;
 
+  // The night sky's stars: a dome of small points around the camera (no fog),
+  // only while the moon is up.
+  const STARS = 900;
+  const starPos = new Float32Array(STARS * 3), starCol = new Float32Array(STARS * 3);
+  let sseed = 3;
+  const srnd = () => ((sseed = (sseed * 16807) % 2147483647) / 2147483647);
+  for (let k = 0; k < STARS; k++) {
+    const u = srnd() * Math.PI * 2, v = Math.asin(srnd() * 1.1 - 0.1);   // mostly above the horizon
+    starPos.set([Math.cos(v) * Math.cos(u) * 700, Math.sin(v) * 700, Math.cos(v) * Math.sin(u) * 700], k * 3);
+    const b = 0.45 + srnd() * 0.55;
+    starCol.set([b * (0.85 + srnd() * 0.15), b * (0.88 + srnd() * 0.12), b], k * 3);
+  }
+  const starGeo = new THREE.BufferGeometry();
+  starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+  starGeo.setAttribute('color', new THREE.BufferAttribute(starCol, 3));
+  const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ size: 1.6, sizeAttenuation: false, vertexColors: true, fog: false, transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false }));
+  stars.renderOrder = -10;
+  stars.frustumCulled = false;
+  stars.visible = false;
+  stars.raycast = () => {};
+  scene.add(stars);
+
   const sphere = new THREE.Sphere(new THREE.Vector3(), R * 3.5);
   const frustum = new THREE.Frustum();
   const m4 = new THREE.Matrix4();
@@ -134,6 +156,8 @@ export function createSkyMoon(scene) {
     group.position.copy(camera.position).addScaledVector(fwd, DIST);
     group.scale.setScalar(size);
     group.visible = true;
+    stars.visible = true;
+    stars.position.copy(camera.position);
     right.setFromMatrixColumn(camera.matrixWorld, 0).normalize();
     up.setFromMatrixColumn(camera.matrixWorld, 1).normalize();
     // The clouds pass a little in front of the moon; they cross the whole screen.
@@ -150,6 +174,7 @@ export function createSkyMoon(scene) {
   }
   const CROSS = 26, PAUSE = 4;   // s to cross the screen; s off-screen before coming round again
   function tick(t, camera) {
+    if (stars.visible) stars.position.copy(camera.position);   // the dome goes where the camera goes
     if (!group.visible) { for (const c of clouds) c.s.visible = false; return; }
     for (const c of clouds) {
       // The second wisp follows the first, lower and a little faster, half a crossing behind.
@@ -175,7 +200,12 @@ export function createSkyMoon(scene) {
   }
   return {
     placeAhead, tick, inView,
-    hide() { group.visible = false; for (const c of clouds) c.s.visible = false; },
+    hide() { group.visible = false; stars.visible = false; for (const c of clouds) c.s.visible = false; },
+    // The moon and its clouds only (the stars stay for the rest of the camera move).
+    hideMoon() { group.visible = false; for (const c of clouds) c.s.visible = false; },
+    get starsUp() { return stars.visible; },
+    // Everything in the sky (not to be moved with the land).
+    parts: () => [group, stars, ...clouds.map((c) => c.s)],
     get visible() { return group.visible; },
   };
 }

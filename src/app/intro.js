@@ -14,24 +14,23 @@ import { ui } from './config.js';
 import { aheadPose } from './pointer.js';
 import { skyMoon } from './loop.js';
 import { markers, labelGroup, refreshMarkers } from '../render/board.js';
-import { __set_camTween, camera, controls, fitPreset, wake } from '../render/scene.js';
+import { __set_camTween, camera, controls, fitPreset, wake, scene, markShadows, moon as moonLight } from '../render/scene.js';
 import { play } from '../play/playView.js';
 import * as THREE from 'three';
 
 // (window.__introSlow stretches it, for checking the stages one by one.)
 const slow = () => (typeof window !== 'undefined' && window.__introSlow) || 1;
-const PAN = 2.2;       // s: from the sky down to the town
-const ZOOM = 1.8;      // s: down to the player
+const MOVE = 3;        // s: from the moon down to the player
+const DROP = 60;       // how far below the land waits while the sky shows
 const FADE = 700;      // ms: menus and markers fade in
 
 let running = null;    // the intro in progress: { cancel }
-let watchMoon = 0;
 
 // The title screen's camera: high over the town (where the game's camera move
 // starts) but tilted up at the sky, so no town shows; the full moon big in the
 // middle of the screen, wisps of cloud drifting across it.
 const TILT = 32;       // degrees above the horizon
-const MOON_SIZE = 2.3;
+const MOON_SIZE = 3.1;
 let titleLook = null;  // where the title camera looks (the moon)
 export function showTitleView() {
   stopIntro();
@@ -67,6 +66,10 @@ export function leaveTitleView() {
 }
 
 // The game-start camera move. Call after the game is on the board (setTool('play')).
+// One continuous move of MOVE seconds that starts slow, picks up speed and
+// settles gently on the player who is up. Coming from the title, the camera
+// tips down from the moon into an empty starry sky, and the land rises up into
+// place beneath it (it waits far below, out of sight, while the sky shows).
 export function playIntro() {
   stopIntro();
   __set_camTween(null);   // (starting play queues its own glide: this move replaces it)
@@ -77,51 +80,46 @@ export function playIntro() {
   markers.setVisible(false);
   labelGroup.visible = false;
   let cancelled = false;
-  running = { cancel: () => { cancelled = true; } };
-  // Keep checking: once the moon is out of view it goes.
-  cancelAnimationFrame(watchMoon);
-  const watch = () => {
-    if (!skyMoon.visible) return;
-    if (!skyMoon.inView(camera)) { skyMoon.hide(); return; }
-    watchMoon = requestAnimationFrame(watch);
-  };
-  watch();
-  // 1. Down from the sky over the whole town: from the title, the camera stays
-  //    where it is and tilts down from the moon; otherwise it glides there.
-  const over = fitPreset('persp');
-  const zoomIn = () => {
+  const fromSky = ui.freeCamera && skyMoon.visible;
+  ui.freeCamera = true;
+  // The land: everything but the lights and the sky.
+  const sky = new Set(skyMoon.parts());
+  const land = fromSky ? scene.children.filter((o) => !o.isLight && o !== moonLight.target && !sky.has(o)) : [];
+  const base = land.map((o) => o.position.y);
+  const setLand = (lift) => land.forEach((o, i) => { o.position.y = base[i] - DROP * (1 - lift); });
+  setLand(0);
+  running = { cancel: () => { cancelled = true; setLand(1); } };
+
+  const pose = aheadPose() ?? fitPreset('persp');
+  const p0 = camera.position.clone(), q0 = camera.quaternion.clone();
+  const probe = new THREE.PerspectiveCamera();   // how the camera will face at the end
+  probe.position.copy(pose.pos);
+  probe.up.copy(camera.up);
+  probe.lookAt(pose.target);
+  const q1 = probe.quaternion.clone();
+  const t0 = performance.now();
+  const smooth = (a, b, x) => { const k = Math.min(1, Math.max(0, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
+  const frame = () => {
     if (cancelled) return;
+    const k = Math.min(1, (performance.now() - t0) / (MOVE * slow() * 1000));
+    // Slow start, speeding up, then easing in to the player (cubic in-out).
+    const e = k < 0.5 ? 4 * k ** 3 : 1 - Math.pow(-2 * k + 2, 3) / 2;
+    camera.position.lerpVectors(p0, pose.pos, e);
+    camera.quaternion.slerpQuaternions(q0, q1, e);
+    if (fromSky) {
+      setLand(smooth(0.12, 0.78, k));   // the land rises while the camera comes down
+      markShadows();
+      if (skyMoon.visible && !skyMoon.inView(camera)) skyMoon.hideMoon();
+    }
+    wake(200);
+    if (k < 1) { requestAnimationFrame(frame); return; }
+    setLand(1);
+    controls.target.copy(pose.target);
     ui.freeCamera = false;
-    // 2. In to the player who is up.
-    const pose = aheadPose() ?? over;
-    __set_camTween({
-      t: 0, dur: ZOOM * slow(), ease: 'inOut',
-      fromPos: camera.position.clone(), fromTarget: controls.target.clone(), toPos: pose.pos, toTarget: pose.target,
-      done: () => { if (!cancelled) finish(); },
-    });
+    controls.update();
+    finish();
   };
-  if (ui.freeCamera && titleLook) {
-    const from = titleLook.clone(), pos = camera.position.clone(), look = new THREE.Vector3();
-    const t0 = performance.now();
-    const tilt = () => {
-      if (cancelled) return;
-      const k = Math.min(1, (performance.now() - t0) / (PAN * slow() * 1000));
-      const e = k < 0.5 ? 4 * k ** 3 : 1 - Math.pow(-2 * k + 2, 3) / 2;
-      camera.position.lerpVectors(pos, over.pos, e);
-      camera.lookAt(look.lerpVectors(from, over.target, e));
-      wake(200);
-      if (k < 1) { requestAnimationFrame(tilt); return; }
-      controls.target.copy(over.target);
-      zoomIn();
-    };
-    requestAnimationFrame(tilt);
-  } else {
-    __set_camTween({
-      t: 0, dur: PAN * slow(), ease: 'inOut',
-      fromPos: camera.position.clone(), fromTarget: controls.target.clone(), toPos: over.pos, toTarget: over.target,
-      done: zoomIn,
-    });
-  }
+  requestAnimationFrame(frame);
 }
 // 3. The menus and the markers fade in; the camera is the player's again.
 function finish() {
@@ -150,7 +148,6 @@ export function stopIntro() {
   running = null;
   __set_camTween(null);
   ui.freeCamera = false;
-  cancelAnimationFrame(watchMoon);
   document.body.classList.remove('intro');
   play.holdCamera(false);
   controls.enabled = true;

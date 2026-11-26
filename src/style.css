@@ -1539,3 +1539,14 @@ body.mode-title .screen-card {
 }
 body.mode-title .title-name { text-shadow: 0 2px 18px rgba(0, 0, 0, 0.9), 0 0 2px rgba(0, 0, 0, 0.8); }
 body.mode-title .screen-menu button { background-color: rgba(14, 16, 22, 0.8); }
+/* Title, second pass: the moon fills the middle of the screen, so the menu is a
+   small panel near the bottom, its buttons two to a row. (Only the title card:
+   New game, Load and the rest keep their size, low on the screen too.) */
+body.mode-title .screen { align-items: flex-end; padding-bottom: max(4vh, 14px); }
+body.mode-title .screen-card { margin: auto auto 0; }
+body.mode-title .screen-card:has(.title-block) { width: min(360px, 100%); padding: 12px 14px 14px; }
+body.mode-title .title-block { padding: 2px 0 10px; }
+body.mode-title .title-name { font-size: 24px; margin: 0; text-align: center; }
+body.mode-title .screen-card:has(.title-block) .screen-menu { grid-template-columns: 1fr 1fr; gap: 6px; }
+body.mode-title .screen-card:has(.title-block) .screen-menu button { min-height: 36px; padding: 6px 10px; font-size: 14px; }
+body.mode-title .screen-card:has(.title-block) .screen-menu button.primary { grid-column: 1 / -1; }
