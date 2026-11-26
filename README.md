@@ -177,8 +177,10 @@ teammates in your space for heals like the Medical Kit). Obol costs (◉) take a
   Outdoor store.
 - **Objectives the game plays** (`src/game/objectives/verbs.js`; the others still use the Casebook's
   Objective achieved): **Shadow People**: step on the Church to take a lit candle (one each at a time), carry
-  it to the Lair; 4 candles win (2 with one or two players). Ending your turn in the dark with a lit candle
+  it to the Lair; one candle per investigator wins (1 to 4). Ending your turn in the dark with a lit candle
   flips a coin; tails, it goes out (Discard Fire & keep candle lit is offered then); relight it at the Church.
+  Candles never go out inside the Church, and starting or ending a turn on the stand relights one. A lit
+  candle gives its carrier +1 Defense. Umbral Stab strikes at most once a move (the first lit space entered).
   **Barghest**: each investigator steps on the Church to be cleansed; the uncleansed can't step onto a
   bridge; a cleansed investigator reaching the Start space escapes (out of the turn order, out of the
   monster's reach). The first escape wins for the team; play goes on until everyone has escaped or fallen.

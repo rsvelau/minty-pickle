@@ -39,7 +39,7 @@ export const OBJECTIVES = {
     played: true,
     steps: [
       { do: 'collect', at: 'church', fixture: 'votive-candle-stand', item: 'candle', text: 'Take a lit candle from the Church’s Votive Candle Stand (each investigator can carry one)' },
-      { do: 'deliver', at: 'lair', item: 'candle', times: 4, fewer: 2, text: 'Carry it, still lit, to the Lair: 4 candles light the Dark Room (2 with one or two players)' },
+      { do: 'deliver', at: 'lair', item: 'candle', times: 4, perPlayer: true, text: 'Carry it, still lit, to the Lair: one candle per investigator lights the Dark Room' },
     ],
   },
   poltergeist: {

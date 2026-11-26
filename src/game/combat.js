@@ -72,7 +72,8 @@ export function defenseValue(pl, type = null) {
   const rushed = pl.mindset === 'rushed';                  // Rushed: defense dice count at most 3
   const dice = (pl.defense ?? []).reduce((a, d) => a + Math.min(rushed ? 3 : 99, doomed && d.v === 6 ? 1 : d.v), 0);
   const bonus = (pl.bonusDefense ?? []).filter((b) => !b.type || !type || b.type === type).reduce((a, b) => a + b.v, 0);
-  return dice + bonus;
+  const candle = (pl.carry ?? []).some((c) => c.item === 'candle' && c.lit) ? 1 : 0;   // Shadow People: a lit candle holds the dark back
+  return dice + bonus + candle;
 }
 
 // Defense still standing this turn: the total less what attacks wore off it.

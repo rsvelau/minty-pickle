@@ -176,3 +176,11 @@ needs stepping onto the stand, so the bot now steps off first), wins: solo 8, 2p
 - 3 players need 4 candles but 2 players only 2: why 3p does worse than 2p.
 - The Lair's walking distance from the Church decides most games: under 15 spaces 55% wins, 15-24
   16%, 25-34 20%.
+
+### After the rework (once-a-move Umbral Stab, a safe Church and relighting on the stand, one candle per
+### investigator, +1 Defense for a lit candle)
+
+Wins of 40: solo 30, 2p 27, 3p 31, 4p 28 (was 8 / 18 / 9 / 16). Undecided games: 7 of 160 (was 38).
+Snuffed at the first stop after taking a candle: ~4% of snuffs (was ~35%). Umbral Stab still causes ~90%
+of deaths, now one stab a move. Church to Lair: under 15 spaces 87%, 15-24 79%, 25-34 48% (was 55 / 16 / 20).
+The bot also learned to walk to a Nailed Shut door and force it with a 6.

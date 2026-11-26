@@ -98,24 +98,38 @@ function fight(kind, { players = 3 } = {}) {
   return { g, board, state, monster, ctx, at, log };
 }
 
-test('Shadow People: a lit candle from the Church, carried to the Lair; 4 win (one each at a time)', () => {
+test('Shadow People: a lit candle from the Church, carried to the Lair; one per investigator wins (one each at a time)', () => {
   const s = fight('shadow-people');
   const [a, b, c] = s.state.players;
   s.at(a, 0, 0);
   assert.deepEqual(a.carry, [{ item: 'candle', lit: true }]);
   s.at(a, 0, 0);
   assert.equal(a.carry.length, 1, 'one at a time');
-  for (const p of [a, b, c]) { s.at(p, 0, 0); s.at(p, 6, 0); }
-  assert.equal(s.state.objective.delivered.candle, 3);
+  for (const p of [a, b]) { s.at(p, 0, 0); s.at(p, 6, 0); }
+  assert.equal(s.state.objective.delivered.candle, 2);
   assert.ok(!s.state.won);
-  s.at(a, 0, 0); s.at(a, 6, 0);
-  assert.ok(s.state.won, '4 candles: the Dark Room is lit');
+  s.at(c, 0, 0); s.at(c, 6, 0);
+  assert.ok(s.state.won, '3 candles for 3 investigators: the Dark Room is lit');
 });
 
-test('Shadow People: two candles are enough with one or two players', () => {
-  const s = fight('shadow-people', { players: 2 });
-  for (const p of s.state.players) { s.at(p, 0, 0); s.at(p, 6, 0); }
-  assert.ok(s.state.won);
+test('Shadow People: candles needed = team size (1 solo, 2 with two)', () => {
+  const two = fight('shadow-people', { players: 2 });
+  for (const p of two.state.players) { two.at(p, 0, 0); two.at(p, 6, 0); }
+  assert.ok(two.state.won);
+  const solo = fight('shadow-people', { players: 1 });
+  solo.at(solo.state.players[0], 0, 0); solo.at(solo.state.players[0], 6, 0);
+  assert.ok(solo.state.won);
+});
+
+test('Shadow People: a lit candle gives +1 Defense', async () => {
+  const { defenseValue } = await import('../src/game/combat.js');
+  const s = fight('shadow-people');
+  const pl = s.state.players[0];
+  const before = defenseValue(pl, 'P');
+  s.at(pl, 0, 0);
+  assert.equal(defenseValue(pl, 'P'), before + 1);
+  pl.carry[0].lit = false;
+  assert.equal(defenseValue(pl, 'P'), before);
 });
 
 test('Suffocating Darkness: ending the turn in the dark with a lit candle, tails puts it out; Fire keeps it lit', () => {
@@ -356,4 +370,33 @@ test('White Lady’s Infatuation: she appears inside the occupied building and s
   act('Regret');
   assert.equal(Object.values(state.doors).filter((d) => d === 'blocked').length, 0);
   assert.equal(state.players[0].injuries.M, 1, 'and Regret strikes inside');
+});
+
+test('Shadow People: candles never go out inside the Church, and the stand relights one', async () => {
+  const { relightHere } = await import('../src/game/objectives/verbs.js');
+  const s = fight('shadow-people');
+  const pl = s.state.players[0];
+  for (const x of [0, 1]) s.g.apply(s.g.index(x, 0), { area: 'indoor', sub: 'hardwood' }, { silent: true });
+  s.at(pl, 0, 0);
+  pl.pos = s.g.index(1, 0);                  // inside the Church, off the stand, in the dark
+  s.board.light[pl.pos] = 0;
+  suffocate(s.state, s.board, pl, s.ctx, []);
+  assert.equal(pl.carry[0].lit, true, 'safe in the Church');
+  pl.carry[0].lit = false;
+  pl.pos = s.g.index(0, 0);                  // standing on the stand
+  relightHere(s.state, s.board, pl, s.ctx, []);
+  assert.equal(pl.carry[0].lit, true, 'relit without stepping off and back on');
+});
+
+test('Umbral Stab: once a move, however many lit spaces it crosses', async () => {
+  const { onPlayerEnters } = await import('../src/game/monsterTurn.js');
+  const s = fight('shadow-people');
+  const pl = s.state.players[0];
+  const hits = () => s.log.filter((m) => /Umbral Stab/.test(m)).length;
+  s.state.moveN = 1;
+  for (const x of [3, 4, 5]) { const c = s.g.index(x, 3); s.board.light[c] = 1; onPlayerEnters(s.state, s.board, pl, c, s.ctx, []); }
+  assert.equal(hits(), 1, 'one stab on this move');
+  s.state.moveN = 2;
+  onPlayerEnters(s.state, s.board, pl, s.g.index(5, 3), s.ctx, []);
+  assert.equal(hits(), 2, 'a new move can be stabbed again');
 });

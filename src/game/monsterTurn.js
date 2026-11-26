@@ -1101,6 +1101,10 @@ export function onPlayerEnters(state, board, pl, cell, ctx, events) {
     if ((board.light[cell] ?? 0) < state.config.litThreshold) continue;
     // Discard Crystal & no light for ⌛: lit spaces are safe for a round.
     if (state.flags?.noLight) { ctx.log(state, `${pl.name} steps into the light, but the ${card.name} can't reach them there for now.`); continue; }
+    // Once a move: the first lit space entered on each move.
+    const moveKey = `${state.turn}:${state.moveN ?? 0}`;
+    if (pl.stabbed === moveKey) continue;
+    pl.stabbed = moveKey;
     const ability = card.abilities.find((a) => a.roll === 'Persistent' && KIND_TO_TYPE[a.kind]);
     const type = KIND_TO_TYPE[rule.kind] ?? card.evidence.attack;
     events.push({ type: 'monsterAttack', id: monster.id, seat: pl.seat, cell, grab: true, attack: type });

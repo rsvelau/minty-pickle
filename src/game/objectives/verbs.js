@@ -30,6 +30,7 @@ import { siteLabel } from '../../core/sites.js';
 import { achieveObjective, banishMonster } from '../equipmentPlay.js';
 import { watch, offer } from '../reactions.js';
 import { buildingOf } from '../../core/mapCheck.js';
+import { buildingCells } from '../../core/buildings.js';
 
 export const ITEMS = {
   candle: { label: 'Candle', lit: true },
@@ -50,6 +51,7 @@ export const describeItem = (c) => {
 // How many deliveries a step needs: `times`, halved (Shadow People: 2) with one or two players.
 export function deliveriesNeeded(state, step) {
   const n = step.times ?? 1;
+  if (step.perPlayer) return Math.max(1, Math.min(n, state.players.length));   // one each (Shadow People: 1-4)
   return step.fewer && state.players.length <= 2 ? step.fewer : n;
 }
 
@@ -208,10 +210,32 @@ export function crossingBlocked(state, board, pl, to) {
 // Shadow People, Suffocating Darkness: a player with a lit candle who ends
 // the turn in the dark flips a coin; tails, it goes out (Discard Fire & keep
 // candle lit is offered then: reactions.js).
+// Inside the Church (the building holding the Votive Candle Stand): candles stay lit there.
+function inChurch(state, board, cell) {
+  const g = board.grid;
+  const stands = (mapSites(g).church ?? []);
+  if (!stands.length || g.cells[cell]?.area !== 'indoor') return false;
+  return stands.some((s) => s === cell || buildingCells(g, s).includes(cell));
+}
+
+// Standing on the Votive Candle Stand with a candle that went out: it is lit again
+// (at the start of the turn, or stopping there), no stepping off and back on.
+export function relightHere(state, board, pl, ctx, events) {
+  if (knownMonster(state) !== 'shadow-people' || pl.dead) return;
+  const candle = (pl.carry ?? []).find((c) => c.item === 'candle' && c.lit === false);
+  if (!candle || !inChurch(state, board, pl.pos)) return;
+  const stand = (mapSites(board.grid).church ?? []).includes(pl.pos);
+  if (!stand) return;
+  candle.lit = true;
+  ctx.log(state, `${pl.name} relights the candle at the Votive Candle Stand.`);
+  events.push({ type: 'objStep', seat: pl.seat, cell: pl.pos, text: `${pl.name}'s candle is lit again.` });
+}
+
 export function suffocate(state, board, pl, ctx, events) {
   if (knownMonster(state) !== 'shadow-people') return;
   const candle = (pl.carry ?? []).find((c) => c.item === 'candle' && c.lit);
   if (!candle || pl.dead || (board.light[pl.pos] ?? 0) >= state.config.litThreshold) return;
+  if (inChurch(state, board, pl.pos)) return;     // the Church's candles keep the dark off
   const heads = ctx.randInt(state, 2) === 0;
   events.push({ type: 'coin', heads });
   if (heads) { ctx.log(state, `${pl.name}'s candle gutters in the dark, but stays lit (heads).`); return; }

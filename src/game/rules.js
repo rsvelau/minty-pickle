@@ -22,7 +22,7 @@ import { turnLimits, injuries, applyDamage, sacrificeCarrier, killPlayer } from 
 import { answer as answerReaction } from './reactions.js';
 import { RANGE, cellRange } from './cards/injuries.js';
 import { objectiveLive, knownMonster } from './objectives/scripts.js';
-import { onSiteEnter, crossingBlocked, suffocate, destroyAnchor, holdRound, pickUpHere, itemLabel } from './objectives/verbs.js';
+import { onSiteEnter, crossingBlocked, suffocate, relightHere, destroyAnchor, holdRound, pickUpHere, itemLabel } from './objectives/verbs.js';
 import { siteOf, siteLabel } from '../core/sites.js';
 import { craft } from './obolcraft.js';
 import { refreshThreat, onPlayerEnters, setupVictims } from './monsterTurn.js';
@@ -365,6 +365,7 @@ function applyActionNow(state, board, action) {
       startOfTurn(state, eventCtx(state));
       // Standing on something dropped (the Cosor after Unholy Burn): pick it up, once allowed.
       pickUpHere(state, pl, pl.pos, (text) => { log(state, text); events.push({ type: 'objStep', seat: pl.seat, cell: pl.pos, text }); }, { burntOnly: true });
+      relightHere(state, board, pl, { state, log, randInt }, events);   // Shadow People: starting on the candle stand
       state.pool = Array.from({ length: lim.dice }, () => ({ kind: 'black', v: d6(state) }));
       state.slots = [];
       state.defSlots = [];
@@ -437,6 +438,7 @@ function applyActionNow(state, board, action) {
       state.roll = fresh.total;
       state.steps = state.roll;
       curPlayer(state).prev = -1;
+      state.moveN = (state.moveN ?? 0) + 1;   // each move counts on its own (Umbral Stab: once a move)
       log(state, `${who(state)} moves ${state.roll} (${fresh.dice}).`);
       state.phase = 'moving';
       advance(state, board, events);
@@ -1117,6 +1119,7 @@ function endTurn(state, board, events) {
     log(state, `Lightning Storm: ${who(state)} ends the turn outside and flips a coin: ${heads ? 'heads, the lightning misses' : 'tails'}.`);
     if (!heads) applyDamage(state, board, pl, 'P', 1 + randInt(state, 6), { log, source: 'The lightning' }, events);
   }
+  relightHere(state, board, pl, { state, log, randInt }, events); // Shadow People: ending the turn on the stand
   suffocate(state, board, pl, { state, log, randInt }, events);   // Shadow People: a lit candle in the dark
   const left = unusedDice(state);
   pl.lastMove = state.pool.filter((d) => d.spent).map((d) => ({ ...d })); // for Exhaust (Movement die)

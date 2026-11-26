@@ -172,11 +172,13 @@ export const MONSTER_TEXT = {
     rules: [
       'No single body: it fills all the darkness on the map.',
       'Every Defense die is exhausted once it is used.',
+      'A lit candle gives its carrier +1 Defense.',
+      'Candles never go out inside the Church; starting or ending your turn on the candle stand relights yours.',
     ],
-    goal: 'Light the Dark Room: carry lit candles from the Church {9} to the Lair. 4 candles (2 with one or two players).',
+    goal: 'Light the Dark Room: carry lit candles from the Church {9} to the Lair, one per investigator.',
     says: {
-      'Umbral Stab': 'Attacks for 🎲 whenever a player steps into a lit space.',
-      'Suffocating Darkness': 'A player with a lit candle who stops in the dark flips a coin. Tails: it goes out.',
+      'Umbral Stab': 'Attacks for 🎲 the first time a player steps into a lit space on each move.',
+      'Suffocating Darkness': 'A player with a lit candle who ends their turn in the dark flips a coin. Tails: it goes out.',
     },
     track: ['Discard Fire: avoid one attack', 'Discard Fire: keep a candle lit', 'Discard Crystal: lit spaces are safe until your next turn'],
   },

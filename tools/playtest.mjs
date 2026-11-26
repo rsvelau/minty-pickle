@@ -16,6 +16,7 @@
 // monster off the board, NaN health, health above its maximum.
 import { readFileSync } from 'fs';
 import { gridFromMap } from '../src/core/mapFormat.js';
+import { parseEdgeKey } from '../src/core/state.js';
 import { createBoard } from '../src/game/board.js';
 import { newGame, applyAction, unlockedFn } from '../src/game/rules.js';
 import { MONSTER_CARDS, MONSTER_BY_ID } from '../src/game/cards/monsters.js';
@@ -174,7 +175,13 @@ function makeBot(state, board) {
     if (nearest(pl.pos, gl)) return gl;
     const used = new Set(state.used ?? []);
     const keys = g.cells.map((c, i) => (c.marker === 'key' && !used.has(i) ? i : -1)).filter((i) => i >= 0);
-    return keys.length && nearest(pl.pos, keys) ? keys : gl;
+    if (keys.length && nearest(pl.pos, keys)) return keys;
+    // Shut in by a blocked door (Nailed Shut): go and stand beside it to force it with a 6.
+    const beside = Object.entries(state.doors ?? {}).filter(([, v]) => v === 'blocked').flatMap(([k]) => {
+      const { o, x, y } = parseEdgeKey(k);
+      return (o === 'v' ? [[x - 1, y], [x, y]] : [[x, y - 1], [x, y]]).filter(([a, b]) => g.inBounds(a, b)).map(([a, b]) => g.index(a, b));
+    });
+    return beside.length && nearest(pl.pos, beside) ? beside : gl;
   };
 
   // One bot action for whoever must act. Returns the action (or null: end turn).
