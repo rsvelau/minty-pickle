@@ -422,11 +422,14 @@ export function createMonsterModels(terrainify) {
   };
 
   // An Adze fly swarm flying out to strike: a cloud of glowing motes.
-  function makeSwarm() {
+  // The Adze's fly swarm: a ghastly green cloud; `burning`: flaming orange
+  // (set alight by a Fire attack, heading back to the hive).
+  function makeSwarm({ burning = false } = {}) {
     const g = new THREE.Group();
     const flies = [];
+    const [a, b] = burning ? ['#ff7a1a', '#ffd04a'] : ['#7dff8a', '#c8ffb0'];
     for (let k = 0; k < 26; k++) {
-      const f = noRay(new THREE.Sprite(spriteMat(k % 3 ? '#d8ff70' : '#fff0a0', 0.95)));
+      const f = noRay(new THREE.Sprite(spriteMat(k % 3 ? a : b, 0.95)));
       f.scale.setScalar(m(0.16 + (k % 4) * 0.04));
       f.userData = { a: k * 2.39996, r: 0.25 + (k % 6) * 0.12, h: 0.6 + (k % 7) * 0.18, s: 2 + (k % 5) * 0.6 };
       g.add(f);

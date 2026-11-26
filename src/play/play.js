@@ -514,13 +514,23 @@ export function createPlay({
 
   // --- swarms in flight (Adze): a cloud where each one is, drifting on --------------------------
   const swarmClouds = new Map();   // swarm id -> cloud
+  const syncAt = new Map();        // where a re-coloured cloud picks up from
   function syncSwarms() {
     const live = new Map((g()?.swarms ?? []).map((sw) => [sw.id, sw]));
     for (const [id, c] of swarmClouds) if (!live.has(id)) { group.remove(c); swarmClouds.delete(id); }
     for (const [id, sw] of live) {
       if (!inBoard(sw.pos)) continue;
       let c = swarmClouds.get(id);
-      if (!c) { c = models.makeSwarm(); c.userData.goal = centreOf(sw.pos); c.position.copy(c.userData.goal); group.add(c); swarmClouds.set(id, c); }
+      // Green; orange once alight (a new cloud where the old one was).
+      if (c && !!c.userData.burning !== !!sw.burning) { group.remove(c); swarmClouds.delete(id); syncAt.set(id, c.position.clone()); c = null; }
+      if (!c) {
+        c = models.makeSwarm({ burning: !!sw.burning });
+        c.userData.burning = !!sw.burning;
+        c.userData.goal = centreOf(sw.pos);
+        c.position.copy(syncAt.get(id) ?? c.userData.goal);
+        syncAt.delete(id);
+        group.add(c); swarmClouds.set(id, c);
+      }
       c.userData.goal = centreOf(sw.pos);
     }
   }

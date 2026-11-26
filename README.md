@@ -995,9 +995,12 @@ player closest to the heirloom; on a roof she's out of Close range; Keen only re
 heirloom (a signed ring) is picked up at the Funeral Parlor and set down from Team (Set down); brought to
 the Unmarked Grave (any Objective marker on a cemetery space, or one set to that site), it defeats her at once. Adze: its
 victims come out as soon as the team knows it's the Adze (all its evidence, or named right), or at midnight;
-the turn it rises its swarms only gather; then each swarm flies from the Lair to its victim (walls stop it,
-nothing else) at a speed that reaches the farthest victim in two turns, shown as a cloud on the board, and
-strikes when it arrives (on the nearest living victim if its own is dead); a victim survives the first hit
+the turn it rises its swarms only gather; then each swarm flies from the Lair 6 spaces a turn toward its
+victim (walls stop it, nothing else; one swarm per victim at a time, so a second one goes after another
+victim), shown as a ghastly green cloud on the board; it settles right beside its victim and strikes on the
+Adze's next turn (on the nearest living victim if its own has died); a Fire attack of 5+ damage on a swarm
+(Skills lists swarms in range as targets) sets it alight, flaming orange, and it flies back to the hive and
+burns the Nest for 3 piercing damage; a victim survives the first hit
 that gets through (wounded) and dies to the second; a victim's death costs everyone one die × the dead. Redcap: toughness-ignoring (Piercing) hits can't kill it.
 Monster heals now really heal.
 

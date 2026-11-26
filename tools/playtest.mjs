@@ -25,7 +25,7 @@ import { choicesFor } from '../src/game/eventPlay.js';
 import { scriptOf, mapSites, knownMonster } from '../src/game/objectives/scripts.js';
 import { sixToSpend } from '../src/game/objectives/verbs.js';
 import { matchesEvidence } from '../src/game/mystery.js';
-import { toughnessOf } from '../src/game/equipmentPlay.js';
+import { toughnessOf, targetsFor } from '../src/game/equipmentPlay.js';
 import { checkRequirement } from '../src/game/cards/requirements.js';
 
 // TUNE='{"werewolf":{"toughness":3}}': try card changes in this run only (hp,
@@ -264,6 +264,19 @@ function makeBot(state, board) {
   // worth extra (it advances the weakness track), one-die weapons with the highest die.
   function bestAttack(pl, ready) {
     let best = null;
+    // Adze: set a swarm alight with Fire 5+ (it turns back and burns the Nest).
+    for (const e of ready) {
+      const a = e.card.abilities[e.ability];
+      if (e.item === 'cosor' || a.kind !== 'fire' || a.fx?.dmg === undefined) continue;
+      const sw = targetsFor(state, board, pl, a).find((t) => t.swarm !== undefined);
+      if (!sw) continue;
+      const free = state.pool.map((d, i) => ({ ...d, i })).filter((d) => !d.spent && !state.slots.includes(d.i) && !state.defSlots.includes(d.i)).sort((x, y) => y.v - x.v);
+      const dice = free.slice(0, a.dice).map((d) => d.i);
+      if (dice.length < a.dice || !checkRequirement(a.req, dice.map((n) => state.pool[n].v), {})) continue;
+      const vals = dice.map((n) => state.pool[n].v);
+      const raw = a.fx.dmg === 'die' ? vals[0] : a.fx.dmg === 'sum' ? vals.reduce((x, y) => x + y, 0) : a.fx.dmg;
+      if (raw >= 5) return { ...e.action, dice, target: { swarm: sw.swarm } };
+    }
     for (const e of ready) {
       const a = e.card.abilities[e.ability];
       const fx = a.fx ?? {};

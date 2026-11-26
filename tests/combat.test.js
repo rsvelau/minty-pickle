@@ -1,5 +1,6 @@
 // Defense, injuries, death, and telegraphed monster actions.
 import { test } from 'node:test';
+import { EQUIPMENT_BY_ID } from '../src/game/cards/equipment.js';
 import assert from 'node:assert/strict';
 import { GridState } from '../src/core/state.js';
 import { createBoard } from '../src/game/board.js';
@@ -227,6 +228,12 @@ const adzeGame = (seed = 4) => {
   return { g, board, state, act: (a) => applyAction(state, board, { ...a, seat: 0 }) };
 };
 const victimAction = (n, ops) => ({ roll: n, ability: 0, name: 'Hotel Victim', kind: 'spiritual', text: '', ops, unknown: [] });
+// A swarm already settled beside victim `v`: it strikes on the Adze's next turn.
+const settled = (state, g, v, dmg, { exhaust = false, n = 1 } = {}) => {
+  const { x, y } = g.coords(v.cell);
+  state.swarms = [...(state.swarms ?? []), ...Array.from({ length: n }, (_, k) => ({ id: `t${k}`, victim: v.id, pos: g.index(x, y - 1), dmg: { fixed: dmg }, type: 'S', exhaust, ready: true }))];
+  state.monsters[0].intents = [];
+};
 
 test('the Adze’s three victims lie at the Hotel, the Bar and the Hospital', () => {
   const { g, state } = adzeGame();
@@ -238,14 +245,15 @@ test('the Adze’s three victims lie at the Hotel, the Bar and the Hospital', ()
 });
 
 test('an undefended victim dies and every player suffers a Global Attack', () => {
-  const { state, act } = adzeGame();
-  state.npcs.find((v) => v.target === 1).wounded = true;      // already hurt once
-  state.monsters[0].intents = [victimAction(1, [{ op: 'attack', dmg: { fixed: 4 }, target: 1 }])];
+  const { g, state, act } = adzeGame();
+  const v = state.npcs.find((x) => x.target === 1);
+  v.wounded = true;                                          // already hurt once
+  settled(state, g, v, 4);
   act({ type: 'roll' });
   const r = act({ type: 'end' });
   const hit = r.events.find((e) => e.type === 'npcAttacked');
   assert.equal(hit.outcome, 'killed');
-  assert.equal(state.npcs.find((v) => v.target === 1).alive, false);
+  assert.equal(v.alive, false);
   assert.ok(r.events.some((e) => e.type === 'damage' && e.seat === 0), 'global attack on the players');
 });
 
@@ -253,7 +261,7 @@ test('a player in Close range with enough defense saves the victim; Exhaust then
   const { g, state, act } = adzeGame();
   const v = state.npcs.find((x) => x.target === 1);
   const pl = state.players[0];
-  state.monsters[0].intents = [victimAction(1, [{ op: 'attack', dmg: { fixed: 3 }, target: 1 }, { op: 'exhaust', what: 'defense' }])];
+  settled(state, g, v, 3, { exhaust: true });
   act({ type: 'roll' });
   const { x, y } = g.coords(v.cell);
   pl.pos = g.index(x + 1, y + 1);              // diagonal: Close range
@@ -353,9 +361,9 @@ test('every attack wears down what defense is left: 6 blocks a 3, leaving 3, so 
 test('defending a victim wears your defense down too', () => {
   const { g, state, act } = adzeGame();
   const v = state.npcs.find((x) => x.target === 1);
-  v.wounded = true;
   const pl = state.players[0];
-  state.monsters[0].intents = [victimAction(1, [{ op: 'attack', dmg: { fixed: 3 }, target: 1 }, { op: 'attack', dmg: { fixed: 3 }, target: 1 }])];
+  v.wounded = true;
+  settled(state, g, v, 3, { n: 2 });
   act({ type: 'roll' });
   const { x, y } = g.coords(v.cell);
   pl.pos = g.index(x + 1, y + 1);              // Close range
@@ -369,33 +377,39 @@ test('defending a victim wears your defense down too', () => {
   assert.equal(hits[1].defense, 2);
 });
 
-test('Adze: victims are out as soon as it is identified; a round of gathering; swarms take up to two turns; a victim survives one hit', async () => {
-  const { setupVictims } = await import('../src/game/monsterTurn.js');
+test('Adze: victims out when identified; a gathering turn; one swarm per victim, 6 a turn, settles beside, strikes next turn', async () => {
+  const { SWARM_SPEED } = await import('../src/game/monsterTurn.js');
+  assert.equal(SWARM_SPEED, 6);
   const g = townWithBuildings();
   const board = createBoard(g);
   const { state } = newGame(board, { seed: 4, startMode: 'midnight', config: { players: 1, monsterPick: 'adze' } });
   const mo = state.monsters[0];
   assert.ok(mo.gathering, 'it rises gathering its swarms');
-  mo.intents = [victimAction(1, [{ op: 'attack', dmg: { fixed: 9 }, target: 13 }])];
   const act = (a) => applyAction(state, board, { ...a, seat: 0 });
+  mo.intents = [victimAction(1, [{ op: 'attack', dmg: { fixed: 9 }, target: 13 }])];
   act({ type: 'roll' });
   let r = act({ type: 'end' });
   assert.ok(!r.events.some((e) => e.type === 'npcAttacked'), 'the first turn: no swarm');
-  assert.ok(!mo.gathering);
-  // Next turn a swarm sets off for the farthest victim: there in at most two turns.
+  // Two swarms for the same victim: the second goes after another one.
   mo.pos = g.index(0, 9);
-  state.swarmSpeed = 0;
-  mo.intents = [victimAction(5, [{ op: 'attack', dmg: { fixed: 9 }, target: 13 }])];
+  mo.intents = [victimAction(5, [{ op: 'attack', dmg: { fixed: 9 }, target: 13 }]), victimAction(5, [{ op: 'attack', dmg: { fixed: 9 }, target: 13 }])];
   act({ type: 'roll' });
   r = act({ type: 'end' });
-  assert.equal(state.swarms.length, 1, 'in the air');
-  assert.ok(!r.events.some((e) => e.type === 'npcAttacked'));
-  mo.intents = [victimAction(2, [])];
+  assert.equal(state.swarms.length, 2);
+  assert.notEqual(state.swarms[0].victim, state.swarms[1].victim, 'one swarm per victim');
+  const far = state.swarms.find((sw) => sw.victim === 'v13');
+  assert.equal(far.pos, g.index(6, 9), '6 spaces');
+  // Fly on until it settles beside the victim; it strikes only on the turn after.
+  let turns = 0;
+  while (!far.ready && turns < 5) { mo.intents = []; act({ type: 'roll' }); act({ type: 'end' }); turns++; }
+  const v = state.npcs.find((x) => x.id === 'v13');
+  assert.ok(far.ready);
+  assert.equal(Math.max(Math.abs(g.coords(far.pos).x - g.coords(v.cell).x), Math.abs(g.coords(far.pos).y - g.coords(v.cell).y)), 1, 'right beside');
+  assert.ok(v.alive && !v.wounded, 'not yet');
+  mo.intents = [];
   act({ type: 'roll' });
   r = act({ type: 'end' });
-  const hit = r.events.find((e) => e.type === 'npcAttacked');
-  assert.equal(hit?.outcome, 'wounded', 'arrived on the second turn; the victim survives the first hit');
-  assert.equal(state.swarms.length, 0);
+  assert.equal(r.events.find((e) => e.type === 'npcAttacked' && e.npc === 'v13')?.outcome, 'wounded', 'the next turn; survives the first hit');
   // Before midnight: identified by its evidence, its victims come out.
   const g2 = townWithBuildings();
   const b2 = createBoard(g2);
@@ -404,5 +418,28 @@ test('Adze: victims are out as soon as it is identified; a round of gathering; s
   s2.mystery.identified = true;
   assert.ok(applyAction(s2, b2, { type: 'roll', seat: 0 }).ok);
   assert.equal(s2.npcs.length, 3, 'out as soon as the team knows');
-  void setupVictims;
+});
+
+test('Adze: a Fire attack of 5+ sets a swarm alight; it flies back and burns the Nest for 3, through its toughness', () => {
+  const { g, board, state, act } = adzeGame();
+  const pl = state.players[0];
+  const mo = state.monsters[0];
+  const v = state.npcs.find((x) => x.target === 13);
+  state.swarms = [{ id: 'f1', victim: v.id, pos: g.index(5, 5), dmg: { fixed: 4 }, type: 'S', exhaust: true }];
+  mo.pos = g.index(1, 5);
+  pl.pos = g.index(5, 4);                     // Close range
+  pl.inventory.equipment = [{ id: 'dragons-breath-shotgun' }];
+  act({ type: 'roll' });
+  state.pool = [{ kind: 'black', v: 6 }, { kind: 'black', v: 6 }]; state.slots = []; state.defSlots = [];
+  const card = EQUIPMENT_BY_ID['dragons-breath-shotgun'];
+  const k = card.abilities.findIndex((a) => a.kind === 'fire' && a.fx?.dmg !== undefined);
+  const r = act({ type: 'use', item: 0, ability: k, dice: card.abilities[k].dice === 2 ? [0, 1] : [0], target: { swarm: 'f1' } });
+  assert.ok(r.ok, r.error);
+  assert.ok(state.swarms[0].burning);
+  const hp = mo.hp;
+  mo.intents = [];
+  act({ type: 'end' });
+  assert.equal(state.swarms.length, 0, 'back in the hive');
+  assert.equal(mo.hp, hp - 3, '3 piercing');
+  void board;
 });

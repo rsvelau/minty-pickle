@@ -69,12 +69,17 @@ export function targetsFor(state, board, pl, ability) {
   const reach = lunges(pl, ability) ? RANGE.mid : REACH[ability.range] ?? RANGE.close;
   if (fx.target === 'monster') {
     const min = MIN_REACH[ability.range] ?? 0;
-    return state.monsters.filter((m) => {
+    // Adze: a Fire attack can be turned on a swarm in the air (5+ sets it alight).
+    const swarms = ability.kind === 'fire' && fx.dmg !== undefined
+      ? (state.swarms ?? []).filter((sw) => !sw.burning && cellRange(board.grid, pl.pos, sw.pos) <= reach && cellRange(board.grid, pl.pos, sw.pos) >= min)
+        .map((sw) => ({ swarm: sw.id, name: `Swarm (after the ${state.npcs?.find((v) => v.id === sw.victim)?.name ?? 'victim'})` }))
+      : [];
+    return [...state.monsters.filter((m) => {
       // Banshee on a rooftop: out of Close range.
       const d = Math.max(cellRange(board.grid, pl.pos, m.pos), m.perched ? RANGE.close + 1 : 0);
       return MONSTER_BY_ID[m.kind] && d <= reach && d >= min;
     })
-      .map((m) => ({ monster: m.id, name: MONSTER_BY_ID[m.kind].name }));
+      .map((m) => ({ monster: m.id, name: MONSTER_BY_ID[m.kind].name })), ...swarms];
   }
   if (fx.target === 'ally') {
     return state.players.filter((p) => !p.dead && (p === pl || cellRange(board.grid, pl.pos, p.pos) <= Math.max(reach, 0)))
@@ -129,12 +134,14 @@ export function useEquipment(state, board, pl, action, ctx, events) {
   const values = dice.map((n) => state.pool[n].v);
 
   // Target.
-  let monster = null, ally = null, door = null, spot = -1, onto = null;
+  let monster = null, ally = null, door = null, spot = -1, onto = null, swarm = null;
   if (fx.target === 'monster') {
     const options = targetsFor(state, board, pl, a);
-    const pick = options.find((o) => o.monster === action.target?.monster) ?? (options.length === 1 ? options[0] : null);
+    const pick = options.find((o) => (o.monster !== undefined && o.monster === action.target?.monster) || (o.swarm !== undefined && o.swarm === action.target?.swarm))
+      ?? (options.length === 1 ? options[0] : null);
     if (!pick) return options.length ? 'choose a target' : 'no monster in range';
-    monster = state.monsters.find((m) => m.id === pick.monster);
+    if (pick.swarm !== undefined) swarm = state.swarms.find((sw) => sw.id === pick.swarm);
+    else monster = state.monsters.find((m) => m.id === pick.monster);
   } else if (fx.target === 'ally') {
     const options = targetsFor(state, board, pl, a);
     const pick = options.find((o) => o.seat === action.target?.seat) ?? options.find((o) => o.seat === pl.seat);
@@ -202,6 +209,17 @@ export function useEquipment(state, board, pl, action, ctx, events) {
       if (a.kind && mcard.weakness.includes(a.kind)) parts.push(...weaknessHit(state, board, monster, mcard, ctx, events, later));
       checkDefeat(state, board, monster, mcard, ctx, events);
     }
+  }
+  if (swarm) {
+    // A Fire attack of 5+ sets the swarm alight: it turns back to the hive, burning.
+    let dmg = fx.dmg === 'die' ? values[0] ?? 0 : fx.dmg === 'sum' ? values.reduce((x, y) => x + y, 0) : fx.dmg;
+    if (pl.mods?.doubleAttack) dmg *= 2;
+    if (pl.mindset === 'reckless' || pl.mindset === 'mighty') dmg *= 2;
+    if (dmg >= 5) {
+      swarm.burning = true;
+      parts.push(`${dmg} Fire: the swarm bursts into flame and turns back for the hive`);
+      events.push({ type: 'swarms' });
+    } else parts.push(`${dmg} Fire: not enough to set the swarm alight (it takes 5)`);
   }
   if (ally) {
     if (fx.doubleAttack) { ally.mods = { ...(ally.mods ?? {}), doubleAttack: true }; parts.push(`${ally.name}'s attacks deal double this turn`); }
@@ -314,7 +332,7 @@ export function useEquipment(state, board, pl, action, ctx, events) {
   // 🔗 breaks; Mighty: any weapon breaks after a single use.
   if (a.limit === 'breaks' || (pl.mindset === 'mighty' && fx.dmg !== undefined)) { pl.inventory.equipment.splice(action.item | 0, 1); broke = true; }
 
-  const text = `${who} uses ${card.name}: ${a.name}${values.length ? ` (${values.join(' + ')})` : ''}${monster ? ` on the ${MONSTER_BY_ID[monster.kind].name}` : ''}${ally && ally !== pl ? ` on ${ally.name}` : ''}. ${parts.filter(Boolean).join('; ')}.${broke ? ` The ${card.name} is spent and discarded.` : ''}`;
+  const text = `${who} uses ${card.name}: ${a.name}${values.length ? ` (${values.join(' + ')})` : ''}${monster ? ` on the ${MONSTER_BY_ID[monster.kind].name}` : swarm ? ' on a swarm' : ''}${ally && ally !== pl ? ` on ${ally.name}` : ''}. ${parts.filter(Boolean).join('; ')}.${broke ? ` The ${card.name} is spent and discarded.` : ''}`;
   ctx.log(state, text);
   events.push({ type: 'equipUse', seat: pl.seat, item: card.id, ability: a.name, monster: monster?.id ?? null, text, hp: monster?.hp ?? null, broke });
   for (const f of later) f();

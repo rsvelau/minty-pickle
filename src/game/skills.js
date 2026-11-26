@@ -95,7 +95,7 @@ export function skillStatus(state, board, pl) {
       // (keeps the high dice for moving).
       let dice = [];
       let target = null;
-      const tpay = (t) => (t.monster !== undefined ? { monster: t.monster } : t.edge !== undefined ? { edge: t.edge } : t.cell !== undefined ? { cell: t.cell } : { seat: t.seat });
+      const tpay = (t) => (t.monster !== undefined ? { monster: t.monster } : t.swarm !== undefined ? { swarm: t.swarm } : t.edge !== undefined ? { edge: t.edge } : t.cell !== undefined ? { cell: t.cell } : { seat: t.seat });
       const tryTargets = fx.target === 'ally' ? [options.find((o) => o.seat === pl.seat) ?? options[0]] : options.length ? options.slice(0, 8) : [null];
       if (a.dice) {
         if (free.length < a.dice) {

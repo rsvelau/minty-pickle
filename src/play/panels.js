@@ -926,8 +926,8 @@ function renderUseSheet(body, pl, items) {
   const reqOk = useUI.dice.length === a.dice && checkRequirement(a.req, values, { targetDie: mon ? actionRoll(mon) : null });
   const targeted = fx.target === 'monster' || fx.target === 'ally' || fx.target === 'either' || !!fx.door;
   // A target's id and what the rules expect for it.
-  const tid = (t) => t.monster ?? t.seat ?? t.edge;
-  const tpay = (t) => (t.monster ? { monster: t.monster } : t.edge ? { edge: t.edge } : { seat: t.seat });
+  const tid = (t) => t.monster ?? t.swarm ?? t.seat ?? t.edge;
+  const tpay = (t) => (t.monster ? { monster: t.monster } : t.swarm ? { swarm: t.swarm } : t.edge ? { edge: t.edge } : { seat: t.seat });
   const dieChip = (d, on, attr) => `<button type="button" class="use-die${on ? ' on' : ''}" ${attr}="${d.n}">${d.v}<small>${d.kind === 'white' ? 'white' : ''}</small></button>`;
   body.innerHTML = `<div class="use-sheet">
     <button type="button" class="screen-back use-back">‹ Skills</button>
@@ -939,7 +939,7 @@ function renderUseSheet(body, pl, items) {
     ${fx.raise ? `<p class="use-label">Raise ${fx.raise === 1 ? 'one other die' : `${fx.raise} other dice`} to ${fx.to}</p>
       <div class="use-dice">${free.filter((d) => !useUI.dice.includes(d.n)).map((d) => dieChip(d, useUI.raise.includes(d.n), 'data-raise')).join('')}</div>` : ''}
     ${targeted ? `<p class="use-label">${fx.door ? 'Door' : 'Target'}</p>
-      <div class="use-targets">${targets.map((t) => `<button type="button" class="${(useUI.target ? tid(t) === (useUI.target.monster ?? useUI.target.seat ?? useUI.target.edge) : t === targets[0]) ? 'on' : ''}" data-target='${JSON.stringify(tpay(t))}'>${esc(t.name)}</button>`).join('') || `<span class="inv-empty">${fx.door ? (fx.door === 'breach' ? 'No door next to you to breach.' : 'No door next to you to shut.') : fx.target === 'monster' ? `No monster in ${RANGE_LABEL[a.range]} range.` : 'No one in range.'}</span>`}</div>` : ''}
+      <div class="use-targets">${targets.map((t) => `<button type="button" class="${(useUI.target ? tid(t) === (useUI.target.monster ?? useUI.target.swarm ?? useUI.target.seat ?? useUI.target.edge) : t === targets[0]) ? 'on' : ''}" data-target='${JSON.stringify(tpay(t))}'>${esc(t.name)}</button>`).join('') || `<span class="inv-empty">${fx.door ? (fx.door === 'breach' ? 'No door next to you to breach.' : 'No door next to you to shut.') : fx.target === 'monster' ? `No monster in ${RANGE_LABEL[a.range]} range.` : 'No one in range.'}</span>`}</div>` : ''}
     ${fx.manual ? '<p class="use-label">✋ Paid for and logged here; resolve its effect at the table.</p>' : ''}
     <p class="use-status ${reqOk ? 'ok' : ''}">${useUI.error ? esc(useUI.error) : a.dice ? (reqOk ? '✓ Ready' : useUI.dice.length === a.dice ? '✕ These dice don’t meet the requirement' : '') : ''}</p>
     <button type="button" class="use-go" ${(a.dice && !reqOk) || (targeted && !targets.length) ? 'disabled' : ''}>Use ${esc(a.name)}</button>

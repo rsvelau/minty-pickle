@@ -19,7 +19,7 @@ import { cellLabel } from '../core/state.js';
 import { applyDamage, alive, defenseValue, killPlayer } from './combat.js';
 import { RANGE, cellRange } from './cards/injuries.js';
 import { buildingOf } from '../core/mapCheck.js'; // the same grouping the map check uses
-import { endMonsterTurn, hurtMonster } from './equipmentPlay.js';
+import { endMonsterTurn, hurtMonster, strikeMonster } from './equipmentPlay.js';
 import { monsterEnters, monsterDoorBanned } from './eventPlay.js';
 import { anyDoor, blockDoor, buildingDoors } from './doors.js';
 import { edgeKey } from '../core/state.js';
@@ -623,19 +623,22 @@ const livingVictims = (state) => (state.npcs ?? []).filter((v) => v.alive);
 // otherwise the victim dies. Either way the defender's defense wears down by
 // what it took. Returns the defender (if any).
 // --- Swarms in flight (Adze) ---------------------------------------------------------
-// A swarm leaves the Lair toward its victim and flies `swarmSpeed` spaces each
-// monster turn (walls, windows and locked doors stop it; nothing else does),
-// fast enough to reach the farthest victim in two turns. It strikes when it
-// gets there; if that victim is already dead it turns on the nearest living one.
-//   state.swarms = [{ id, victim, pos, dmg, type, exhaust, name }]
-function swarmSpeed(state, board, from) {
-  if (state.swarmSpeed) return state.swarmSpeed;
-  const far = Math.max(1, ...livingVictims(state).map((v) => (swarmRouteTo(board, from, new Set([v.cell])) ?? [from, v.cell]).length - 1));
-  return (state.swarmSpeed = Math.ceil(far / 2));
-}
+// A swarm leaves the Lair toward its victim and flies SWARM_SPEED spaces each
+// monster turn (walls, windows and locked doors stop it; nothing else does).
+// It settles right beside its victim and strikes on the Adze's next turn (if
+// that victim is dead by then, it heads for the nearest living one). One swarm
+// per victim at a time. A Fire attack of 5+ sets a swarm alight
+// (equipmentPlay.js): it flies back to the hive and, on arrival, burns the Nest
+// for 3 piercing damage.
+//   state.swarms = [{ id, victim, pos, dmg, type, exhaust, name, ready?, burning? }]
+export const SWARM_SPEED = 6;
+export const SWARM_BURN = 3;
 function launchSwarm(state, board, monster, card, intent, o, ctx, events) {
   const victims = livingVictims(state);
-  const v = victims.find((x) => x.target === o.target) ?? victims[0];
+  const hunted = new Set((state.swarms ?? []).filter((sw) => !sw.burning).map((sw) => sw.victim));
+  // Its own victim if no swarm is after them already; else another one no swarm is after.
+  const v = [victims.find((x) => x.target === o.target), ...victims].find((x) => x && !hunted.has(x.id));
+  if (!v) { ctx.log(state, `${card.name}: every victim already has a swarm on the way.`); return; }
   const sw = {
     id: `s${(state.swarmCount = (state.swarmCount ?? 0) + 1)}`, victim: v.id, pos: monster.pos, dmg: o.dmg,
     type: KIND_TO_TYPE[intent.kind] ?? card.evidence.attack, exhaust: intent.ops.some((x) => x.op === 'exhaust'), name: intent.name,
@@ -644,28 +647,49 @@ function launchSwarm(state, board, monster, card, intent, o, ctx, events) {
   ctx.log(state, `The ${card.name} sends a swarm after the ${v.name}.`);
   flySwarm(state, board, monster, card, sw, ctx, events);
 }
-// Move one swarm on; it strikes if it arrives.
+// Move one swarm on (or, beside its victim since last turn, strike).
 function flySwarm(state, board, monster, card, sw, ctx, events) {
+  const drop = () => { state.swarms = state.swarms.filter((x) => x !== sw); events.push({ type: 'swarms' }); };
+  if (sw.burning) {
+    // Back to the hive, alight; there it burns the Nest.
+    const route = swarmRouteTo(board, sw.pos, new Set([monster.pos])) ?? [sw.pos, monster.pos];
+    const leg = route.slice(0, SWARM_SPEED + 1);
+    sw.pos = leg[leg.length - 1];
+    if (sw.pos !== monster.pos) { events.push({ type: 'swarms' }); return; }
+    drop();
+    ctx.log(state, `A burning swarm flies back into the hive.`);
+    strikeMonster(state, board, monster, SWARM_BURN, null, ctx, events);
+    return;
+  }
   let v = (state.npcs ?? []).find((x) => x.id === sw.victim && x.alive);
   if (!v) {
-    // Its victim is gone: the nearest living one.
-    const route = swarmRouteTo(board, sw.pos, new Set(livingVictims(state).map((x) => x.cell)));
-    v = route && livingVictims(state).find((x) => x.cell === route[route.length - 1]);
-    if (!v) { state.swarms = state.swarms.filter((x) => x !== sw); ctx.log(state, `A swarm of the ${card.name}'s finds no one left and scatters.`); events.push({ type: 'swarms' }); return; }
-    sw.victim = v.id;
+    // Its victim is gone: the nearest living one no other swarm is after.
+    const hunted = new Set(state.swarms.filter((x) => x !== sw && !x.burning).map((x) => x.victim));
+    const open = livingVictims(state).filter((x) => !hunted.has(x.id));
+    const route = swarmRouteTo(board, sw.pos, new Set(open.map((x) => x.cell)));
+    v = route && open.find((x) => x.cell === route[route.length - 1]);
+    if (!v) { drop(); ctx.log(state, `A swarm of the ${card.name}'s finds no one left to prey on and scatters.`); return; }
+    sw.victim = v.id; sw.ready = false;
   }
+  if (sw.ready && cellRange(board.grid, sw.pos, v.cell) <= 1) {
+    // Settled beside its victim last turn: it strikes now.
+    state.swarms = state.swarms.filter((x) => x !== sw);
+    events.push({ type: 'monsterSwarm', id: monster.id, path: [sw.pos, v.cell], npc: v.id, attack: sw.type });
+    const defender = attackVictim(state, board, monster, card, { kind: Object.keys(KIND_TO_TYPE).find((k) => KIND_TO_TYPE[k] === sw.type) }, { dmg: sw.dmg, victim: v }, ctx, events);
+    if (defender && sw.exhaust) exhaust(state, defender, 'defense', ctx, events);
+    return;
+  }
+  // Fly on, stopping right beside the victim.
   const route = swarmRouteTo(board, sw.pos, new Set([v.cell])) ?? [sw.pos, v.cell];
-  const speed = swarmSpeed(state, board, monster.pos);
-  const leg = route.slice(0, speed + 1);
+  const leg = route.slice(0, Math.min(SWARM_SPEED, route.length - 2) + 1);
   sw.pos = leg[leg.length - 1];
-  if (sw.pos !== v.cell) { events.push({ type: 'swarms' }); return; }
-  // Arrived: it strikes.
-  state.swarms = state.swarms.filter((x) => x !== sw);
-  events.push({ type: 'monsterSwarm', id: monster.id, path: leg, npc: v.id, attack: sw.type });
-  const defender = attackVictim(state, board, monster, card, { kind: Object.keys(KIND_TO_TYPE).find((k) => KIND_TO_TYPE[k] === sw.type) }, { dmg: sw.dmg, victim: v }, ctx, events);
-  if (defender && sw.exhaust) exhaust(state, defender, 'defense', ctx, events);
+  if (route.length - 1 - (leg.length - 1) <= 1) {
+    sw.ready = true;
+    ctx.log(state, `A swarm settles beside the ${v.name}: it strikes on the ${card.name}'s next turn.`);
+  }
+  events.push({ type: 'swarms' });
 }
-// The Adze's turn begins: swarms already in the air fly on (and may strike).
+// The Adze's turn begins: swarms already out fly on, or strike.
 function flyOn(state, board, monster, card, ctx, events) {
   for (const sw of [...(state.swarms ?? [])]) flySwarm(state, board, monster, card, sw, ctx, events);
 }
