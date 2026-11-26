@@ -204,3 +204,9 @@ to heal. Second pass: 25 of 2,080.
 | Survivors have nothing that can hurt the monster, and it can't kill them through their Defense | 17 | Redcap 7, Wendigo 6, Adze (2p) 3, Skinwalker 1 |
 | A one-of-a-kind objective item dies with its carrier | 7 | White Lady 7 (the Gown, Ring or Finger Bone) |
 | Other | 1 | Shadow People |
+
+## After the night limit and Care Packages (expert bot, 40 games × 4 team sizes × 13 monsters)
+
+Undecided: 0 of 2,080 (was 25). Wins 1,365, losses 675, of which 67 (3%) are Lost in the night: Adze solo 12,
+Strigoi 18 across sizes, White Lady 12, Redcap 8, Shadow People 6, others 1-4. Adze solo fell to 2 wins of 40
+(was 14 before the limit: its solo games ran about 41 rounds).
