@@ -213,3 +213,21 @@ test('Shadow People: Fire undoes an Umbral Stab; Crystal keeps lit spaces safe u
   onPlayerEnters(s.state, s.board, s.pl, lit, s.ctx, ev);
   assert.ok(!ev.some((e) => e.type === 'damage'), 'safe');
 });
+
+test('Ushi-Oni Run Down: charges 5 through the nearest player and on; everyone in its path takes a die', () => {
+  const s = setup('ushi-oni');
+  s.monster.pos = s.g.index(7, 5);                            // P1 at 10, P2 at 12
+  s.pl.defense = []; s.mate.defense = [];
+  s.turn('Run Down');
+  assert.equal(s.monster.pos, s.g.index(12, 5), 'through P1 and on, 5 spaces');
+  assert.equal(s.pl.injuries.P, 1, 'P1 trampled');
+  assert.equal(s.mate.injuries.P, 1, 'P2 at the end of the charge too');
+});
+
+test('Run Down: no one in the path, no one hurt', () => {
+  const s = setup('ushi-oni');
+  s.monster.pos = s.g.index(1, 5);                            // P1 is 9 away: the charge stops short
+  s.turn('Run Down');
+  assert.equal(s.monster.pos, s.g.index(6, 5));
+  assert.equal(s.pl.injuries.P + s.mate.injuries.P, 0);
+});

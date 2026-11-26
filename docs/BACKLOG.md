@@ -61,7 +61,7 @@ need going through with the designer.
 - [ ] **Lure** (Wendigo: "Lure causes players to move towards Wendigo")
 - [ ] **Consume** (Wendigo: Feed, Consume (die); "Consume heals equal to damage")
 - [ ] **Trap** (Barghest: Shadow Trap: Teleport (nearest lightsource) and Trap (🎲🎲))
-- [ ] **Trample** (Ushi-Oni: Run Down, Trample (die, 5))
+- [x] **Trample** (Ushi-Oni: Run Down: a 5-space charge at the nearest player, straight through them and on; everyone in its path takes a die)
 - [x] **Block / Unblock (All Doors)** (White Lady: Infatuation, Regret)
 - [x] **Target** (White Lady: Wrath; Poltergeist: Heave)
 - [ ] **LoS Attack** (Barghest: Death Gaze, line of sight)

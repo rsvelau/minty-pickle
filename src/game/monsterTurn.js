@@ -163,11 +163,13 @@ export function parseAbility(text) {
     }
   }
   if (rit) ops.push({ op: 'ritual', at: Number(rit[1]), dmg: damageSpec(rit[2]), _at: text.length });
-  // Trample (dmg, n): a charge, n spaces at the nearest player, then the damage (Ushi-Oni's Run Down).
+  // Trample (dmg, n): a charge of n spaces at the nearest player, through them
+  // and on in a straight line; everyone on a space it charges through takes
+  // the damage (Ushi-Oni's Run Down).
   const tr = /Trample \(([^,)]*),\s*(\d+)\)/.exec(text);
   if (tr) {
     ops.push({ op: 'pursue', n: Number(tr[2]), word: 'Trample', _at: tr.index });
-    ops.push({ op: 'attack', dmg: damageSpec(tr[1]), _at: tr.index + 1 });
+    ops.push({ op: 'trample', dmg: damageSpec(tr[1]), _at: tr.index + 1 });
     text = text.replace(tr[0], '');
   }
   // Target, Pin, Drop, appear, Block / Unblock (group 7, for the objective monsters).
@@ -239,6 +241,28 @@ function planMovement(state, board, monster, ops, ctx) {
       if (!t) continue;
       // Walk toward them, stopping next to them, or at a door it can't pass
       // (it may Bash it: see doorInPath).
+      if (o.word === 'Trample') {
+        // A charge: through the player it charges at and on, straight ahead,
+        // for all n spaces (or until something stops it).
+        let left = o.n;
+        for (const cell of t.path.slice(1)) {
+          if (!left || !canWalk(board, monster, pos, cell, state)) { left = left ? -1 : 0; break; }
+          steps.push(cell); pos = cell; left--;
+        }
+        const n = steps.length;
+        if (left > 0 && n) {
+          const a = board.grid.coords(n > 1 ? steps[n - 2] : monster.pos), b = board.grid.coords(pos);
+          const dx = Math.sign(b.x - a.x), dy = Math.sign(b.y - a.y);
+          for (; left > 0; left--) {
+            const c = board.grid.coords(pos);
+            if (!board.grid.inBounds(c.x + dx, c.y + dy)) break;
+            const cell = board.grid.index(c.x + dx, c.y + dy);
+            if (!canWalk(board, monster, pos, cell, state)) break;
+            steps.push(cell); pos = cell;
+          }
+        }
+        continue;
+      }
       for (const cell of t.path.slice(1, 1 + o.n)) {
         if (cell === t.pl.pos) break;
         if (!canWalk(board, monster, pos, cell, state)) break;
@@ -363,7 +387,9 @@ function predictVictims(state, board, monster, intents) {
   for (const intent of intents) {
     const type = KIND_TO_TYPE[intent.kind] ?? card?.evidence.attack;
     const before = new Set(seats);
-    pos = planMovement(state, board, { pos, kind: monster.kind, lure: monster.lure }, intent.ops, null).pos;
+    const from = pos;
+    const plan = planMovement(state, board, { pos, kind: monster.kind, lure: monster.lure }, intent.ops, null);
+    pos = plan.pos;
     const swarm = MONSTER_BY_ID[monster.kind]?.actsBy === 'swarm';
     for (const o of intent.ops) {
       if (o.op === 'attack' && swarm && o.target !== undefined) {
@@ -374,6 +400,8 @@ function predictVictims(state, board, monster, intents) {
       } else if (o.op === 'attack') {
         const t = closeTarget(state, board, pos, monster);
         if (t) seats.add(t.seat);
+      } else if (o.op === 'trample') {
+        for (const pl of trampled(state, board, monster, from, plan.steps)) seats.add(pl.seat);
       } else if (o.op === 'target') {
         const t = pickTarget(state, board, { ...monster, pos }, o.who);
         if (t) seats.add(t.seat);
@@ -387,6 +415,13 @@ function predictVictims(state, board, monster, intents) {
   }
   monster.dangerTypes = types; // seat -> damage types threatening them (P/M/S)
   return [...seats];
+}
+
+// Trample: who a charge along `steps` (cells) runs over: anyone standing on a
+// space it passes through or ends on.
+function trampled(state, board, monster, from, steps) {
+  const cells = new Set(steps.filter((st) => typeof st !== 'object'));
+  return targetable(state).filter((pl) => cells.has(pl.pos));
 }
 
 // Who an Area Attack from `pos` reaches: within its radius, or (inside) every
@@ -618,6 +653,7 @@ export function executeIntent(state, board, monster, ctx, events) {
     const source = `The ${card.name}'s ${intent.name}`;
     const opts = { log: ctx.log, source, ignoreLowest: demonic };
     // Move first (less if Bound, not at all if immobilized).
+    const startPos = monster.pos;
     const move = planMovement(state, board, monster, intent.ops, ctx);
     if (mods.moveDown) {
       // Bind / Gaffe: this turn's movement is reduced by the total.
@@ -691,6 +727,19 @@ export function executeIntent(state, board, monster, ctx, events) {
         aim = pickTarget(state, board, monster, o.who);
         if (aim) { hit = [aim]; ctx.log(state, `${source} singles out ${aim.name}${o.who === 'cosor' ? ', who holds the Cosor' : ''}.`); }
         else if (o.who !== 'cosor') ctx.log(state, `${source} finds no one to single out.`);   // no Cosor holder: it strikes up close
+        continue;
+      }
+      if (o.op === 'trample') {
+        // Run Down: everyone it charged through, and the one it charged at.
+        const victims = trampled(state, board, monster, startPos, move.steps);
+        if (!victims.length) continue;        // no one: stuck at a door, it bashes (below)
+        attacked = true;
+        hit = victims;
+        for (const pl of victims) {
+          events.push({ type: 'monsterAttack', id: monster.id, seat: pl.seat, cell: pl.pos, attack: type });
+          struck(state, monster, intent.name, pl, ctx, () => applyDamage(state, board, pl, type, roll(o.dmg), opts, events));
+        }
+        ctx.log(state, `${source} tramples ${victims.map((p) => p.name).join(', ')}.`);
         continue;
       }
       if (o.op === 'pull') {
