@@ -11,10 +11,11 @@ import { toast } from '../app/files.js';
 import { $ } from '../app/dom.js';
 import { craftUI, dmgIcon, hitText, injuryPips, markCaseNew, obolHTML, renderAsk, renderSacrifice, renderCasebook, renderIntent, renderInventory, renderTeam, renderSkillBadge, openStrike, renderScouting, renderRevealSheet, showCard, showObol, renderEventChoice } from './panels.js';
 import { objectiveLive } from '../game/objectives/scripts.js';
+import { memorialsLive, memorialCells } from '../game/objectives/verbs.js';
 import { feedUpdate, feedReset } from './feed.js';
 import { describeItem } from '../game/objectives/verbs.js';
 import { RANGE, cellRange } from '../game/cards/injuries.js';
-import { __set_markerHidden, __set_markerUsed, markers, refreshMarkers, refreshPropsAndWalls, visibleTop } from '../render/board.js';
+import { __set_markerHidden, __set_markerExtras, __set_markerUsed, markers, refreshMarkers, refreshPropsAndWalls, visibleTop } from '../render/board.js';
 import { camera, cellToWorld, controls, scene, wake } from '../render/scene.js';
 import { lightLevels } from '../render/tileLook.js';
 import { onGameUpdate } from '../app/gameShell.js';
@@ -89,6 +90,9 @@ export function init() {
   __set_markerUsed((i) => ui.tool === 'play' && play.state.shownUsed.has(i));
   // Objectives appear once the monster is known (midnight, or named early), and only its own sites.
   __set_markerHidden((i) => ui.tool === 'play' && grid.cells[i].marker === 'objective' && !objectiveLive(play.session.state ?? {}, grid, i));
+  // Shadow People: the Missing-person memorials become optional objectives
+  // (a pale blue flag): candles can be relit there.
+  __set_markerExtras(() => (ui.tool === 'play' && play.session?.state && memorialsLive(play.session.state) ? memorialCells(play.board).map((i) => ({ i, type: 'shrine' })) : []));
   $('#playRoll').addEventListener('click', () => play.roll());
   document.querySelectorAll('#trayTarget [data-to]').forEach((b) => b.addEventListener('click', () => { trayTarget = b.dataset.to; renderTray(); }));
 }
@@ -111,7 +115,7 @@ export function renderPlay() {
     idle: `On <b>${here}</b>. Roll to move.`,
     rolling: 'Rolling…',
     slotting: `Slot dice into up to <b>${s.maxSlots}</b> movement slots${s.lit ? ' (in light: extra slot open)' : ''}, then Move.`,
-    asking: `Investigation spot. Investigate? <b>${s.steps}</b> move${s.steps === 1 ? '' : 's'} left.`,
+    asking: `${s.ask?.relight ? 'A memorial. Relight your candle?' : s.ask?.anchor ? 'An anchor. Destroy it?' : 'Investigation spot. Investigate?'} <b>${s.steps}</b> move${s.steps === 1 ? '' : 's'} left.`,
     revealing: 'Evidence! Choose a face-down card to turn over.',
     eventing: 'An event: make your choice.',
     over: 'Everyone is dead. The night wins. Press Restart to play again.',
@@ -186,7 +190,7 @@ export function renderPlay() {
     slotting: s.pool.some((d) => d.spent) ? 'Slot more, adjust defense, or end turn' : `Slot dice · move <b>${play.slotTotal()}</b>`,
     moving: s.fast ? `Fast-forward ⏩ <b>${s.steps}</b> left` : `Running… <b>${s.steps}</b> left · hold to fast-forward`,
     choosing: `${s.stopReason ? `<b>${s.stopReason}</b> · ` : ''}Tap an arrow · <b>${s.steps}</b> left${play.slotTotal() ? ` +${play.slotTotal()}` : ''}`,
-    asking: `Investigate? · <b>${s.steps}</b> left`,
+    asking: `${s.ask?.relight ? 'Relight?' : s.ask?.anchor ? 'Destroy the anchor?' : 'Investigate?'} · <b>${s.steps}</b> left`,
     scouting: 'Scouting: choose a card',
     revealing: 'Evidence! Choose a card',
     eventing: 'An event: make your choice',

@@ -25,7 +25,7 @@ import { RECIPES, blocked as craftBlocked } from '../src/game/obolcraft.js';
 import { choicesFor, doorOverride } from '../src/game/eventPlay.js';
 import { scriptOf, mapSites, knownMonster } from '../src/game/objectives/scripts.js';
 import { RANGE, cellRange } from '../src/game/cards/injuries.js';
-import { sixToSpend } from '../src/game/objectives/verbs.js';
+import { sixToSpend, memorialCells } from '../src/game/objectives/verbs.js';
 import { matchesEvidence } from '../src/game/mystery.js';
 import { toughnessOf, targetsFor } from '../src/game/equipmentPlay.js';
 import { checkRequirement } from '../src/game/cards/requirements.js';
@@ -111,6 +111,12 @@ function makeBot(state, board) {
           const it = carrying(pl, st.item);
           if (it.lit === false) {
             const from = siteCells(sc.steps.find((x) => x.do === 'collect' && x.item === st.item).at);
+            // Shadow People: the memorials relight too (the spaces beside them), whichever is nearer.
+            if (st.item === 'candle') {
+              const shrines = memorialCells(board).flatMap((m) => { const { x, y } = g.coords(m); return [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => g.inBounds(x + dx, y + dy) && g.cells[g.index(x + dx, y + dy)].walkable).map(([dx, dy]) => g.index(x + dx, y + dy)); });
+              if (shrines.includes(pl.pos)) return [pl.pos];   // stay: it relights at the start of the next turn (or now, for an Obol)
+              from.push(...shrines);
+            }
             // Relighting happens on stepping onto the stand: standing on it already, step off first.
             if (from.includes(pl.pos)) { const { x, y } = g.coords(pl.pos); return [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => g.inBounds(x + dx, y + dy) && g.cells[g.index(x + dx, y + dy)].walkable).map(([dx, dy]) => g.index(x + dx, y + dy)); }
             return from;

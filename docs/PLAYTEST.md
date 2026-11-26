@@ -184,3 +184,9 @@ Wins of 40: solo 30, 2p 27, 3p 31, 4p 28 (was 8 / 18 / 9 / 16). Undecided games:
 Snuffed at the first stop after taking a candle: ~4% of snuffs (was ~35%). Umbral Stab still causes ~90%
 of deaths, now one stab a move. Church to Lair: under 15 spaces 87%, 15-24 79%, 25-34 48% (was 55 / 16 / 20).
 The bot also learned to walk to a Nailed Shut door and force it with a 6.
+
+### Memorials as relight points
+
+The two Missing-person memorials (K9, U13) now relight candles (free when starting a turn beside one, or
+for an Obol when passing). Wins of 40: solo 31, 2p 28, 3p 31, 4p 33. Free memorial relights: 51-217 per
+40 games; paid: 11-40. Church to Lair 25-34 spaces: 61% (was 48%).

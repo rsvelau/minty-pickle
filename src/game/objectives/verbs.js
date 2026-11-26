@@ -220,15 +220,65 @@ function inChurch(state, board, cell) {
 
 // Standing on the Votive Candle Stand with a candle that went out: it is lit again
 // (at the start of the turn, or stopping there), no stepping off and back on.
-export function relightHere(state, board, pl, ctx, events) {
+// Starting the turn right beside a Missing-person memorial (a side shared with
+// it) relights it too, free (`start`).
+export function relightHere(state, board, pl, ctx, events, { start = false } = {}) {
   if (knownMonster(state) !== 'shadow-people' || pl.dead) return;
   const candle = (pl.carry ?? []).find((c) => c.item === 'candle' && c.lit === false);
-  if (!candle || !inChurch(state, board, pl.pos)) return;
-  const stand = (mapSites(board.grid).church ?? []).includes(pl.pos);
-  if (!stand) return;
+  if (!candle) return;
+  const stand = inChurch(state, board, pl.pos) && (mapSites(board.grid).church ?? []).includes(pl.pos);
+  const shrine = start && memorialBeside(board, pl.pos) >= 0;
+  if (!stand && !shrine) return;
   candle.lit = true;
-  ctx.log(state, `${pl.name} relights the candle at the Votive Candle Stand.`);
+  ctx.log(state, stand ? `${pl.name} relights the candle at the Votive Candle Stand.` : `${pl.name} relights the candle from the memorial's candles.`);
   events.push({ type: 'objStep', seat: pl.seat, cell: pl.pos, text: `${pl.name}'s candle is lit again.` });
+}
+
+// --- Missing-person memorials (Shadow People): optional relight points ---
+// The memorial landmark's cells (blocked: you stand beside it, never on it).
+export function memorialCells(board) {
+  const g = board.grid;
+  return g.cells.map((c, i) => (c.sub === 'memorial' ? i : -1)).filter((i) => i >= 0);
+}
+// The memorial sharing a side with `cell`, or -1.
+export function memorialBeside(board, cell) {
+  const g = board.grid;
+  const { x, y } = g.coords(cell);
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    if (!g.inBounds(x + dx, y + dy)) continue;
+    const j = g.index(x + dx, y + dy);
+    if (g.cells[j].sub === 'memorial') return j;
+  }
+  return -1;
+}
+// Shown (and usable) once the team knows it's the Shadow People.
+export const memorialsLive = (state) => knownMonster(state) === 'shadow-people';
+// Passing a memorial with a candle that went out: offer to relight it for an Obol.
+// Once per memorial per move.
+export function memorialPass(state, board, pl, cell) {
+  if (!memorialsLive(state) || pl.dead || state.ask) return;
+  if (!(pl.carry ?? []).some((c) => c.item === 'candle' && c.lit === false)) return;
+  if (!pl.inventory.obolcraft.length) return;
+  const m = memorialBeside(board, cell);
+  if (m < 0) return;
+  const key = `${state.turn}:${state.moveN ?? 0}:${m}`;
+  if (state.memorialAsked === key) return;
+  state.memorialAsked = key;
+  state.ask = { i: m, relight: true };
+}
+// The answer: pay an Obol (one of the kind you hold most of) and relight.
+export function relightForObol(state, pl, ctx, events) {
+  const candle = (pl.carry ?? []).find((c) => c.item === 'candle' && c.lit === false);
+  const obols = pl.inventory.obolcraft;
+  if (!candle || !obols.length) return false;
+  const count = {};
+  for (const o of obols) count[o.type] = (count[o.type] ?? 0) + 1;
+  const type = Object.keys(count).sort((a, b) => count[b] - count[a])[0];
+  obols.splice(obols.findIndex((o) => o.type === type), 1);
+  candle.lit = true;
+  ctx.log(state, `${pl.name} relights the candle at the memorial for an Obol (${type}).`);
+  events.push({ type: 'objStep', seat: pl.seat, cell: pl.pos, text: `${pl.name}'s candle is lit again.` });
+  return true;
 }
 
 export function suffocate(state, board, pl, ctx, events) {

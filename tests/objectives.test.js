@@ -400,3 +400,33 @@ test('Umbral Stab: once a move, however many lit spaces it crosses', async () =>
   onPlayerEnters(s.state, s.board, pl, s.g.index(5, 3), s.ctx, []);
   assert.equal(hits(), 2, 'a new move can be stabbed again');
 });
+
+test('Shadow People: a memorial relights a candle free at the start of a turn beside it, or for an Obol when passing', async () => {
+  const { relightHere, memorialPass } = await import('../src/game/objectives/verbs.js');
+  const s = fight('shadow-people');
+  const pl = s.state.players[0];
+  const m = s.g.index(10, 5);
+  s.g.apply(m, { area: 'outdoor', sub: 'memorial', walkable: false }, { silent: true });
+  s.at(pl, 0, 0);
+  pl.carry[0].lit = false;
+  // Diagonal doesn't count: a shared side only.
+  pl.pos = s.g.index(11, 6);
+  relightHere(s.state, s.board, pl, s.ctx, [], { start: true });
+  assert.equal(pl.carry[0].lit, false);
+  pl.pos = s.g.index(11, 5);
+  relightHere(s.state, s.board, pl, s.ctx, [], { start: true });
+  assert.equal(pl.carry[0].lit, true, 'free at the start of a turn beside it');
+  // Passing with the candle out: asked, for an Obol.
+  pl.carry[0].lit = false;
+  pl.inventory.obolcraft = [];
+  memorialPass(s.state, s.board, pl, s.g.index(10, 4));
+  assert.equal(s.state.ask, null, 'no Obol, no offer');
+  pl.inventory.obolcraft = [{ type: 'bone' }, { type: 'ash' }, { type: 'bone' }];
+  memorialPass(s.state, s.board, pl, s.g.index(10, 4));
+  assert.deepEqual(s.state.ask, { i: m, relight: true });
+  s.state.phase = 'asking';
+  s.state.steps = 0;
+  assert.ok(applyAction(s.state, s.board, { type: 'investigate', yes: true, seat: 0 }).ok);
+  assert.equal(pl.carry[0].lit, true);
+  assert.deepEqual(pl.inventory.obolcraft.map((o) => o.type).sort(), ['ash', 'bone'], 'paid the kind held most');
+});

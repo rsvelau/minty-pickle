@@ -134,6 +134,14 @@ export function renderAsk() {
   const cur = s.players[s.cur];
   const { x, y } = grid.coords(s.ask.i);
   const curious = !!s.ask.curious;
+  if (s.ask.relight) {
+    // Shadow People: relight the candle at a Missing-person memorial for an Obol.
+    const n = cur.inventory?.obolcraft?.length ?? 0;
+    $('#askTitle').textContent = 'Relight your candle?';
+    $('#askSub').innerHTML = `<b style="color:${cur.colour}">${cur.name}</b> passes the memorial at ${cellLabel(x, y)} · costs 1 Obol (you have ${n})`;
+    $('#askDefense').hidden = true;
+    return;
+  }
   if (s.ask.anchor) {
     // Poltergeist: spend a 6 to destroy the spiritual anchor here.
     $('#askTitle').textContent = 'Destroy the anchor?';

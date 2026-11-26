@@ -2,7 +2,6 @@
 // the camera, so it reads from the overhead view) plus a coloured ring on
 // the floor. Markers sit on top of a cell and never change it.
 import * as THREE from 'three';
-import { MARKERS } from '../core/state.js';
 
 // Badge colours and icon drawing per marker type.
 export const MARKER_STYLE = {
@@ -12,6 +11,9 @@ export const MARKER_STYLE = {
   blackDice: { ring: '#9aa0a8', bg: '#121315', fg: '#f2f0ea' },
   key: { ring: '#e6c25a', bg: '#2a2410', fg: '#f2d070' },
   research: { ring: '#a98be0', bg: '#1e1830', fg: '#c6aef5' },
+  // Optional objective (play only, never painted): a Missing-person memorial
+  // where the Shadow People's candles can be relit. Pale blue, not the red flag.
+  shrine: { ring: '#7fcfe6', bg: '#102028', fg: '#9fe0f2' },
 };
 
 const S = 256; // icon canvas size
@@ -51,9 +53,14 @@ export function drawMarkerIcon(type, size = S) {
       g.beginPath(); g.moveTo(142, 140); g.lineTo(180, 178); g.stroke();
       break;
     case 'objective': // flag on a pole
+    case 'shrine':    // the same flag, with a small candle flame at its foot
       g.lineWidth = 12;
       g.beginPath(); g.moveTo(90, 190); g.lineTo(90, 66); g.stroke();
       g.beginPath(); g.moveTo(96, 68); g.lineTo(182, 92); g.lineTo(96, 122); g.closePath(); g.fill();
+      if (type === 'shrine') {
+        g.beginPath(); g.moveTo(150, 132); g.quadraticCurveTo(170, 158, 150, 176); g.quadraticCurveTo(130, 158, 150, 132); g.fill();
+        g.fillRect(140, 178, 20, 18);
+      }
       break;
     case 'whiteDice':
     case 'blackDice': { // a die showing five
@@ -177,7 +184,7 @@ export function createMarkers(group) {
   const ringMats = {};
   const fadedSpriteMats = {};
   const fadedRingMats = {};
-  for (const type of Object.keys(MARKERS)) {
+  for (const type of Object.keys(MARKER_STYLE)) {
     const tex = new THREE.CanvasTexture(drawMarkerIcon(type));
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 4;

@@ -324,8 +324,16 @@ export function refreshWaterAndBridges() {
 // Markers the play demo has collected or used (set once the demo exists).
 export let markerUsed = () => false;
 export let markerHidden = () => false; // objectives stay hidden in play until midnight
+// Markers the game adds on top of the map's own (play only): [{ i, type }].
+export let markerExtras = () => [];
+export function __set_markerExtras(v) { markerExtras = v; return v; }
 export function refreshMarkers() {
   const list = [];
+  for (const { i, type } of markerExtras()) {
+    const { x, y } = grid.coords(i);
+    const p = cellToWorld(x, y);
+    list.push({ type, x: p.x, y: Math.max(visibleTop(i), WATER_Y) + terrainHeight(p.x, p.z, {}), z: p.z, dim: false, faded: false });
+  }
   grid.cells.forEach((c, i) => {
     if (!c.marker || markerHidden(i)) return;
     const { x, y } = grid.coords(i);

@@ -22,7 +22,7 @@ import { turnLimits, injuries, applyDamage, sacrificeCarrier, killPlayer } from 
 import { answer as answerReaction } from './reactions.js';
 import { RANGE, cellRange } from './cards/injuries.js';
 import { objectiveLive, knownMonster } from './objectives/scripts.js';
-import { onSiteEnter, crossingBlocked, suffocate, relightHere, destroyAnchor, holdRound, pickUpHere, itemLabel } from './objectives/verbs.js';
+import { onSiteEnter, crossingBlocked, suffocate, relightHere, memorialPass, relightForObol, destroyAnchor, holdRound, pickUpHere, itemLabel } from './objectives/verbs.js';
 import { siteOf, siteLabel } from '../core/sites.js';
 import { craft } from './obolcraft.js';
 import { refreshThreat, onPlayerEnters, setupVictims } from './monsterTurn.js';
@@ -365,7 +365,7 @@ function applyActionNow(state, board, action) {
       startOfTurn(state, eventCtx(state));
       // Standing on something dropped (the Cosor after Unholy Burn): pick it up, once allowed.
       pickUpHere(state, pl, pl.pos, (text) => { log(state, text); events.push({ type: 'objStep', seat: pl.seat, cell: pl.pos, text }); }, { burntOnly: true });
-      relightHere(state, board, pl, { state, log, randInt }, events);   // Shadow People: starting on the candle stand
+      relightHere(state, board, pl, { state, log, randInt }, events, { start: true });   // Shadow People: starting on the candle stand or beside a memorial
       state.pool = Array.from({ length: lim.dice }, () => ({ kind: 'black', v: d6(state) }));
       state.slots = [];
       state.defSlots = [];
@@ -470,9 +470,13 @@ function applyActionNow(state, board, action) {
     case 'investigate': {
       // The answer to "Investigate?": yes draws an Obol; no runs on through.
       if (state.phase !== 'asking' || !state.ask) return fail('nothing to investigate');
-      const { i, curious, anchor } = state.ask;
+      const { i, curious, anchor, relight } = state.ask;
       state.ask = null;
-      if (anchor) {
+      if (relight) {
+        // Shadow People: relight a candle at a Missing-person memorial for an Obol.
+        if (action.yes) relightForObol(state, curPlayer(state), { log, state }, events);
+        else log(state, `${who(state)} passes the memorial with the candle still out.`);
+      } else if (anchor) {
         // Poltergeist: spend a 6 to destroy the anchor here.
         if (action.yes) destroyAnchor(state, i, { log, randInt, state }, events);
         if (state.phase === 'over') break;
@@ -1055,6 +1059,7 @@ function takeStep(state, board, o, events) {
   enter(state, board, o.i, events);
   onSiteEnter(state, board, pl, o.i, { state, log, randInt }, events);
   if (state.monsters.length) onPlayerEnters(state, board, pl, o.i, { state, log, randInt }, events);
+  if (!pl.dead) memorialPass(state, board, pl, o.i);   // Shadow People: relight at a memorial for an Obol?
 }
 function step(state, board, o, events) {
   takeStep(state, board, o, events);
