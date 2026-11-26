@@ -14,7 +14,7 @@ import { ui } from './config.js';
 import { aheadPose } from './pointer.js';
 import { skyMoon } from './loop.js';
 import { markers, labelGroup, refreshMarkers } from '../render/board.js';
-import { __set_camTween, camera, controls, fitPreset } from '../render/scene.js';
+import { __set_camTween, camera, controls, fitPreset, wake } from '../render/scene.js';
 import { play } from '../play/playView.js';
 import * as THREE from 'three';
 
@@ -27,29 +27,38 @@ const FADE = 700;      // ms: menus and markers fade in
 let running = null;    // the intro in progress: { cancel }
 let watchMoon = 0;
 
-// The title screen's camera: low over the south edge, looking across the town,
-// the moon centred above it.
+// The title screen's camera: high over the town (where the game's camera move
+// starts) but tilted up at the sky, so no town shows; the full moon big in the
+// middle of the screen, wisps of cloud drifting across it.
+const TILT = 32;       // degrees above the horizon
+const MOON_SIZE = 2.3;
+let titleLook = null;  // where the title camera looks (the moon)
 export function showTitleView() {
   stopIntro();
-  const fit = fitPreset('persp');
-  // Look across the board from beyond its south side, from a little above the roofs.
-  const target = new THREE.Vector3(0, 2, -fit.pos.z * 0.15);
-  const pos = new THREE.Vector3(0, 7.5, Math.abs(fit.pos.z) * 0.62 + 4);
   __set_camTween(null);
-  camera.position.copy(pos);
-  controls.target.copy(target);
+  const over = fitPreset('persp');
+  camera.position.copy(over.pos);
+  // Facing the same way as the town view below, tilted up into the sky.
+  const flat = over.target.clone().sub(over.pos).setY(0).normalize();
+  const t = THREE.MathUtils.degToRad(TILT);
+  const dir = flat.multiplyScalar(Math.cos(t)).setY(Math.sin(t));
+  titleLook = camera.position.clone().addScaledVector(dir, 400);
+  ui.freeCamera = true;
   controls.enabled = false;
-  controls.update();
-  skyMoon.placeFrom(camera, target, 17);   // high enough to clear the menu card
+  camera.lookAt(titleLook);
+  skyMoon.placeAhead(camera, MOON_SIZE);
   ui.hideMarkers = true;
   markers.setVisible(false);
   labelGroup.visible = false;
 }
+// A resized window on the title: frame it again.
+if (typeof window !== 'undefined') window.addEventListener('resize', () => { if (ui.mode === 'title' && skyMoon.visible) showTitleView(); });
 
 // Leaving the title for the editor: everything back.
 export function leaveTitleView() {
   stopIntro();
   skyMoon.hide();
+  ui.freeCamera = false;
   controls.enabled = true;
   ui.hideMarkers = false;
   markers.setVisible(ui.showMarkers);
@@ -60,6 +69,7 @@ export function leaveTitleView() {
 // The game-start camera move. Call after the game is on the board (setTool('play')).
 export function playIntro() {
   stopIntro();
+  __set_camTween(null);   // (starting play queues its own glide: this move replaces it)
   document.body.classList.add('intro');
   controls.enabled = false;
   play.holdCamera(true);
@@ -76,22 +86,42 @@ export function playIntro() {
     watchMoon = requestAnimationFrame(watch);
   };
   watch();
-  // 1. Down from the sky over the whole town.
+  // 1. Down from the sky over the whole town: from the title, the camera stays
+  //    where it is and tilts down from the moon; otherwise it glides there.
   const over = fitPreset('persp');
-  __set_camTween({
-    t: 0, dur: PAN * slow(), ease: 'inOut',
-    fromPos: camera.position.clone(), fromTarget: controls.target.clone(), toPos: over.pos, toTarget: over.target,
-    done: () => {
+  const zoomIn = () => {
+    if (cancelled) return;
+    ui.freeCamera = false;
+    // 2. In to the player who is up.
+    const pose = aheadPose() ?? over;
+    __set_camTween({
+      t: 0, dur: ZOOM * slow(), ease: 'inOut',
+      fromPos: camera.position.clone(), fromTarget: controls.target.clone(), toPos: pose.pos, toTarget: pose.target,
+      done: () => { if (!cancelled) finish(); },
+    });
+  };
+  if (ui.freeCamera && titleLook) {
+    const from = titleLook.clone(), pos = camera.position.clone(), look = new THREE.Vector3();
+    const t0 = performance.now();
+    const tilt = () => {
       if (cancelled) return;
-      // 2. In to the player who is up.
-      const pose = aheadPose() ?? over;
-      __set_camTween({
-        t: 0, dur: ZOOM * slow(), ease: 'inOut',
-        fromPos: camera.position.clone(), fromTarget: controls.target.clone(), toPos: pose.pos, toTarget: pose.target,
-        done: () => { if (!cancelled) finish(); },
-      });
-    },
-  });
+      const k = Math.min(1, (performance.now() - t0) / (PAN * slow() * 1000));
+      const e = k < 0.5 ? 4 * k ** 3 : 1 - Math.pow(-2 * k + 2, 3) / 2;
+      camera.position.lerpVectors(pos, over.pos, e);
+      camera.lookAt(look.lerpVectors(from, over.target, e));
+      wake(200);
+      if (k < 1) { requestAnimationFrame(tilt); return; }
+      controls.target.copy(over.target);
+      zoomIn();
+    };
+    requestAnimationFrame(tilt);
+  } else {
+    __set_camTween({
+      t: 0, dur: PAN * slow(), ease: 'inOut',
+      fromPos: camera.position.clone(), fromTarget: controls.target.clone(), toPos: over.pos, toTarget: over.target,
+      done: zoomIn,
+    });
+  }
 }
 // 3. The menus and the markers fade in; the camera is the player's again.
 function finish() {
@@ -119,6 +149,7 @@ export function stopIntro() {
   running.cancel();
   running = null;
   __set_camTween(null);
+  ui.freeCamera = false;
   cancelAnimationFrame(watchMoon);
   document.body.classList.remove('intro');
   play.holdCamera(false);

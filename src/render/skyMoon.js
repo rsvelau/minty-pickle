@@ -29,12 +29,19 @@ function moonTexture() {
     g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
   };
   for (const [x, y, r, a] of [[90, 90, 46, 0.45], [150, 80, 34, 0.38], [165, 140, 40, 0.32], [105, 160, 30, 0.3], [70, 130, 22, 0.28]]) blot(x, y, r, a);
-  for (let k = 0; k < 26; k++) {
-    const x = 30 + rnd() * 196, y = 30 + rnd() * 196, r = 2 + rnd() * 7;
-    if ((x - 128) ** 2 + (y - 128) ** 2 > 112 ** 2) continue;
-    g.strokeStyle = 'rgba(120, 116, 104, 0.35)'; g.lineWidth = 1.2;
-    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke();
-    blot(x + 1, y + 1, r, 0.18);
+  // Mottling and a few faint craters (soft, no outlines).
+  for (let k = 0; k < 60; k++) {
+    const x = 20 + rnd() * 216, y = 20 + rnd() * 216, r = 3 + rnd() * 14;
+    if ((x - 128) ** 2 + (y - 128) ** 2 > 110 ** 2) continue;
+    blot(x, y, r, 0.08 + rnd() * 0.1);
+  }
+  for (let k = 0; k < 9; k++) {
+    const x = 40 + rnd() * 176, y = 40 + rnd() * 176, r = 3 + rnd() * 5;
+    if ((x - 128) ** 2 + (y - 128) ** 2 > 100 ** 2) continue;
+    blot(x + 1.5, y + 1.5, r, 0.22);
+    const hi = g.createRadialGradient(x - 1, y - 1, 0, x - 1, y - 1, r * 0.8);
+    hi.addColorStop(0, 'rgba(255, 252, 240, 0.35)'); hi.addColorStop(1, 'rgba(255, 252, 240, 0)');
+    g.fillStyle = hi; g.beginPath(); g.arc(x - 1, y - 1, r * 0.8, 0, Math.PI * 2); g.fill();
   }
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
@@ -50,6 +57,31 @@ function glowTexture(inner, outer) {
   grad.addColorStop(1, outer);
   g.fillStyle = grad;
   g.fillRect(0, 0, 128, 128);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+// A wisp of cloud: a few soft, stretched puffs, pale blue-grey, see-through.
+function cloudTexture(seed0) {
+  const c = document.createElement('canvas');
+  c.width = 512; c.height = 128;
+  const g = c.getContext('2d');
+  let seed = seed0;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let k = 0; k < 22; k++) {
+    const x = 70 + rnd() * 372, y = 64 + (rnd() - 0.5) * 40;
+    const rx = 45 + rnd() * 80, ry = 14 + rnd() * 22;
+    g.save();
+    g.translate(x, y);
+    g.scale(rx / ry, 1);
+    const b = g.createRadialGradient(0, 0, 0, 0, 0, ry);
+    b.addColorStop(0, `rgba(150, 160, 185, ${0.16 + rnd() * 0.14})`);
+    b.addColorStop(1, 'rgba(150, 160, 185, 0)');
+    g.fillStyle = b;
+    g.beginPath(); g.arc(0, 0, ry, 0, Math.PI * 2); g.fill();
+    g.restore();
+  }
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
@@ -76,22 +108,58 @@ export function createSkyMoon(scene) {
   group.add(disc);
   scene.add(group);
 
+  // Two wisps of cloud that drift across in front of it, left to right, and come
+  // round again a moment after they've left the screen.
+  const clouds = [0, 1].map((k) => {
+    const m = new THREE.SpriteMaterial({ map: cloudTexture(11 + k * 97), transparent: true, opacity: 0.95, depthWrite: false, fog: false, toneMapped: false });
+    const s = new THREE.Sprite(m);
+    s.renderOrder = 0;
+    s.raycast = () => {};
+    scene.add(s);
+    s.visible = false;
+    return { s, k, t0: null };
+  });
+  const right = new THREE.Vector3(), up = new THREE.Vector3(), centre = new THREE.Vector3();
+  let span = 0, cloudW = 0;
+
   const sphere = new THREE.Sphere(new THREE.Vector3(), R * 3.5);
   const frustum = new THREE.Frustum();
   const m4 = new THREE.Matrix4();
 
-  // Hang it in the sky ahead of the camera: centred left-right, `lift` degrees
-  // above where the camera looks.
-  function placeFrom(camera, target, lift = 13) {
-    const fwd = target.clone().sub(camera.position).normalize();
-    const flat = new THREE.Vector3(fwd.x, 0, fwd.z).normalize();
-    const pitch = Math.asin(THREE.MathUtils.clamp(fwd.y, -1, 1)) + THREE.MathUtils.degToRad(lift);
-    const dir = flat.multiplyScalar(Math.cos(pitch)).setY(Math.sin(pitch));
-    group.position.copy(camera.position).addScaledVector(dir, DIST);
+  // Hang it dead ahead of the camera (centred on the screen), `size` times its
+  // usual size; the clouds drift across in front of it.
+  function placeAhead(camera, size = 1) {
+    camera.updateMatrixWorld();
+    const fwd = camera.getWorldDirection(new THREE.Vector3());
+    group.position.copy(camera.position).addScaledVector(fwd, DIST);
+    group.scale.setScalar(size);
     group.visible = true;
+    right.setFromMatrixColumn(camera.matrixWorld, 0).normalize();
+    up.setFromMatrixColumn(camera.matrixWorld, 1).normalize();
+    // The clouds pass a little in front of the moon; they cross the whole screen.
+    const d = DIST * 0.8;
+    centre.copy(camera.position).addScaledVector(fwd, d);
+    const halfH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * d;
+    cloudW = R * size * 3.4;
+    span = halfH * camera.aspect + cloudW / 2;
+    for (const c of clouds) {
+      c.s.scale.set(cloudW * (c.k ? 0.8 : 1), cloudW * 0.32 * (c.k ? 0.8 : 1), 1);
+      c.s.visible = true;
+      c.t0 = null;
+    }
   }
+  const CROSS = 26, PAUSE = 4;   // s to cross the screen; s off-screen before coming round again
   function tick(t, camera) {
-    if (!group.visible) return;
+    if (!group.visible) { for (const c of clouds) c.s.visible = false; return; }
+    for (const c of clouds) {
+      // The second wisp follows the first, lower and a little faster, half a crossing behind.
+      const cross = c.k ? CROSS * 0.85 : CROSS;
+      c.t0 ??= t - (c.k ? -cross * 0.45 : cross * 0.12);
+      const p = ((t - c.t0) % (cross + PAUSE) + (cross + PAUSE)) % (cross + PAUSE);
+      const x = -span + (2 * span) * (p / cross);
+      const y = (c.k ? -0.42 : 0.18) * R * group.scale.x;
+      c.s.position.copy(centre).addScaledVector(right, p < cross ? x : span * 3).addScaledVector(up, y);
+    }
     disc.lookAt(camera.position);
     const beat = 0.5 + 0.5 * Math.sin(t * 1.7);      // a slow, uneasy pulse
     red.material.opacity = 0.3 + 0.3 * beat;
@@ -106,8 +174,8 @@ export function createSkyMoon(scene) {
     return frustum.intersectsSphere(sphere);
   }
   return {
-    placeFrom, tick, inView,
-    hide() { group.visible = false; },
+    placeAhead, tick, inView,
+    hide() { group.visible = false; for (const c of clouds) c.s.visible = false; },
     get visible() { return group.visible; },
   };
 }

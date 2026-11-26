@@ -67,8 +67,12 @@ export function init() {
     // Zoom-to-cursor re-derives the target from the camera's facing after a
     // wheel zoom; switch it off while we animate the camera ourselves.
     controls.zoomToCursor = !camTween;
-    controls.update();
-    clampTarget();
+    // The title (and the start of the game's camera move) points the camera up
+    // at the moon, which the orbit controls can't do: they keep their hands off.
+    if (!ui.freeCamera) {
+      controls.update();
+      clampTarget();
+    }
 
     // Ease tile heights toward their targets.
     let moved = false;
