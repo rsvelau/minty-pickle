@@ -230,3 +230,15 @@ test('an objective finished before midnight (the monster named by its evidence) 
   achieveObjective(w.state, w.ctx, []);
   assert.equal(w.state.won, true);
 });
+
+test('Banshee: the heirloom laid on the Unmarked Grave before midnight wins too', async () => {
+  const { onSiteEnter } = await import('../src/game/objectives/verbs.js');
+  const s = setup('banshee');
+  s.state.monsters = [];
+  const grave = s.g.index(3, 7);
+  s.g.apply(grave, { area: 'outdoor', sub: 'cemetery', marker: 'objective' }, { silent: true });
+  s.state.mystery = { ...s.state.mystery, monster: 'banshee', identified: true };
+  s.pl.carry = [{ item: 'heirloom' }];
+  onSiteEnter(s.state, s.board, s.pl, grave, s.ctx, []);
+  assert.equal(s.state.won, true);
+});

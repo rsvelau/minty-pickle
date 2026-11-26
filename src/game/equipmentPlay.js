@@ -468,7 +468,15 @@ export function achieveObjective(state, ctx, events) {
 // Defeated at once, whatever its health (the Banshee laid to rest by her heirloom).
 export function banishMonster(state, ctx, events) {
   const m = state.monsters.find((x) => MONSTER_BY_ID[x.kind]);
-  if (!m) return;
+  if (!m) {
+    // Before it rises (named by its evidence): it never will.
+    const known = MONSTER_BY_ID[knownMonster(state)];
+    if (!known) return;
+    state.objectiveDone = true;
+    ctx.log(state, `The ${known.name} is laid to rest before she can rise.`);
+    win(state, ctx, events);
+    return;
+  }
   const mcard = MONSTER_BY_ID[m.kind];
   state.objectiveDone = true;
   state.monsters = state.monsters.filter((x) => x !== m);
