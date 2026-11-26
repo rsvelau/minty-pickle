@@ -528,3 +528,24 @@ test('Adze solo: one swarm strikes per turn (the rest wait), and a failed block 
   assert.equal(state.swarms.length, 1, 'the other swarm waits beside its victim');
   assert.ok(state.swarms[0].ready);
 });
+
+test('Adze solo: one swarm on the map at a time, 2 health, and the Nest has no toughness', () => {
+  const g = townWithBuildings();
+  const board = createBoard(g);
+  const { state } = newGame(board, { seed: 4, startMode: 'midnight', config: { players: 1, monsterPick: 'adze' } });
+  const mo = state.monsters[0];
+  assert.equal(mo.tough, 0, 'no toughness solo');
+  delete mo.gathering;
+  const act = (a) => applyAction(state, board, { ...a, seat: 0 });
+  mo.pos = g.index(0, 9);
+  mo.intents = [victimAction(1, [{ op: 'attack', dmg: { fixed: 9 }, target: 1 }]), victimAction(5, [{ op: 'attack', dmg: { fixed: 9 }, target: 5 }])];
+  act({ type: 'roll' });
+  act({ type: 'end' });
+  assert.equal(state.swarms.length, 1, 'one at a time');
+  assert.equal(state.swarms[0].hp, 2);
+  // While it's out, no other swarm leaves the hive.
+  mo.intents = [victimAction(5, [{ op: 'attack', dmg: { fixed: 9 }, target: 5 }])];
+  act({ type: 'roll' });
+  act({ type: 'end' });
+  assert.ok(state.swarms.length <= 1);
+});

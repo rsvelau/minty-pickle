@@ -134,6 +134,8 @@ export function spawnMonsters(state, board, events, random, log) {
   if (cell < 0) return;
   const monster = { id: `m${state.monsters.length + 1}`, kind, pos: cell, prev: -1, revealed: true };
   armMonster(monster); // health, toughness, weakness track (equipmentPlay.js)
+  // The Adze played solo: the cocoon has no toughness at all.
+  if (kind === 'adze' && (state.config.players ?? state.players.length) === 1) monster.tough = 0;
   state.monsters.push(monster);
   log(state, `Something stirs at ${label(board, cell)}.`);
   events.push({ type: 'monsterSpawn', id: monster.id, kind: monster.kind, cell });

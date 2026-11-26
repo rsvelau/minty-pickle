@@ -155,7 +155,7 @@ export const MONSTER_TEXT = {
       'The victims show as soon as you know it’s the Adze (or at midnight). The turn it rises, its swarms only gather.',
       'Its swarms fly {move} 6 a turn (walls stop them, nothing else), one per victim at a time. A swarm settles beside its victim and strikes on the Adze’s next turn.',
       'Fire burns a swarm: each has 5 health, and any Fire attack counts. At 0 it’s alight: it flies back to the hive and burns the Nest for 3, through its toughness.',
-      'One victim per investigator (all three with three or more). Playing solo: all three, together in the Hospital {13}; only one swarm strikes per turn (the others wait), and a failed block exhausts nothing.',
+      'One victim per investigator (all three with three or more). Playing solo: all three, together in the Hospital {13}; one swarm on the map at a time, with 2 health; a failed block exhausts nothing; the Nest has no toughness.',
       'Each swarm beaten off by a defender is lost to the hive: the Nest takes 2, through its toughness.',
       'A victim survives the first hit that gets through (wounded); the second kills them. Stand beside one to Defend them.',
       'A victim dies: everyone takes 🎲 × the number of dead victims. No victims left: every attack hits everyone.',

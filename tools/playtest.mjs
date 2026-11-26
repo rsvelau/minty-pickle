@@ -140,6 +140,8 @@ function makeBot(state, board) {
           const victims = (state.npcs ?? []).filter((v) => v.alive);
           const guards = state.players.filter((p) => !p.dead).sort((a, b) => a.seat - b.seat);
           const k = guards.indexOf(pl);
+          // Solo: one guard can't cover three victims; the Nest has no toughness, so go and kill it.
+          if (state.players.length === 1 && monster) { fighting = true; return [monster.pos]; }
           // More victims than guards (solo: all three in the Hospital): a
           // space beside as many of them as possible, if the last guard.
           if (victims.length > guards.length && k === guards.length - 1) {
