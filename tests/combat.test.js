@@ -506,3 +506,25 @@ test('Adze: a swarm beaten off costs the Nest 2, through its toughness; solo, al
   for (const n of s2.npcs) assert.ok(g2.coords(n.cell).x >= 12 && g2.coords(n.cell).x < 15, 'inside the Hospital (x 12-14)');
   assert.equal(new Set(s2.npcs.map((n) => n.cell)).size, 3, 'each on its own space');
 });
+
+test('Adze solo: one swarm strikes per turn (the rest wait), and a failed block exhausts nothing', () => {
+  const { g, state, act } = adzeGame();
+  state.config.players = 1;                    // played solo
+  const pl = state.players[0];
+  const [a, b] = state.npcs;
+  settled(state, g, a, 9, { exhaust: true });
+  settled(state, g, b, 9, { exhaust: true });
+  act({ type: 'roll' });
+  const { x, y } = g.coords(a.cell);
+  pl.pos = g.index(x + 1, y + 1);
+  state.pool = [{ kind: 'black', v: 2 }];
+  state.maxDefense = 1;
+  act({ type: 'slot', die: 0, to: 'defense' });
+  const r = act({ type: 'end' });
+  const hits = r.events.filter((e) => e.type === 'npcAttacked');
+  assert.equal(hits.length, 1, 'only one swarm strikes this turn');
+  assert.ok(a.wounded, 'got past the defense');
+  assert.ok(!pl.lostBlack, 'solo: no die exhausted');
+  assert.equal(state.swarms.length, 1, 'the other swarm waits beside its victim');
+  assert.ok(state.swarms[0].ready);
+});

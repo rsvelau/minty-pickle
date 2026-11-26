@@ -1003,7 +1003,8 @@ attack wears down (Skills lists swarms in range as targets): at 0 it's alight, f
 back to the hive and burns the Nest for 3 piercing damage; a defender's Defense die is exhausted only when a
 strike gets past them (a block costs nothing for good), and each swarm a defender beats off costs the Nest 2
 health, through its toughness; one victim per investigator (all three with three or more), and playing solo
-all three wait together in the Hospital; a victim survives the first hit
+all three wait together in the Hospital, only one swarm strikes per Adze turn (the rest hover and wait) and a
+failed block exhausts nothing; a victim survives the first hit
 that gets through (wounded) and dies to the second; a victim's death costs everyone one die × the dead. Redcap: toughness-ignoring (Piercing) hits can't kill it.
 Monster heals now really heal.
 

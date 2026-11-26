@@ -649,6 +649,7 @@ const livingVictims = (state) => (state.npcs ?? []).filter((v) => v.alive);
 // (equipmentPlay.js) and at 0 it's alight: it flies back to the hive and, on
 // arrival, burns the Nest for 3 piercing damage. The defender's Defense die is
 // exhausted only when the strike gets through (a block costs nothing for good).
+// Playing solo: one swarm strikes per Adze turn, and nothing is exhausted.
 //   state.swarms = [{ id, victim, pos, dmg, type, exhaust, name, ready?, burning? }]
 export const SWARM_SPEED = 6;
 export const SWARM_BURN = 3;
@@ -693,13 +694,21 @@ function flySwarm(state, board, monster, card, sw, ctx, events) {
     sw.victim = v.id; sw.ready = false;
   }
   if (sw.ready && cellRange(board.grid, sw.pos, v.cell) <= 1) {
-    // Settled beside its victim last turn: it strikes now.
+    // Settled beside its victim last turn: it strikes now. Playing solo, one
+    // swarm strikes per Adze turn (the first to settle); the rest hold back.
+    const solo = (state.config?.players ?? state.players.length) === 1;   // playing solo (as the game was set up)
+    if (solo && monster.swarmStruck) {
+      ctx.log(state, `A swarm hovers beside the ${v.name}, waiting its turn to strike.`);
+      return;
+    }
+    if (solo) monster.swarmStruck = true;
     state.swarms = state.swarms.filter((x) => x !== sw);
     events.push({ type: 'monsterSwarm', id: monster.id, path: [sw.pos, v.cell], npc: v.id, attack: sw.type });
     const was = { alive: v.alive, wounded: !!v.wounded };
     const defender = attackVictim(state, board, monster, card, { kind: Object.keys(KIND_TO_TYPE).find((k) => KIND_TO_TYPE[k] === sw.type) }, { dmg: sw.dmg, victim: v }, ctx, events);
     const through = (was.alive && !v.alive) || (!was.wounded && v.wounded);
-    if (defender && sw.exhaust && through) exhaust(state, defender, 'defense', ctx, events);
+    // Playing solo, a failed block exhausts nothing.
+    if (defender && sw.exhaust && through && !solo) exhaust(state, defender, 'defense', ctx, events);
     return;
   }
   // Fly on, stopping right beside the victim. Walled in all round: it can't reach them.
@@ -715,6 +724,7 @@ function flySwarm(state, board, monster, card, sw, ctx, events) {
 }
 // The Adze's turn begins: swarms already out fly on, or strike.
 function flyOn(state, board, monster, card, ctx, events) {
+  monster.swarmStruck = false;
   for (const sw of [...(state.swarms ?? [])]) flySwarm(state, board, monster, card, sw, ctx, events);
 }
 
