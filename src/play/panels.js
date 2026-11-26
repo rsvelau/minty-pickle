@@ -21,7 +21,7 @@ import { eventCard } from '../game/decks.js';
 import { choicesFor } from '../game/eventPlay.js';
 import { sacrificeSeat, SCOUTING_STORY } from '../game/rules.js';
 import { scriptOf, mapSites, knownMonster } from '../game/objectives/scripts.js';
-import { progressLines } from '../game/objectives/verbs.js';
+import { progressLines, describeItem } from '../game/objectives/verbs.js';
 import { skillStatus, COSOR_CARD } from '../game/skills.js';
 import { MONSTER_TEXT } from '../game/cards/monsterText.js';
 import { showSheet, hideSheet, sheetOpen, dragToClose } from './sheets.js';
@@ -763,6 +763,20 @@ export function renderTeam() {
         `<span><b style="display:inline">${esc(tier.name)}</b> · ${esc(tier.text)}</span></div>`).join('') + '</div>').join('')}</div>` +
     `<p class="inv-empty" style="padding:8px 4px">${pl.dead ? `${esc(pl.name)} is dead.` : 'Tiers add up; each track is separate. Tier 3 on any track is Death’s Door.'}</p>`;
   $('#teamDetail').querySelector('.team-skills').onclick = () => openInventory(k, 'skills');
+  // What they carry; on their own turn, anything can be set down here (Drop).
+  const carry = pl.carry ?? [];
+  if (carry.length) {
+    const mine = k === s.cur && ['idle', 'slotting', 'choosing', 'asking'].includes(s.phase);
+    const box = document.createElement('div');
+    box.className = 'team-carry';
+    box.innerHTML = `<b class="sheet-sub">Carrying</b>` + carry.map((c) => `<div class="team-carry-row"><span>${esc(describeItem(c))}</span>` +
+      (mine ? `<button type="button" data-drop="${esc(c.item)}">Set down</button>` : '') + '</div>').join('');
+    $('#teamDetail').querySelector('.team-who').after(box);
+    box.querySelectorAll('[data-drop]').forEach((b) => { b.onclick = () => {
+      const r = play.session.dispatch({ type: 'drop', item: b.dataset.drop, seat: s.cur });
+      if (!r.ok) toast(r.error ?? 'That can’t be set down now.');
+    }; });
+  }
 }
 
 // An Equipment card's abilities, as printed: range, damage kind, name, cost

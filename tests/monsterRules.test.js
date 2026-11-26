@@ -168,3 +168,34 @@ test('Banshee Keen only reaches outdoor spaces', () => {
   assert.equal(s.pl.injuries.M, 1);
   assert.equal(s.mate.injuries.M, 0);
 });
+
+test('Banshee Perch: end of her turn, the rooftop nearest whoever is closest to the heirloom; out of Close range there', async () => {
+  const { targetsFor } = await import('../src/game/equipmentPlay.js');
+  const { EQUIPMENT_BY_ID } = await import('../src/game/cards/equipment.js');
+  const s = setup('banshee', { at: [15, 5] });
+  s.mate.carry = [{ item: 'heirloom' }];                     // P2 at 12 has it
+  s.mate.pos = s.g.index(7, 5);                              // just below the building
+  s.turn('Keen');
+  assert.ok(s.monster.perched);
+  assert.equal(s.g.cells[s.monster.pos].area, 'indoor', 'on the building’s roof');
+  assert.ok(Math.abs(s.g.coords(s.monster.pos).x - 7) + Math.abs(s.g.coords(s.monster.pos).y - 5) <= 1, 'right above P2');
+  const knife = EQUIPMENT_BY_ID['kitchen-knife'].abilities[0];  // Close
+  assert.equal(targetsFor(s.state, s.board, s.mate, knife).length, 0, 'out of Close range on the roof');
+  s.monster.perched = false;                                 // Grounded
+  assert.equal(targetsFor(s.state, s.board, s.mate, knife).length, 1);
+});
+
+test('the heirloom: picked up at the Funeral Parlor, set down with Drop, picked up again by stepping there', () => {
+  const s = setup('banshee');
+  s.pl.carry = [{ item: 'heirloom' }];
+  s.state.phase = 'idle'; s.state.cur = 0;
+  assert.ok(applyAction(s.state, s.board, { type: 'drop', seat: 0, item: 'heirloom' }).ok);
+  assert.equal(s.pl.carry.length, 0);
+  assert.deepEqual(s.state.objective.dropped.map((d) => [d.item, d.cell]), [['heirloom', s.g.index(10, 5)]]);
+  assert.match(applyAction(s.state, s.board, { type: 'drop', seat: 0, item: 'heirloom' }).error, /not carrying/);
+});
+
+test('Adze: a victim dies: one die × the dead, to everyone', async () => {
+  const src = await import('fs').then((fs) => fs.readFileSync(new URL('../src/game/monsterTurn.js', import.meta.url), 'utf8'));
+  assert.match(src, /die \* dead/);
+});

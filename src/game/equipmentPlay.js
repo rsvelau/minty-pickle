@@ -69,7 +69,8 @@ export function targetsFor(state, board, pl, ability) {
   if (fx.target === 'monster') {
     const min = MIN_REACH[ability.range] ?? 0;
     return state.monsters.filter((m) => {
-      const d = cellRange(board.grid, pl.pos, m.pos);
+      // Banshee on a rooftop: out of Close range.
+      const d = Math.max(cellRange(board.grid, pl.pos, m.pos), m.perched ? RANGE.close + 1 : 0);
       return MONSTER_BY_ID[m.kind] && d <= reach && d >= min;
     })
       .map((m) => ({ monster: m.id, name: MONSTER_BY_ID[m.kind].name }));
@@ -393,6 +394,7 @@ function applyTrackEffect(monster, mcard, text, state) {
   }
   if (/drop player/.test(text)) release(state, monster);                // Ushi-Oni lets go
   if (/Interrupt this turn/.test(text)) monster.mods.interrupted = true;
+  if (/Grounded/.test(text)) monster.perched = false;                   // Banshee: down off the roof until her next Perch
   if (/Reset Curseblood Ritual/.test(text)) monster.rituals = 0;      // the count starts over
   const trig = /Trigger ([A-Z][\w ]+?)(?:,|$)/.exec(text);
   return trig && mcard.abilities.some((ab) => ab.name === trig[1].trim()) ? trig[1].trim() : null;

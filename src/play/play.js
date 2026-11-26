@@ -500,7 +500,7 @@ export function createPlay({
       const mv = view.monsters.get(mo.id);
       if (!mv) continue;
       healthRing(mv, mo);
-      if (mv.hp) { mv.hp.g.visible = !!mv.at && mv.fig.visible; if (mv.at) mv.hp.g.position.set(mv.at.x, mv.at.y + 0.012, mv.at.z); }
+      if (mv.hp) { mv.hp.g.visible = !!mv.at && mv.fig.visible; if (mv.at) mv.hp.g.position.set(mv.at.x, mv.fig.position.y + 0.012, mv.at.z); }
     }
     for (let k = pops.length - 1; k >= 0; k--) {
       const p = pops[k];
@@ -677,7 +677,15 @@ export function createPlay({
       const knife = new THREE.Group();
       knife.add(blade, grip);
       knife.rotation.y = 0.6;
-      obj.add(glow, knife);
+      if (d.item === 'heirloom') {
+        // The Banshee's heirloom: a gold signet ring.
+        const gold = new THREE.MeshLambertMaterial({ color: 0xd8b040 });
+        terrainify(gold, { bridge: true });
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.012, 6, 16).rotateX(Math.PI / 2), gold);
+        ring.position.y = 0.014;
+        ring.raycast = () => {};
+        obj.add(glow, ring);
+      } else obj.add(glow, knife);
       for (const m of [glow, blade, grip]) m.raycast = () => {};
       const at = centreOf(d.cell);
       obj.position.set(at.x - 0.2, at.y + 0.01, at.z - 0.2);
@@ -1169,6 +1177,8 @@ export function createPlay({
       if (!mv.at) continue;
       mv.fig.visible = true;
       mv.fig.position.copy(mv.at);
+      // On a rooftop (Banshee's Perch): up on the roof.
+      if (s.monsters?.find((x) => view.monsters.get(x.id) === mv)?.perched && !running(mv)) mv.fig.position.y += 0.5;
       mv.fig.rotation.y += (((mv.face - mv.fig.rotation.y + Math.PI * 3) % (Math.PI * 2)) - Math.PI) * Math.min(1, dt * 6);
       const body = mv.fig.userData.body;
       const idle = mv.fig.userData.tick;

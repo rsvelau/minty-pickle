@@ -31,13 +31,14 @@ export const MONSTER_TEXT = {
   barghest: {
     rules: [
       'Starts at the town entrance and can’t enter buildings.',
+      'Death Gaze sees in straight lines; walls, doors and buildings block it (windows don’t).',
       'At midnight every investigator is Corrupted: cleanse at the Church {9} before crossing the river.',
     ],
     goal: 'Escape: get cleansed at the Church {9}, then reach the Start space. One investigator escaping wins for the team.',
     says: {
       'Death Gaze': 'End of its turn: attacks for 10 everyone it can see.',
       Stalk: '{move} 5 toward the nearest player.',
-      'Shadow Trap': 'Vanishes to the nearest light source and sets a trap there (🎲🎲).',
+      'Shadow Trap': 'Vanishes to the nearest light source and springs a trap there: everyone beside it takes 🎲🎲. Gone before the players act again.',
     },
     track: ['Death Gaze stops for {round}', 'Death Gaze stops for {round}', 'Shadow Trap is disabled'],
   },
@@ -57,31 +58,34 @@ export const MONSTER_TEXT = {
   skinwalker: {
     rules: [
       'Steps around traps.',
-      'The first investigator to reach its Lair stuns it: toughness 0 for {round}.',
+      'Once a game, the first investigator to reach its Lair stuns it: it skips its next turn, toughness 0 until then.',
     ],
     goal: 'Kill it: wear its health down to 0.',
     says: {
       'Wolf Prowl': '{move} 15 around to the nearest player, then attacks for 🎲.',
-      'Bear Maul': '{move} 5, then attacks for 🎲 and drags them 5 spaces into the nearest building.',
+      'Bear Maul': '{move} 5, then attacks for 🎲. If it gets through, they’re dragged up to 5 spaces into the nearest building.',
       'Curseblood Ritual': 'Returns to its Lair and marks a ritual. At the 3rd mark everyone takes 10, and the count starts over.',
     },
     track: ['The ritual count goes back to 0', '−2 toughness', 'Curseblood Ritual is disabled'],
   },
   wendigo: {
-    rules: ['Steps around traps.', 'Consume heals it as much as the damage it deals.'],
+    rules: ['Steps around traps.', 'Consume heals it for all the damage that gets through.'],
     goal: 'Kill it: wear its health down to 0.',
     says: {
       Regeneration: 'End of its turn: {heal} heals 4.',
       'Inhuman Speed': '{move} 20 around to the nearest player, then attacks for 🎲.',
-      Feed: 'Lures everyone within 4 spaces 🎲 spaces toward it, then Consumes one for 🎲.',
+      Feed: 'Lures everyone within 4 spaces toward it, all by the same 🎲 spaces. Then everyone in Close range is Consumed for 🎲.',
     },
-    track: ['Regeneration stops until it feeds', 'Regeneration stops until it feeds', 'Regeneration stops for good'],
+    track: ['Regeneration stops until a Consume lands', 'Regeneration stops until a Consume lands', 'Regeneration stops for good'],
   },
   banshee: {
-    rules: ['On a rooftop it is out of Close range.'],
+    rules: [
+      'On a rooftop (any real building) she is out of Close range.',
+      'The heirloom, a signed ring, lies at the Funeral Parlor {11}: carry it or set it down to draw her where you want.',
+    ],
     goal: 'Kill it: wear its health down to 0.',
     says: {
-      Perch: 'Flies to the rooftop nearest the player closest to the heirloom.',
+      Perch: 'End of her turn: flies to the rooftop nearest the player closest to the heirloom.',
       Keen: '{area} Everyone outdoors within 5 spaces takes 🎲🎲.',
       Swoop: 'Lands beside the nearest player and attacks for 5.',
     },
@@ -90,18 +94,19 @@ export const MONSTER_TEXT = {
   'ushi-oni': {
     rules: [
       'End of its turn: {move} 10 toward its Lair, straight through walls. Salt stops it.',
-      'A Seized player is at Death’s Door. Carried into the Lair, they die.',
+      'A Seized player is at Death’s Door and can’t move. Get damage through its defense to break free.',
+      'Carried into its Lair, they die at the end of the round.',
     ],
     goal: 'Kill it: wear its health down to 0.',
     says: {
-      Abduct: '{move} 10 toward the nearest player and Seizes them.',
+      Abduct: '{move} 10 toward the nearest player, then attacks for 🎲🎲. If it gets through, they’re Seized.',
       'Run Down': 'Charges {move} 5 at the nearest player, straight through them and on. Everyone in its path takes 🎲.',
       Miasma: '{area} Everyone within 3 spaces takes 4.',
     },
     track: ['−1 toughness; drops whoever it carries', '−1 toughness; drops whoever it carries', '−1 toughness; drops whoever it carries'],
   },
   redcap: {
-    rules: ['Piercing attacks can hurt it, but can’t land the killing blow.'],
+    rules: ['Piercing attacks (the ones that ignore toughness) can hurt it, but can’t land the killing blow: it clings on at 1.'],
     goal: 'Kill it: wear its health down to 0.',
     says: {
       Chase: '{move} 6 toward the nearest player, then attacks for 10.',
@@ -148,7 +153,7 @@ export const MONSTER_TEXT = {
     rules: [
       'It never leaves its Lair: fly swarms do its attacks, only at the townspeople (victims).',
       'Victims are Frail. Stand with one to Defend them.',
-      'A victim dies: everyone takes 🎲 for each victim lost. No victims left: every attack hits everyone.',
+      'A victim dies: everyone takes 🎲 × the number of dead victims. No victims left: every attack hits everyone.',
     ],
     goal: 'Kill the Nest at its Lair, while defending the victims at the Hotel {1}, the Bar {5} and the Hospital {13}.',
     says: {
@@ -160,7 +165,7 @@ export const MONSTER_TEXT = {
   },
   'shadow-people': {
     rules: [
-      'No single body: the darkness itself.',
+      'No single body: it fills all the darkness on the map.',
       'Every Defense die is exhausted once it is used.',
     ],
     goal: 'Light the Dark Room: carry lit candles from the Church {9} to the Lair. 4 candles (2 with one or two players).',

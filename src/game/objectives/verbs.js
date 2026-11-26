@@ -38,6 +38,7 @@ export const ITEMS = {
   ring: { label: 'Tarnished Wedding Ring' },
   'finger-bone': { label: 'Desiccated Finger Bone' },
   cosor: { label: 'Cosor' },
+  heirloom: { label: 'Heirloom (a signed ring)' },
 };
 export const itemLabel = (id) => ITEMS[id]?.label ?? id;
 // An item with its marks: "Cosor (sharpened, blessed)", "Candle (out)".
@@ -63,9 +64,11 @@ function siteCells(state, board, at) {
 // Something dropped on `cell` is picked up again, as it was; except by the
 // player it was burnt out of the hands of (Unholy Burn), until their next
 // turn is over (`banned` seat, `until` round).
-export function pickUpHere(state, pl, cell, say) {
+// `burntOnly`: only what was burnt out of someone's hands (picked up at the
+// start of a turn spent standing on it), not what someone set down.
+export function pickUpHere(state, pl, cell, say, { burntOnly = false } = {}) {
   const ob = state.objective;
-  const mayTake = (d) => d.cell === cell && !(d.banned === pl.seat && state.round <= d.until);
+  const mayTake = (d) => d.cell === cell && !(d.banned === pl.seat && state.round <= d.until) && (!burntOnly || d.banned !== undefined);
   const here = (ob?.dropped ?? []).filter(mayTake);
   if (!here.length) return;
   ob.dropped = ob.dropped.filter((d) => !mayTake(d));

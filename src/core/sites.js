@@ -24,7 +24,7 @@ export const SITES = {
   hospital: { label: 'Hospital', number: 13, fixtures: ['bed'], floors: ['hospital'] },
   boutique: { label: 'Boutique', number: 3, fixtures: ['wedding-gown'] },
   curio: { label: 'Curio Shop', number: 7, fixtures: ['antique-chest'] },
-  funeral: { label: 'Funeral Parlor', number: 11, fixtures: ['finger-bone'] },
+  funeral: { label: 'Funeral Parlor', number: 11, fixtures: ['finger-bone', 'heirloom'] },
   outdoor: { label: 'Outdoor Store', number: 12, fixtures: ['whetstone'] },
 };
 
@@ -37,6 +37,7 @@ export const FIXTURES = {
   'wedding-gown': { label: 'Decayed Wedding Gown', note: 'For the White Lady’s wedding ritual' },
   'finger-bone': { label: 'Desiccated Finger Bone', note: 'For the White Lady’s wedding ritual' },
   whetstone: { label: 'Whetstone', note: 'Sharpens the Cosor (Strigoi)' },
+  heirloom: { label: 'Heirloom', note: 'A signed ring: the Banshee perches nearest whoever is closest to it' },
 };
 
 export const IMPLICIT_SITES = {

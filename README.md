@@ -979,6 +979,23 @@ The game is split so the same rules can run on one phone today and on a server f
   round-trips, rejected moves, Obols, midnight, monsters stalking and attacking, the board travelling as
   JSON, and a host with two phones staying in sync with seats enforced.
 
+### Monster rules played (Nov 26 answers)
+
+Barghest: can't enter buildings; Death Gaze at the end of its turn hits everyone in line of sight (straight
+lines; walls, doors and buildings block it, windows don't) for 10; Shadow Trap springs at once where it lands
+(🎲🎲 to everyone beside it). Skinwalker: Bear Maul drags whoever it hurts up to 5 spaces into the nearest
+building; once a game the first investigator at its Lair stuns it (skips its next turn, toughness 0 till
+then). Wendigo: Feed lures everyone within 4 by the same die, then Consumes everyone in Close range and
+heals all that got through; Regeneration heals 4 at the end of its turn, off until a Consume lands (or for
+good). Ushi-Oni: Abduct's 🎲🎲 attack Seizes whoever it hurts (Death's Door, can't move; damage through its
+toughness or a weakness hit frees them); at the end of its turn it heads 10 toward its Lair through walls
+(salt stops it), carrying them, and kills them there at the end of the round. Banshee: Perch at the end of
+her turn, to the rooftop (a building floor or a premade building, not fences, wrecks or towers) nearest the
+player closest to the heirloom; on a roof she's out of Close range; Keen only reaches outdoor spaces; the
+heirloom (a signed ring) is picked up at the Funeral Parlor and set down from Team (Set down). Adze: a
+victim's death costs everyone one die × the dead. Redcap: toughness-ignoring (Piercing) hits can't kill it.
+Monster heals now really heal.
+
 ### Monster cards as players read them
 
 `src/game/cards/monsterText.js` holds each card's player-facing wording: short constant rules, what each

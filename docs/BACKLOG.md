@@ -55,25 +55,25 @@ at the same spot.
 Keywords in the monster cards' abilities the monster turn doesn't do yet. Each monster's rules
 need going through with the designer.
 - [x] **Pin** (an attack; if it injures, no moving next turn)
-- [ ] **Seize / Drop / Carry** (Ushi-Oni: Abduct... Seize player; "Seized players are at Death's Door.
+- [x] **Seize / Drop / Carry** (2026-11-26: Abduct's 🎲🎲 attack Seizes if it lands; at Death's Door, can't move; carried 10 toward the Lair at the end of its turn, killed there at the end of the round; damage through its toughness or a weakness hit frees them)
   Carried to Lair = killed"; weakness: "drop player")
-- [ ] **Drag** (Skinwalker: Bear Maul, Drag (die, 5M into nearest building))
-- [ ] **Lure** (Wendigo: "Lure causes players to move towards Wendigo")
-- [ ] **Consume** (Wendigo: Feed, Consume (die); "Consume heals equal to damage")
-- [ ] **Trap** (Barghest: Shadow Trap: Teleport (nearest lightsource) and Trap (🎲🎲))
+- [x] **Drag** (2026-11-26: if Bear Maul's attack lands, up to 5 spaces into the nearest building)
+- [x] **Lure** (2026-11-26: everyone within 4, the same die of spaces toward it)
+- [x] **Consume** (2026-11-26: everyone then in Close range; it heals all that got through; a landed Consume restarts Regeneration)
+- [x] **Trap** (2026-11-26: sprung at once where the Barghest lands: 🎲🎲 to everyone beside it; gone before players act)
 - [x] **Trample** (Ushi-Oni: Run Down: a 5-space charge at the nearest player, straight through them and on; everyone in its path takes a die)
 - [x] **Block / Unblock (All Doors)** (White Lady: Infatuation, Regret)
 - [x] **Target** (White Lady: Wrath; Poltergeist: Heave)
-- [ ] **LoS Attack** (Barghest: Death Gaze, line of sight)
-- [ ] **Ritual** (Skinwalker: Curseblood Ritual, Teleport to Lair, +1 ritual; at 3 rituals: Global Attack (10))
-- [ ] Persistent rules on cards: Banshee Perch (rooftops), Shadow People Suffocating Darkness
+- [x] **LoS Attack** (2026-11-26: Death Gaze, end of its turn, 10 to everyone in a straight line not cut by walls, doors or buildings)
+- [x] **Ritual**
+- [x] Persistent rules on cards (2026-11-26): Banshee Perch (rooftops of real buildings, out of Close range; the heirloom, a signed ring at the Funeral Parlor, carried or set down), Wendigo Regeneration, Barghest outdoors only, Skinwalker stunned at its Lair once, Redcap (toughness-ignoring hits can't kill it)
   (candle, coin flip), Redcap "piercing attacks can't land the killing blow", Strigoi "only damaged
   by the Blessed Cosor", Poltergeist "discard salt items inside targeted buildings"...
 
 ## 8. Weakness-track effects only announced — mostly done (2026-11-24)
 - [x] Skinwalker 1: **Reset Curseblood Ritual** (with the ritual counter: the 3rd ritual sets off its
   Global Attack (10), then the count starts over)
-- [ ] Banshee 1 and 3: **Grounded until next Perch** (waits for Perch, see 7: on hold until the objective
+- [x] Banshee 1 and 3: **Grounded until next Perch** (2026-11-26) (waits for Perch, see 7: on hold until the objective
   marker rework, which decides what the "heirloom" is)
 - [x] White Lady 1, 3, 6: **Trigger Regret** (Regret strikes at once: Area Attack on every player inside
   her building; its Unblock waits for Infatuation's Block, see 7)

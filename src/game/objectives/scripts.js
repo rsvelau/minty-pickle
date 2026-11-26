@@ -69,6 +69,13 @@ export const OBJECTIVES = {
       { do: 'kill', at: 'lair', text: 'Strike the Strigoi with the Blessed Cosor (Close range, once a turn: one of your rolled dice as damage, ignoring its toughness) until it falls' },
     ],
   },
+  // Banshee: the heirloom only steers where she perches; killing her wins.
+  banshee: {
+    steps: [
+      { do: 'collect', at: 'funeral', item: 'heirloom', unique: true, text: 'The heirloom, a signed ring, lies at the Funeral Parlor {11}. She perches on the rooftop nearest whoever is closest to it. Carry it, or set it down, to draw her where you want her' },
+      { do: 'kill', at: 'lair', text: 'Kill her: wear her health down to 0' },
+    ],
+  },
   'white-lady': {
     needs: ['boutique', 'curio', 'funeral', 'church'],
     played: true,

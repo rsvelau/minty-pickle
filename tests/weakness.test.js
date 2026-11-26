@@ -99,8 +99,10 @@ test('Regret on her own turn: an Area Attack on everyone inside her building', (
 test('Swoop lands beside the nearest player; holding Silver, they may discard it and the damage is undone', () => {
   const s = setup('banshee');
   s.give(s.pl, ['heavy-silver-chain']);
-  s.turn('Swoop');
-  assert.equal(Math.abs(s.g.coords(s.monster.pos).x - 10) + Math.abs(s.g.coords(s.monster.pos).y - 5), 1, 'landed next to P1');
+  const ev = s.turn('Swoop');
+  const landed = ev.find((e) => e.type === 'monsterTeleport').to;
+  assert.equal(Math.abs(s.g.coords(landed).x - 10) + Math.abs(s.g.coords(landed).y - 5), 1, 'landed next to P1');
+  assert.ok(s.monster.perched, 'then back up on a rooftop (Perch)');
   assert.equal(s.pl.injuries.P, 1);
   assert.equal(s.state.reactions.length, 1);
   assert.match(s.act({ type: 'roll' }).error, /waiting for P1/);

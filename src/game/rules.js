@@ -22,7 +22,7 @@ import { turnLimits, injuries, applyDamage, sacrificeCarrier, killPlayer } from 
 import { answer as answerReaction } from './reactions.js';
 import { RANGE, cellRange } from './cards/injuries.js';
 import { objectiveLive } from './objectives/scripts.js';
-import { onSiteEnter, crossingBlocked, suffocate, destroyAnchor, holdRound, pickUpHere } from './objectives/verbs.js';
+import { onSiteEnter, crossingBlocked, suffocate, destroyAnchor, holdRound, pickUpHere, itemLabel } from './objectives/verbs.js';
 import { siteOf, siteLabel } from '../core/sites.js';
 import { craft } from './obolcraft.js';
 import { refreshThreat, onPlayerEnters } from './monsterTurn.js';
@@ -311,7 +311,7 @@ function scout(state, action, events) {
 // equipment and Obolcraft.
 const STOPPED = ['slotting', 'choosing', 'asking'];
 // Every action: { type, seat? }. Returns { ok, error?, events }.
-export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective', 'event', 'setting', 'sacrifice', 'setDie', 'react', 'strike', 'scout'];
+export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective', 'event', 'setting', 'sacrifice', 'setDie', 'react', 'strike', 'scout', 'drop'];
 
 export function applyAction(state, board, action) {
   // Doors the game changed (nailed, breached) count for every move made while
@@ -364,7 +364,7 @@ function applyActionNow(state, board, action) {
       if (state.flags?.noLight && state.flags.noLight.seat === state.cur && state.flags.noLight.round !== state.round) delete state.flags.noLight;
       startOfTurn(state, eventCtx(state));
       // Standing on something dropped (the Cosor after Unholy Burn): pick it up, once allowed.
-      pickUpHere(state, pl, pl.pos, (text) => { log(state, text); events.push({ type: 'objStep', seat: pl.seat, cell: pl.pos, text }); });
+      pickUpHere(state, pl, pl.pos, (text) => { log(state, text); events.push({ type: 'objStep', seat: pl.seat, cell: pl.pos, text }); }, { burntOnly: true });
       state.pool = Array.from({ length: lim.dice }, () => ({ kind: 'black', v: d6(state) }));
       state.slots = [];
       state.defSlots = [];
@@ -526,6 +526,19 @@ function applyActionNow(state, board, action) {
       // Toss or Drink mid-turn: injuries held off now give back what they took.
       if (before) relimit(state, board, pl, before, events);
       restop(state, board, events);
+      break;
+    }
+    case 'drop': {
+      // Set down something carried (the Banshee's heirloom...), on your own
+      // space: anyone stepping there picks it up.
+      if (!['idle', ...STOPPED].includes(state.phase)) return fail('finish moving first');
+      const pl = curPlayer(state);
+      const k = (pl.carry ?? []).findIndex((c) => c.item === action.item);
+      if (k < 0) return fail('you are not carrying that');
+      const [thing] = pl.carry.splice(k, 1);
+      (state.objective ??= { delivered: {} }).dropped = [...(state.objective.dropped ?? []), { ...thing, cell: pl.pos }];
+      log(state, `${who(state)} sets down the ${itemLabel(thing.item)} at ${label(board, pl.pos)}.`);
+      events.push({ type: 'objStep', seat: pl.seat, cell: pl.pos, text: `${itemLabel(thing.item)} set down` });
       break;
     }
     case 'scout': {

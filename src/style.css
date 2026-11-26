@@ -1491,3 +1491,7 @@ body:not(.playing) .feed { display: none; }
 .mc-goal { margin: 0; padding: 7px 9px; border-radius: 8px; background: rgba(176, 122, 16, 0.12); border: 1px solid rgba(176, 122, 16, 0.35); }
 .mc-ev .ge-chips { gap: 4px; }
 .pc-stars { text-align: center; color: #b07a10; font-size: 22px; letter-spacing: 0.16em; margin: -2px 0 6px; }
+
+.team-carry { display: grid; gap: 4px; margin: 4px 0 8px; }
+.team-carry-row { display: flex; align-items: center; gap: 8px; color: #f3d27a; }
+.team-carry-row button { margin-left: auto; min-height: 32px; }

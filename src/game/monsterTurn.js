@@ -639,12 +639,12 @@ function attackVictim(state, board, monster, card, intent, o, ctx, events) {
   const dead = (state.npcs ?? []).filter((x) => !x.alive).length;
   ctx.log(state, `The ${card.name}'s swarm falls on the ${v.name} for ${dmg}${best ? ` (defense ${block} wasn't enough)` : ' and no one defends them'}. They die.`);
   events.push({ type: 'npcAttacked', npc: v.id, cell: v.cell, amount: dmg, defense: block, defender: best?.seat ?? null, outcome: 'killed' });
-  // On a victim's death: a Global Attack of one die per dead victim (die × ☠).
+  // On a victim's death: a Global Attack of one die multiplied by the victims
+  // dead so far (die × ☠), the same roll for everyone.
   const source = `The ${card.name} (a victim dies)`;
-  for (const pl of alive(state)) {
-    const amount = Array.from({ length: dead }, () => rollDie(ctx)).reduce((a, b) => a + b, 0);
-    applyDamage(state, board, pl, type, amount, { log: ctx.log, source }, events);
-  }
+  const die = rollDie(ctx);
+  ctx.log(state, `${source}: ${die} × ${dead} dead = ${die * dead} to everyone.`);
+  for (const pl of alive(state)) applyDamage(state, board, pl, type, die * dead, { log: ctx.log, source }, events);
   return best;
 }
 
@@ -704,6 +704,7 @@ export function executeIntent(state, board, monster, ctx, events) {
     if (mods.immobile) move.steps = [];
     let cut = 0;
     for (const st of move.steps) {
+      monster.perched = false;               // any move brings her down off the roof
       if (typeof st === 'object') {
         events.push({ type: 'monsterTeleport', id: monster.id, from: monster.pos, to: st.teleport });
         monster.pos = st.teleport;
@@ -1048,8 +1049,47 @@ function drag(state, board, pl, n, ctx, events) {
   if (steps.length) ctx.log(state, `${pl.name} is dragged ${steps.length} space${steps.length === 1 ? '' : 's'}, to ${label(board, pl.pos)}${g.cells[pl.pos].area === 'indoor' ? ', inside' : ''}.`);
 }
 
+// Rooftops (Banshee's Perch): any real building: a building's floor, or a
+// premade building (the diner, the motel, the farmhouse...), not fences,
+// wrecks, groves, towers or yards.
+const ROOFED = new Set(['videoStore', 'diner', 'gasStation', 'laundromat', 'arcade', 'motel', 'lumberMill', 'lookout', 'grange',
+  'rectory', 'burnedHouse', 'farm', 'trailerPark', 'clocktower']);
+export const isRooftop = (cell) => !!cell && (cell.area === 'indoor' || ROOFED.has(cell.sub));
+// Where the heirloom is: carried (its carrier's space), set down, or still at
+// the Funeral Parlor. -1 if this map has none.
+function heirloomCell(state, board) {
+  const holder = alive(state).find((pl) => (pl.carry ?? []).some((c) => c.item === 'heirloom'));
+  if (holder) return holder.pos;
+  const down = (state.objective?.dropped ?? []).find((d) => d.item === 'heirloom');
+  if (down) return down.cell;
+  if (state.objective?.taken?.heirloom) return -1;
+  return mapSites(board.grid).funeral?.[0] ?? -1;
+}
+// Perch: to the rooftop nearest the player closest to the heirloom (or, with
+// no heirloom on the map, the player nearest her).
+function perch(state, board, monster, card, ctx, events) {
+  const g = board.grid;
+  const players = targetable(state);
+  if (!players.length) return;
+  const h = heirloomCell(state, board);
+  const from = h >= 0 ? h : monster.pos;
+  const who = [...players].sort((a, b) => gridDist(board, from, a.pos) - gridDist(board, from, b.pos) || a.seat - b.seat)[0];
+  let best = -1, bd = Infinity;
+  g.cells.forEach((c, i) => {
+    if (!isRooftop(c)) return;
+    const d = gridDist(board, who.pos, i) * 1000 + gridDist(board, monster.pos, i);
+    if (d < bd) { bd = d; best = i; }
+  });
+  if (best < 0) return;
+  if (best !== monster.pos) events.push({ type: 'monsterTeleport', id: monster.id, from: monster.pos, to: best });
+  monster.pos = best;
+  monster.perched = true;
+  ctx.log(state, `The ${card.name} perches on a rooftop at ${label(board, best)}, near ${who.name}${h >= 0 ? ', closest to the heirloom' : ''}.`);
+}
+
 // End of the monster's turn: its constant rules that act then.
 //   Death Gaze (Barghest): an attack of 10 on everyone it can see.
+//   Perch (Banshee): back up to a rooftop (out of Close range there).
 //   Regeneration (Wendigo): it heals 4.
 //   Ushi-Oni: moves 10 toward its Lair, through walls (salt stops it),
 //     carrying whoever it has Seized; brought into the Lair, they die.
@@ -1065,6 +1105,8 @@ function endOfTurn(state, board, monster, card, ctx, events, roll) {
       for (const pl of seen) struck(state, monster, gaze.name, pl, ctx, () => applyDamage(state, board, pl, type, roll(o.dmg), { log: ctx.log, source: `The ${card.name}'s ${gaze.name}` }, events));
     }
   }
+  const perchAb = card.abilities.find((a) => a.name === 'Perch');
+  if (perchAb && !off(perchAb.name) && !monster.mods?.immobile) perch(state, board, monster, card, ctx, events);
   const regen = card.abilities.find((a) => a.name === 'Regeneration');
   if (regen && !off(regen.name)) {
     const o = parseAbility(regen.text).ops.find((x) => x.op === 'heal');
