@@ -341,7 +341,7 @@ export function refreshMarkers() {
     list.push({ type: c.marker, x: p.x, y: Math.max(visibleTop(i), WATER_Y) + terrainHeight(p.x, p.z, { bridge: c.bridge }), z: p.z, dim: !c.walkable, faded: markerUsed(i) });
   });
   markers.update(list);
-  markers.setVisible(ui.showMarkers);
+  markers.setVisible(ui.showMarkers && !ui.hideMarkers);   // hidden on the title and during the game-start camera move
   refreshKeyHighlight();
 }
 export function refreshKeyHighlight() {

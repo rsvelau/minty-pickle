@@ -8,6 +8,7 @@
 // A game's map is loaded into the same board the editor uses, so the editor's
 // own board is set aside first and put back when you return to the editor;
 // a game never overwrites it.
+import { showTitleView, leaveTitleView, playIntro } from './intro.js';
 import { monsterAvailability, objectiveProblems } from '../game/objectives/scripts.js';
 import { MONSTER_CARDS, MONSTER_POOLS } from '../game/cards/monsters.js';
 import { RULES_VERSION, clockMinutes, formatClock, migrateState } from '../game/rules.js';
@@ -102,6 +103,7 @@ export const editorBoardShown = () => boardHolds === 'editor';
 
 export function enterEditor() {
   closeScreen();
+  leaveTitleView();
   restoreEditorBoard();
   game = null;
   setMode('editor');
@@ -123,6 +125,7 @@ export function showTitle() {
   if (ui.mode === 'game') autosaveNow();
   setMode('title');
   if (ui.tool === 'play') setTool('cells');
+  showTitleView();   // the town under a full moon (intro.js)
   const auto = storage.saves.list().find((s) => s.id === AUTOSAVE);
   const anySave = storage.saves.list().length > 0;
   openScreen(`
@@ -274,6 +277,7 @@ function startGame({ map, name, players, startMode, movement = 'quick', monster 
   play.setStartMode(startMode); // a fresh game on this map with these settings
   setTool('play');
   renderPlay();
+  playIntro();   // down from the moon to the town, then to the player (intro.js)
   autosaveNow();
   // No pop-up: the board, the clock and the play bar say a game has begun.
 }
@@ -326,6 +330,7 @@ function loadSlot(id) {
   play.loadState(loaded.state);
   setTool('play');
   renderPlay();
+  playIntro();
 }
 // The map from a save, as a map file again (data + details).
 function writeMapFromData({ data, meta }) {

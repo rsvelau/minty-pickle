@@ -13,9 +13,10 @@ import { FOG, QUALITY_KEY, RES_STEPS, applyResolution, fitShadows, inShadowWindo
 import { HOUSE_D, HOUSE_W, atmos, cullForest, ghostHouse, houseWindow, porchLight, updateRain, updateTreeFade } from '../render/surroundings.js';
 import { hoverBox, tmpPos, writeTileMatrix } from '../render/tileLook.js';
 import { powerOut } from '../render/tileLook.js';
+import { createSkyMoon } from '../render/skyMoon.js';
 
 // Module state: assigned by init() below, in the same order as before the split.
-export let TINT, clock, fpsMeter;
+export let TINT, clock, fpsMeter, skyMoon;
 
 // Run once at startup (called from src/main.js, in order).
 export function init() {
@@ -36,6 +37,7 @@ export function init() {
   };
 
   clock = new THREE.Clock();
+  skyMoon = createSkyMoon(scene);   // the title screen's full moon (src/render/skyMoon.js)
   fpsMeter = { frames: 0, since: performance.now(), show: false, active: false };
   renderer.setAnimationLoop(() => {
     // Full rate while anything moves; the idle rate otherwise (see wake()).
@@ -43,7 +45,7 @@ export function init() {
     const active = now < wakeUntil || !!camTween || heightsEasing || play.busy() || markers.busy()
       || clocktowers.busy() || (dread > 0 && dread < 1) || (towerOut > 0 && towerOut < 1);
     // After midnight things move all the time: a smoother rate than idle.
-    const restFps = dread > 0 ? quality.midnightFps : quality.idleFps;
+    const restFps = dread > 0 || skyMoon.visible ? quality.midnightFps : quality.idleFps;   // the moon's red glow breathes
     if (!active && now - lastFrame < 1000 / restFps - 2) return;
     autoResolution(now, active);
     lastFrame = now;
@@ -51,11 +53,16 @@ export function init() {
     const dt = Math.min(clock.getDelta(), 0.1);
 
     if (camTween) {
-      camTween.t = Math.min(1, camTween.t + dt / 0.6);
-      const k = 1 - Math.pow(1 - camTween.t, 3);
-      camera.position.lerpVectors(camTween.fromPos, camTween.toPos, k);
-      controls.target.lerpVectors(camTween.fromTarget, camTween.toTarget, k);
-      if (camTween.t >= 1) __set_camTween(null);
+      // A glide: 0.6 s ease-out by default; the game-start camera move sets its
+      // own duration, an ease-in-out and what to do when it gets there.
+      const tw = camTween;
+      // Timed by the wall clock when it has its own duration, so a slow frame
+      // rate doesn't stretch the game-start camera move.
+      if (tw.dur) { tw.start ??= now; tw.t = Math.min(1, (now - tw.start) / (tw.dur * 1000)); } else tw.t = Math.min(1, tw.t + dt / 0.6);
+      const k = tw.ease === 'inOut' ? (tw.t < 0.5 ? 4 * tw.t ** 3 : 1 - Math.pow(-2 * tw.t + 2, 3) / 2) : 1 - Math.pow(1 - tw.t, 3);
+      camera.position.lerpVectors(tw.fromPos, tw.toPos, k);
+      controls.target.lerpVectors(tw.fromTarget, tw.toTarget, k);
+      if (tw.t >= 1) { __set_camTween(null); tw.done?.(); }
     }
     // Zoom-to-cursor re-derives the target from the camera's facing after a
     // wheel zoom; switch it off while we animate the camera ourselves.
@@ -98,6 +105,7 @@ export function init() {
     props?.tick(clock.elapsedTime);
     landmarks?.tick(clock.elapsedTime);
     markers.tick(clock.elapsedTime, camera);
+    skyMoon.tick(clock.elapsedTime, camera);
     // A bug in game code must never stop the render loop (the board would
     // freeze and stop taking input): log it and keep going.
     try { play.tick(dt, clock.elapsedTime); } catch (e) { console.error(e); }

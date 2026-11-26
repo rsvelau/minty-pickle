@@ -189,8 +189,13 @@ export function setTool(tool, start) {
 // of the van).
 const AHEAD = 2.5, CAM_DIST = 11, CAM_PITCH = THREE.MathUtils.degToRad(42);
 export function frameAhead() {
+  const pose = aheadPose();
+  if (pose) __set_camTween({ t: 0, fromPos: camera.position.clone(), fromTarget: controls.target.clone(), toPos: pose.pos, toTarget: pose.target });
+}
+// The over-the-shoulder view of the player who is up: { pos, target } (or null).
+export function aheadPose() {
   const i = play.state.pos;
-  if (i < 0) return;
+  if (i < 0) return null;
   const { x, y } = grid.coords(i);
   let fx = 0, fy = -1;
   const prev = play.state.prev;
@@ -202,7 +207,7 @@ export function frameAhead() {
   const fwd = new THREE.Vector3(fx, 0, fy).normalize();
   const target = cellToWorld(x, y).addScaledVector(fwd, AHEAD);
   const pos = target.clone().addScaledVector(fwd, -CAM_DIST * Math.cos(CAM_PITCH)).setY(CAM_DIST * Math.sin(CAM_PITCH));
-  __set_camTween({ t: 0, fromPos: camera.position.clone(), fromTarget: controls.target.clone(), toPos: pos, toTarget: target });
+  return { pos, target };
 }
 
 let tapStart = null;

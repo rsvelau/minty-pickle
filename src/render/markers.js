@@ -316,6 +316,16 @@ export function createMarkers(group) {
   }
 
   function setVisible(v) { root.visible = v; }
+  // Fade every badge and ring (0..1): the game-start camera move fades them in.
+  function setOpacity(k) {
+    root.traverse((o) => {
+      for (const m of [].concat(o.material ?? [])) {
+        m.userData.baseOpacity ??= m.transparent ? m.opacity : 1;
+        if (k < 1) m.transparent = true;
+        m.opacity = m.userData.baseOpacity * k;
+      }
+    });
+  }
 
-  return { update, tick, setVisible, burst, busy: () => bursts.length > 0 };
+  return { update, tick, setVisible, setOpacity, burst, busy: () => bursts.length > 0 };
 }

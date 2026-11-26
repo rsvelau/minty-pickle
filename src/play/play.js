@@ -1218,6 +1218,8 @@ export function createPlay({
   const tmp = new THREE.Vector3();
   let last = performance.now();
   // Is anything animating (so the renderer should run at full rate)?
+  // The game-start camera move (app/intro.js) holds the follow camera off.
+  function holdCamera(on) { view.hold = !!on; if (!on) view.pan = false; }
   function busy() {
     return rolling() || !!view.watch || drops.length > 0 || grabs.length > 0 || pops.length > 0 || swarmClouds.size > 0 || view.actors.some(running) || [...view.monsters.values()].some((mv) => running(mv) || mv.lunge > 0)
       || (view.pan && group.visible);
@@ -1379,6 +1381,7 @@ export function createPlay({
     if (cur?.at) halo.position.copy(cur.at);
     halo.visible = !!cur?.at;
 
+    if (view.hold) return;   // the game-start camera move has the camera
     // A Care Package falling: every camera goes to look (as for a monster), then back.
     if (drops.length) {
       const at = centreOf(drops[0].cell);
@@ -1501,7 +1504,7 @@ export function createPlay({
     // Game settings changed outside a game: the next game starts fresh with them.
     invalidate: () => { stale = true; },
     state, session, board, roll, reset, setStartMode, saveState, loadState, useEquipment, answerInvestigate, choose, chooseByKey, tick, setActive,
-    boardChanged, setPlayers, toggleSlot, confirmMove, endTurn, unusedCount, slotTotal, rollWhite, busy, revealCard, nameMonster, craft, sacrifice, setDie, react, strike, scout,
+    boardChanged, setPlayers, toggleSlot, confirmMove, endTurn, unusedCount, slotTotal, rollWhite, busy, holdCamera, revealCard, nameMonster, craft, sacrifice, setDie, react, strike, scout,
     clockMinutes: () => (g() ? rulesClockMinutes(g()) : rulesStartMinutesFor(cfg)),
     startMinutes: () => (g() ? rulesStartMinutes(g()) : rulesStartMinutesFor(cfg)),
     midnight: () => (g() ? isMidnight(g()) : false),

@@ -6,6 +6,14 @@ A 3D planning board for a night-time, 90s Pacific Northwest board game, and the 
 
 The app opens on the **title screen** (`src/app/gameShell.js`):
 
+**The moon and the opening camera move** (`src/app/intro.js`, `src/render/skyMoon.js`): behind the title menu
+the camera looks low across the town at a bright full moon, centred above the menu, with a faint red glow
+breathing behind it (no markers, no axis labels, the camera fixed). Starting a game (new, Continue or Load)
+hides and locks the play display while the camera pans down from the sky to show the whole town, then moves in
+to the over-the-shoulder view of whoever is up (the Start space for a new game); then the menus and the map
+markers fade in. The moon is switched off as soon as it has left the view (and drawn at all only on the title
+and at the start of that move).
+
 - **Continue**: the most recent game, from its autosave.
 - **New game**: pick a map (the built-in **Hawthorn Bend**, any of **My maps**, or whatever is in the map
   editor now), 1 to 4 investigators, the monster (random from a pool, or a specific one) and an 11 PM or

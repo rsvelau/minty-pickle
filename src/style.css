@@ -1507,3 +1507,24 @@ body:not(.playing) .feed { display: none; }
 /* The clock after midnight: turns left until the night is lost. */
 .game-clock .night-left { color: #c9b8ff; }
 .game-clock .night-left.late { color: #ff8a7a; font-weight: 700; }
+
+/* The game-start camera move (src/app/intro.js): the play display is hidden
+   and locked while the camera comes down from the moon, then fades in. */
+#playHud, #gameClock, #moveModeBtn, #feed, #playTray, #trayPill, #intentBanner, #scoutScreen, #askCard, #cardPop, .choice-btn {
+  transition: opacity 0.7s ease;
+}
+body.intro #playHud, body.intro #gameClock, body.intro #moveModeBtn, body.intro #feed, body.intro #playTray,
+body.intro #trayPill, body.intro #intentBanner, body.intro #scoutScreen, body.intro #askCard, body.intro #cardPop,
+body.intro .choice-btn, body.intro #gameMenuBtn {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+body.intro #app canvas { pointer-events: none; }
+
+/* Title: the menu sits low and the sky above it stays clear, so the full moon
+   (src/render/skyMoon.js) hangs over the town above the menu. */
+body.mode-title .screen {
+  align-items: flex-end;
+  padding-bottom: max(6vh, 16px);
+  background: linear-gradient(to bottom, rgba(4, 5, 8, 0) 0%, rgba(4, 5, 8, 0.1) 35%, rgba(4, 5, 8, 0.7) 75%, rgba(4, 5, 8, 0.9) 100%);
+}
