@@ -170,8 +170,8 @@ needs stepping onto the stand, so the bot now steps off first), wins: solo 8, 2p
 - Nearly every death (≈98%) is Umbral Stab. A move along lit streets often triggers 3-4+ stabs in one move;
   four landed stabs kill a healthy investigator outright. Standing in the dark gives 0 defense slots, and
   Defense dice are exhausted once used, so most stabs land at defense 0.
-- About a third of all snuffed candles go out on the stand itself (the Church is dark), the same stop
-  they were taken.
+- About a third of all snuffed candles go out at the first stop after they were taken, often on the
+  stand itself (the Church is dark).
 - Only 28-46% of candles taken reach the Lair.
 - 3 players need 4 candles but 2 players only 2: why 3p does worse than 2p.
 - The Lair's walking distance from the Church decides most games: under 15 spaces 55% wins, 15-24
