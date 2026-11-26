@@ -58,6 +58,7 @@ export function createPlay({
   onUsed = () => {}, onReset = () => {}, onCollect = () => {}, onObol = () => {}, onAttack = () => {}, onMonster = () => {},
   onEvidence = () => {}, onAttacked = () => {}, onNamed = () => {}, onMonsterRevealed = () => {},
   onDamage = () => {}, onIntent = () => {}, onGameOver = () => {}, onNpc = () => {}, onExhaust = () => {}, onCraft = () => {}, onCard = () => {}, onEquip = () => {}, onSacrifice = () => {}, onEscaped = () => {},
+  onCarePackage = () => {}, onCrateHere = () => {}, onNightWarning = () => {},
   config = defaultConfig(),
 }) {
   const cfg = config; // live: Game settings edits this object; used at the next new game
@@ -696,26 +697,30 @@ export function createPlay({
       terrainify(glowMat, { bridge: true });
       const glow = new THREE.Mesh(new THREE.RingGeometry(0.1, 0.17, 28).rotateX(-Math.PI / 2), glowMat);
       glow.renderOrder = 3;
-      const steel = new THREE.MeshLambertMaterial({ color: 0xc8ccd0 });
-      const wood = new THREE.MeshLambertMaterial({ color: 0x5a3a24 });
-      terrainify(steel, { bridge: true }); terrainify(wood, { bridge: true });
-      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.008, 0.03), steel);
-      blade.position.set(0.05, 0.012, 0);
-      const grip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.016, 0.026), wood);
-      grip.position.set(-0.055, 0.014, 0);
-      const knife = new THREE.Group();
-      knife.add(blade, grip);
-      knife.rotation.y = 0.6;
-      if (d.item === 'heirloom') {
-        // The Banshee's heirloom: a gold signet ring.
-        const gold = new THREE.MeshLambertMaterial({ color: 0xd8b040 });
-        terrainify(gold, { bridge: true });
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.012, 6, 16).rotateX(Math.PI / 2), gold);
-        ring.position.y = 0.014;
-        ring.raycast = () => {};
-        obj.add(glow, ring);
-      } else obj.add(glow, knife);
-      for (const m of [glow, blade, grip]) m.raycast = () => {};
+      // The item itself, small, lying on the ground.
+      const mat = (color) => { const m = new THREE.MeshLambertMaterial({ color }); terrainify(m, { bridge: true }); return m; };
+      const lay = (geo, color, x = 0, y = 0.014, z = 0) => { const m = new THREE.Mesh(geo, mat(color)); m.position.set(x, y, z); m.raycast = () => {}; return m; };
+      const item = new THREE.Group();
+      if (d.item === 'heirloom' || d.item === 'ring') {
+        // A gold ring (the Banshee's signet, the White Lady's wedding ring).
+        item.add(lay(new THREE.TorusGeometry(0.045, 0.012, 6, 16).rotateX(Math.PI / 2), d.item === 'ring' ? 0xb8a070 : 0xd8b040));
+      } else if (d.item === 'candle') {
+        item.add(lay(new THREE.CylinderGeometry(0.022, 0.022, 0.09, 10), 0xeee6d0, 0, 0.045));
+        if (d.lit !== false) item.add(new THREE.Mesh(new THREE.SphereGeometry(0.016, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffb040 })).translateY(0.105));
+      } else if (d.item === 'holy-water') {
+        item.add(lay(new THREE.CylinderGeometry(0.025, 0.03, 0.07, 10), 0x6fa8e0, 0, 0.035), lay(new THREE.CylinderGeometry(0.01, 0.01, 0.025, 8), 0x5a3a24, 0, 0.082));
+      } else if (d.item === 'gown') {
+        item.add(lay(new THREE.BoxGeometry(0.15, 0.025, 0.11), 0xd8d2c4, 0, 0.0125));
+      } else if (d.item === 'finger-bone') {
+        item.add(lay(new THREE.CylinderGeometry(0.008, 0.008, 0.07, 6).rotateZ(Math.PI / 2), 0xe0d8c0, 0, 0.01), lay(new THREE.SphereGeometry(0.013, 6, 5), 0xe0d8c0, 0.037, 0.012), lay(new THREE.SphereGeometry(0.013, 6, 5), 0xe0d8c0, -0.037, 0.012));
+      } else if (d.item === 'cosor') {
+        item.add(lay(new THREE.BoxGeometry(0.14, 0.008, 0.03), 0xc8ccd0, 0.05, 0.012), lay(new THREE.BoxGeometry(0.07, 0.016, 0.026), 0x5a3a24, -0.055, 0.014));
+      } else {
+        item.add(lay(new THREE.BoxGeometry(0.08, 0.05, 0.06), 0x8a7a5a, 0, 0.025));   // anything else: a small parcel
+      }
+      item.rotation.y = 0.6;
+      obj.add(glow, item);
+      glow.raycast = () => {};
       const at = centreOf(d.cell);
       obj.position.set(at.x - 0.2, at.y + 0.01, at.z - 0.2);
       obj.userData.glow = glowMat;
@@ -794,9 +799,82 @@ export function createPlay({
     group.add(pickMesh);
   }
 
+  // Care Packages: a military crate on each (state.crates), and the drop itself:
+  // a purple portal opens over the space and the crate falls out of it.
+  const crateTokens = new Map();   // cell -> group
+  const drops = [];                // { cell, t, portal, crate }
+  function makeCrate() {
+    const crate = new THREE.Group();
+    const mat = (color) => { const m = new THREE.MeshLambertMaterial({ color }); terrainify(m, { bridge: true }); return m; };
+    const add = (geo, color, x, y, z) => { const m = new THREE.Mesh(geo, mat(color)); m.position.set(x, y, z); m.raycast = () => {}; crate.add(m); return m; };
+    add(new THREE.BoxGeometry(0.42, 0.24, 0.3), 0x4b5320, 0, 0.12, 0);              // olive drab body
+    add(new THREE.BoxGeometry(0.44, 0.04, 0.32), 0x3a4019, 0, 0.25, 0);             // lid
+    for (const x of [-0.16, 0.16]) add(new THREE.BoxGeometry(0.025, 0.245, 0.305), 0x2e3314, x, 0.12, 0); // straps
+    add(new THREE.BoxGeometry(0.16, 0.06, 0.004), 0xe8e4d0, 0, 0.13, 0.152);        // stencil plate
+    add(new THREE.BoxGeometry(0.03, 0.03, 0.006), 0xc23030, 0, 0.13, 0.155);        // the red cross on it
+    return crate;
+  }
+  function makePortal() {
+    const portal = new THREE.Group();
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0xb050ff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
+    const discMat = new THREE.MeshBasicMaterial({ color: 0x5a1a9a, transparent: true, opacity: 0.75, side: THREE.DoubleSide, depthWrite: false });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.05, 10, 40).rotateX(Math.PI / 2), ringMat);
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(0.42, 40).rotateX(Math.PI / 2), discMat);
+    for (const m of [ring, disc]) { m.raycast = () => {}; m.renderOrder = 8; portal.add(m); }
+    const light = new THREE.PointLight(0xb050ff, 2.5, 3.5);
+    portal.add(light);
+    portal.userData = { ringMat, discMat, light };
+    return portal;
+  }
+  function syncCrates() {
+    const want = new Set((g()?.crates ?? []).map((c) => c.cell));
+    for (const [cell, obj] of crateTokens) if (!want.has(cell)) { group.remove(obj); crateTokens.delete(cell); }
+    for (const cell of want) {
+      if (crateTokens.has(cell) || !inBoard(cell)) continue;
+      const crate = makeCrate();
+      const at = centreOf(cell);
+      crate.position.set(at.x, at.y, at.z);
+      crate.rotation.y = 0.35;
+      group.add(crate);
+      crateTokens.set(cell, crate);
+    }
+  }
+  function startDrop(cell) {
+    syncCrates();
+    const crate = crateTokens.get(cell);
+    if (!crate) return;
+    const portal = makePortal();
+    const at = centreOf(cell);
+    portal.position.set(at.x, at.y + 2.4, at.z);
+    portal.scale.setScalar(0.01);
+    group.add(portal);
+    crate.position.y = at.y + 2.3;
+    crate.visible = false;
+    drops.push({ cell, t: -1.2, portal, crate, floor: at.y });   // a moment for the cameras to get there first
+  }
+  function tickDrops(dt) {
+    for (const d of [...drops]) {
+      d.t += dt;
+      const t = Math.max(0, d.t);
+      const open = Math.min(1, t / 0.6);                       // 0-0.6s the portal opens
+      const close = t > 1.8 ? Math.max(0, 1 - (t - 1.8) / 0.8) : 1;
+      d.portal.scale.setScalar(Math.max(0.01, open * close));
+      d.portal.rotation.y += dt * 2.5;
+      d.portal.userData.light.intensity = 2.5 * open * close;
+      if (t > 0.6) {
+        d.crate.visible = true;
+        const f = Math.min(1, (t - 0.6) / 0.7);                // 0.6-1.3s it falls
+        d.crate.position.y = d.floor + 2.3 * (1 - f * f);
+        d.crate.rotation.y = 0.35 + (1 - f) * 2;
+      }
+      if (t > 4.2) { group.remove(d.portal); drops.splice(drops.indexOf(d), 1); }   // and a moment to look at it
+    }
+  }
+
   function refreshDiscoveries() {
     syncHazards();
     syncDropped();
+    if (!drops.length) syncCrates();
     syncWards();
     const my = g()?.mystery;
     const list = (my?.found ?? []).slice(0, view.shownFinds).map((f) => ({
@@ -1004,7 +1082,22 @@ export function createPlay({
           onIntent(e);
           break;
         case 'gameOver':
-          onGameOver();
+          onGameOver(e);
+          break;
+        case 'carePackage':
+          startDrop(e.cell);
+          onUsed();   // the Investigation marker under it goes
+          onCarePackage(e);
+          break;
+        case 'crateHere':
+          attachToArrival(view.actors[e.seat], e.cell, () => onCrateHere(e));
+          break;
+        case 'crateTake':
+          syncCrates();
+          onUsed();
+          break;
+        case 'nightWarning':
+          onNightWarning(e);
           break;
         default:
       }
@@ -1126,7 +1219,7 @@ export function createPlay({
   let last = performance.now();
   // Is anything animating (so the renderer should run at full rate)?
   function busy() {
-    return rolling() || !!view.watch || grabs.length > 0 || pops.length > 0 || swarmClouds.size > 0 || view.actors.some(running) || [...view.monsters.values()].some((mv) => running(mv) || mv.lunge > 0)
+    return rolling() || !!view.watch || drops.length > 0 || grabs.length > 0 || pops.length > 0 || swarmClouds.size > 0 || view.actors.some(running) || [...view.monsters.values()].some((mv) => running(mv) || mv.lunge > 0)
       || (view.pan && group.visible);
   }
   function tick(_dt, t) {
@@ -1169,6 +1262,7 @@ export function createPlay({
     tickGrabs(dt);
     tickDarkness(t, s);
     tickNpcs(t, s);
+    tickDrops(dt);
     tickSwarms(t, dt);
     for (const [, mv] of view.monsters) {
       if (!mv.anim && mv.queue.length) mv.anim = Object.assign(mv.queue.shift(), { t: 0 });
@@ -1285,6 +1379,17 @@ export function createPlay({
     if (cur?.at) halo.position.copy(cur.at);
     halo.visible = !!cur?.at;
 
+    // A Care Package falling: every camera goes to look (as for a monster), then back.
+    if (drops.length) {
+      const at = centreOf(drops[0].cell);
+      tmp.set(at.x, 0, at.z).sub(controls.target);
+      tmp.y = 0;
+      tmp.multiplyScalar(Math.min(1, dt * 5));
+      controls.target.add(tmp);
+      camera.position.add(tmp);
+      view.pan = true;
+      return;
+    }
     // Camera visits a monster when it appears or moves (and stays while it
     // stalks or lunges), then returns to the current player.
     const wmv = view.watch && view.monsters.get(view.watch.id);

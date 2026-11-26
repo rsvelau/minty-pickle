@@ -193,14 +193,14 @@ export const MONSTER_CARDS = [
     evidence: { attack: 'S', observations: ['WR', 'IS', 'PB'], lair: 'UG' },
   },
   {
-    id: 'adze', name: 'Adze', hp: 30, toughness: 3, badge: 3, stars: 2,
+    id: 'adze', name: 'Adze', hp: 30, toughness: 2, badge: 3, stars: 2,
     // It stays in its cocoon in the Lair; its actions are carried out by fly
     // swarms that cross any terrain but not walls.
     body: 'cocoon', actsBy: 'swarm',
     traits: ['Corporeal', 'Intelligent'],
     note: 'Attacks target only NPCs. NPCs are Frail and can be Defended. On NPC death: Global Attack (die × ☠). No NPCs left: attacks are Global.',
     objective: 'Kill the Nest at the Lair, while defending the victims at the Hotel {1}, the Bar {5} and the Hospital {13} from its fly swarms.',
-    weakness: ['fire', 'holy'], immune: ['crystal', 'salt', 'iron', 'silver'],
+    weakness: ['fire', 'holy'], immune: ['crystal', 'salt', 'silver'],
     weaknessTrack: [{ hits: 1, text: '−1 toughness' }, { hits: 3, text: '−1 toughness' }, { hits: 5, text: '−1 die' }],
     abilities: [
       A('spiritual', 'Hotel Victim', '1-2', 'Attack ({1}, die) and Exhaust (defensive die)'),

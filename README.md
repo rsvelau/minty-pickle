@@ -269,6 +269,22 @@ teammates in your space for heals like the Medical Kit). Obol costs (◉) take a
 
 **The clock stops at midnight**: from then on it shows 12:00 AM · Midnight, and ⏳ effects do nothing.
 
+**The night has 24 turns** (`src/game/carePackage.js`): counted from midnight, the clock shows how many turns
+are left to dawn (red for the last 5). At 19 a warning; when the 24th turn ends and the monster still stands, the
+team is **Lost in the night** and everyone loses.
+
+**Care Packages**: every 6 turns after midnight (6, 12 and 18) a purple portal opens over a random Investigation
+marker (investigated or not) and a military crate falls onto it; every camera turns to watch, and the feed says
+where. The crate replaces the marker and holds 5 Equipment cards from the deck. Stopping on it (the pawn always
+stops there) opens it: take what you need, the rest stays for the others (📦 in the dock reopens it while you
+stand there). An empty crate is gone.
+
+**Dropped on death**: an investigator who dies drops what they carried (the White Lady's relics, the Cosor, the
+heirloom, holy water, a candle...) where they fell, drawn on the ground; anyone stepping there picks it up.
+
+**Skills don't offer pointless healing**: a heal with no matching injury (yours, or a teammate's in range) is
+"Not now: No Physical injury to heal".
+
 **Cards in the game** (Game settings → Cards → Choose…): pick which Equipment, Events and Mindsets new games
 use, 0-3 copies of each, and which Monsters the random mystery can be. Search, All in / All out. Saved with the
 game settings (`deckCounts`: only the changes from one copy each).
@@ -1003,6 +1019,7 @@ her turn, to the rooftop (a building floor or a premade building, not fences, wr
 player closest to the heirloom; on a roof she's out of Close range; Keen only reaches outdoor spaces; the
 heirloom (a signed ring) is picked up at the Funeral Parlor and set down from Team (Set down); brought to
 the Unmarked Grave (any Objective marker on a cemetery space, or one set to that site), it defeats her at once. Adze: its
+the Nest has toughness 2 and isn't immune to Iron (Iron weapons hurt it); its
 victims come out as soon as the team knows it's the Adze (all its evidence, or named right), or at midnight;
 the turn it rises its swarms only gather; then each swarm flies from the Lair 6 spaces a turn toward its
 victim (walls and windows stop it, doors don't, locked or not; with no way through it scatters; one swarm per victim at a time, so a second one goes after another

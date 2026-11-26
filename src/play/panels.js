@@ -23,6 +23,7 @@ import { sacrificeSeat, SCOUTING_STORY } from '../game/rules.js';
 import { scriptOf, mapSites, knownMonster } from '../game/objectives/scripts.js';
 import { progressLines, describeItem } from '../game/objectives/verbs.js';
 import { skillStatus, COSOR_CARD } from '../game/skills.js';
+import { crateAt } from '../game/carePackage.js';
 import { MONSTER_TEXT } from '../game/cards/monsterText.js';
 import { showSheet, hideSheet, sheetOpen, dragToClose } from './sheets.js';
 import { initFeed } from './feed.js';
@@ -87,7 +88,8 @@ export function init() {
   // --- The dock: Team, Skills, Case, More (sheets.js keeps one open at a time). ---------
   // A dock button opens its sheet, or closes it if it's the one open.
   const openers = { teamSheet: () => openTeam(), inventory: () => openInventory(), casebook: () => openCasebook(), moreSheet: () => showSheet('moreSheet') };
-  const closers = { teamSheet: () => hideSheet('teamSheet'), inventory: closeInventory, casebook: closeCasebook, moreSheet: () => hideSheet('moreSheet') };
+  const closers = { teamSheet: () => hideSheet('teamSheet'), inventory: closeInventory, casebook: closeCasebook, moreSheet: () => hideSheet('moreSheet'), crateSheet: () => hideSheet('crateSheet') };
+  $('#crateBtn').addEventListener('click', () => (sheetOpen('crateSheet') ? hideSheet('crateSheet') : openCrate()));
   document.querySelectorAll('.dock-btn[data-sheet]').forEach((b) => b.addEventListener('click', () => {
     const id = b.dataset.sheet;
     if (sheetOpen(id)) closers[id](); else openers[id]();
@@ -304,6 +306,10 @@ export function showCardNow(c) {
     html = escaped.length
       ? `<div class="pc-kind">Dawn, at last</div><div class="pc-glyph">☀</div><div class="pc-title">They got away</div><div class="pc-sub">${esc(escaped.map((p) => p.name).join(', '))} escaped. The investigators win.</div>`
       : '<div class="pc-kind">Dawn, at last</div><div class="pc-glyph">☀</div><div class="pc-title">The objective is achieved</div><div class="pc-sub">The investigators survive the night.</div>';
+    stay = true;
+  } else if (c.kind === 'over' && play.session.state?.lostInNight) {
+    html = '<div class="pc-kind">The night wins</div><div class="pc-glyph">☾</div><div class="pc-title">Lost in the night</div>' +
+      '<div class="pc-sub">24 turns after midnight the monster still stands. Dawn never comes: everyone loses. Restart to try again.</div>';
     stay = true;
   } else if (c.kind === 'over') {
     html = '<div class="pc-kind">The night wins</div><div class="pc-glyph">☠</div><div class="pc-title">Everyone is dead</div>' +
@@ -1100,4 +1106,26 @@ function mapEffectsHTML() {
   if (st.lockdown) bits.push('<b>Lockdown</b>: every door is locked. Touch a Key space to open them all for good.');
   if (st.allDoorsOpen) bits.push('Every door is unlocked for good.');
   return bits.length ? `<p class="case-note">${bits.join(' ')}</p>` : '';
+}
+
+// --- Care Package: the crate under the current player (game/carePackage.js). ---
+export function openCrate() { renderCrate(); showSheet('crateSheet'); }
+export function renderCrate() {
+  const st = play.session.state;
+  const pl = st?.players?.[st.cur];
+  const crate = pl && crateAt(st, pl.pos);
+  const body = $('#crateBody');
+  if (!crate) { body.innerHTML = '<p class="inv-empty">No Care Package here. Stand on one to open it.</p>'; return; }
+  const mine = ['idle', 'slotting', 'choosing', 'asking'].includes(st.phase);
+  body.innerHTML = `<p class="crate-note">A military crate from a purple portal. <b style="color:${pl.colour}">${esc(pl.name)}</b> can take what they need; whatever is left stays for the others.</p>` +
+    `<div class="eq-list">${crate.items.map((id, k) => {
+      const card = EQUIPMENT_BY_ID[id];
+      return `<div class="eq-card"><b>${esc(card?.name ?? id)}</b>${card ? abilitiesHTML(card) : ''}` +
+        `<div class="case-actions"><button type="button" class="ink" data-take="${k}" ${mine ? '' : 'disabled'}>Take</button></div></div>`;
+    }).join('')}</div>`;
+  body.querySelectorAll('[data-take]').forEach((b) => { b.onclick = () => {
+    const r = play.session.dispatch({ type: 'crate', item: Number(b.dataset.take), seat: st.cur });
+    if (!r.ok) { b.textContent = r.error; return; }
+    if (crateAt(play.session.state, pl.pos)) renderCrate(); else hideSheet('crateSheet');
+  }; });
 }

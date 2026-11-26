@@ -148,7 +148,17 @@ export function killPlayer(state, pl, { log, text }) {
   }
   pl.dead = true;
   log(state, `${text}, and dies.`);
+  dropCarried(state, pl, log);
   return 'killed';
+}
+// A dead investigator's objective items fall where they died, for the others
+// to pick up (stepping onto the space).
+export function dropCarried(state, pl, log) {
+  if (!pl.carry?.length) return;
+  const ob = (state.objective ??= { delivered: {} });
+  ob.dropped = [...(ob.dropped ?? []), ...pl.carry.map((thing) => ({ ...thing, cell: pl.pos }))];
+  log(state, `${pl.name}'s ${pl.carry.map((c) => c.item.replace(/-/g, ' ')).join(', ')} ${pl.carry.length === 1 ? 'falls' : 'fall'} to the ground where they died.`);
+  pl.carry = [];
 }
 // Who can pay for the Sacrifice to save `pl`: pl themselves first, then the
 // teammates in seat order (alive, carrying the Fetish, holding an Obol).

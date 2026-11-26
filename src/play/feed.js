@@ -24,7 +24,7 @@ const KINDS = [
   ['objective', /\b(Cosor|sharpen|bless|deliver|cleanse|candle|escape|objective|picks up|Ring|Gown|Finger Bone|holy water|anchor)\w*/i],
   ['evidence', /\b(evidence|investigat\w*|Obol|Casebook|Lair|found)\b/i],
   ['skill', /(\b(uses|Equipment|craft\w*|Lucky|Rally|refresh\w*|heal\w*|discards)\b|Obolcraft)/i],
-  ['night', /\b(midnight|round|monster appears|rises)\b/i],
+  ['night', /\b(midnight|round|monster appears|rises|Care Package|night is closing|Lost in the night)\b/i],
 ];
 const kindOf = (text) => KINDS.find(([, re]) => re.test(text))?.[0] ?? 'plain';
 // What pops up: attacks either way, a death, objectives, evidence and Obols,
@@ -32,7 +32,7 @@ const kindOf = (text) => KINDS.find(([, re]) => re.test(text))?.[0] ?? 'plain';
 // rolls, moves, turns and other plain lines. Every player sees the same lines:
 // they come from the game's own log, which is shared (one game state).
 const POPS = new Set(['death', 'monster', 'hurt', 'objective', 'evidence', 'skill', 'night']);
-const MARKER = /\b(picked up a key|collected a single-use White Die|attuned a Black Die|used Research|Objective marker|takes the)\b/;
+const MARKER = /\b(to the ground where they died|picked up a key|collected a single-use White Die|attuned a Black Die|used Research|Objective marker|takes the)\b/;
 const pops = (text) => POPS.has(kindOf(text)) || MARKER.test(text);
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 

@@ -1495,3 +1495,15 @@ body:not(.playing) .feed { display: none; }
 .team-carry { display: grid; gap: 4px; margin: 4px 0 8px; }
 .team-carry-row { display: flex; align-items: center; gap: 8px; color: #f3d27a; }
 .team-carry-row button { margin-left: auto; min-height: 32px; }
+
+/* Care Package: the dock button while standing on one, and the sheet's note. */
+.crate-btn {
+  flex: none; margin-left: 6px; padding: 4px 10px; border-radius: 999px;
+  border: 1px solid rgba(176, 80, 255, 0.7); background: rgba(60, 20, 90, 0.85); color: #ecd8ff;
+  font: 600 12px/1.2 inherit; cursor: pointer; white-space: nowrap;
+}
+.crate-btn:hover { background: rgba(90, 30, 130, 0.95); }
+.crate-note { margin: 0 0 10px; color: var(--muted, #aab); font-size: 13px; line-height: 1.4; }
+/* The clock after midnight: turns left until the night is lost. */
+.game-clock .night-left { color: #c9b8ff; }
+.game-clock .night-left.late { color: #ff8a7a; font-weight: 700; }

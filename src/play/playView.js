@@ -9,7 +9,7 @@ import { defenseLeft, defenseValue } from '../game/combat.js';
 import { WATER_Y, grid, ui } from '../app/config.js';
 import { toast } from '../app/files.js';
 import { $ } from '../app/dom.js';
-import { craftUI, dmgIcon, hitText, injuryPips, markCaseNew, obolHTML, renderAsk, renderSacrifice, renderCasebook, renderIntent, renderInventory, renderTeam, renderSkillBadge, openStrike, renderScouting, renderRevealSheet, showCard, showObol, renderEventChoice } from './panels.js';
+import { openCrate, renderCrate, craftUI, dmgIcon, hitText, injuryPips, markCaseNew, obolHTML, renderAsk, renderSacrifice, renderCasebook, renderIntent, renderInventory, renderTeam, renderSkillBadge, openStrike, renderScouting, renderRevealSheet, showCard, showObol, renderEventChoice } from './panels.js';
 import { objectiveLive } from '../game/objectives/scripts.js';
 import { memorialsLive, memorialCells } from '../game/objectives/verbs.js';
 import { feedUpdate, feedReset } from './feed.js';
@@ -17,6 +17,8 @@ import { describeItem } from '../game/objectives/verbs.js';
 import { RANGE, cellRange } from '../game/cards/injuries.js';
 import { __set_markerHidden, __set_markerExtras, __set_markerUsed, markers, refreshMarkers, refreshPropsAndWalls, visibleTop } from '../render/board.js';
 import { camera, cellToWorld, controls, scene, wake } from '../render/scene.js';
+import { crateAt, turnsLeftInNight } from '../game/carePackage.js';
+import { sheetOpen } from './sheets.js';
 import { lightLevels } from '../render/tileLook.js';
 import { onGameUpdate } from '../app/gameShell.js';
 import { EVENT_BY_ID } from '../game/cards/events.js';
@@ -61,6 +63,14 @@ export function init() {
     onExhaust: (e) => showCard({ kind: 'exhaust', e }),
     onCraft: (e) => { craftUI.recipe = null; showCard({ kind: 'craft', e }); },
     onReset: () => feedReset(),
+    // A Care Package falls: every camera turns to look at the purple portal.
+    onCarePackage: (e) => {
+      const { x, y } = grid.coords(e.cell);
+      toast(`A Care Package falls at ${cellLabel(x, y)}: ${e.items} pieces of Equipment inside.`);
+    },
+    // The current player reaches a crate: open it.
+    onCrateHere: (e) => { if (e.seat === play.session.state?.cur) openCrate(); },
+    onNightWarning: (e) => toast(`The night is closing in: ${e.left} turns left.`),
     onCard: (e) => showCard({ kind: e.deck === 'events' ? 'event' : 'equipment', e }),
     onEquip: (e) => showCard({ kind: 'equipUse', e }),
     onSacrifice: (e) => showCard({ kind: 'sacrifice', e }),
@@ -89,7 +99,8 @@ export function init() {
   });
   __set_markerUsed((i) => ui.tool === 'play' && play.state.shownUsed.has(i));
   // Objectives appear once the monster is known (midnight, or named early), and only its own sites.
-  __set_markerHidden((i) => ui.tool === 'play' && grid.cells[i].marker === 'objective' && !objectiveLive(play.session.state ?? {}, grid, i));
+  // A Care Package replaces the Investigation marker it fell on.
+  __set_markerHidden((i) => ui.tool === 'play' && ((grid.cells[i].marker === 'objective' && !objectiveLive(play.session.state ?? {}, grid, i)) || (grid.cells[i].marker === 'investigation' && !!crateAt(play.session.state ?? {}, i))));
   // Shadow People: the Missing-person memorials become optional objectives
   // (a pale blue flag): candles can be relit there.
   __set_markerExtras(() => (ui.tool === 'play' && play.session?.state && memorialsLive(play.session.state) ? memorialCells(play.board).map((i) => ({ i, type: 'shrine' })) : []));
@@ -198,6 +209,7 @@ export function renderPlay() {
     done: `On <b>${here}</b>. Roll again.`,
   }[s.phase] ?? '');
   renderChoices();
+  renderCrateBtn();
 }
 export function renderChoices() {
   const host = $('#playChoices');
@@ -288,7 +300,7 @@ export function renderClock() {
   const glob = play.session.state?.global ? EVENT_BY_ID[play.session.state.global.id] : null;
   el.innerHTML = (r <= turns
     ? `${t}<span class="sep">·</span><span class="turn-word">Turn </span>${r}/${turns}`
-    : `${t}<span class="sep">·</span>Midnight`)
+    : `${t}<span class="sep">·</span>Midnight${turnsLeftInNight(play.session.state ?? {}) !== null ? `<span class="sep">·</span><span class="night-left${turnsLeftInNight(play.session.state) <= 5 ? ' late' : ''}">${turnsLeftInNight(play.session.state)} turns to dawn</span>` : ''}`)
     + (glob ? `<span class="sep">·</span><span class="glob" title="${glob.text.replace(/"/g, '&quot;')}">${glob.name}</span>` : '');
 }
 
@@ -422,4 +434,13 @@ export function endCellPick() {
   play.showPick(null);
   $('#pickBar').hidden = true;
   renderTray();
+}
+
+// The 📦 button in the dock: shown while the current player stands on a Care Package.
+export function renderCrateBtn() {
+  const st = play.session?.state;
+  const pl = st?.players?.[st.cur];
+  const on = ui.tool === 'play' && !!pl && !pl.dead && !!crateAt(st, pl.pos) && st.phase !== 'over';
+  $('#crateBtn').hidden = !on;
+  if (sheetOpen('crateSheet')) renderCrate();
 }

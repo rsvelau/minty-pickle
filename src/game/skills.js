@@ -23,7 +23,7 @@ import { MONSTER_BY_ID, DAMAGE_KINDS } from './cards/monsters.js';
 import { checkRequirement } from './cards/requirements.js';
 import { abilityReady, targetsFor, actionRoll } from './equipmentPlay.js';
 import { applyAction } from './rules.js';
-import { RANGE, cellRange } from './cards/injuries.js';
+import { RANGE, cellRange, INJURY_TRACKS } from './cards/injuries.js';
 import { doorsAround } from './doors.js';
 import { canRelightAtMemorial, memorialBeside, memorialsLive } from './objectives/verbs.js';
 
@@ -72,6 +72,18 @@ export function skillStatus(state, board, pl) {
       if (targeted && !options.length) {
         if ((fx.target === 'monster' || fx.lure) && !state.monsters.length) return set('not', 'No monster on the board');
         if (fx.door && state.phase !== 'idle') return set('not', 'No door next to you');
+      }
+
+      // Healing with nothing to heal: not offered (it would only spend the dice).
+      if (fx.heal && typeof fx.heal === 'object') {
+        const kinds = Object.keys(fx.heal);
+        const hurt = (p) => p && kinds.some((k) => (p.injuries?.[k] ?? 0) > 0);
+        const what = kinds.map((k) => INJURY_TRACKS[k]?.label ?? k).join(' or ');
+        if (fx.target === 'ally') {
+          const keep = options.filter((o) => o.seat === undefined || hurt(state.players[o.seat]));
+          if (!keep.length) return set('not', `No ${what} injury to heal`);
+          options.splice(0, options.length, ...keep);
+        } else if (!hurt(pl)) return set('not', `No ${what} injury to heal`);
       }
 
       // Nothing rolled yet: dice skills wait for the roll.

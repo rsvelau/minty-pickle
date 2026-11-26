@@ -18,13 +18,14 @@
 import { MARKERS, streetMask, edgeKey, cellLabel } from '../core/state.js';
 import { gameDoorOverride, doorsAround } from './doors.js';
 import { MONSTERS, spawnMonsters, monstersAct, farthestFromPlayers } from './monsters.js';
-import { turnLimits, injuries, applyDamage, sacrificeCarrier, killPlayer } from './combat.js';
+import { turnLimits, injuries, applyDamage, sacrificeCarrier, killPlayer, dropCarried } from './combat.js';
 import { answer as answerReaction } from './reactions.js';
 import { RANGE, cellRange } from './cards/injuries.js';
 import { objectiveLive, knownMonster } from './objectives/scripts.js';
 import { onSiteEnter, crossingBlocked, suffocate, relightHere, memorialPass, relightForObol, canRelightAtMemorial, destroyAnchor, holdRound, pickUpHere, itemLabel } from './objectives/verbs.js';
 import { siteOf, siteLabel } from '../core/sites.js';
 import { craft } from './obolcraft.js';
+import { nightTurn, crateAt, takeFromCrate } from './carePackage.js';
 import { refreshThreat, onPlayerEnters, setupVictims } from './monsterTurn.js';
 import { setupMystery, evidenceObol, revealEvidence, attackObol, nameMonster, revealMonster } from './mystery.js';
 import { setupDecks, drawEquipment, drawCard, eventCard, isMindset } from './decks.js';
@@ -216,7 +217,7 @@ export function newGame(board, setup = {}) {
     survivors: { live: 0, die: 0 }, exposed: {}, flags: {}, pendingEvent: null, eventQueue: [], midnightDone: false,
     log: [],
   };
-  if (state.startMode === 'midnight') { state.round = config.turnsToMidnight + 1; state.midnightDone = true; }
+  if (state.startMode === 'midnight') { state.round = config.turnsToMidnight + 1; state.midnightDone = true; state.midnightRound = state.round; }
   setupDecks(state, randInt);
   const events = [{ type: 'start' }];
   if (start >= 0) {
@@ -311,7 +312,7 @@ function scout(state, action, events) {
 // equipment and Obolcraft.
 const STOPPED = ['slotting', 'choosing', 'asking'];
 // Every action: { type, seat? }. Returns { ok, error?, events }.
-export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective', 'event', 'setting', 'sacrifice', 'setDie', 'react', 'strike', 'scout', 'drop', 'force', 'relight'];
+export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective', 'event', 'setting', 'sacrifice', 'setDie', 'react', 'strike', 'scout', 'drop', 'force', 'relight', 'crate'];
 
 export function applyAction(state, board, action) {
   // Doors the game changed (nailed, breached) count for every move made while
@@ -578,6 +579,13 @@ function applyActionNow(state, board, action) {
       restop(state, board, events);
       break;
     }
+    case 'crate': {
+      // Take a piece of Equipment from the Care Package you stand on.
+      if (!['idle', ...STOPPED].includes(state.phase)) return fail('finish moving first');
+      const err = takeFromCrate(state, curPlayer(state), action.item | 0, { log, state }, events);
+      if (err) return fail(err);
+      break;
+    }
     case 'relight': {
       // Shadow People: beside a Missing-person memorial (start of the turn or
       // stopped there), relight a candle that went out for an Obol.
@@ -643,6 +651,7 @@ function applyActionNow(state, board, action) {
       } else {
         pl.dead = true;
         log(state, `${pl.name} dies.`);
+        dropCarried(state, pl, log);
         events.push({ type: 'sacrifice', seat: pl.seat, carrier: carrier.seat, saved: false });
       }
       afterSacrifice(state, board, events);
@@ -710,7 +719,7 @@ function pendingSacrifice(state) {
     const carrier = pl.dying && sacrificeCarrier(state, pl);
     if (carrier) return { pl, carrier };
     state.sacrifice.shift();
-    if (pl.dying) { delete pl.dying; pl.dead = true; log(state, `${pl.name} dies.`); }
+    if (pl.dying) { delete pl.dying; pl.dead = true; log(state, `${pl.name} dies.`); dropCarried(state, pl, log); }
   }
   return null;
 }
@@ -872,6 +881,13 @@ function canStillAct(state) {
 // Entering a cell: touching a marker collects / uses it (event 'collect'),
 // and the pawn stops there to choose a way on.
 function enter(state, board, i, events) {
+  // A Care Package (on what was an Investigation marker): stop to look inside.
+  if (crateAt(state, i)) {
+    state.stopAt = i;
+    state.stopReason = 'Care Package';
+    events.push({ type: 'crateHere', seat: state.cur, cell: i });
+    return;
+  }
   const m = board.grid.cells[i].marker;
   if (!m || !MARKERS[m]) return;
   if (m === 'objective' && !objectiveLive(state, board.grid, i)) return; // the monster isn't known yet, or not its site
@@ -1086,6 +1102,7 @@ function nextPlayer(state, board, events) {
   for (let k = 0; k < state.players.length; k++) {
     state.cur = (state.cur + 1) % state.players.length;
     if (state.cur === 0) endRound(state, board, events);
+    if (state.phase === 'over') return;          // Lost in the night
     if (state.players.every(gone)) break;
     // Chalk-Scrawled Narrative (after midnight): this player sits a turn out.
     if (!gone(curPlayer(state)) && curPlayer(state).skipTurns > 0) {
@@ -1162,11 +1179,13 @@ function endRound(state, board, events) {
   summon(state, eventCtx(state), events);
   if (isMidnight(state) && !state.midnightDone) {
     state.midnightDone = true;
+    state.midnightRound = state.round;   // the night's 24 turns count from here (carePackage.js)
     log(state, 'Midnight. The clocktower strikes twelve, and the objectives appear.');
     events.push({ type: 'midnight' });
     revealMonster(state, board, mysteryCtx(state), events);
     spawnMonsters(state, board, events, random, log);
   }
+  nightTurn(state, board, { state, log, randInt }, events);   // Care Packages, and the night's end
 }
 
 export { MONSTERS };

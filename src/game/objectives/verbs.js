@@ -74,7 +74,13 @@ export function pickUpHere(state, pl, cell, say, { burntOnly = false } = {}) {
   const here = (ob?.dropped ?? []).filter(mayTake);
   if (!here.length) return;
   ob.dropped = ob.dropped.filter((d) => !mayTake(d));
-  for (const { cell: _c, banned: _b, until: _u, ...thing } of here) { (pl.carry ??= []).push(thing); say(`${pl.name} picks up the ${itemLabel(thing.item)}.`); }
+  for (const d of here) {
+    const { cell: _c, banned: _b, until: _u, ...thing } = d;
+    // One candle each: a second one stays on the ground.
+    if (thing.item === 'candle' && (pl.carry ?? []).some((c) => c.item === 'candle')) { ob.dropped.push(d); continue; }
+    (pl.carry ??= []).push(thing);
+    say(`${pl.name} picks up the ${itemLabel(thing.item)}.`);
+  }
 }
 
 // A player has stepped onto `cell`: play any objective step there.

@@ -296,6 +296,7 @@
          the board, just above the dock; one at a time. -->
     <div id="playHud" class="play-hud dock" hidden>
       <div class="dock-status"><div class="die die-sm" id="hudDie" aria-label="Black die"></div><p class="hud-status" id="hudStatus"></p>
+        <button id="crateBtn" class="crate-btn" type="button" hidden title="A Care Package is here: take what you need">📦 Care Package</button>
         <button id="feedToggle" class="feed-toggle" type="button" aria-label="Messages on or off" aria-pressed="true">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 5.5h15v10h-9l-4.5 3.5v-3.5h-1.5z"/><path d="M8 9.5h8M8 12.5h5"/></svg>
         </button></div>
@@ -334,6 +335,13 @@
     <!-- The message feed (src/play/feed.js): what just happened, colour-coded, fading. -->
     <div id="feed" class="feed" role="log" aria-live="polite" title="Tap for recent messages"><div id="feedLines" class="feed-lines"></div></div>
     <!-- Team: everyone's place, dice, injuries and Obols; one player's injuries in full; the log. -->
+    <!-- A Care Package: the Equipment in the crate under the current player. -->
+    <div id="crateSheet" class="dialog sheet" hidden role="dialog" aria-labelledby="crateTitle">
+      <div class="dialog-card sheet-card">
+        <div class="inv-head sheet-head"><h3 id="crateTitle">Care Package</h3><button type="button" class="inv-close" data-close aria-label="Close">✕</button></div>
+        <div class="sheet-body" id="crateBody"></div>
+      </div>
+    </div>
     <div id="teamSheet" class="dialog sheet" hidden role="dialog" aria-labelledby="teamTitle">
       <div class="dialog-card sheet-card">
         <div class="inv-head sheet-head"><h3 id="teamTitle">Team</h3><button type="button" class="inv-close" data-close aria-label="Close">✕</button></div>

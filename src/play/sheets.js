@@ -1,12 +1,12 @@
 // The dock's menus open as sheets over the board, just above the dock: one at
 // a time (opening one closes the others), and the dock button of the open one
 // is lit. Team, Skills (#inventory), Case (#casebook) and More.
-export const SHEETS = ['teamSheet', 'inventory', 'casebook', 'moreSheet'];
+export const SHEETS = ['teamSheet', 'inventory', 'casebook', 'moreSheet', 'crateSheet'];
 const el = (id) => document.getElementById(id);
 
 function syncDock() {
   document.querySelectorAll('.dock-btn[data-sheet]').forEach((b) => {
-    const open = !el(b.dataset.sheet).hidden;
+    const open = !!el(b.dataset.sheet) && !el(b.dataset.sheet).hidden;
     b.classList.toggle('on', open);
     b.setAttribute('aria-expanded', String(open));
   });

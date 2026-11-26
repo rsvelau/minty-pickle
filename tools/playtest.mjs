@@ -21,6 +21,7 @@ import { createBoard } from '../src/game/board.js';
 import { newGame, applyAction, unlockedFn } from '../src/game/rules.js';
 import { MONSTER_CARDS, MONSTER_BY_ID } from '../src/game/cards/monsters.js';
 import { skillStatus } from '../src/game/skills.js';
+import { EQUIPMENT_BY_ID } from '../src/game/cards/equipment.js';
 import { RECIPES, blocked as craftBlocked } from '../src/game/obolcraft.js';
 import { choicesFor, doorOverride } from '../src/game/eventPlay.js';
 import { scriptOf, mapSites, knownMonster } from '../src/game/objectives/scripts.js';
@@ -94,8 +95,16 @@ function makeBot(state, board) {
   // Set by goals(): the goal is the monster itself (stop beside it to fight), not a
   // place it happens to stand on (a Lair to deliver to).
   let fighting = false;
+  // Can this investigator hurt the monster at all (a damaging skill it isn't immune to)?
+  const armed = (pl) => {
+    const m = state.monsters[0];
+    const immune = MONSTER_BY_ID[m?.kind]?.immune ?? [];
+    return pl.inventory.equipment.some((it) => (EQUIPMENT_BY_ID[it.id]?.abilities ?? []).some((a) => a.fx?.dmg !== undefined && !immune.includes(a.kind)));
+  };
   function goals(pl) {
     fighting = false;
+    // Nothing that can hurt the monster, and a Care Package is out: go and get something.
+    if (state.crates?.length && state.monsters.length && !armed(pl)) return state.crates.map((c) => c.cell);
     const ob = state.objective ?? {};
     const id = knownMonster(state);
     const sc = scriptOf(id);
@@ -231,6 +240,15 @@ function makeBot(state, board) {
         // Skills first: anything ready that hurts a monster, or heals me.
         const injured = Object.values(pl.injuries ?? {}).some((v) => v > 0);
         const ready = skillStatus(state, board, pl).filter((e) => e.status === 'now' && e.action && !e.manual);
+        // On a Care Package: take what can hurt the monster first, then a couple more (leave the rest).
+        const crate = (state.crates ?? []).find((c) => c.cell === pl.pos);
+        if (crate && (pl.cratesTaken ?? 0) < 3) {
+          const immune = MONSTER_BY_ID[state.monsters[0]?.kind]?.immune ?? [];
+          const hurts = (id) => (EQUIPMENT_BY_ID[id]?.abilities ?? []).some((a) => a.fx?.dmg !== undefined && !immune.includes(a.kind));
+          const k = Math.max(0, crate.items.findIndex(hurts));
+          pl.cratesTaken = (pl.cratesTaken ?? 0) + 1;
+          return { type: 'crate', item: k, seat: state.cur };
+        }
         // Beside a memorial with the candle out: relight it for an Obol.
         const relight = ready.find((e) => e.item === 'relight');
         if (relight) return relight.action;
@@ -447,6 +465,7 @@ function play(monster, players, seed) {
     rounds: state.round, dead: state.players.filter((p) => p.dead).length,
     identified: !!state.mystery?.revealed || !!knownMonster(state),
     objective: !!state.objectiveDone,
+    lostInNight: !!state.lostInNight,
     monsterHp: state.monsters[0] ? `${state.monsters[0].hp ?? '∞'}/${state.monsters[0].maxHp ?? '∞'}` : 'gone',
     anomalies,
   };
@@ -467,13 +486,14 @@ for (const id of ids) {
       rounds: (games.reduce((s, x) => s + x.rounds, 0) / games.length).toFixed(1),
       dead: (games.reduce((s, x) => s + x.dead, 0) / games.length).toFixed(1),
       objective: tally((x) => x.objective),
+      night: tally((x) => x.lostInNight),
     });
     games.forEach((x, k) => x.anomalies.forEach((an) => problems.push({ monster: id, players: n, game: k, ...an })));
   }
 }
-console.log(`| Monster | Team | Win | Loss | Undecided | Avg rounds | Avg dead | Objective done |`);
-console.log(`|---|---|---|---|---|---|---|---|`);
-for (const r of rows) console.log(`| ${r.monster} | ${r.players} | ${r.win} | ${r.loss} | ${r.undecided} | ${r.rounds} | ${r.dead} | ${r.objective} |`);
+console.log(`| Monster | Team | Win | Loss | Lost in the night | Undecided | Avg rounds | Avg dead | Objective done |`);
+console.log(`|---|---|---|---|---|---|---|---|---|`);
+for (const r of rows) console.log(`| ${r.monster} | ${r.players} | ${r.win} | ${r.loss} | ${r.night} | ${r.undecided} | ${r.rounds} | ${r.dead} | ${r.objective} |`);
 console.log(`\n${problems.length} anomalies in ${rows.length * GAMES} games (${((Date.now() - t0) / 1000).toFixed(0)}s)`);
 const seen = new Set();
 for (const p of problems) {
