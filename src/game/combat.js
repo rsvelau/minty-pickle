@@ -18,7 +18,8 @@ import { flickeringNear } from './eventPlay.js';
 import { hurtMonster } from './equipmentPlay.js';
 
 export const injuries = (pl) => (pl.injuries ??= { P: 0, M: 0, S: 0 });
-export const atDeathsDoor = (pl) => Object.values(injuries(pl)).some((t) => t >= DEATHS_DOOR);
+// Seized by the Ushi-Oni: at Death's Door while it holds them.
+export const atDeathsDoor = (pl) => !!pl.seized || Object.values(injuries(pl)).some((t) => t >= DEATHS_DOOR);
 // Still in the fight: not dead, and not down waiting on a Sacrifice.
 export const alive = (state) => state.players.filter((pl) => !pl.dead && !pl.dying && !pl.escaped);
 
@@ -56,7 +57,7 @@ export function turnLimits(state, board, pl) {
   if (terrifiedNear) defense--;
   let dice = state.blackCount - (pl.lostBlack ?? 0);           // black dice exhausted for good
   if (inj.P >= 1) dice--;                                   // Sprained: one die in reserve
-  const deathsDoor = Object.values(inj).some((t) => t >= DEATHS_DOOR);
+  const deathsDoor = !!pl.seized || Object.values(inj).some((t) => t >= DEATHS_DOOR);   // Seized: at Death's Door too
   if (deathsDoor) dice = 1;                                 // one die per turn
   return {
     lit, move: Math.max(0, move), defense: Math.max(0, defense), dice: Math.max(1, dice), deathsDoor, terrifiedNear,

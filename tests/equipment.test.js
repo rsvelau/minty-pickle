@@ -133,10 +133,17 @@ test('Long only reaches 3+; Medical Kit heals a teammate in your space; Bless do
 
 test('objectives decide the win', () => {
   // Kill: destroying wins.
-  const k = setup('redcap', { items: ['hunting-rifle'], pool: [6, 6, 6] });   // 9 health
+  const k = setup('werewolf', { items: ['hunting-rifle'], pool: [6, 6, 6] });
   k.monster.pos = k.g.index(14, 5);
+  k.monster.hp = 10;
   assert.ok(k.use(0, 0, [0, 1, 2]).ok);                                // 18 damage ignoring toughness
   assert.equal(k.state.won, true);
+  // Redcap: a Piercing blow (one that ignores toughness) can't land the killing blow.
+  const r = setup('redcap', { items: ['hunting-rifle'], pool: [6, 6, 6] });   // 9 health
+  r.monster.pos = r.g.index(14, 5);
+  assert.ok(r.use(0, 0, [0, 1, 2]).ok);
+  assert.equal(r.monster.hp, 1);
+  assert.equal(r.state.won, undefined);
   // Disrupt Ritual (Hellhounds): back to the Lair until the objective is done.
   const h = setup('hellhounds', { items: ['hunting-rifle', 'hunting-rifle'], pool: [6, 6, 6, 6, 6, 6] });
   h.state.mystery = { spawnCell: h.g.index(2, 5) };

@@ -326,9 +326,24 @@ function damageMonster(state, monster, mcard, fx, a, values, pl) {
   if (pl.mindset === 'reckless' || pl.mindset === 'mighty') dmg *= 2;    // Mindsets: double attacking damage
   const tough = fx.ignoreToughness ? 0 : toughnessOf(monster);
   const through = tough === Infinity ? 0 : Math.max(0, dmg - tough);
-  if (monster.hp === null) return `${dmg} damage, but the ${mcard.name} cannot be worn down by damage`;
+  // Seized (Ushi-Oni): any damage through its defense frees the one it holds.
+  const freed = through > 0 && monster.carrying === pl.seat ? release(state, monster) : null;
+  const tail = freed ? `; ${pl.name} breaks free` : '';
+  if (monster.hp === null) return `${dmg} damage, but the ${mcard.name} cannot be worn down by damage${tail}`;
   monster.hp = Math.max(0, monster.hp - through);
-  return `${dmg} damage${fx.ignoreToughness ? ' (ignoring toughness)' : tough ? ` − toughness ${tough}` : ''}: ${through} gets through (${monster.hp}/${monster.maxHp} health left)`;
+  // Redcap: Piercing attacks (the ones that ignore toughness) can't land the killing blow.
+  const spared = mcard.id === 'redcap' && fx.ignoreToughness && monster.hp === 0 && through > 0;
+  if (spared) monster.hp = 1;
+  return `${dmg} damage${fx.ignoreToughness ? ' (ignoring toughness)' : tough ? ` − toughness ${tough}` : ''}: ${through} gets through (${monster.hp}/${monster.maxHp} health left)` +
+    `${spared ? '. A Piercing blow can’t kill the Redcap: it clings on at 1' : ''}${tail}`;
+}
+
+// Seized (Ushi-Oni): let go of whoever the monster holds. Returns them, or null.
+export function release(state, monster) {
+  const pl = monster.carrying !== undefined && monster.carrying !== null ? state.players[monster.carrying] : null;
+  monster.carrying = null;
+  if (pl) delete pl.seized;
+  return pl;
 }
 
 function heal(p, spec) {
@@ -350,7 +365,7 @@ function weaknessHit(state, board, monster, mcard, ctx, events, later = null) {
     if (w.hits === null || monster.trackDone.includes(idx) || monster.weakHits < w.hits) return;
     monster.trackDone.push(idx);
     out.push(`weakness: ${w.text}`);
-    const strike = applyTrackEffect(monster, mcard, w.text);
+    const strike = applyTrackEffect(monster, mcard, w.text, state);
     events.push({ type: 'weakness', id: monster.id, text: w.text, hits: w.hits });
     if (strike) {
       const f = () => { ctx.log(state, `The ${mcard.name}'s weakness triggers ${strike}.`); strikeNow(state, board, monster, strike, ctx, events); };
@@ -362,7 +377,7 @@ function weaknessHit(state, board, monster, mcard, ctx, events, later = null) {
 
 // What the game can play of a weakness-track effect; the rest is announced.
 // Returns the name of an ability it sets off at once (Trigger Regret), if any.
-function applyTrackEffect(monster, mcard, text) {
+function applyTrackEffect(monster, mcard, text, state) {
   const t = /−(\d+) toughness/.exec(text);
   if (t) monster.toughLost += Number(t[1]);
   const d = /([−+])(\d+) die/.exec(text);
@@ -372,8 +387,11 @@ function applyTrackEffect(monster, mcard, text) {
   const dis = /Disable ([A-Z][\w ]+?)(?: for ⌛| until| permanently|$|,)/.exec(text);
   if (dis) {
     const name = dis[1].trim();
-    if (mcard.abilities.some((ab) => ab.name === name)) monster.disabled[name] = /for ⌛/.test(text) ? 1 : true;
+    // For a round (1), until something restarts it (true: Wendigo's Regeneration
+    // comes back when a Consume lands), or for good ('perm').
+    if (mcard.abilities.some((ab) => ab.name === name)) monster.disabled[name] = /for ⌛/.test(text) ? 1 : /permanently/.test(text) ? 'perm' : true;
   }
+  if (/drop player/.test(text)) release(state, monster);                // Ushi-Oni lets go
   if (/Interrupt this turn/.test(text)) monster.mods.interrupted = true;
   if (/Reset Curseblood Ritual/.test(text)) monster.rituals = 0;      // the count starts over
   const trig = /Trigger ([A-Z][\w ]+?)(?:,|$)/.exec(text);
@@ -479,7 +497,7 @@ export function discardForWeakness(state, pl, action, ctx, events) {
 export function endMonsterTurn(monster) {
   monster.mods = {};
   for (const [name, v] of Object.entries(monster.disabled ?? {})) {
-    if (v === true) continue;
+    if (typeof v !== 'number') continue;            // until restarted (true), or for good ('perm')
     if (v <= 1) delete monster.disabled[name]; else monster.disabled[name] = v - 1;
   }
 }
@@ -514,7 +532,7 @@ export function triggerWeakness(state, board, monster, n, ctx, events) {
     if (out.length >= n || w.hits === null || monster.trackDone.includes(idx)) return;
     monster.trackDone.push(idx);
     monster.mods ??= {};
-    const strike = applyTrackEffect(monster, mcard, w.text);
+    const strike = applyTrackEffect(monster, mcard, w.text, state);
     out.push(w.text);
     events.push({ type: 'weakness', id: monster.id, text: w.text, hits: w.hits });
     if (strike) strikes.push(strike);

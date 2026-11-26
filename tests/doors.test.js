@@ -173,13 +173,20 @@ test('an Incorporeal monster phases through walls and doors', () => {
   assert.ok(ev.some((e) => e.type === 'damage'), 'and attacks');
 });
 
-test('a Semi-Corporeal monster leaves the door alone when it will teleport later this round', () => {
+test('a Semi-Corporeal monster leaves the door alone when it will teleport later this round', async () => {
+  // The Barghest is the one Semi-Corporeal monster, but it can't go indoors at
+  // all; for the door rules, pretend it could.
+  const { MONSTER_BY_ID } = await import('../src/game/cards/monsters.js');
+  const was = MONSTER_BY_ID.barghest.outdoorsOnly;
+  MONSTER_BY_ID.barghest.outdoorsOnly = false;
+  try {
   const s = hunt('barghest', { blocked: 'nail' });
   let ev = s.round(undefined, [[{ op: 'teleport', to: 'light' }]]);
   assert.ok(!ev.some((e) => e.type === 'doorBash'));
   const t = hunt('barghest', { blocked: 'nail' });
   ev = t.round();
   assert.ok(ev.some((e) => e.type === 'doorBash'), 'no teleport coming: it bashes like a Corporeal one');
+  } finally { MONSTER_BY_ID.barghest.outdoorsOnly = was; }
 });
 
 test('a one-way door stops a Corporeal monster from its closed side, and gets bashed', () => {

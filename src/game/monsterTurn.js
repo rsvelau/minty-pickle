@@ -16,7 +16,7 @@
 // logged but not played yet; those come with each monster's own rules.
 import { MONSTER_BY_ID } from './cards/monsters.js';
 import { cellLabel } from '../core/state.js';
-import { applyDamage, alive, defenseValue } from './combat.js';
+import { applyDamage, alive, defenseValue, killPlayer } from './combat.js';
 import { RANGE, cellRange } from './cards/injuries.js';
 import { buildingOf } from '../core/mapCheck.js'; // the same grouping the map check uses
 import { endMonsterTurn, hurtMonster } from './equipmentPlay.js';
@@ -66,7 +66,10 @@ function monsterField(state, board, monster, from) {
   const g = board.grid;
   // Salt Circles can't be entered or crossed (a player standing in one can
   // still be walked up to: the walk stops next to them).
-  const salt = saltedCells(state).filter((i) => !state.players.some((pl) => !pl.dead && pl.pos === i));
+  let salt = saltedCells(state).filter((i) => !state.players.some((pl) => !pl.dead && pl.pos === i));
+  // Outdoors only (the Barghest): building floors are as good as walls.
+  if (MONSTER_BY_ID[monster.kind]?.outdoorsOnly) g.cells.forEach((c, i) => { if (c.area === 'indoor') salt.push(i); });
+  salt = [...new Set(salt)];
   if (bodyOf(monster.kind) === 'incorporeal') return phaseField(g, from, new Set(salt));
   const { x, y } = g.coords(from);
   const real = g.edgeOverride;
@@ -89,6 +92,7 @@ function edgeBetween(grid, a, b) {
 // Can the monster really step from a to b (its neighbour)? Ghosts always can.
 function canWalk(board, monster, a, b, state = null) {
   if (state && saltedCells(state).includes(b)) return false;   // salt stops every body
+  if (MONSTER_BY_ID[monster.kind]?.outdoorsOnly && board.grid.cells[b]?.area === 'indoor') return false;
   if (bodyOf(monster.kind) === 'incorporeal') return true;
   const p = board.grid.coords(a), q = board.grid.coords(b);
   return board.grid.canStep(p.x, p.y, q.x - p.x, q.y - p.y);
@@ -153,9 +157,10 @@ export function parseAbility(text) {
       if (/inside/i.test(rad ?? '')) push({ op: 'area', dmg: damageSpec(dmg), inside: true });
       // "nearest occupied building to Lair": everyone in that building (Poltergeist's Torment).
       else if (/occupied building/i.test(rad ?? '')) push({ op: 'area', dmg: damageSpec(dmg), building: 'nearLair' });
-      else push({ op: 'area', dmg: damageSpec(dmg), radius: r ? Number(r[1]) : 2 });
+      // "Only affects outdoor spaces" (Banshee's Keen).
+      else push({ op: 'area', dmg: damageSpec(dmg), radius: r ? Number(r[1]) : 2, ...(/outdoor/i.test(text) ? { outdoor: true } : {}) });
     } else if (word === 'Global Attack') push({ op: 'global', dmg: damageSpec(arg) });
-    else if (word === 'LoS Attack') unknown.push('LoS Attack');
+    else if (word === 'LoS Attack') push({ op: 'los', dmg: damageSpec(arg) });
     else if (word === 'Attack') {
       const d = damageSpec(arg);
       const target = /^\{(\d+)\}/.exec(String(arg).trim());
@@ -184,6 +189,25 @@ export function parseAbility(text) {
     else if (drop !== undefined) ops.push({ op: 'drop', item: drop.trim().toLowerCase(), _at: k.index });
     else if (/^Unblock/.test(all)) ops.push({ op: 'unblock', _at: k.index });
     else ops.push({ op: 'block', _at: k.index });
+  }
+  ops.sort((a, b) => (a._at ?? -1) - (b._at ?? -1));
+  for (const o of ops) delete o._at;
+  // Trap (2 dice): sprung at once where it lands (Barghest's Shadow Trap).
+  // Drag (die, 5M into nearest building): an attack; if it lands, they are
+  //   dragged up to 5 spaces into the nearest building (Skinwalker's Bear Maul).
+  // Lure (die, R4): everyone within 4 is pulled one die's worth of spaces toward it.
+  // Consume (die): everyone in Close range after that; it heals what it deals (Wendigo's Feed).
+  // Seize player: a 2-dice attack; if it lands, the player is Seized (Ushi-Oni's Abduct).
+  const late = [
+    [/Trap \(([^)]*)\)/, (m) => ({ op: 'trap', dmg: damageSpec(m[1]) })],
+    [/Drag \(([^,)]*),\s*(\d+)/, (m) => ({ op: 'drag', dmg: damageSpec(m[1]), n: Number(m[2]) })],
+    [/Lure \(([^,)]*),\s*R(\d+)\)/, (m) => ({ op: 'lure', dmg: damageSpec(m[1]), radius: Number(m[2]) })],
+    [/Consume \(([^)]*)\)/, (m) => ({ op: 'consume', dmg: damageSpec(m[1]) })],
+    [/Seize player/, () => ({ op: 'seize', dmg: { dice: 2 } })],
+  ];
+  for (const [re, make] of late) {
+    const mm = re.exec(text);
+    if (mm) { ops.push({ ...make(mm), _at: mm.index }); text = text.replace(mm[0], ''); }
   }
   ops.sort((a, b) => (a._at ?? -1) - (b._at ?? -1));
   for (const o of ops) delete o._at;
@@ -402,6 +426,13 @@ function predictVictims(state, board, monster, intents) {
         if (t) seats.add(t.seat);
       } else if (o.op === 'trample') {
         for (const pl of trampled(state, board, monster, from, plan.steps)) seats.add(pl.seat);
+      } else if (o.op === 'drag' || o.op === 'seize') {
+        const t = closeTarget(state, board, pos, monster);
+        if (t) seats.add(t.seat);
+      } else if (o.op === 'trap' || o.op === 'consume') {
+        for (const pl of inClose(state, board, pos)) seats.add(pl.seat);
+      } else if (o.op === 'los') {
+        for (const pl of inSight(state, board, pos)) seats.add(pl.seat);
       } else if (o.op === 'target') {
         const t = pickTarget(state, board, { ...monster, pos }, o.who);
         if (t) seats.add(t.seat);
@@ -437,7 +468,7 @@ function areaTargets(state, board, pos, o, players) {
     const b = buildingOf(g, near.pos);
     return inside.filter((pl) => buildingOf(g, pl.pos) === b);
   }
-  if (!o.inside) return players.filter((pl) => gridDist(board, pos, pl.pos) <= o.radius);
+  if (!o.inside) return players.filter((pl) => gridDist(board, pos, pl.pos) <= o.radius && !(o.outdoor && board.grid.cells[pl.pos]?.area === 'indoor'));
   const g = board.grid;
   const indoor = (i) => g.cells[i]?.area === 'indoor';
   if (!indoor(pos)) return players.filter((pl) => indoor(pl.pos));
@@ -635,6 +666,13 @@ export function executeIntent(state, board, monster, ctx, events) {
     total += dmg?.fixed ?? 0;
     return mods.halve ? Math.floor(total / 2) : total;
   };
+  if (monster.stunned) {
+    // Skinwalker, stunned at its Lair: it skips this turn (toughness 0 until it's over).
+    delete monster.stunned;
+    ctx.log(state, `The ${card.name} is stunned and does nothing this turn.`);
+    monster.intents = null; monster.danger = []; endMonsterTurn(monster);
+    return;
+  }
   if (mods.interrupted) {
     ctx.log(state, `The ${card.name} is interrupted and does nothing this turn.`);
     monster.intents = null; monster.danger = []; endMonsterTurn(monster);
@@ -729,6 +767,75 @@ export function executeIntent(state, board, monster, ctx, events) {
         else if (o.who !== 'cosor') ctx.log(state, `${source} finds no one to single out.`);   // no Cosor holder: it strikes up close
         continue;
       }
+      if (o.op === 'trap') {
+        // Shadow Trap: sprung at once where it lands, on everyone in Close range;
+        // gone before the players act again.
+        const caught = inClose(state, board, monster.pos).filter((pl) => targetable(state).includes(pl));
+        if (!caught.length) { ctx.log(state, `${source}: the trap closes on no one.`); continue; }
+        attacked = true;
+        hit = caught;
+        events.push({ type: 'monsterAttack', id: monster.id, seat: caught[0].seat, cell: monster.pos, area: true, attack: type });
+        for (const pl of caught) struck(state, monster, intent.name, pl, ctx, () => applyDamage(state, board, pl, type, roll(o.dmg), opts, events));
+        continue;
+      }
+      if (o.op === 'drag' || o.op === 'seize') {
+        // Bear Maul / Abduct: an attack; if it lands, they're dragged into the
+        // nearest building, or Seized.
+        const t = aim ?? closeTarget(state, board, monster.pos, monster);
+        if (!t) continue;                       // no one in reach (a door in the way: it bashes, below)
+        attacked = true;
+        hit = [t];
+        events.push({ type: 'monsterAttack', id: monster.id, seat: t.seat, cell: t.pos, attack: type });
+        let out = null;
+        struck(state, monster, intent.name, t, ctx, () => { out = applyDamage(state, board, t, type, roll(o.dmg), opts, events); });
+        if (out !== 'injured' || t.dead || t.dying) continue;
+        if (o.op === 'drag') drag(state, board, t, o.n, ctx, events);
+        else if (monster.carrying === null || monster.carrying === undefined) {
+          monster.carrying = t.seat;
+          t.seized = monster.id;
+          ctx.log(state, `${source}: ${t.name} is Seized, at Death's Door while it holds them. Damage through its defense breaks them free.`);
+          events.push({ type: 'seized', seat: t.seat, id: monster.id });
+        }
+        continue;
+      }
+      if (o.op === 'lure') {
+        // Feed: everyone within the radius is pulled the same die of spaces toward it.
+        const caught = targetable(state).filter((pl) => gridDist(board, monster.pos, pl.pos) <= o.radius);
+        if (!caught.length) continue;
+        const n = roll(o.dmg);
+        ctx.log(state, `${source}: a lure of ${n}.`);
+        for (const pl of caught) pull(state, board, pl, monster, n, ctx, events);
+        continue;
+      }
+      if (o.op === 'consume') {
+        // Feed: everyone now in Close range; it heals all the damage that got through.
+        const caught = inClose(state, board, monster.pos).filter((pl) => targetable(state).includes(pl));
+        if (!caught.length) { ctx.log(state, `${source}: no one close enough to consume.`); continue; }
+        attacked = true;
+        hit = caught;
+        let fed = 0;
+        events.push({ type: 'monsterAttack', id: monster.id, seat: caught[0].seat, cell: monster.pos, area: true, attack: type });
+        for (const pl of caught) {
+          const amount = roll(o.dmg);
+          let out = null;
+          struck(state, monster, intent.name, pl, ctx, () => { out = applyDamage(state, board, pl, type, amount, opts, events); });
+          if (out && out !== 'blocked' && out !== 'dead') fed += amount;
+        }
+        if (fed) {
+          healMonster(state, monster, card, fed, ctx, events);
+          if (monster.disabled?.Regeneration === true) { delete monster.disabled.Regeneration; ctx.log(state, `The ${card.name} has fed: its Regeneration returns.`); }
+        }
+        continue;
+      }
+      if (o.op === 'los') {
+        const seen = inSight(state, board, monster.pos);
+        if (!seen.length) continue;
+        attacked = true;
+        hit = seen;
+        events.push({ type: 'monsterAttack', id: monster.id, seat: seen[0].seat, cell: monster.pos, area: true, attack: type });
+        for (const pl of seen) struck(state, monster, intent.name, pl, ctx, () => applyDamage(state, board, pl, type, roll(o.dmg), opts, events));
+        continue;
+      }
       if (o.op === 'trample') {
         // Run Down: everyone it charged through, and the one it charged at.
         const victims = trampled(state, board, monster, startPos, move.steps);
@@ -819,7 +926,7 @@ export function executeIntent(state, board, monster, ctx, events) {
           if (out && out !== 'blocked' && out !== 'dead') hit.push(pl);
         }
       } else if (o.op === 'heal') {
-        ctx.log(state, `The ${card.name} heals ${o.n}.`);
+        healMonster(state, monster, card, o.n, ctx, events);
       } else if (o.op === 'ritual') {
         // Curseblood Ritual: one more; at the mark, a Global Attack, and the count starts over.
         monster.rituals = (monster.rituals ?? 0) + 1;
@@ -841,6 +948,7 @@ export function executeIntent(state, board, monster, ctx, events) {
     }
     if (intent.unknown.length) ctx.log(state, `(${intent.name}: ${intent.unknown.join(', ')} not played yet.)`);
   }
+  if (state.monsters.includes(monster)) endOfTurn(state, board, monster, card, ctx, events, roll);
   monster.intents = null;
   monster.danger = [];
   if (monster.lure?.round !== undefined) delete monster.lure;   // Distract is over
@@ -852,6 +960,15 @@ export function executeIntent(state, board, monster, ctx, events) {
 export function onPlayerEnters(state, board, pl, cell, ctx, events) {
   for (const monster of state.monsters) {
     const card = MONSTER_BY_ID[monster.kind];
+    // Skinwalker: the first investigator to reach its Lair stuns it, once a game:
+    // it skips its next turn, and its toughness is 0 until then.
+    if (card?.id === 'skinwalker' && !monster.stunUsed && cell === lairCell(state) && !pl.dead) {
+      monster.stunUsed = true;
+      monster.stunned = true;
+      (monster.mods ??= {}).toughZero = true;
+      ctx.log(state, `${pl.name} reaches the ${card.name}'s Lair: it is stunned. It skips its next turn, and its toughness is 0 until then.`);
+      events.push({ type: 'objStep', seat: pl.seat, cell, text: `The ${card.name} is stunned` });
+    }
     const rule = card?.onEnterLit;
     if (!rule || pl.dead || pl.dying) continue;
     if ((board.light[cell] ?? 0) < state.config.litThreshold) continue;
@@ -874,6 +991,107 @@ function struck(state, monster, what, pl, ctx, hit) {
 }
 
 export { describeDamage };
+
+// Heal a monster with health (Lick Wounds, Regeneration, Consume).
+function healMonster(state, monster, card, n, ctx, events) {
+  if (monster.hp === null || monster.hp === undefined || n <= 0) return;
+  const before = monster.hp;
+  monster.hp = Math.min(monster.maxHp ?? monster.hp + n, monster.hp + n);
+  if (monster.hp === before) return;
+  ctx.log(state, `The ${card.name} heals ${monster.hp - before} (${monster.hp}/${monster.maxHp}).`);
+  events.push({ type: 'monsterHeal', id: monster.id, amount: monster.hp - before, hp: monster.hp });
+}
+
+// Line of sight (Barghest's Death Gaze): a straight line between the two
+// spaces that no wall, door or blocked space (a building, the forest) cuts.
+// Windows and water don't block it.
+function seeThrough(g, a, b, target) {
+  const t = g.edgeAt(edgeBetween(g, a, b));
+  if (t && t !== 'window') return false;
+  const c = g.cells[b];
+  return b === target || c.walkable || c.area === 'water';
+}
+function lineOfSight(board, a, b) {
+  const g = board.grid;
+  const A = g.coords(a), B = g.coords(b);
+  const n = Math.max(Math.abs(B.x - A.x), Math.abs(B.y - A.y)) * 4;
+  let cur = a;
+  for (let k = 1; k <= n; k++) {
+    const x = Math.floor(A.x + 0.5 + ((B.x - A.x) * k) / n), y = Math.floor(A.y + 0.5 + ((B.y - A.y) * k) / n);
+    const c = g.index(x, y);
+    if (c === cur) continue;
+    const p = g.coords(cur);
+    const dx = x - p.x, dy = y - p.y;
+    if (dx && dy) {
+      // A diagonal step: clear if either way round the corner is clear.
+      const m1 = g.index(p.x + dx, p.y), m2 = g.index(p.x, p.y + dy);
+      const ok = (seeThrough(g, cur, m1, b) && seeThrough(g, m1, c, b)) || (seeThrough(g, cur, m2, b) && seeThrough(g, m2, c, b));
+      if (!ok) return false;
+    } else if (!seeThrough(g, cur, c, b)) return false;
+    cur = c;
+  }
+  return true;
+}
+const inSight = (state, board, from) => targetable(state).filter((pl) => pl.pos === from || lineOfSight(board, from, pl.pos));
+
+// Drag (Bear Maul): up to n spaces along their walk to the nearest building's floor.
+function drag(state, board, pl, n, ctx, events) {
+  const g = board.grid;
+  if (g.cells[pl.pos]?.area === 'indoor') return;            // already inside
+  const { x, y } = g.coords(pl.pos);
+  const field = g.moveField(x, y, { keys: false });
+  let best = -1;
+  g.cells.forEach((c, i) => { if (c.area === 'indoor' && c.walkable && field.dist[i] > 0 && (best < 0 || field.dist[i] < field.dist[best])) best = i; });
+  if (best < 0) return;
+  const steps = field.path(best).slice(1, 1 + n);
+  for (const to of steps) { events.push({ type: 'step', seat: pl.seat, from: pl.pos, to, pulled: true }); pl.pos = to; }
+  if (steps.length) ctx.log(state, `${pl.name} is dragged ${steps.length} space${steps.length === 1 ? '' : 's'}, to ${label(board, pl.pos)}${g.cells[pl.pos].area === 'indoor' ? ', inside' : ''}.`);
+}
+
+// End of the monster's turn: its constant rules that act then.
+//   Death Gaze (Barghest): an attack of 10 on everyone it can see.
+//   Regeneration (Wendigo): it heals 4.
+//   Ushi-Oni: moves 10 toward its Lair, through walls (salt stops it),
+//     carrying whoever it has Seized; brought into the Lair, they die.
+function endOfTurn(state, board, monster, card, ctx, events, roll) {
+  const off = (name) => !!monster.disabled?.[name];
+  const gaze = card.abilities.find((a) => a.name === 'Death Gaze');
+  if (gaze && !off(gaze.name) && alive(state).length) {
+    const o = parseAbility(gaze.text).ops.find((x) => x.op === 'los');
+    const seen = inSight(state, board, monster.pos);
+    const type = KIND_TO_TYPE[gaze.kind] ?? card.evidence.attack;
+    if (o && seen.length) {
+      events.push({ type: 'monsterAttack', id: monster.id, seat: seen[0].seat, cell: monster.pos, area: true, attack: type });
+      for (const pl of seen) struck(state, monster, gaze.name, pl, ctx, () => applyDamage(state, board, pl, type, roll(o.dmg), { log: ctx.log, source: `The ${card.name}'s ${gaze.name}` }, events));
+    }
+  }
+  const regen = card.abilities.find((a) => a.name === 'Regeneration');
+  if (regen && !off(regen.name)) {
+    const o = parseAbility(regen.text).ops.find((x) => x.op === 'heal');
+    if (o) healMonster(state, monster, card, o.n, ctx, events);
+  }
+  if (card.id === 'ushi-oni' && !monster.mods?.immobile) {
+    const lair = lairCell(state);
+    if (lair >= 0 && monster.pos !== lair) {
+      const route = phaseField(board.grid, monster.pos, new Set(saltedCells(state))).path(lair) ?? [];
+      const carried = monster.carrying !== null && monster.carrying !== undefined ? state.players[monster.carrying] : null;
+      for (const to of route.slice(1, 11)) {
+        events.push({ type: 'monsterStep', id: monster.id, from: monster.pos, to });
+        monster.prev = monster.pos; monster.pos = to;
+        if (carried) { events.push({ type: 'step', seat: carried.seat, from: carried.pos, to, pulled: true }); carried.pos = to; }
+      }
+      if (route.length > 1) ctx.log(state, `The ${card.name} heads for its Lair${carried ? `, carrying ${carried.name}` : ''}: ${label(board, monster.pos)}.`);
+    }
+    // End of the round, at the Lair: the one it carries dies.
+    const held = monster.carrying !== null && monster.carrying !== undefined ? state.players[monster.carrying] : null;
+    if (held && monster.pos === lair && !held.dead) {
+      monster.carrying = null;
+      delete held.seized;
+      killPlayer(state, held, { log: ctx.log, text: `The ${card.name} carries ${held.name} into its Lair` });
+      events.push({ type: 'objStep', seat: held.seat, cell: held.pos, text: `${held.name} is taken` });
+    }
+  }
+}
 
 // Pull (n): `pl` is dragged up to n spaces along their walking route toward
 // the monster, stopping beside it (Charm). The view walks them there.

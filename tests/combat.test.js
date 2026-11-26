@@ -90,8 +90,8 @@ test('ability text is read into moves and attacks', () => {
   assert.deepEqual(p.ops.map((o) => o.op), ['pursue', 'attack']);
   assert.equal(p.ops[1].dmg.fixed, 4);
   const area = parseAbility('Area Attack (2 dice, R5). Only affects outdoor spaces');
-  assert.deepEqual(area.ops[0], { op: 'area', dmg: { dice: 2 }, radius: 5 });
-  assert.ok(parseAbility('Pursue (10) and Seize player').unknown.includes('Seize'));
+  assert.deepEqual(area.ops[0], { op: 'area', dmg: { dice: 2 }, radius: 5, outdoor: true });
+  assert.deepEqual(parseAbility('Pursue (10) and Seize player').ops.map((o) => o.op), ['pursue', 'seize']);
 });
 
 test('a card monster declares its action, shows who is in danger, then carries it out', () => {

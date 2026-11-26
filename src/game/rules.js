@@ -358,6 +358,8 @@ function applyActionNow(state, board, action) {
       state.noMove = false;                          // Camouflage: can't move the rest of that turn
       // Pinned (Hellhounds' and the Poltergeist's Pin): no moving this turn.
       if (pl.pinned) { delete pl.pinned; state.noMove = true; log(state, `${who(state)} is pinned: no moving this turn.`); }
+      // Seized (Ushi-Oni): held fast; damage through its defense frees them.
+      if (pl.seized) { state.noMove = true; log(state, `${who(state)} is held by the monster: no moving until they break free.`); }
       // Discard Crystal & no light for ⌛ (Shadow People): over when its player's turn comes round again.
       if (state.flags?.noLight && state.flags.noLight.seat === state.cur && state.flags.noLight.round !== state.round) delete state.flags.noLight;
       startOfTurn(state, eventCtx(state));
