@@ -232,3 +232,26 @@ test('a monster moving away (Retreat, Heal) doesn’t bash doors', () => {
   const ev = s.round([{ op: 'retreat', n: 5 }, { op: 'heal', n: 6 }]);
   assert.ok(!ev.some((e) => e.type === 'doorBash'));
 });
+
+test('a blocked door can be forced open with a rolled 6', async () => {
+  const { skillStatus } = await import('../src/game/skills.js');
+  const g = new GridState(6, 3);
+  for (let x = 0; x < 6; x++) g.apply(g.index(x, 1), { area: x < 3 ? 'indoor' : 'outdoor', sub: x < 3 ? 'hardwood' : 'street' }, { silent: true });
+  g.apply(g.index(5, 1), { area: 'outdoor', sub: 'start', walkable: false, facing: 3 }, { silent: true });
+  g.setEdge('v', 3, 1, 'door', { silent: true });
+  const board = createBoard(g);
+  const { state } = newGame(board, { seed: 1, config: { players: 1 } });
+  const pl = state.players[0];
+  pl.pos = g.index(2, 1);
+  state.doors = { [edgeKey('v', 3, 1)]: 'blocked' };
+  applyAction(state, board, { type: 'roll', seat: 0 });
+  state.pool = [{ kind: 'black', v: 5 }, { kind: 'black', v: 6 }];
+  assert.equal(applyAction(state, board, { type: 'force', seat: 0, die: 0 }).ok, false, 'a 5 won’t do');
+  const e = skillStatus(state, board, pl).find((x) => x.item === 'force');
+  assert.equal(e.status, 'now');
+  assert.equal(e.action.die, 1);
+  assert.ok(applyAction(state, board, e.action).ok);
+  assert.equal(state.doors[edgeKey('v', 3, 1)], 'breached');
+  assert.ok(state.pool[1].spent);
+  assert.equal(doorsAround(state, board, pl.pos)[0].status, 'breached');
+});

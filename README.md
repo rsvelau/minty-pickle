@@ -17,8 +17,8 @@ The app opens on the **title screen** (`src/app/gameShell.js`):
 
 **Scouting** (the start of every new game; Game settings → Start → Scouting turns it off): someone got
 here first, and what they gathered was left at the edge of town. How it went depends on the night's monster's
-**difficulty**, 1 to 5 stars on its card (`stars` in `src/game/cards/monsters.js`; every monster is 1 star
-for now). Difficulty isn't evidence: the stars only show when the monster's identity comes out (on its card,
+**difficulty**, 1 to 5 stars on its card (`stars` in `src/game/cards/monsters.js`; the Adze is 2 stars,
+every other monster 1 for now). Difficulty isn't evidence: the stars only show when the monster's identity comes out (on its card,
 with its name), and in the card list under Game settings. The Scouting screen shows only the story
 (`SCOUTING_STORY` in rules.js): 1 ★ whoever called us left supplies; 2 ★ somebody left in a hurry; 3 ★ a
 scouting team found this much before things got too hot; 4 ★ paid for in blood; 5 ★ a slaughter, the
@@ -230,6 +230,9 @@ teammates in your space for heals like the Medical Kit). Obol costs (◉) take a
   the monster included, until someone Breaches it; the spike and the chain are left on the door (the card is
   lost). Doors the Nailed Shut and Roof Collapse events block also stop the monster now, and are drawn boarded.
   A breached doorway can't be shut again (Lockdown and Nailed Shut pass it by). `src/game/doors.js`.
+  **Forcing a door**: anyone beside a blocked door can spend a rolled 6 (not slotted or spent) to break it
+  open for good (breached), so no one stays trapped; it shows under Skills as "Force the door" while you
+  stand beside one (the `force` action).
 - **Holding the monster back** (each lasts through the monster's next turn, at the end of the round):
   **Salt Circle** (Salt Lick, Glowing Salt Lamp) pours a ring of salt on your space: no monster, ghosts
   included, can enter or cross it, though one can still come up beside it and strike whoever is inside.

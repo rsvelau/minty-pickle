@@ -16,7 +16,7 @@
 // The board is read through a small adapter (see board.js) over GridState,
 // which is plain data too, so a server can rebuild it from the saved board.
 import { MARKERS, streetMask, edgeKey, cellLabel } from '../core/state.js';
-import { gameDoorOverride } from './doors.js';
+import { gameDoorOverride, doorsAround } from './doors.js';
 import { MONSTERS, spawnMonsters, monstersAct, farthestFromPlayers } from './monsters.js';
 import { turnLimits, injuries, applyDamage, sacrificeCarrier, killPlayer } from './combat.js';
 import { answer as answerReaction } from './reactions.js';
@@ -311,7 +311,7 @@ function scout(state, action, events) {
 // equipment and Obolcraft.
 const STOPPED = ['slotting', 'choosing', 'asking'];
 // Every action: { type, seat? }. Returns { ok, error?, events }.
-export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective', 'event', 'setting', 'sacrifice', 'setDie', 'react', 'strike', 'scout', 'drop'];
+export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective', 'event', 'setting', 'sacrifice', 'setDie', 'react', 'strike', 'scout', 'drop', 'force'];
 
 export function applyAction(state, board, action) {
   // Doors the game changed (nailed, breached) count for every move made while
@@ -569,6 +569,27 @@ function applyActionNow(state, board, action) {
       log(state, `${who(state)} strikes the Strigoi with the Blessed Cosor, a ${dmg}.`);
       strikeMonster(state, board, m, dmg, 'holy', { log, state, randInt }, events);
       events.push({ type: 'cosorStrike', seat: state.cur, id: m.id, amount: dmg });
+      restop(state, board, events);
+      break;
+    }
+    case 'force': {
+      // Force a door that is nailed shut or otherwise blocked: spend a rolled
+      // 6 (not slotted or spent) to break it open for good (breached), so no
+      // one is trapped for the rest of the game.
+      if (!['idle', ...STOPPED].includes(state.phase)) return fail('finish moving first');
+      const pl = curPlayer(state);
+      if (!state.pool.length) return fail('roll first: forcing a door takes a 6');
+      const n = action.die | 0;
+      const die = state.pool[n];
+      if (!die || die.spent || state.slots.includes(n) || state.defSlots.includes(n)) return fail('force it with a rolled die that is not slotted or spent');
+      if (die.v !== 6) return fail('forcing a door takes a 6');
+      const door = doorsAround(state, board, pl.pos).find((d) => d.status === 'blocked' && (action.edge === undefined || d.edge === action.edge));
+      if (!door) return fail('no blocked door next to you');
+      die.spent = true;
+      die.usedFor = 'Force the door';
+      state.doors[door.edge] = 'breached';
+      log(state, `${who(state)} forces the blocked ${door.side} door with a 6: it's broken open for good.`);
+      events.push({ type: 'doors', edge: door.edge, change: 'breach' });
       restop(state, board, events);
       break;
     }

@@ -210,6 +210,9 @@ function makeBot(state, board) {
         // Skills first: anything ready that hurts a monster, or heals me.
         const injured = Object.values(pl.injuries ?? {}).some((v) => v > 0);
         const ready = skillStatus(state, board, pl).filter((e) => e.status === 'now' && e.action && !e.manual);
+        // Shut in (a blocked door between me and where I'm going): force it with a 6.
+        const force = ready.find((e) => e.item === 'force');
+        if (force && !nearest(pl.pos, goals(pl))) return force.action;
         if (EXPERT) {
           const best = bestAttack(pl, ready);
           if (best) return best;

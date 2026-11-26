@@ -193,7 +193,7 @@ export const MONSTER_CARDS = [
     evidence: { attack: 'S', observations: ['WR', 'IS', 'PB'], lair: 'UG' },
   },
   {
-    id: 'adze', name: 'Adze', hp: 30, toughness: 3, badge: 3, stars: 1,
+    id: 'adze', name: 'Adze', hp: 30, toughness: 3, badge: 3, stars: 2,
     // It stays in its cocoon in the Lair; its actions are carried out by fly
     // swarms that cross any terrain but not walls.
     body: 'cocoon', actsBy: 'swarm',

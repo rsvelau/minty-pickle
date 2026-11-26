@@ -24,6 +24,7 @@ import { checkRequirement } from './cards/requirements.js';
 import { abilityReady, targetsFor, actionRoll } from './equipmentPlay.js';
 import { applyAction } from './rules.js';
 import { RANGE, cellRange } from './cards/injuries.js';
+import { doorsAround } from './doors.js';
 
 const USE_PHASES = ['idle', 'slotting', 'choosing', 'asking'];
 const RANGE_WORD = { close: 'Close', mid: 'Mid', long: 'Long', self: 'Self', all: 'All' };
@@ -128,7 +129,32 @@ export function skillStatus(state, board, pl) {
   });
   // The Blessed Cosor (Strigoi objective): Strike, listed with the skills.
   if ((pl.carry ?? []).some((c) => c.item === 'cosor' && c.blessed)) out.push(cosorStrike(state, board, pl, mine, free));
+  // Beside a blocked door (Nailed Shut and the like): force it with a 6.
+  if (doorsAround(state, board, pl.pos).some((d) => d.status === 'blocked')) out.push(forceDoor(state, board, pl, mine, free));
   return out;
+}
+
+// Anyone can force a blocked door with a 6: listed with the skills (item 'force').
+export const FORCE_CARD = {
+  name: 'Blocked door',
+  abilities: [{ range: 'close', kind: null, name: 'Force the door', dice: 1, req: '6', limit: null,
+    text: 'Spend a 6 to break a blocked door beside you open for good.', fx: {} }],
+};
+function forceDoor(state, board, pl, mine, free) {
+  const e = { item: 'force', ability: 0, name: 'Force the door', card: FORCE_CARD, status: 'not', why: '', action: null, manual: false };
+  const set = (status, why = '') => { e.status = status; e.why = why; return e; };
+  if (pl.dead) return set('not', `${pl.name} is dead`);
+  if (!mine) return set('not', `On ${pl.name}’s turn`);
+  if (!USE_PHASES.includes(state.phase)) return set('not', state.phase === 'moving' ? 'Finish moving first' : 'Not right now');
+  if (state.phase === 'idle' && !(state.pool ?? []).length) return set('almost', 'Roll first: needs a 6');
+  const six = free.find((d) => d.v === 6);
+  if (!six) return set('almost', 'Needs a free 6');
+  const door = doorsAround(state, board, pl.pos).find((d) => d.status === 'blocked');
+  const action = { type: 'force', seat: state.cur, die: six.n, edge: door.edge };
+  const r = applyAction(structuredClone(state), board, action);
+  if (!r.ok) return set('not', r.error ? r.error[0].toUpperCase() + r.error.slice(1) : 'Not right now');
+  e.action = action;
+  return set('now');
 }
 
 // The Blessed Cosor's Strike, shaped like an Equipment skill (item 'cosor').

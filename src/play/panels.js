@@ -687,6 +687,12 @@ function renderInventoryTab(s, pl, body) {
   body.querySelectorAll('[data-use]').forEach((b) => { b.onclick = () => {
     const [i0, k0] = b.dataset.use.split(':');
     const st = statusByKey(pl).get(b.dataset.use);
+    if (i0 === 'force') {
+      // Forcing a blocked door: nothing to pick, the 6 is already chosen.
+      const r = st?.action ? play.session.dispatch(st.action) : { ok: false, error: 'not right now' };
+      if (r.ok) closeInventory(); else { b.textContent = r.error; }
+      return;
+    }
     if (i0 === 'cosor') {
       Object.assign(useUI, { item: 'cosor', ability: 0, dice: st?.action ? [st.action.die] : [], target: null, raise: [], error: '' });
       renderInventory();

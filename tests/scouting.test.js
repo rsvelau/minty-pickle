@@ -51,16 +51,18 @@ test('solo: two cards, one choice; turned off, no scouting', () => {
   assert.equal(setup(2, false).state.phase, 'idle');
 });
 
-test('the story follows the night’s monster’s stars; every monster is 1 star for now', async () => {
+test('the story follows the night’s monster’s stars (the Adze is 2 stars)', async () => {
   const { MONSTER_CARDS } = await import('../src/game/cards/monsters.js');
   const { SCOUTING_STORY } = await import('../src/game/rules.js');
-  assert.ok(MONSTER_CARDS.every((c) => c.stars === 1));
+  assert.equal(MONSTER_CARDS.find((c) => c.id === 'adze').stars, 2);
+  assert.ok(MONSTER_CARDS.filter((c) => c.id !== 'adze').every((c) => c.stars === 1));
   const g = new GridState(20, 10);
   for (let x = 0; x < 20; x++) g.apply(g.index(x, 5), { area: 'outdoor', sub: 'street' }, { silent: true });
   g.apply(g.index(19, 5), { area: 'outdoor', sub: 'start', walkable: false, facing: 3 }, { silent: true });
   const board = createBoard(g);
   const { state } = newGame(board, { seed: 3, scout: true, config: { players: 2, monster: 'mystery' } });
-  assert.equal(state.scouting.stars, 1);
-  assert.equal(state.scouting.story, SCOUTING_STORY[1]);
+  const stars = MONSTER_CARDS.find((c) => c.id === state.mystery.monster).stars;
+  assert.equal(state.scouting.stars, stars);
+  assert.equal(state.scouting.story, SCOUTING_STORY[stars]);
   assert.equal(Object.keys(SCOUTING_STORY).length, 5);
 });
