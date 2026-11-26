@@ -12,9 +12,9 @@
 // soon as it has left the view.
 import { ui } from './config.js';
 import { aheadPose } from './pointer.js';
-import { skyMoon } from './loop.js';
+import { skyMoon, driveCamera, autoRes } from './loop.js';
 import { markers, labelGroup, refreshMarkers } from '../render/board.js';
-import { __set_camTween, camera, controls, fitPreset, wake } from '../render/scene.js';
+import { __set_camTween, camera, controls, fitPreset, wake, renderer, scene, holdShadowsWhole } from '../render/scene.js';
 import { play } from '../play/playView.js';
 import * as THREE from 'three';
 
@@ -104,12 +104,19 @@ export function playIntro() {
   const look = new THREE.PerspectiveCamera();
   const facing = (from, to) => { look.position.copy(from); look.up.set(0, 1, 0); look.lookAt(to); return look.quaternion.clone(); };
   const qStart = camera.quaternion.clone();
-  const t0 = performance.now();
   const smooth = (a, b, x) => { const k = Math.min(1, Math.max(0, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
   const SPLIT = 0.42;    // by here the camera faces the town; after it, it turns to the player
-  const frame = () => {
-    if (cancelled) return;
-    const k = Math.min(1, (performance.now() - t0) / (MOVE * slow() * 1000));
+  // Smooth running: no resolution changes and no shadow refits mid-move, and
+  // everything the flight will show drawn once beforehand, out of sight, so no
+  // shader is compiled or texture uploaded the moment the town comes into view.
+  autoRes.paused = true;
+  holdShadowsWhole(true);
+  warmUp([[over.pos, over.target], [pose.pos, pose.target]]);
+  let t0 = null;         // the clock starts on the first frame drawn after all that
+  driveCamera((now) => {
+    if (cancelled) { driveCamera(null); return; }
+    t0 ??= now;
+    const k = Math.min(1, (now - t0) / (MOVE * slow() * 1000));
     // Slow start, speeding up, then easing in to the player (cubic in-out).
     const e = k < 0.5 ? 4 * k ** 3 : 1 - Math.pow(-2 * k + 2, 3) / 2;
     const pos = curve(e);
@@ -126,19 +133,40 @@ export function playIntro() {
       skyMoon.starsOpacity(1 - smooth(0.35, 0.8, e));
       if (skyMoon.visible && !skyMoon.inView(camera)) skyMoon.hideMoon();
     }
-    wake(200);
-    if (k < 1) { requestAnimationFrame(frame); return; }
+    if (k < 1) return;
+    driveCamera(null);
     camera.position.copy(pose.pos);
     controls.target.copy(pose.target);
     ui.freeCamera = false;
     controls.update();
     finish();
-  };
-  requestAnimationFrame(frame);
+  });
+}
+// Draw the scene once from each of these [pos, target] views into a tiny
+// off-screen target: it compiles every shader and uploads every texture the
+// flight will need, now, while the screen still shows the sky.
+function warmUp(views) {
+  const probe = camera.clone();
+  const rt = new THREE.WebGLRenderTarget(64, 64);
+  const before = renderer.getRenderTarget();
+  try {
+    for (const [pos, target] of views) {
+      probe.position.copy(pos);
+      probe.lookAt(target);
+      probe.updateMatrixWorld();
+      renderer.compile(scene, probe);
+      renderer.setRenderTarget(rt);
+      renderer.render(scene, probe);
+    }
+  } catch (e) { console.error(e); }
+  renderer.setRenderTarget(before);
+  rt.dispose();
 }
 // 3. The menus and the markers fade in; the camera is the player's again.
 function finish() {
   running = null;
+  autoRes.paused = false;
+  holdShadowsWhole(false);
   skyMoon.hide();
   controls.enabled = true;
   play.holdCamera(false);
@@ -161,6 +189,9 @@ export function stopIntro() {
   if (!running) return;
   running.cancel();
   running = null;
+  driveCamera(null);
+  autoRes.paused = false;
+  holdShadowsWhole(false);
   __set_camTween(null);
   ui.freeCamera = false;
   document.body.classList.remove('intro');

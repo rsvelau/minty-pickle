@@ -17,6 +17,10 @@ import { createSkyMoon } from '../render/skyMoon.js';
 
 // Module state: assigned by init() below, in the same order as before the split.
 export let TINT, clock, fpsMeter, skyMoon;
+// Something that moves the camera itself, once per frame, just before the frame
+// is drawn (the game-start camera move): fn(now). Set to null when done.
+let cameraDriver = null;
+export function driveCamera(fn) { cameraDriver = fn; }
 
 // Run once at startup (called from src/main.js, in order).
 export function init() {
@@ -42,7 +46,7 @@ export function init() {
   renderer.setAnimationLoop(() => {
     // Full rate while anything moves; the idle rate otherwise (see wake()).
     const now = performance.now();
-    const active = now < wakeUntil || !!camTween || heightsEasing || play.busy() || markers.busy()
+    const active = now < wakeUntil || !!camTween || !!cameraDriver || heightsEasing || play.busy() || markers.busy()
       || clocktowers.busy() || (dread > 0 && dread < 1) || (towerOut > 0 && towerOut < 1);
     // After midnight things move all the time: a smoother rate than idle.
     const restFps = dread > 0 || skyMoon.visible ? quality.midnightFps : quality.idleFps;   // the moon's red glow breathes
@@ -67,6 +71,7 @@ export function init() {
     // Zoom-to-cursor re-derives the target from the camera's facing after a
     // wheel zoom; switch it off while we animate the camera ourselves.
     controls.zoomToCursor = !camTween;
+    if (cameraDriver) { try { cameraDriver(now); } catch (e) { console.error(e); cameraDriver = null; } }
     // The title (and the start of the game's camera move) points the camera up
     // at the moon, which the orbit controls can't do: they keep their hands off.
     if (!ui.freeCamera) {
@@ -147,7 +152,7 @@ export function init() {
       // Synced: wait for the GPU to finish the frame (reading back one pixel
       // does), so the time covers CPU and GPU work end to end.
       if (frameLog.sync) { const gl = renderer.getContext(); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, syncPixel); }
-      frameLog.frames.push({ t: now, cpu, total: performance.now() - now, tris: renderer.info.render.triangles, calls: renderer.info.render.calls, shadow: shadowFrame });
+      frameLog.frames.push({ t: now, cpu, total: performance.now() - now, tris: renderer.info.render.triangles, calls: renderer.info.render.calls, shadow: shadowFrame, cam: [camera.position.x, camera.position.y, camera.position.z], q: camera.quaternion.toArray(), res: resScale });
       gpuPoll();
     }
     // FPS readout (View → FPS).
@@ -201,7 +206,7 @@ export function init() {
       try { localStorage.setItem('infoCollapsed', c ? '1' : '0'); } catch { /* fine */ }
     });
   }
-  window.gridPlanner = { grid, scene, camera, controls, cellToWorld, brushes: BRUSHES, terrainHeight, play, dread: () => dread, stopCameraGlide: () => __set_camTween(null) };
+  window.gridPlanner = { grid, scene, camera, controls, cellToWorld, brushes: BRUSHES, terrainHeight, play, dread: () => dread, frameLog, stopCameraGlide: () => __set_camTween(null) };
 }
 
 // Midnight dread (play demo, from midnight on): lights flicker, the

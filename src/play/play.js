@@ -1222,7 +1222,7 @@ export function createPlay({
   function holdCamera(on) { view.hold = !!on; if (!on) view.pan = false; }
   function busy() {
     return rolling() || !!view.watch || drops.length > 0 || grabs.length > 0 || pops.length > 0 || swarmClouds.size > 0 || view.actors.some(running) || [...view.monsters.values()].some((mv) => running(mv) || mv.lunge > 0)
-      || (view.pan && group.visible);
+      || (view.pan && !view.hold && group.visible);
   }
   function tick(_dt, t) {
     // Wall-clock timing so rolls and hops take the same time on slow machines.

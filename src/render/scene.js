@@ -486,8 +486,16 @@ export function viewShadowRect() {
 const area = (r) => Math.max(0, r.x1 - r.x0) * Math.max(0, r.y1 - r.y0);
 // Called every frame; changes the shadow window (and asks for a redraw)
 // only when the view needs it.
+// The game-start camera move sweeps across the whole board: it holds the
+// shadows to the whole board for its length instead of refitting (and redrawing
+// them) frame after frame.
+let shadowsHeld = false;
+export function holdShadowsWhole(on) {
+  shadowsHeld = !!on;
+  if (on && shadowWin.all) setShadowRect(shadowWin.all);
+}
 export function fitShadows() {
-  if (!renderer.shadowMap.enabled || !shadowWin.all) return;
+  if (!renderer.shadowMap.enabled || !shadowWin.all || shadowsHeld) return;
   const need = viewShadowRect(), w = shadowWin.win, a = shadowWin.all;
   if (need.x0 >= need.x1 || need.y0 >= need.y1) { if (!w) setShadowRect(a); return; }
   const inside = w && need.x0 >= w.x0 && need.x1 <= w.x1 && need.y0 >= w.y0 && need.y1 <= w.y1;
