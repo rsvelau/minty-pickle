@@ -460,6 +460,18 @@ export function achieveObjective(state, ctx, events) {
   return null;
 }
 
+// Defeated at once, whatever its health (the Banshee laid to rest by her heirloom).
+export function banishMonster(state, ctx, events) {
+  const m = state.monsters.find((x) => MONSTER_BY_ID[x.kind]);
+  if (!m) return;
+  const mcard = MONSTER_BY_ID[m.kind];
+  state.objectiveDone = true;
+  state.monsters = state.monsters.filter((x) => x !== m);
+  ctx.log(state, `The ${mcard.name} is laid to rest: defeated at once.`);
+  events.push({ type: 'monsterDefeated', id: m.id, kind: m.kind });
+  if (!state.monsters.length) win(state, ctx, events);
+}
+
 // ∞ weakness effects that discard an item: "Discard Silver to …". Any time on
 // your turn, discard an Equipment card with a skill of that element. Those
 // marked `react` are offered at the moment instead (reactions.js).

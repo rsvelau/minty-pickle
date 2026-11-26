@@ -27,7 +27,7 @@
 // [{ item, cell, ... }], anchors: [cells], ceremony: { held } }.
 import { scriptOf, mapSites, knownMonster } from './scripts.js';
 import { siteLabel } from '../../core/sites.js';
-import { achieveObjective } from '../equipmentPlay.js';
+import { achieveObjective, banishMonster } from '../equipmentPlay.js';
 import { watch, offer } from '../reactions.js';
 import { buildingOf } from '../../core/mapCheck.js';
 
@@ -103,6 +103,8 @@ export function onSiteEnter(state, board, pl, cell, ctx, events) {
       const n = state.objective.delivered[step.item] = (state.objective.delivered[step.item] ?? 0) + 1;
       const need = deliveriesNeeded(state, step);
       say(`${pl.name} brings the ${itemLabel(step.item).toLowerCase()} to ${where}${need > 1 ? `: ${Math.min(n, need)} of ${need}` : ''}.`);
+      // A side objective that ends the monster outright (the Banshee's heirloom at the Unmarked Grave).
+      if (step.banish && n >= need) { banishMonster(state, ctx, events); continue; }
       if (n >= need && step.completes !== false && !state.objectiveDone) achieveObjective(state, ctx, events);
       // Everything a hold waits for is in: the ceremony starts.
       const hold = sc.steps.find((x) => x.do === 'hold');

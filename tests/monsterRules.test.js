@@ -199,3 +199,19 @@ test('Adze: a victim dies: one die × the dead, to everyone', async () => {
   const src = await import('fs').then((fs) => fs.readFileSync(new URL('../src/game/monsterTurn.js', import.meta.url), 'utf8'));
   assert.match(src, /die \* dead/);
 });
+
+test('Banshee: the heirloom brought to the Unmarked Grave (an Objective marker in the cemetery) defeats her at once', async () => {
+  const { onSiteEnter } = await import('../src/game/objectives/verbs.js');
+  const { siteOf } = await import('../src/core/sites.js');
+  const s = setup('banshee', { at: [15, 5] });
+  const grave = s.g.index(3, 7);
+  s.g.apply(grave, { area: 'outdoor', sub: 'cemetery', marker: 'objective' }, { silent: true });
+  assert.equal(siteOf(s.g.cells[grave], s.g, grave), 'grave');
+  s.state.mystery = { ...s.state.mystery, monster: 'banshee', revealed: true };
+  s.pl.carry = [{ item: 'heirloom' }];
+  const events = [];
+  onSiteEnter(s.state, s.board, s.pl, grave, s.ctx, events);
+  assert.equal(s.state.monsters.length, 0);
+  assert.equal(s.state.won, true);
+  assert.ok(events.some((e) => e.type === 'monsterDefeated'));
+});

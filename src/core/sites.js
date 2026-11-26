@@ -26,6 +26,8 @@ export const SITES = {
   curio: { label: 'Curio Shop', number: 7, fixtures: ['antique-chest'] },
   funeral: { label: 'Funeral Parlor', number: 11, fixtures: ['finger-bone', 'heirloom'] },
   outdoor: { label: 'Outdoor Store', number: 12, fixtures: ['whetstone'] },
+  // In the cemetery: an Objective marker on a cemetery space is this site.
+  grave: { label: 'Unmarked Grave', fixtures: ['unmarked-grave'], floors: ['cemetery', 'forestCemetery'] },
 };
 
 // Fixtures: the things at a site the objectives use.
@@ -38,6 +40,7 @@ export const FIXTURES = {
   'finger-bone': { label: 'Desiccated Finger Bone', note: 'For the White Lady’s wedding ritual' },
   whetstone: { label: 'Whetstone', note: 'Sharpens the Cosor (Strigoi)' },
   heirloom: { label: 'Heirloom', note: 'A signed ring: the Banshee perches nearest whoever is closest to it' },
+  'unmarked-grave': { label: 'Unmarked Grave', note: 'Bring the Banshee’s heirloom here and she is laid to rest at once' },
 };
 
 export const IMPLICIT_SITES = {

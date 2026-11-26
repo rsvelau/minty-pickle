@@ -992,7 +992,8 @@ toughness or a weakness hit frees them); at the end of its turn it heads 10 towa
 (salt stops it), carrying them, and kills them there at the end of the round. Banshee: Perch at the end of
 her turn, to the rooftop (a building floor or a premade building, not fences, wrecks or towers) nearest the
 player closest to the heirloom; on a roof she's out of Close range; Keen only reaches outdoor spaces; the
-heirloom (a signed ring) is picked up at the Funeral Parlor and set down from Team (Set down). Adze: a
+heirloom (a signed ring) is picked up at the Funeral Parlor and set down from Team (Set down); brought to
+the Unmarked Grave (any Objective marker on a cemetery space, or one set to that site), it defeats her at once. Adze: a
 victim's death costs everyone one die × the dead. Redcap: toughness-ignoring (Piercing) hits can't kill it.
 Monster heals now really heal.
 

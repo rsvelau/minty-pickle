@@ -83,7 +83,7 @@ export const MONSTER_TEXT = {
       'On a rooftop (any real building) she is out of Close range.',
       'The heirloom, a signed ring, lies at the Funeral Parlor {11}: carry it or set it down to draw her where you want.',
     ],
-    goal: 'Kill it: wear its health down to 0.',
+    goal: 'Kill her: wear her health down to 0. Or bring the heirloom to the Unmarked Grave in the cemetery: she is defeated at once.',
     says: {
       Perch: 'End of her turn: flies to the rooftop nearest the player closest to the heirloom.',
       Keen: '{area} Everyone outdoors within 5 spaces takes 🎲🎲.',
