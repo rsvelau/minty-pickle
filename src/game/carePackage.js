@@ -28,7 +28,7 @@ export const crateAt = (state, cell) => (state.crates ?? []).find((c) => c.cell 
 // A new turn after midnight has begun (endRound, after the round count moved on).
 export function nightTurn(state, board, ctx, events) {
   const n = turnsAfterMidnight(state);
-  if (n === null || state.phase === 'over') return;
+  if (n === null || state.phase === 'over' || state.won) return;   // a won game is over for the night too
   if (n >= NIGHT_TURNS) {
     state.phase = 'over';
     state.lostInNight = true;

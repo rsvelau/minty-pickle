@@ -106,3 +106,11 @@ test('Skills: healing with nothing to heal is Not now', () => {
   pl.injuries.P = 1;
   assert.notEqual(dress().status, 'not');
 });
+
+test('a team that has won is never Lost in the night', () => {
+  const { board, state, ctx } = setup();
+  state.won = true;
+  state.round = state.midnightRound + 30;
+  nightTurn(state, board, ctx, []);
+  assert.ok(!state.lostInNight);
+});
