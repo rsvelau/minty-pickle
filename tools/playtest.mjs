@@ -21,8 +21,9 @@ import { newGame, applyAction, unlockedFn } from '../src/game/rules.js';
 import { MONSTER_CARDS, MONSTER_BY_ID } from '../src/game/cards/monsters.js';
 import { skillStatus } from '../src/game/skills.js';
 import { RECIPES, blocked as craftBlocked } from '../src/game/obolcraft.js';
-import { choicesFor } from '../src/game/eventPlay.js';
+import { choicesFor, doorOverride } from '../src/game/eventPlay.js';
 import { scriptOf, mapSites, knownMonster } from '../src/game/objectives/scripts.js';
+import { RANGE, cellRange } from '../src/game/cards/injuries.js';
 import { sixToSpend } from '../src/game/objectives/verbs.js';
 import { matchesEvidence } from '../src/game/mystery.js';
 import { toughnessOf, targetsFor } from '../src/game/equipmentPlay.js';
@@ -54,7 +55,8 @@ function makeBot(state, board) {
   const avoidLit = () => state.monsters.some((m) => MONSTER_BY_ID[m.kind]?.onEnterLit) && !state.flags?.noLight;
   const distTo = (goal) => {
     const lit = avoidLit();
-    const k = `${goal}:${state.keys ?? 0}:${lit}`;
+    const ov = doorOverride(state);
+    const k = `${goal}:${state.keys ?? 0}:${lit}:${ov ? JSON.stringify([state.doors, state.lockdown, state.allDoorsOpen, state.doorPass]) : ''}`;
     if (!fields.has(k)) {
       const open = unlockedFn(state, board);
       const n = g.cells.length;
@@ -71,7 +73,7 @@ function makeBot(state, board) {
           for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
             if (!g.inBounds(x + dx, y + dy)) continue;
             // From the neighbour back to here: walking toward the goal.
-            if (!g.canStep(x + dx, y + dy, -dx, -dy, open)) continue;
+            if (!g.canStep(x + dx, y + dy, -dx, -dy, open, ov)) continue;
             const j = g.index(x + dx, y + dy);
             const cost = c + 1 + (lit && (board.light[i] ?? 0) >= state.config.litThreshold ? 3 : 0);
             if (cost < best[j]) { best[j] = cost; (buckets[cost] ??= []).push(j); }
@@ -114,7 +116,19 @@ function makeBot(state, board) {
           const victims = (state.npcs ?? []).filter((v) => v.alive);
           const guards = state.players.filter((p) => !p.dead).sort((a, b) => a.seat - b.seat);
           const k = guards.indexOf(pl);
-          if (victims.length && k < victims.length && (guards.length > victims.length || k < guards.length - 1 || guards.length === 1)) return [victims[k].cell];
+          // More victims than guards (solo: all three in the Hospital): a
+          // space beside as many of them as possible, if the last guard.
+          if (victims.length > guards.length && k === guards.length - 1) {
+            const rest = victims.slice(k);
+            let most = 0; let spots = [];
+            g.cells.forEach((c, i) => {
+              if (!c.walkable) return;
+              const n = rest.filter((v) => cellRange(g, i, v.cell) <= RANGE.close).length;
+              if (n > most) { most = n; spots = [i]; } else if (n === most && n) spots.push(i);
+            });
+            if (most > 1) return spots;
+          }
+          if (victims.length && k >= 0 && k < victims.length && (guards.length > victims.length || k < guards.length - 1 || guards.length === 1)) return [victims[k].cell];
           if (monster) return [monster.pos];
         }
         else if (st.do === 'upgrade') {

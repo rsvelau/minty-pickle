@@ -996,13 +996,14 @@ heirloom (a signed ring) is picked up at the Funeral Parlor and set down from Te
 the Unmarked Grave (any Objective marker on a cemetery space, or one set to that site), it defeats her at once. Adze: its
 victims come out as soon as the team knows it's the Adze (all its evidence, or named right), or at midnight;
 the turn it rises its swarms only gather; then each swarm flies from the Lair 6 spaces a turn toward its
-victim (walls stop it, nothing else; one swarm per victim at a time, so a second one goes after another
+victim (walls and windows stop it, doors don't, locked or not; with no way through it scatters; one swarm per victim at a time, so a second one goes after another
 victim), shown as a ghastly green cloud on the board; it settles right beside its victim and strikes on the
 Adze's next turn (on the nearest living victim if its own has died); each swarm has 5 health that any Fire
 attack wears down (Skills lists swarms in range as targets): at 0 it's alight, flaming orange, and it flies
 back to the hive and burns the Nest for 3 piercing damage; a defender's Defense die is exhausted only when a
-strike gets past them (a block costs nothing for good); one victim per investigator (all three with three
-or more); a victim survives the first hit
+strike gets past them (a block costs nothing for good), and each swarm a defender beats off costs the Nest 2
+health, through its toughness; one victim per investigator (all three with three or more), and playing solo
+all three wait together in the Hospital; a victim survives the first hit
 that gets through (wounded) and dies to the second; a victim's death costs everyone one die × the dead. Redcap: toughness-ignoring (Piercing) hits can't kill it.
 Monster heals now really heal.
 

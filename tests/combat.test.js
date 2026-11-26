@@ -473,11 +473,36 @@ test('Adze: any Fire attack counts against a swarm’s 5 health (two Molotovs li
   assert.ok(state.swarms[0].burning);
 });
 
-test('Adze: one victim per investigator (all three with three or more)', () => {
-  for (const [n, want] of [[1, 1], [2, 2], [3, 3], [4, 3]]) {
+test('Adze: one victim per investigator (all three with three or more; solo, all three in the Hospital)', () => {
+  for (const [n, want] of [[1, 3], [2, 2], [3, 3], [4, 3]]) {   // solo: all three, in the Hospital
     const g = townWithBuildings();
     const board = createBoard(g);
     const { state } = newGame(board, { seed: 4, startMode: 'midnight', config: { players: n, monsterPick: 'adze' } });
     assert.equal(state.npcs.length, want, `${n} players`);
   }
+});
+
+test('Adze: a swarm beaten off costs the Nest 2, through its toughness; solo, all three victims are in the Hospital', () => {
+  const { g, state, act } = adzeGame();
+  const v = state.npcs.find((x) => x.target === 1);
+  const pl = state.players[0];
+  const mo = state.monsters[0];
+  settled(state, g, v, 3);
+  act({ type: 'roll' });
+  const { x, y } = g.coords(v.cell);
+  pl.pos = g.index(x + 1, y + 1);
+  state.pool = [{ kind: 'black', v: 5 }];
+  state.maxDefense = 1;
+  act({ type: 'slot', die: 0, to: 'defense' });
+  const hp = mo.hp;
+  act({ type: 'end' });
+  assert.ok(v.alive && !v.wounded);
+  assert.equal(mo.hp, hp - 2);
+  // Solo: three victims, side by side in the Hospital.
+  const g2 = townWithBuildings();
+  const b2 = createBoard(g2);
+  const s2 = newGame(b2, { seed: 4, startMode: 'midnight', config: { players: 1, monsterPick: 'adze' } }).state;
+  assert.equal(s2.npcs.length, 3);
+  for (const n of s2.npcs) assert.ok(g2.coords(n.cell).x >= 12 && g2.coords(n.cell).x < 15, 'inside the Hospital (x 12-14)');
+  assert.equal(new Set(s2.npcs.map((n) => n.cell)).size, 3, 'each on its own space');
 });

@@ -19,6 +19,7 @@ import { cellLabel } from '../core/state.js';
 import { applyDamage, alive, defenseValue, killPlayer } from './combat.js';
 import { RANGE, cellRange } from './cards/injuries.js';
 import { buildingOf } from '../core/mapCheck.js'; // the same grouping the map check uses
+import { buildingCells } from '../core/buildings.js';
 import { endMonsterTurn, hurtMonster, strikeMonster } from './equipmentPlay.js';
 import { monsterEnters, monsterDoorBanned } from './eventPlay.js';
 import { anyDoor, blockDoor, buildingDoors } from './doors.js';
@@ -353,10 +354,13 @@ const gridDist = (board, a, b) => cellRange(board.grid, a, b);
 const inClose = (state, board, pos) => alive(state).filter((pl) => cellRange(board.grid, pos, pl.pos) <= RANGE.close);
 
 // A fly swarm's route from `from` to the nearest living player: over any
-// terrain, but walls, windows and locked doors stop it. Returns cells or null.
+// terrain and through any door, but walls and windows stop it. Returns cells or null.
 export function swarmRoute(state, board, from) {
   return swarmRouteTo(board, from, new Set(chaseable(state).map((pl) => pl.pos)));
 }
+// Flies get through any door (locked, nailed, boarded: through the gaps);
+// walls and windows stop them.
+const flyOverride = (k, t) => (t && t !== 'wall' && t !== 'window' ? 'door' : t);
 export function swarmRouteTo(board, from, targets) {
   const grid = board.grid;
   const n = grid.cells.length;
@@ -372,7 +376,7 @@ export function swarmRouteTo(board, from, targets) {
     }
     const { x, y } = grid.coords(i);
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      if (!grid.inBounds(x + dx, y + dy) || !grid.canCross(x, y, dx, dy)) continue;
+      if (!grid.inBounds(x + dx, y + dy) || !grid.canCross(x, y, dx, dy, () => true, flyOverride)) continue;
       const j = grid.index(x + dx, y + dy);
       if (prev[j] === -2) { prev[j] = i; queue.push(j); }
     }
@@ -607,14 +611,24 @@ export function setupVictims(state, board, monster, ctx, events) {
   if (!targets.length) return;
   // Fewer victims for a smaller team: one per investigator, up to all of them
   // (chosen at random). Swarms meant for a missing victim go after another.
-  const keep = Math.min(targets.length, Math.max(1, state.players.length));
-  while (targets.length > keep) targets.splice(ctx.randInt(state, targets.length), 1);
+  // Solo: all three, together in the Hospital.
+  // Solo: all three, but together, inside the Hospital (the spaces nearest its marker).
   const sites = mapSites(board.grid);
   state.npcs = [];
-  for (const t of targets) {
-    const cells = sites[siteByNumber(t.target)] ?? [];
-    if (!cells.length) continue;
-    state.npcs.push({ id: `v${t.target}`, target: t.target, name: t.name, cell: cells[ctx.randInt(state, cells.length)], alive: true });
+  const hospital = sites.hospital?.[0];
+  if (state.players.length === 1 && hospital !== undefined) {
+    const g = board.grid;
+    const room = buildingCells(g, hospital).filter((i) => g.cells[i].walkable)
+      .sort((a, b) => gridDist(board, hospital, a) - gridDist(board, hospital, b) || a - b);
+    targets.forEach((t, k) => state.npcs.push({ id: `v${t.target}`, target: t.target, name: t.name, cell: room[k] ?? hospital, alive: true }));
+  } else {
+    const keep = Math.min(targets.length, Math.max(1, state.players.length));
+    while (targets.length > keep) targets.splice(ctx.randInt(state, targets.length), 1);
+    for (const t of targets) {
+      const cells = sites[siteByNumber(t.target)] ?? [];
+      if (!cells.length) continue;
+      state.npcs.push({ id: `v${t.target}`, target: t.target, name: t.name, cell: cells[ctx.randInt(state, cells.length)], alive: true });
+    }
   }
   for (const v of state.npcs) ctx.log(state, `${v.name}: a townsperson at ${label(board, v.cell)} is in the ${card.name}'s sights.`);
   events.push({ type: 'npcs', npcs: state.npcs.map((v) => ({ ...v })) });
@@ -638,7 +652,8 @@ const livingVictims = (state) => (state.npcs ?? []).filter((v) => v.alive);
 //   state.swarms = [{ id, victim, pos, dmg, type, exhaust, name, ready?, burning? }]
 export const SWARM_SPEED = 6;
 export const SWARM_BURN = 3;
-export const SWARM_HP = 5;        // Fire it takes to set it alight (any Fire attack counts)
+export const SWARM_HP = 5;
+export const SWARM_BLOCKED = 2;   // the Nest's loss each time a defender beats a swarm off        // Fire it takes to set it alight (any Fire attack counts)
 function launchSwarm(state, board, monster, card, intent, o, ctx, events) {
   const victims = livingVictims(state);
   const hunted = new Set((state.swarms ?? []).filter((sw) => !sw.burning).map((sw) => sw.victim));
@@ -687,11 +702,12 @@ function flySwarm(state, board, monster, card, sw, ctx, events) {
     if (defender && sw.exhaust && through) exhaust(state, defender, 'defense', ctx, events);
     return;
   }
-  // Fly on, stopping right beside the victim.
-  const route = swarmRouteTo(board, sw.pos, new Set([v.cell])) ?? [sw.pos, v.cell];
+  // Fly on, stopping right beside the victim. Walled in all round: it can't reach them.
+  const route = swarmRouteTo(board, sw.pos, new Set([v.cell]));
+  if (!route) { drop(); ctx.log(state, `A swarm can't find a way to the ${v.name} and scatters.`); return; }
   const leg = route.slice(0, Math.min(SWARM_SPEED, route.length - 2) + 1);
   sw.pos = leg[leg.length - 1];
-  if (route.length - 1 - (leg.length - 1) <= 1) {
+  if (cellRange(board.grid, sw.pos, v.cell) <= 1) {
     sw.ready = true;
     ctx.log(state, `A swarm settles beside the ${v.name}: it strikes on the ${card.name}'s next turn.`);
   }
@@ -715,6 +731,8 @@ function attackVictim(state, board, monster, card, intent, o, ctx, events) {
   if (best && block >= dmg) {
     ctx.log(state, `The ${card.name}'s swarm falls on the ${v.name} for ${dmg}: ${best.name} shields them (defense ${block}).`);
     events.push({ type: 'npcAttacked', npc: v.id, cell: v.cell, amount: dmg, defense: block, defender: best.seat, outcome: 'saved' });
+    // A swarm beaten off is lost to the hive: the Nest takes SWARM_BLOCKED, through its toughness.
+    if (card.actsBy === 'swarm' && state.monsters.includes(monster)) strikeMonster(state, board, monster, SWARM_BLOCKED, null, ctx, events);
     return best;
   }
   // Victims are hardy: the first hit that gets through wounds them; the second kills.
