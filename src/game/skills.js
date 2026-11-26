@@ -25,6 +25,7 @@ import { abilityReady, targetsFor, actionRoll } from './equipmentPlay.js';
 import { applyAction } from './rules.js';
 import { RANGE, cellRange } from './cards/injuries.js';
 import { doorsAround } from './doors.js';
+import { canRelightAtMemorial, memorialBeside, memorialsLive } from './objectives/verbs.js';
 
 const USE_PHASES = ['idle', 'slotting', 'choosing', 'asking'];
 const RANGE_WORD = { close: 'Close', mid: 'Mid', long: 'Long', self: 'Self', all: 'All' };
@@ -131,7 +132,27 @@ export function skillStatus(state, board, pl) {
   if ((pl.carry ?? []).some((c) => c.item === 'cosor' && c.blessed)) out.push(cosorStrike(state, board, pl, mine, free));
   // Beside a blocked door (Nailed Shut and the like): force it with a 6.
   if (doorsAround(state, board, pl.pos).some((d) => d.status === 'blocked')) out.push(forceDoor(state, board, pl, mine, free));
+  // Shadow People: beside a memorial with a candle that went out: relight it for an Obol.
+  if (memorialsLive(state) && memorialBeside(board, pl.pos) >= 0 && (pl.carry ?? []).some((c) => c.item === 'candle' && c.lit === false)) out.push(relightSkill(state, board, pl, mine));
   return out;
+}
+
+export const RELIGHT_CARD = {
+  name: 'Missing-person memorial',
+  abilities: [{ range: 'close', kind: null, name: 'Relight the candle', dice: 0, req: null, obols: 1, limit: null,
+    text: 'Spend an Obol to relight your candle from the memorial’s candles.', fx: {} }],
+};
+function relightSkill(state, board, pl, mine) {
+  const e = { item: 'relight', ability: 0, name: 'Relight the candle', card: RELIGHT_CARD, status: 'not', why: '', action: null, manual: false };
+  const set = (status, why = '') => { e.status = status; e.why = why; return e; };
+  if (!mine) return set('not', `On ${pl.name}’s turn`);
+  if (!USE_PHASES.includes(state.phase)) return set('not', state.phase === 'moving' ? 'Finish moving first' : 'Not right now');
+  if (!canRelightAtMemorial(state, board, pl)) return set('almost', '1 more Obol needed');
+  const action = { type: 'relight', seat: state.cur };
+  const r = applyAction(structuredClone(state), board, action);
+  if (!r.ok) return set('not', r.error ? r.error[0].toUpperCase() + r.error.slice(1) : 'Not right now');
+  e.action = action;
+  return set('now');
 }
 
 // Anyone can force a blocked door with a 6: listed with the skills (item 'force').

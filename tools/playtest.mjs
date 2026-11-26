@@ -112,9 +112,8 @@ function makeBot(state, board) {
           if (it.lit === false) {
             const from = siteCells(sc.steps.find((x) => x.do === 'collect' && x.item === st.item).at);
             // Shadow People: the memorials relight too (the spaces beside them), whichever is nearer.
-            if (st.item === 'candle') {
+            if (st.item === 'candle' && pl.inventory.obolcraft.length) {
               const shrines = memorialCells(board).flatMap((m) => { const { x, y } = g.coords(m); return [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => g.inBounds(x + dx, y + dy) && g.cells[g.index(x + dx, y + dy)].walkable).map(([dx, dy]) => g.index(x + dx, y + dy)); });
-              if (shrines.includes(pl.pos)) return [pl.pos];   // stay: it relights at the start of the next turn (or now, for an Obol)
               from.push(...shrines);
             }
             // Relighting happens on stepping onto the stand: standing on it already, step off first.
@@ -228,6 +227,9 @@ function makeBot(state, board) {
         // Skills first: anything ready that hurts a monster, or heals me.
         const injured = Object.values(pl.injuries ?? {}).some((v) => v > 0);
         const ready = skillStatus(state, board, pl).filter((e) => e.status === 'now' && e.action && !e.manual);
+        // Beside a memorial with the candle out: relight it for an Obol.
+        const relight = ready.find((e) => e.item === 'relight');
+        if (relight) return relight.action;
         // Shut in (a blocked door between me and where I'm going): force it with a 6.
         const force = ready.find((e) => e.item === 'force');
         if (force && !nearest(pl.pos, goals(pl))) return force.action;

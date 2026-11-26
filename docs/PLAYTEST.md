@@ -190,3 +190,5 @@ The bot also learned to walk to a Nailed Shut door and force it with a 6.
 The two Missing-person memorials (K9, U13) now relight candles (free when starting a turn beside one, or
 for an Obol when passing). Wins of 40: solo 31, 2p 28, 3p 31, 4p 33. Free memorial relights: 51-217 per
 40 games; paid: 11-40. Church to Lair 25-34 spaces: 61% (was 48%).
+Then memorials always cost an Obol (no free relight when starting beside one; Skills offers "Relight the
+candle" on your turn beside one). Wins of 40: solo 31, 2p 28, 3p 33, 4p 29. Paid relights: 11-36 per 40 games.

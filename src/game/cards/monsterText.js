@@ -174,7 +174,7 @@ export const MONSTER_TEXT = {
       'Every Defense die is exhausted once it is used.',
       'A lit candle gives its carrier +1 Defense.',
       'Candles never go out inside the Church; starting or ending your turn on the candle stand relights yours.',
-      'The Missing-person memorials (blue flags) relight a candle too: free if you start your turn right beside one; passing one, for an Obol.',
+      'The Missing-person memorials (blue flags) relight a candle too, for an Obol: passing one, or on your turn beside one.',
     ],
     goal: 'Light the Dark Room: carry lit candles from the Church {9} to the Lair, one per investigator.',
     says: {

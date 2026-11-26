@@ -182,9 +182,9 @@ teammates in your space for heals like the Medical Kit). Obol costs (◉) take a
   Candles never go out inside the Church, and starting or ending a turn on the stand relights one. A lit
   candle gives its carrier +1 Defense. Umbral Stab strikes at most once a move (the first lit space entered).
   The Missing-person memorial landmarks become optional objectives (a pale blue flag with a candle, not the red
-  one): starting a turn on a space sharing a side with one relights a candle free; stepping onto such a space
-  with the candle out asks whether to relight it for an Obol (the kind you hold most of), once per memorial a
-  move.
+  one) where a candle that went out can be relit for an Obol (the kind you hold most of): stepping onto a space
+  sharing a side with one asks (once per memorial a move), and on your turn beside one (before rolling, or
+  stopped) Skills offers "Relight the candle".
   **Barghest**: each investigator steps on the Church to be cleansed; the uncleansed can't step onto a
   bridge; a cleansed investigator reaching the Start space escapes (out of the turn order, out of the
   monster's reach). The first escape wins for the team; play goes on until everyone has escaped or fallen.

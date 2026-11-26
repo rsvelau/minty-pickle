@@ -401,7 +401,7 @@ test('Umbral Stab: once a move, however many lit spaces it crosses', async () =>
   assert.equal(hits(), 2, 'a new move can be stabbed again');
 });
 
-test('Shadow People: a memorial relights a candle free at the start of a turn beside it, or for an Obol when passing', async () => {
+test('Shadow People: a memorial relights a candle for an Obol: passing it, or on your turn beside it', async () => {
   const { relightHere, memorialPass } = await import('../src/game/objectives/verbs.js');
   const s = fight('shadow-people');
   const pl = s.state.players[0];
@@ -409,15 +409,26 @@ test('Shadow People: a memorial relights a candle free at the start of a turn be
   s.g.apply(m, { area: 'outdoor', sub: 'memorial', walkable: false }, { silent: true });
   s.at(pl, 0, 0);
   pl.carry[0].lit = false;
-  // Diagonal doesn't count: a shared side only.
-  pl.pos = s.g.index(11, 6);
-  relightHere(s.state, s.board, pl, s.ctx, [], { start: true });
-  assert.equal(pl.carry[0].lit, false);
+  // Starting beside it is not free.
   pl.pos = s.g.index(11, 5);
-  relightHere(s.state, s.board, pl, s.ctx, [], { start: true });
-  assert.equal(pl.carry[0].lit, true, 'free at the start of a turn beside it');
+  relightHere(s.state, s.board, pl, s.ctx, []);
+  assert.equal(pl.carry[0].lit, false, 'no free relight');
+  // On your turn beside it: Skills offers it, for an Obol.
+  s.state.phase = 'idle'; s.state.cur = 0; s.state.pool = [];
+  pl.inventory.obolcraft = [];
+  let e = skillStatus(s.state, s.board, pl).find((x) => x.item === 'relight');
+  assert.equal(e.status, 'almost', 'no Obol yet');
+  pl.inventory.obolcraft = [{ type: 'bone' }];
+  e = skillStatus(s.state, s.board, pl).find((x) => x.item === 'relight');
+  assert.equal(e.status, 'now');
+  assert.ok(applyAction(s.state, s.board, e.action).ok);
+  assert.equal(pl.carry[0].lit, true);
+  assert.equal(pl.inventory.obolcraft.length, 0);
+  // Diagonal doesn't count.
+  pl.carry[0].lit = false; pl.inventory.obolcraft = [{ type: 'ash' }];
+  pl.pos = s.g.index(11, 6);
+  assert.ok(!skillStatus(s.state, s.board, pl).some((x) => x.item === 'relight'));
   // Passing with the candle out: asked, for an Obol.
-  pl.carry[0].lit = false;
   pl.inventory.obolcraft = [];
   memorialPass(s.state, s.board, pl, s.g.index(10, 4));
   assert.equal(s.state.ask, null, 'no Obol, no offer');

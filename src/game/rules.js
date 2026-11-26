@@ -22,7 +22,7 @@ import { turnLimits, injuries, applyDamage, sacrificeCarrier, killPlayer } from 
 import { answer as answerReaction } from './reactions.js';
 import { RANGE, cellRange } from './cards/injuries.js';
 import { objectiveLive, knownMonster } from './objectives/scripts.js';
-import { onSiteEnter, crossingBlocked, suffocate, relightHere, memorialPass, relightForObol, destroyAnchor, holdRound, pickUpHere, itemLabel } from './objectives/verbs.js';
+import { onSiteEnter, crossingBlocked, suffocate, relightHere, memorialPass, relightForObol, canRelightAtMemorial, destroyAnchor, holdRound, pickUpHere, itemLabel } from './objectives/verbs.js';
 import { siteOf, siteLabel } from '../core/sites.js';
 import { craft } from './obolcraft.js';
 import { refreshThreat, onPlayerEnters, setupVictims } from './monsterTurn.js';
@@ -311,7 +311,7 @@ function scout(state, action, events) {
 // equipment and Obolcraft.
 const STOPPED = ['slotting', 'choosing', 'asking'];
 // Every action: { type, seat? }. Returns { ok, error?, events }.
-export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective', 'event', 'setting', 'sacrifice', 'setDie', 'react', 'strike', 'scout', 'drop', 'force'];
+export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective', 'event', 'setting', 'sacrifice', 'setDie', 'react', 'strike', 'scout', 'drop', 'force', 'relight'];
 
 export function applyAction(state, board, action) {
   // Doors the game changed (nailed, breached) count for every move made while
@@ -365,7 +365,7 @@ function applyActionNow(state, board, action) {
       startOfTurn(state, eventCtx(state));
       // Standing on something dropped (the Cosor after Unholy Burn): pick it up, once allowed.
       pickUpHere(state, pl, pl.pos, (text) => { log(state, text); events.push({ type: 'objStep', seat: pl.seat, cell: pl.pos, text }); }, { burntOnly: true });
-      relightHere(state, board, pl, { state, log, randInt }, events, { start: true });   // Shadow People: starting on the candle stand or beside a memorial
+      relightHere(state, board, pl, { state, log, randInt }, events);   // Shadow People: starting on the candle stand
       state.pool = Array.from({ length: lim.dice }, () => ({ kind: 'black', v: d6(state) }));
       state.slots = [];
       state.defSlots = [];
@@ -576,6 +576,15 @@ function applyActionNow(state, board, action) {
       strikeMonster(state, board, m, dmg, 'holy', { log, state, randInt }, events);
       events.push({ type: 'cosorStrike', seat: state.cur, id: m.id, amount: dmg });
       restop(state, board, events);
+      break;
+    }
+    case 'relight': {
+      // Shadow People: beside a Missing-person memorial (start of the turn or
+      // stopped there), relight a candle that went out for an Obol.
+      if (!['idle', ...STOPPED].includes(state.phase)) return fail('finish moving first');
+      const pl = curPlayer(state);
+      if (!canRelightAtMemorial(state, board, pl)) return fail('stand beside a memorial with a candle that went out and an Obol');
+      relightForObol(state, pl, { log, state }, events);
       break;
     }
     case 'force': {
