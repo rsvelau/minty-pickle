@@ -91,7 +91,11 @@ function makeBot(state, board) {
   const teamHas = (item) => state.players.some((p) => !p.dead && carrying(p, item));
 
   // Where this investigator wants to go now: a list of cells (the nearest wins).
+  // Set by goals(): the goal is the monster itself (stop beside it to fight), not a
+  // place it happens to stand on (a Lair to deliver to).
+  let fighting = false;
   function goals(pl) {
+    fighting = false;
     const ob = state.objective ?? {};
     const id = knownMonster(state);
     const sc = scriptOf(id);
@@ -140,7 +144,7 @@ function makeBot(state, board) {
             if (most > 1) return spots;
           }
           if (victims.length && k >= 0 && k < victims.length && (guards.length > victims.length || k < guards.length - 1 || guards.length === 1)) return [victims[k].cell];
-          if (monster) return [monster.pos];
+          if (monster) { fighting = true; return [monster.pos]; }
         }
         else if (st.do === 'upgrade') {
           const it = carrying(pl, st.item);
@@ -163,7 +167,7 @@ function makeBot(state, board) {
       if (marks.length) return marks;
     }
     // A monster to fight.
-    if (monster && monster.hp !== null) return [monster.pos];
+    if (monster && monster.hp !== null) { fighting = true; return [monster.pos]; }
     return [board.startCell()];
   }
   const nearest = (from, cells) => {
@@ -236,12 +240,12 @@ function makeBot(state, board) {
         if (EXPERT) {
           const best = bestAttack(pl, ready);
           if (best) return best;
-          const heal = injured && ready.find((e) => { const fx = e.card.abilities[e.ability].fx ?? {}; return fx.heal || fx.healAround; });
+          const heal = injured && ready.find((e) => { const fx = e.card.abilities[e.ability].fx ?? {}; return (fx.heal && Object.keys(fx.heal).some((k) => (pl.injuries?.[k] ?? 0) > 0)) || fx.healAround; });
           if (heal) return heal.action;
         } else {
           for (const e of ready) {
             const fx = e.card.abilities[e.ability].fx ?? {};
-            const useful = e.item === 'cosor' || fx.dmg !== undefined || (injured && (fx.heal || fx.healAround))
+            const useful = e.item === 'cosor' || fx.dmg !== undefined || (injured && ((fx.heal && Object.keys(fx.heal).some((k) => (pl.injuries?.[k] ?? 0) > 0)) || fx.healAround))
               || (fx.target === 'monster' && (fx.toughDown || fx.immobile || fx.halve));
             if (useful) return e.action;
           }
@@ -265,9 +269,16 @@ function makeBot(state, board) {
         const monster = state.monsters[0];
         const night = monster || knownMonster(state);   // a monster about (the Poltergeist has no body)
         const gl = reachable(pl);
-        const hunting = monster && gl.length === 1 && gl[0] === monster.pos;
+        const hunting = monster && fighting && gl.length === 1 && gl[0] === monster.pos;
         const near = nearest(pl.pos, gl);
         const need = !near ? 0 : hunting ? Math.max(0, near.d - 1) : near.d;
+        // Trace: why a bot that isn't going anywhere waits (once a turn).
+        if (TRACE && need === 0 && state.fullLog && pl.waitNote !== state.turn) {
+          pl.waitNote = state.turn;
+          const lab = (i) => { const { x, y } = g.coords(i); return `${String.fromCharCode(65 + x)}${y + 1}`; };
+          state.fullLog.push(`[bot] ${pl.name} at ${lab(pl.pos)} waits: goals ${gl.slice(0, 4).map(lab).join(',')}${gl.length > 4 ? '…' : ''} ${near ? `reached (d ${near.d})` : 'UNREACHABLE'}${hunting ? ' (hunting)' : ''}${state.noMove ? ' noMove' : ''}`);
+          if (process.env.OBJ) state.fullLog.push(`[bot]   objective ${JSON.stringify(state.objective)} carry ${JSON.stringify(state.players.map((p) => p.carry))}`);
+        }
         const canDef = state.defSlots.length < state.maxDefense;
         const threat = monster && (monster.danger ?? []).includes(pl.seat);
         if (EXPERT) {

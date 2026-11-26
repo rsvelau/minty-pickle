@@ -192,3 +192,15 @@ for an Obol when passing). Wins of 40: solo 31, 2p 28, 3p 31, 4p 33. Free memori
 40 games; paid: 11-40. Church to Lair 25-34 spaces: 61% (was 48%).
 Then memorials always cost an Obol (no free relight when starting beside one; Skills offers "Relight the
 candle" on your turn beside one). Wins of 40: solo 31, 2p 28, 3p 33, 4p 29. Paid relights: 11-36 per 40 games.
+
+## Stalls (games still going at round 60), expert bot, 40 games × 4 team sizes × 13 monsters
+
+First pass: 47 of 2,080 undecided. Two were bot bugs, now fixed: stopping one space short of a Lair the
+monster stands on (holy water and candles never delivered), and spending dice on a Medical Kit with nothing
+to heal. Second pass: 25 of 2,080.
+
+| Cause | Stalls | Monsters |
+|---|---|---|
+| Survivors have nothing that can hurt the monster, and it can't kill them through their Defense | 17 | Redcap 7, Wendigo 6, Adze (2p) 3, Skinwalker 1 |
+| A one-of-a-kind objective item dies with its carrier | 7 | White Lady 7 (the Gown, Ring or Finger Bone) |
+| Other | 1 | Shadow People |

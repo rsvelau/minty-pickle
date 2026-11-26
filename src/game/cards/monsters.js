@@ -210,7 +210,7 @@ export const MONSTER_CARDS = [
     evidence: { attack: 'S', observations: ['UI', 'FW', 'SL'], lair: 'TS' },
   },
   {
-    id: 'shadow-people', name: 'Shadow People', hp: null, toughness: null, badge: 0, stars: 1,
+    id: 'shadow-people', name: 'Shadow People', hp: null, toughness: null, badge: 0, stars: 3,
     // No body: the darkness around players ripples; it only takes shape to
     // strike (Umbral Stab, when a player enters a lit space).
     body: 'none', onEnterLit: { kind: 'physical', dmg: 'die' },
