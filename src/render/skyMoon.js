@@ -157,6 +157,7 @@ export function createSkyMoon(scene) {
     group.scale.setScalar(size);
     group.visible = true;
     stars.visible = true;
+    stars.material.opacity = 0.9;
     stars.position.copy(camera.position);
     right.setFromMatrixColumn(camera.matrixWorld, 0).normalize();
     up.setFromMatrixColumn(camera.matrixWorld, 1).normalize();
@@ -204,78 +205,10 @@ export function createSkyMoon(scene) {
     // The moon and its clouds only (the stars stay for the rest of the camera move).
     hideMoon() { group.visible = false; for (const c of clouds) c.s.visible = false; },
     get starsUp() { return stars.visible; },
+    // Fade the stars (0..1) as the camera comes down to the town.
+    starsOpacity(k) { stars.material.opacity = 0.9 * k; },
     // Everything in the sky (not to be moved with the land).
     parts: () => [group, stars, ...clouds.map((c) => c.s)],
     get visible() { return group.visible; },
   };
-}
-
-// --- The rain clouds the camera passes through on its way down ---------------
-// A bank of soft, dark puffs held in front of the camera (and a veil across the
-// whole view) whose thickness the game-start move sets: 0 clear, 1 nothing but
-// cloud. As the camera comes down the puffs stream upward past it.
-function puffTexture(seed0) {
-  const c = document.createElement('canvas');
-  c.width = c.height = 256;
-  const g = c.getContext('2d');
-  let seed = seed0;
-  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  for (let k = 0; k < 18; k++) {
-    const x = 128 + (rnd() - 0.5) * 120, y = 128 + (rnd() - 0.5) * 80, r = 40 + rnd() * 60;
-    const b = g.createRadialGradient(x, y, 0, x, y, r);
-    const a = 0.18 + rnd() * 0.2;
-    b.addColorStop(0, `rgba(96, 104, 120, ${a})`);
-    b.addColorStop(0.6, `rgba(80, 88, 104, ${a * 0.5})`);
-    b.addColorStop(1, 'rgba(70, 78, 94, 0)');
-    g.fillStyle = b;
-    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
-  }
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-}
-export function createCloudBank(scene) {
-  const PUFFS = 16;
-  const maps = [puffTexture(5), puffTexture(41), puffTexture(97)];
-  let seed = 19;
-  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  const puffs = Array.from({ length: PUFFS }, (_, i) => {
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: maps[i % 3], transparent: true, opacity: 0, depthWrite: false, depthTest: false, fog: false, toneMapped: false }));
-    s.renderOrder = 50;
-    s.visible = false;
-    s.raycast = () => {};
-    scene.add(s);
-    // Where it sits in the view: across, a phase up the screen, how far, how big.
-    return { s, x: (rnd() - 0.5) * 2.4, y: rnd() * 3, d: 3 + rnd() * 6, size: 1.8 + rnd() * 1.6, a: 0.7 + rnd() * 0.3 };
-  });
-  // The veil: an even grey over everything at the cloud's thickest.
-  const veil = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0x3e4552, transparent: true, opacity: 0, depthWrite: false, depthTest: false, fog: false, toneMapped: false }));
-  veil.renderOrder = 49;
-  veil.visible = false;
-  scene.add(veil);
-  const fwd = new THREE.Vector3(), right = new THREE.Vector3(), up = new THREE.Vector3();
-  // density 0..1; rise: how far the puffs have streamed up (grows as the camera descends).
-  function set(camera, density, rise) {
-    const on = density > 0.001;
-    veil.visible = on;
-    for (const p of puffs) p.s.visible = on;
-    if (!on) return;
-    camera.updateMatrixWorld();
-    camera.getWorldDirection(fwd);
-    right.setFromMatrixColumn(camera.matrixWorld, 0).normalize();
-    up.setFromMatrixColumn(camera.matrixWorld, 1).normalize();
-    const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-    veil.position.copy(camera.position).addScaledVector(fwd, 1);
-    veil.scale.set(tanV * camera.aspect * 2.4, tanV * 2.4, 1);
-    veil.material.opacity = Math.min(1, density * density) * 0.92;
-    for (const p of puffs) {
-      const h = tanV * p.d;                                   // half the view's height at its distance
-      const y = (((p.y + rise) % 3) + 3) % 3 - 1.5;           // streams up and wraps round
-      p.s.position.copy(camera.position).addScaledVector(fwd, p.d)
-        .addScaledVector(right, p.x * h * camera.aspect).addScaledVector(up, y * h * 1.4);
-      p.s.scale.setScalar(p.size * h);
-      p.s.material.opacity = Math.min(1, density * 1.4) * p.a;
-    }
-  }
-  return { set, hide: () => set(null, 0, 0) };
 }

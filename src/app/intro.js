@@ -13,20 +13,17 @@
 import { ui } from './config.js';
 import { aheadPose } from './pointer.js';
 import { skyMoon } from './loop.js';
-import { createCloudBank } from '../render/skyMoon.js';
 import { markers, labelGroup, refreshMarkers } from '../render/board.js';
-import { __set_camTween, camera, controls, fitPreset, wake, scene, markShadows, moon as moonLight } from '../render/scene.js';
+import { __set_camTween, camera, controls, fitPreset, wake } from '../render/scene.js';
 import { play } from '../play/playView.js';
 import * as THREE from 'three';
 
 // (window.__introSlow stretches it, for checking the stages one by one.)
 const slow = () => (typeof window !== 'undefined' && window.__introSlow) || 1;
-const MOVE = 3;        // s: from the moon down to the player
-const DROP = 60;       // how far below the land waits while the sky shows
+const MOVE = 5;        // s: from the moon down to the player
 const FADE = 700;      // ms: menus and markers fade in
 
 let running = null;    // the intro in progress: { cancel }
-let cloudBank = null;  // the rain clouds the camera comes down through (made on first use)
 
 // The title screen's camera: high over the town (where the game's camera move
 // starts) but tilted up at the sky, so no town shows; the full moon big in the
@@ -38,9 +35,9 @@ export function showTitleView() {
   stopIntro();
   __set_camTween(null);
   const over = fitPreset('persp');
-  camera.position.copy(over.pos);
-  // Facing the same way as the town view below, tilted up into the sky.
-  const flat = over.target.clone().sub(over.pos).setY(0).normalize();
+  camera.position.copy(farPoint(over));
+  // Facing the town, tilted up into the sky.
+  const flat = over.target.clone().sub(camera.position).setY(0).normalize();
   const t = THREE.MathUtils.degToRad(TILT);
   const dir = flat.multiplyScalar(Math.cos(t)).setY(Math.sin(t));
   titleLook = camera.position.clone().addScaledVector(dir, 400);
@@ -51,6 +48,13 @@ export function showTitleView() {
   ui.hideMarkers = true;
   markers.setVisible(false);
   labelGroup.visible = false;
+}
+// Where the title camera hangs: far out beyond the forest, on the same side as
+// the usual town view, a little above the treetops.
+function farPoint(over) {
+  const back = over.pos.clone().sub(over.target).setY(0);
+  const d = back.length();
+  return over.target.clone().addScaledVector(back.normalize(), d * 2.6).setY(Math.max(9, over.pos.y * 0.45));
 }
 // A resized window on the title: frame it again.
 if (typeof window !== 'undefined') window.addEventListener('resize', () => { if (ui.mode === 'title' && skyMoon.visible) showTitleView(); });
@@ -68,10 +72,11 @@ export function leaveTitleView() {
 }
 
 // The game-start camera move. Call after the game is on the board (setTool('play')).
-// One continuous move of MOVE seconds that starts slow, picks up speed and
-// settles gently on the player who is up. Coming from the title, the camera
-// tips down from the moon into an empty starry sky, and the land rises up into
-// place beneath it (it waits far below, out of sight, while the sky shows).
+// One continuous move of MOVE seconds: it starts slow, picks up speed and eases
+// in on the player who is up. Coming from the title (far out beyond the
+// forest, looking up at the moon) the camera tips down through the stars until
+// the treeline comes into view, then the town far off (out of the night's
+// fog), and flies in over the town to the player.
 export function playIntro() {
   stopIntro();
   __set_camTween(null);   // (starting play queues its own glide: this move replaces it)
@@ -84,44 +89,46 @@ export function playIntro() {
   let cancelled = false;
   const fromSky = ui.freeCamera && skyMoon.visible;
   ui.freeCamera = true;
-  // The land: everything but the lights and the sky.
-  const sky = new Set(skyMoon.parts());
-  const land = fromSky ? scene.children.filter((o) => !o.isLight && o !== moonLight.target && !sky.has(o)) : [];
-  const base = land.map((o) => o.position.y);
-  const setLand = (lift) => land.forEach((o, i) => { o.position.y = base[i] - DROP * (1 - lift); });
-  setLand(0);
-  if (fromSky) cloudBank ??= createCloudBank(scene);
-  running = { cancel: () => { cancelled = true; setLand(1); cloudBank?.hide(); } };
+  running = { cancel: () => { cancelled = true; } };
 
-  const pose = aheadPose() ?? fitPreset('persp');
-  const p0 = camera.position.clone(), q0 = camera.quaternion.clone();
-  const probe = new THREE.PerspectiveCamera();   // how the camera will face at the end
-  probe.position.copy(pose.pos);
-  probe.up.copy(camera.up);
-  probe.lookAt(pose.target);
-  const q1 = probe.quaternion.clone();
+  const over = fitPreset('persp');                 // the whole-town view (and the fog fitted to it)
+  const pose = aheadPose() ?? over;
+  const p0 = camera.position.clone();
+  const sky = fromSky ? titleLook.clone() : null;
+  // The path: from where the camera is, sweeping in by way of the whole-town
+  // view, down to the player (a smooth curve, no corners).
+  const via = over.pos.clone();
+  const at = new THREE.Vector3();
+  const curve = (e) => at.set(0, 0, 0)
+    .addScaledVector(p0, (1 - e) ** 2).addScaledVector(via, 2 * (1 - e) * e).addScaledVector(pose.pos, e * e);
+  const look = new THREE.PerspectiveCamera();
+  const facing = (from, to) => { look.position.copy(from); look.up.set(0, 1, 0); look.lookAt(to); return look.quaternion.clone(); };
+  const qStart = camera.quaternion.clone();
   const t0 = performance.now();
   const smooth = (a, b, x) => { const k = Math.min(1, Math.max(0, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
+  const SPLIT = 0.42;    // by here the camera faces the town; after it, it turns to the player
   const frame = () => {
     if (cancelled) return;
     const k = Math.min(1, (performance.now() - t0) / (MOVE * slow() * 1000));
     // Slow start, speeding up, then easing in to the player (cubic in-out).
     const e = k < 0.5 ? 4 * k ** 3 : 1 - Math.pow(-2 * k + 2, 3) / 2;
-    camera.position.lerpVectors(p0, pose.pos, e);
-    camera.quaternion.slerpQuaternions(q0, q1, e);
+    const pos = curve(e);
+    camera.position.copy(pos);
+    const qTown = facing(pos, over.target);
+    if (e < SPLIT) {
+      // Down from the sky (the moon, the stars) to the town far ahead.
+      const q0 = sky ? facing(pos, sky) : qStart;
+      camera.quaternion.slerpQuaternions(q0, qTown, smooth(0, SPLIT, e));
+    } else {
+      camera.quaternion.slerpQuaternions(qTown, facing(pos, pose.target), smooth(SPLIT, 1, e));
+    }
     if (fromSky) {
-      // It's raining down there: the camera passes through thick cloud, and
-      // the land finishes rising while the cloud hides it.
-      const cloud = smooth(0.24, 0.42, k) * (1 - smooth(0.58, 0.76, k));
-      cloudBank.set(camera, cloud, e * 9);
-      setLand(smooth(0.12, 0.6, k));
-      markShadows();
+      skyMoon.starsOpacity(1 - smooth(0.35, 0.8, e));
       if (skyMoon.visible && !skyMoon.inView(camera)) skyMoon.hideMoon();
     }
     wake(200);
     if (k < 1) { requestAnimationFrame(frame); return; }
-    setLand(1);
-    cloudBank?.hide();
+    camera.position.copy(pose.pos);
     controls.target.copy(pose.target);
     ui.freeCamera = false;
     controls.update();
