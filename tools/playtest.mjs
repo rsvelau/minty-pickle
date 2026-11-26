@@ -25,13 +25,23 @@ import { choicesFor } from '../src/game/eventPlay.js';
 import { scriptOf, mapSites, knownMonster } from '../src/game/objectives/scripts.js';
 import { sixToSpend } from '../src/game/objectives/verbs.js';
 import { matchesEvidence } from '../src/game/mystery.js';
+import { toughnessOf } from '../src/game/equipmentPlay.js';
+import { checkRequirement } from '../src/game/cards/requirements.js';
 
+// TUNE='{"werewolf":{"toughness":3}}': try card changes in this run only (hp,
+// toughness, badge...), to see what a balance change would do before making it.
+if (process.env.TUNE) {
+  const { MONSTER_BY_ID: CARDS } = await import('../src/game/cards/monsters.js');
+  for (const [id, change] of Object.entries(JSON.parse(process.env.TUNE))) Object.assign(CARDS[id], change);
+}
 const MAP = JSON.parse(readFileSync(new URL('../src/maps/hawthorn-bend.json', import.meta.url)));
 const GAMES = Number(process.argv[2] ?? 8);
 const ONLY = process.argv[3] && process.argv[3] !== 'all' ? process.argv[3].split(',') : null;
 const SIZES = (process.argv[4] ?? '1,2,3,4').split(',').map(Number);
 const MAX_ROUNDS = 60;
 const TRACE = process.env.TRACE === '1';   // print every log line of each game
+// BOT=expert: a team that knows every rule and plays to it (but not which monster was drawn).
+const EXPERT = process.env.BOT === 'expert';
 
 // --- the bot ------------------------------------------------------------------------
 function makeBot(state, board) {
@@ -164,6 +174,8 @@ function makeBot(state, board) {
           const found = { attack: my.attack?.code ?? null, cards: (my.found ?? []).filter((f) => f.kind !== 'attack') };
           const fits = (my.pool ?? []).filter((id) => matchesEvidence(MONSTER_BY_ID[id], found));
           if (fits.length === 1 && !named.has(fits[0])) { named.add(fits[0]); return { type: 'name', monster: fits[0], seat: state.cur }; }
+          const late = state.round >= state.config.turnsToMidnight - 1;
+          if (EXPERT && late && fits.length === 2 && !named.size) { named.add(fits[0]); return { type: 'name', monster: fits[0], seat: state.cur }; }
         }
         return { type: 'roll', seat: state.cur };
       }
@@ -183,12 +195,19 @@ function makeBot(state, board) {
       case 'choosing': {
         // Skills first: anything ready that hurts a monster, or heals me.
         const injured = Object.values(pl.injuries ?? {}).some((v) => v > 0);
-        for (const e of skillStatus(state, board, pl)) {
-          if (e.status !== 'now' || !e.action || e.manual) continue;
-          const fx = e.card.abilities[e.ability].fx ?? {};
-          const useful = e.item === 'cosor' || fx.dmg !== undefined || (injured && (fx.heal || fx.healAround))
-            || (fx.target === 'monster' && (fx.toughDown || fx.immobile || fx.halve));
-          if (useful) return e.action;
+        const ready = skillStatus(state, board, pl).filter((e) => e.status === 'now' && e.action && !e.manual);
+        if (EXPERT) {
+          const best = bestAttack(pl, ready);
+          if (best) return best;
+          const heal = injured && ready.find((e) => { const fx = e.card.abilities[e.ability].fx ?? {}; return fx.heal || fx.healAround; });
+          if (heal) return heal.action;
+        } else {
+          for (const e of ready) {
+            const fx = e.card.abilities[e.ability].fx ?? {};
+            const useful = e.item === 'cosor' || fx.dmg !== undefined || (injured && (fx.heal || fx.healAround))
+              || (fx.target === 'monster' && (fx.toughDown || fx.immobile || fx.halve));
+            if (useful) return e.action;
+          }
         }
         if (state.phase === 'choosing') {
           // At a fork: the way nearest the goal.
@@ -214,6 +233,10 @@ function makeBot(state, board) {
         const need = !near ? 0 : hunting ? Math.max(0, near.d - 1) : near.d;
         const canDef = state.defSlots.length < state.maxDefense;
         const threat = monster && (monster.danger ?? []).includes(pl.seat);
+        if (EXPERT) {
+          const plan = expertDefense(pl, free, hunting && near && near.d <= 1);
+          if (plan) return plan;
+        }
         const guard = free.filter((d) => !(sc6(pl) && d.v === 6));
         const adjacent = hunting && near && near.d <= 1;
         if (guard.length && threat && canDef && !(adjacent && guard.length === 1)) return { type: 'slot', die: guard[0].n, to: 'defense', seat: state.cur };
@@ -236,12 +259,76 @@ function makeBot(state, board) {
       default: return null;
     }
   }
+  // --- expert play ------------------------------------------------------------------
+  // The attack that does the most: damage through toughness, a weakness hit
+  // worth extra (it advances the weakness track), one-die weapons with the highest die.
+  function bestAttack(pl, ready) {
+    let best = null;
+    for (const e of ready) {
+      const a = e.card.abilities[e.ability];
+      const fx = a.fx ?? {};
+      if (e.item === 'cosor') {
+        const n = state.pool.map((d, i) => ({ ...d, i })).filter((d) => !d.spent && !state.slots.includes(d.i) && !state.defSlots.includes(d.i)).sort((x, y) => y.v - x.v)[0];
+        if (n) return { ...e.action, die: n.i };
+        continue;
+      }
+      if (fx.dmg === undefined && !(fx.target === 'monster' && (fx.toughDown || fx.immobile || fx.halve || fx.blind))) continue;
+      const m = state.monsters.find((x) => x.id === e.action.target?.monster) ?? state.monsters[0];
+      if (!m) continue;
+      const mc = MONSTER_BY_ID[m.kind];
+      let action = e.action;
+      // One die of damage: the highest free die that meets the requirement.
+      if (fx.dmg === 'die' && a.dice === 1) {
+        const free = state.pool.map((d, i) => ({ ...d, i })).filter((d) => !d.spent && !state.slots.includes(d.i) && !state.defSlots.includes(d.i)).sort((x, y) => y.v - x.v);
+        const fit = free.find((d) => checkRequirement(a.req, [d.v], { targetDie: null }));
+        if (fit) action = { ...action, dice: [fit.i] };
+      }
+      const vals = action.dice.map((n) => state.pool[n].v);
+      const raw = fx.dmg === 'die' ? vals[0] ?? 0 : fx.dmg === 'sum' ? vals.reduce((x, y) => x + y, 0) : typeof fx.dmg === 'number' ? fx.dmg : 0;
+      const tough = fx.ignoreToughness ? 0 : toughnessOf(m);
+      const through = tough === Infinity ? 0 : Math.max(0, raw - tough);
+      const weak = a.kind && mc.weakness.includes(a.kind) ? 4 : 0;
+      const support = fx.toughDown || fx.immobile || fx.halve || fx.blind ? 2 : 0;
+      const score = through + weak + support - (a.limit === 'breaks' && through < 6 ? 3 : 0);
+      if (score > 0 && (!best || score > best.score)) best = { score, action };
+    }
+    return best?.action ?? null;
+  }
+  // How much damage the monster's declared actions could throw at this player.
+  function threatOn(pl) {
+    let worst = 0;
+    for (const m of state.monsters) {
+      if (!(m.danger ?? []).includes(pl.seat)) continue;
+      for (const it of m.intents ?? []) for (const o of it.ops ?? []) {
+        if (!o.dmg) continue;
+        const d = (o.dmg.fixed ?? 0) + (o.dmg.dice ?? 0) * 4;
+        worst = Math.max(worst, d);
+      }
+    }
+    return worst;
+  }
+  // Defense sized to the threat (white dice from reserve if short); keep a die
+  // to attack with when beside the monster.
+  function expertDefense(pl, free, adjacent) {
+    const need = threatOn(pl);
+    if (!need) return null;
+    const have = state.defSlots.reduce((t, n) => t + (state.pool[n]?.v ?? 0), 0);
+    if (have >= need) return null;
+    if (state.defSlots.length < state.maxDefense) {
+      const pick = free.filter((d) => !(sc6(pl) && d.v === 6));
+      if (pick.length > (adjacent ? 1 : 0)) return { type: 'slot', die: pick[0].n, to: 'defense', seat: state.cur };
+    }
+    if (pl.white > 0 && !state.deathsDoor && state.phase !== 'idle') return { type: 'rollWhite', seat: state.cur };
+    return null;
+  }
   function craftHeal(pl) {
     const inj = pl.injuries ?? {};
     for (const r of RECIPES) {
       const heals = /reduce (\w+) injury/i.exec(r.text);
       if (heals && !(inj[{ Physical: 'P', Mental: 'M', Spiritual: 'S' }[heals[1]]] > 0)) continue;
       if (!heals && !/Equipment card/.test(r.text)) continue;
+      // Expert: arm up with spare Obols (keep two for heals once the monster is out).
+      if (EXPERT && !heals && state.monsters.length && (pl.inventory.obolcraft.length < 5)) continue;
       if (!craftBlocked(state, pl, r)) return { type: 'craft', recipe: r.id, seat: pl.seat };
     }
     return null;

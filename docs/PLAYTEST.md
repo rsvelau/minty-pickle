@@ -5,7 +5,14 @@ Hawthorn Bend: Scouting, investigating, midnight, the monster's turns, objective
 round 60 ("undecided"). It also watches for crashes, stuck games, players or monsters off the board and
 impossible health. Add `TRACE=1` for every log line.
 
-**The bot** plays like a cautious beginner: before midnight it walks to the nearest unused marker and
+`BOT=expert` plays a team that knows every rule (not which monster was drawn: that it still works out
+from the evidence): it attacks with whatever does the most through toughness, favouring the monster's
+weaknesses and the highest die; sizes its Defense to the damage the monster has declared (rolling white
+dice from reserve when short); spends spare Obols on Equipment before midnight; and risks naming between
+the last two suspects just before midnight. `TUNE='{"werewolf":{"toughness":3}}'` tries card changes for
+that run only.
+
+**The bot** (default) plays like a cautious beginner: before midnight it walks to the nearest unused marker and
 investigates; then it follows the monster's objective script (collect, deliver, upgrade, cleanse,
 escape, hold, destroy, defend) or hunts the monster; it fetches a key when its goal is locked away;
 it uses any "Use now" skill that hurts the monster (or heals it), crafts heals, moves only as far as it
@@ -93,3 +100,64 @@ Wins by team size: 18% solo, 41% with 2, 44% with 3, 55% with 4.
   dangerous; many games run out the clock.
 - **Barghest 94%, White Lady 65%, Banshee 58%, Hellhounds 56%:** the objective fights are the winnable
   ones once the objective can be worked on.
+
+## Expert teams (BOT=expert, 2026-11-26, 12 games per monster and team size)
+
+Overall by monster: Barghest 97%, Hellhounds 72%, Banshee 72%, White Lady 70%, Wendigo 66%, Skinwalker
+62%, Redcap 50%, Ushi-Oni 47%, Werewolf 45%, Strigoi 43%, Poltergeist 41%, Shadow People 31%, Adze 0%.
+Solo and two-player teams are far behind three and four.
+
+| Monster | Team | Win | Loss | Undecided | Avg rounds | Avg dead | Objective done |
+|---|---|---|---|---|---|---|---|
+| Werewolf | 1 | 1 | 11 | 0 | 17.0 | 0.9 | 0 |
+| Werewolf | 2 | 4 | 8 | 0 | 17.6 | 1.3 | 0 |
+| Werewolf | 3 | 10 | 2 | 0 | 15.6 | 0.7 | 0 |
+| Werewolf | 4 | 7 | 5 | 0 | 16.7 | 1.8 | 0 |
+| Barghest | 1 | 11 | 0 | 1 | 19.1 | 0.0 | 11 |
+| Barghest | 2 | 12 | 0 | 0 | 21.6 | 0.1 | 12 |
+| Barghest | 3 | 12 | 0 | 0 | 17.4 | 0.3 | 12 |
+| Barghest | 4 | 12 | 0 | 0 | 13.1 | 0.3 | 12 |
+| Hellhounds | 1 | 3 | 9 | 0 | 15.4 | 0.8 | 4 |
+| Hellhounds | 2 | 9 | 3 | 0 | 14.3 | 0.6 | 11 |
+| Hellhounds | 3 | 11 | 1 | 0 | 14.1 | 0.9 | 12 |
+| Hellhounds | 4 | 12 | 0 | 0 | 13.3 | 0.4 | 12 |
+| Skinwalker | 1 | 2 | 10 | 0 | 16.4 | 0.8 | 0 |
+| Skinwalker | 2 | 7 | 5 | 0 | 17.2 | 0.8 | 0 |
+| Skinwalker | 3 | 10 | 2 | 0 | 15.0 | 0.6 | 0 |
+| Skinwalker | 4 | 11 | 1 | 0 | 14.6 | 0.4 | 0 |
+| Wendigo | 1 | 2 | 10 | 0 | 15.9 | 0.8 | 0 |
+| Wendigo | 2 | 10 | 1 | 1 | 18.5 | 0.3 | 0 |
+| Wendigo | 3 | 11 | 1 | 0 | 13.9 | 0.3 | 0 |
+| Wendigo | 4 | 9 | 2 | 1 | 18.4 | 1.1 | 0 |
+| Banshee | 1 | 8 | 4 | 0 | 39.3 | 0.6 | 7 |
+| Banshee | 2 | 11 | 1 | 0 | 42.2 | 0.3 | 7 |
+| Banshee | 3 | 9 | 1 | 2 | 33.4 | 0.8 | 3 |
+| Banshee | 4 | 7 | 1 | 4 | 36.3 | 1.3 | 2 |
+| Ushi-Oni | 1 | 1 | 10 | 1 | 21.8 | 0.8 | 0 |
+| Ushi-Oni | 2 | 3 | 8 | 1 | 21.1 | 1.5 | 0 |
+| Ushi-Oni | 3 | 10 | 2 | 0 | 16.5 | 0.9 | 0 |
+| Ushi-Oni | 4 | 9 | 2 | 1 | 21.4 | 1.3 | 0 |
+| Redcap | 1 | 0 | 12 | 0 | 18.0 | 1.0 | 0 |
+| Redcap | 2 | 6 | 5 | 1 | 21.6 | 1.1 | 0 |
+| Redcap | 3 | 9 | 3 | 0 | 20.4 | 1.3 | 0 |
+| Redcap | 4 | 9 | 3 | 0 | 18.3 | 1.3 | 0 |
+| Poltergeist | 1 | 0 | 12 | 0 | 21.7 | 1.0 | 0 |
+| Poltergeist | 2 | 2 | 10 | 0 | 25.9 | 1.7 | 2 |
+| Poltergeist | 3 | 8 | 4 | 0 | 19.3 | 1.0 | 8 |
+| Poltergeist | 4 | 10 | 2 | 0 | 13.9 | 0.7 | 10 |
+| White Lady | 1 | 6 | 6 | 0 | 42.8 | 0.5 | 6 |
+| White Lady | 2 | 10 | 1 | 1 | 59.3 | 0.3 | 10 |
+| White Lady | 3 | 9 | 1 | 2 | 45.5 | 1.8 | 9 |
+| White Lady | 4 | 9 | 2 | 1 | 45.3 | 1.7 | 9 |
+| Strigoi | 1 | 1 | 11 | 0 | 20.2 | 0.9 | 5 |
+| Strigoi | 2 | 4 | 7 | 1 | 27.3 | 1.3 | 9 |
+| Strigoi | 3 | 8 | 4 | 0 | 20.7 | 1.2 | 10 |
+| Strigoi | 4 | 8 | 3 | 1 | 24.8 | 1.6 | 11 |
+| Adze | 1 | 0 | 12 | 0 | 16.8 | 1.0 | 0 |
+| Adze | 2 | 0 | 12 | 0 | 17.6 | 2.0 | 0 |
+| Adze | 3 | 0 | 12 | 0 | 17.5 | 3.0 | 0 |
+| Adze | 4 | 0 | 12 | 0 | 17.3 | 4.0 | 0 |
+| Shadow People | 1 | 3 | 5 | 4 | 41.6 | 0.4 | 3 |
+| Shadow People | 2 | 5 | 4 | 3 | 45.3 | 1.0 | 5 |
+| Shadow People | 3 | 2 | 3 | 7 | 48.9 | 1.6 | 2 |
+| Shadow People | 4 | 5 | 5 | 2 | 38.4 | 2.7 | 5 |
