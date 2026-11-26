@@ -25,7 +25,7 @@ import { checkRequirement } from './cards/requirements.js';
 import { RANGE, cellRange, INJURY_TRACKS } from './cards/injuries.js';
 import { injuries } from './combat.js';
 import { doorsAround } from './doors.js';
-import { strikeNow } from './monsterTurn.js';
+import { strikeNow, SWARM_HP } from './monsterTurn.js';
 
 const REACH = { close: RANGE.close, mid: RANGE.mid, long: Infinity, self: 0, all: Infinity };
 // Long only reaches 3 spaces or more (not Close or Mid).
@@ -69,7 +69,7 @@ export function targetsFor(state, board, pl, ability) {
   const reach = lunges(pl, ability) ? RANGE.mid : REACH[ability.range] ?? RANGE.close;
   if (fx.target === 'monster') {
     const min = MIN_REACH[ability.range] ?? 0;
-    // Adze: a Fire attack can be turned on a swarm in the air (5+ sets it alight).
+    // Adze: a Fire attack can be turned on a swarm in the air (5 Fire in all sets it alight).
     const swarms = ability.kind === 'fire' && fx.dmg !== undefined
       ? (state.swarms ?? []).filter((sw) => !sw.burning && cellRange(board.grid, pl.pos, sw.pos) <= reach && cellRange(board.grid, pl.pos, sw.pos) >= min)
         .map((sw) => ({ swarm: sw.id, name: `Swarm (after the ${state.npcs?.find((v) => v.id === sw.victim)?.name ?? 'victim'})` }))
@@ -211,15 +211,17 @@ export function useEquipment(state, board, pl, action, ctx, events) {
     }
   }
   if (swarm) {
-    // A Fire attack of 5+ sets the swarm alight: it turns back to the hive, burning.
+    // Any Fire attack burns a swarm; enough of it (SWARM_HP) sets it alight.
     let dmg = fx.dmg === 'die' ? values[0] ?? 0 : fx.dmg === 'sum' ? values.reduce((x, y) => x + y, 0) : fx.dmg;
     if (pl.mods?.doubleAttack) dmg *= 2;
     if (pl.mindset === 'reckless' || pl.mindset === 'mighty') dmg *= 2;
-    if (dmg >= 5) {
+    // A swarm has SWARM_HP: Fire wears it down, and at 0 it's alight.
+    swarm.hp = Math.max(0, (swarm.hp ?? SWARM_HP) - dmg);
+    if (swarm.hp === 0) {
       swarm.burning = true;
       parts.push(`${dmg} Fire: the swarm bursts into flame and turns back for the hive`);
-      events.push({ type: 'swarms' });
-    } else parts.push(`${dmg} Fire: not enough to set the swarm alight (it takes 5)`);
+    } else parts.push(`${dmg} Fire: the swarm smoulders (${swarm.hp} more to set it alight)`);
+    events.push({ type: 'swarms' });
   }
   if (ally) {
     if (fx.doubleAttack) { ally.mods = { ...(ally.mods ?? {}), doubleAttack: true }; parts.push(`${ally.name}'s attacks deal double this turn`); }
