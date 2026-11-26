@@ -12,8 +12,10 @@ middle of the screen, a faint red glow breathing behind it, and two wisps of clo
 right, coming round again a few seconds after they've left the screen. The menu is a small dark panel near the
 bottom (buttons two to a row). Starting a game (new, Continue or Load) hides and locks the play display for one
 continuous 3-second camera move that starts slow, picks up speed and eases in on the player who is up: down
-from the moon through empty starry sky, while the land (the board, the forest, everything but the sky) rises
-up from far below into place, to the over-the-shoulder view (the Start space for a new game). Then the menus
+from the moon through empty starry sky, then through a thick bank of rain cloud (dark puffs streaming up past
+the camera, solid grey at its thickest) while the land (the board, the forest, everything but the sky) rises
+up from far below into place, hidden by the cloud; the cloud thins to show the ground, and the camera settles on the
+over-the-shoulder view (the Start space for a new game). Then the menus
 and the map markers fade in. The moon and clouds are switched off once they've left the view, the stars when
 the move ends.
 

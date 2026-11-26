@@ -13,6 +13,7 @@
 import { ui } from './config.js';
 import { aheadPose } from './pointer.js';
 import { skyMoon } from './loop.js';
+import { createCloudBank } from '../render/skyMoon.js';
 import { markers, labelGroup, refreshMarkers } from '../render/board.js';
 import { __set_camTween, camera, controls, fitPreset, wake, scene, markShadows, moon as moonLight } from '../render/scene.js';
 import { play } from '../play/playView.js';
@@ -25,6 +26,7 @@ const DROP = 60;       // how far below the land waits while the sky shows
 const FADE = 700;      // ms: menus and markers fade in
 
 let running = null;    // the intro in progress: { cancel }
+let cloudBank = null;  // the rain clouds the camera comes down through (made on first use)
 
 // The title screen's camera: high over the town (where the game's camera move
 // starts) but tilted up at the sky, so no town shows; the full moon big in the
@@ -88,7 +90,8 @@ export function playIntro() {
   const base = land.map((o) => o.position.y);
   const setLand = (lift) => land.forEach((o, i) => { o.position.y = base[i] - DROP * (1 - lift); });
   setLand(0);
-  running = { cancel: () => { cancelled = true; setLand(1); } };
+  if (fromSky) cloudBank ??= createCloudBank(scene);
+  running = { cancel: () => { cancelled = true; setLand(1); cloudBank?.hide(); } };
 
   const pose = aheadPose() ?? fitPreset('persp');
   const p0 = camera.position.clone(), q0 = camera.quaternion.clone();
@@ -107,13 +110,18 @@ export function playIntro() {
     camera.position.lerpVectors(p0, pose.pos, e);
     camera.quaternion.slerpQuaternions(q0, q1, e);
     if (fromSky) {
-      setLand(smooth(0.12, 0.78, k));   // the land rises while the camera comes down
+      // It's raining down there: the camera passes through thick cloud, and
+      // the land finishes rising while the cloud hides it.
+      const cloud = smooth(0.24, 0.42, k) * (1 - smooth(0.58, 0.76, k));
+      cloudBank.set(camera, cloud, e * 9);
+      setLand(smooth(0.12, 0.6, k));
       markShadows();
       if (skyMoon.visible && !skyMoon.inView(camera)) skyMoon.hideMoon();
     }
     wake(200);
     if (k < 1) { requestAnimationFrame(frame); return; }
     setLand(1);
+    cloudBank?.hide();
     controls.target.copy(pose.target);
     ui.freeCamera = false;
     controls.update();
