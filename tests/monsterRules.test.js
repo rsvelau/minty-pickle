@@ -215,3 +215,18 @@ test('Banshee: the heirloom brought to the Unmarked Grave (an Objective marker i
   assert.equal(s.state.won, true);
   assert.ok(events.some((e) => e.type === 'monsterDefeated'));
 });
+
+test('an objective finished before midnight (the monster named by its evidence) still counts', async () => {
+  const { achieveObjective } = await import('../src/game/equipmentPlay.js');
+  const s = setup('hellhounds');
+  s.state.monsters = [];                                     // not risen yet
+  s.state.mystery = { ...s.state.mystery, monster: 'hellhounds', identified: true };
+  assert.equal(achieveObjective(s.state, s.ctx, []), null);
+  assert.equal(s.state.objectiveDone, true);
+  // A monster nothing can wear down (the White Lady): its objective alone wins.
+  const w = setup('white-lady');
+  w.state.monsters = [];
+  w.state.mystery = { ...w.state.mystery, monster: 'white-lady', identified: true };
+  achieveObjective(w.state, w.ctx, []);
+  assert.equal(w.state.won, true);
+});

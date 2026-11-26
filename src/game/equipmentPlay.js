@@ -20,6 +20,7 @@
 // mods last until the monster has acted at the end of the round.
 import { EQUIPMENT_BY_ID } from './cards/equipment.js';
 import { MONSTER_BY_ID, DAMAGE_KINDS } from './cards/monsters.js';
+import { knownMonster } from './objectives/scripts.js';
 import { checkRequirement } from './cards/requirements.js';
 import { RANGE, cellRange, INJURY_TRACKS } from './cards/injuries.js';
 import { injuries } from './combat.js';
@@ -449,14 +450,18 @@ function win(state, ctx, events) {
 // are played at the table for now).
 export function achieveObjective(state, ctx, events) {
   const m = state.monsters.find((x) => MONSTER_BY_ID[x.kind]);
-  const mcard = m && MONSTER_BY_ID[m.kind];
+  // Before midnight the monster isn't on the board yet, but once the evidence
+  // has named it its objective can already be done (it counts when it rises).
+  const mcard = m ? MONSTER_BY_ID[m.kind] : MONSTER_BY_ID[knownMonster(state)] ?? null;
   if (!mcard) return 'the monster has not appeared';
   if (killObjective(mcard)) return 'this monster’s objective is to destroy it';
   if (state.objectiveDone) return 'already achieved';
   state.objectiveDone = true;
-  ctx.log(state, `Objective achieved: ${mcard.objective.replace(/\.$/, '')}.${m.hp === null ? '' : ` The ${mcard.name} can now be destroyed for good.`}`);
+  const hp = m ? m.hp : mcard.hp ?? null;
+  ctx.log(state, `Objective achieved: ${mcard.objective.replace(/\.$/, '')}.${hp === null ? '' : ` The ${mcard.name} can now be destroyed for good.`}`);
   events.push({ type: 'objective', kind: mcard.id });
-  if (m.hp === null) { state.monsters = state.monsters.filter((x) => x !== m); win(state, ctx, events); }
+  // A monster nothing can wear down is beaten by its objective alone (even before it rises).
+  if (hp === null) { if (m) state.monsters = state.monsters.filter((x) => x !== m); win(state, ctx, events); }
   return null;
 }
 

@@ -24,6 +24,7 @@ import { RECIPES, blocked as craftBlocked } from '../src/game/obolcraft.js';
 import { choicesFor } from '../src/game/eventPlay.js';
 import { scriptOf, mapSites, knownMonster } from '../src/game/objectives/scripts.js';
 import { sixToSpend } from '../src/game/objectives/verbs.js';
+import { matchesEvidence } from '../src/game/mystery.js';
 
 const MAP = JSON.parse(readFileSync(new URL('../src/maps/hawthorn-bend.json', import.meta.url)));
 const GAMES = Number(process.argv[2] ?? 8);
@@ -37,15 +38,37 @@ function makeBot(state, board) {
   const g = board.grid;
   const fields = new Map();
   // Walking distance to `goal` from every cell (keys and doors as the board has them).
-  // Doors the team has unlocked (keys found) count as open; cached per key set.
+  // Walking cost to `goal` from every cell: a step costs 1, and while the
+  // Shadow People hunt, a lit space costs 4 (Umbral Stab strikes there).
+  // Doors the team has unlocked count as open. Cached per goal, key set and mode.
+  const avoidLit = () => state.monsters.some((m) => MONSTER_BY_ID[m.kind]?.onEnterLit) && !state.flags?.noLight;
   const distTo = (goal) => {
-    const k = `${goal}:${state.keys ?? 0}`;
+    const lit = avoidLit();
+    const k = `${goal}:${state.keys ?? 0}:${lit}`;
     if (!fields.has(k)) {
-      const { x, y } = g.coords(goal);
       const open = unlockedFn(state, board);
-      const real = g.edgeOverride;
-      if (open) g.edgeOverride = (e, t) => (open(e) ? 'door' : real ? real(e, t) : t);
-      try { fields.set(k, g.moveField(x, y, { keys: false }).dist); } finally { g.edgeOverride = real; }
+      const n = g.cells.length;
+      const dist = new Int32Array(n).fill(-1);
+      const best = new Float64Array(n).fill(Infinity);
+      best[goal] = 0;
+      // Small Dijkstra with a bucket queue (costs are small integers).
+      const buckets = [[goal]];
+      for (let c = 0; c < buckets.length; c++) {
+        for (const i of buckets[c] ?? []) {
+          if (best[i] !== c || dist[i] >= 0) continue;
+          dist[i] = c;
+          const { x, y } = g.coords(i);
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            if (!g.inBounds(x + dx, y + dy)) continue;
+            // From the neighbour back to here: walking toward the goal.
+            if (!g.canStep(x + dx, y + dy, -dx, -dy, open)) continue;
+            const j = g.index(x + dx, y + dy);
+            const cost = c + 1 + (lit && (board.light[i] ?? 0) >= state.config.litThreshold ? 3 : 0);
+            if (cost < best[j]) { best[j] = cost; (buckets[cost] ??= []).push(j); }
+          }
+        }
+      }
+      fields.set(k, dist);
     }
     return fields.get(k);
   };
@@ -87,7 +110,9 @@ function makeBot(state, board) {
         else if (st.do === 'escape' && pl.status?.cleanse) return at;
         else if (st.do === 'hold' && ob.ceremony && at.length) return at;
         else if (st.do === 'destroy') {
-          const left = at.filter((c) => !(ob.anchors ?? []).includes(c));
+          // An anchor is broken by stepping onto its marker with a 6: not the one underfoot.
+          const left = at.filter((c) => !(ob.anchors ?? []).includes(c) && c !== pl.pos);
+          if (st.count && (ob.anchors ?? []).filter((c) => c !== state.mystery?.spawnCell).length >= st.count) continue;
           if (left.length) return left;
         }
       }
@@ -129,6 +154,13 @@ function makeBot(state, board) {
       case 'idle': {
         const c = craftHeal(pl);
         if (c) return c;
+        // Name the monster once the evidence fits only one (Initiative).
+        const my = state.mystery;
+        if (my && !my.guess && !my.revealed) {
+          const found = { attack: my.attack?.code ?? null, cards: (my.found ?? []).filter((f) => f.kind !== 'attack') };
+          const fits = (my.pool ?? []).filter((id) => matchesEvidence(MONSTER_BY_ID[id], found));
+          if (fits.length === 1 && !named.has(fits[0])) { named.add(fits[0]); return { type: 'name', monster: fits[0], seat: state.cur }; }
+        }
         return { type: 'roll', seat: state.cur };
       }
       case 'asking': return { type: 'investigate', yes: state.ask?.anchor ? !!sixToSpend(state) : true, seat: state.cur };
@@ -171,13 +203,16 @@ function makeBot(state, board) {
           .sort((a, b) => b.v - a.v);
         const pending = state.slots.filter((n) => !state.pool[n].spent).reduce((t, n) => t + state.pool[n].v, 0);
         const monster = state.monsters[0];
+        const night = monster || knownMonster(state);   // a monster about (the Poltergeist has no body)
         const gl = reachable(pl);
         const hunting = monster && gl.length === 1 && gl[0] === monster.pos;
         const near = nearest(pl.pos, gl);
         const need = !near ? 0 : hunting ? Math.max(0, near.d - 1) : near.d;
         const canDef = state.defSlots.length < state.maxDefense;
         const threat = monster && (monster.danger ?? []).includes(pl.seat);
-        if (free.length && threat && canDef && state.defSlots.length === 0) return { type: 'slot', die: free[0].n, to: 'defense', seat: state.cur };
+        const guard = free.filter((d) => !(sc6(pl) && d.v === 6));
+        const adjacent = hunting && near && near.d <= 1;
+        if (guard.length && threat && canDef && !(adjacent && guard.length === 1)) return { type: 'slot', die: guard[0].n, to: 'defense', seat: state.cur };
         if (free.length && !state.noMove && pending < need && state.slots.length < state.maxSlots) {
           const short = need - pending;
           // Poltergeist: keep a 6 back to destroy an anchor with.
@@ -190,8 +225,8 @@ function makeBot(state, board) {
         }
         if (pending > 0 && !state.noMove) return { type: 'move', seat: state.cur };
         const forDef = free.filter((d) => !(sc6(pl) && d.v === 6));
-        if (forDef.length && canDef && monster) return { type: 'slot', die: forDef[0].n, to: 'defense', seat: state.cur };
-        if (free.length && !state.noMove && state.slots.length < state.maxSlots && !monster) return { type: 'slot', die: free[0].n, to: 'move', seat: state.cur };
+        if (forDef.length && canDef && night) return { type: 'slot', die: forDef[0].n, to: 'defense', seat: state.cur };
+        if (free.length && !state.noMove && state.slots.length < state.maxSlots && !night && need > 0) return { type: 'slot', die: free[0].n, to: 'move', seat: state.cur };
         return null;
       }
       default: return null;
@@ -207,6 +242,7 @@ function makeBot(state, board) {
     }
     return null;
   }
+  const named = new Set();
   return { act };
 }
 
@@ -227,7 +263,7 @@ function play(monster, players, seed) {
       actions++;
       let a = bot.act();
       if (!a) a = { type: 'end', seat: state.cur };
-      if (process.env.ACTS === '1' && actions < 80) console.log('ACT', state.phase, state.players[state.cur].pos, JSON.stringify(a), state.options?.map((o) => o.i).join(','));
+      if (process.env.ACTS === '1' && actions < 400) console.log('ACT', state.phase, state.players[state.cur].pos, JSON.stringify(a), state.options?.map((o) => o.i).join(','));
       let r = applyAction(state, board, a);
       if (!r.ok && a.type !== 'end') {
         fails++;
