@@ -195,6 +195,7 @@ export function revealMonster(state, board, ctx, events) {
   }
   m.revealed = true;
   const card = MONSTER_BY_ID[m.monster];
+  if (!card) return;   // a dry run on the players' view (the monster is hidden there): nothing to say
   ctx.log(state, `It's the ${card.name}.`);
   events.push({ type: 'monsterRevealed', monster: m.monster, correct: !!m.guess?.correct });
 }

@@ -22,6 +22,7 @@ import { createBoard } from '../src/game/board.js';
 import { newGame, applyAction } from '../src/game/rules.js';
 import { MONSTER_CARDS, MONSTER_BY_ID } from '../src/game/cards/monsters.js';
 import { knownMonster } from '../src/game/objectives/scripts.js';
+import { publicState } from '../src/game/mystery.js';
 
 // TUNE='{"werewolf":{"toughness":3}}': try card changes in this run only (hp,
 // toughness, badge...), to see what a balance change would do before making it.
@@ -55,7 +56,8 @@ function play(monster, players, seed) {
   try {
     while (state.phase !== 'over' && state.round <= MAX_ROUNDS && actions < 20000) {
       actions++;
-      let a = bot.act(state);
+      // The bot sees what the players see (as in the game: no hidden monster, no face-down cards).
+      let a = bot.act(publicState(state));
       if (!a) a = { type: 'end', seat: state.cur };
       if (process.env.ACTS === '1' && actions < 400) console.log('ACT', state.phase, state.players[state.cur].pos, JSON.stringify(a), state.options?.map((o) => o.i).join(','));
       let r = applyAction(state, board, a);

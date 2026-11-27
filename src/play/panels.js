@@ -180,9 +180,10 @@ export let obolTimer = 0;
 export function showObol({ player, type, left }) {
   const el = $('#obolReveal');
   $('#obolCoin').innerHTML = type ? obolHTML(type, true) : '';
-  $('#obolTitle').textContent = type ? `${OBOLS[type].label} Obol` : 'Nothing found';
+  // Just what it is (Attack, Equipment, Event, Evidence); the coin above says an Obol of that colour was earned.
+  $('#obolTitle').textContent = type ? OBOLS[type].label : 'Nothing found';
   $('#obolSub').innerHTML = type
-    ? `<b style="color:${player.colour}">${player.name}</b> drew it · ${left} left in the bag`
+    ? `<b style="color:${player.colour}">${player.name}</b> +1 ${obolHTML(type)} · ${left} left in the bag`
     : `<b style="color:${player.colour}">${player.name}</b>: the Obol bag is empty`;
   el.hidden = false;
   clearTimeout(obolTimer);

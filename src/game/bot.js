@@ -220,7 +220,8 @@ export function makeBot(board, { expert = true, trace = false } = {}) {
       case 'asking': return { type: 'investigate', yes: state.ask?.anchor ? !!sixToSpend(state) : true, seat: state.cur };
       case 'revealing': {
         const m = state.mystery;
-        const k = (m?.deck ?? []).findIndex((c, i) => c && !m.flipped.includes(i));
+        // (Face-down cards are blank in the players' view: any one not turned over yet.)
+        const k = (m?.deck ?? []).findIndex((c, i) => !m.flipped.includes(i));
         return { type: 'reveal', card: Math.max(0, k), seat: state.cur };
       }
       case 'eventing': {

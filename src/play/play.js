@@ -1043,8 +1043,10 @@ export function createPlay({
         case 'doorBash':
           onUsed(); // the door shows the damage
           break;
+        // What an investigation turns up shows the moment it happens (the rules
+        // have already played it), not when the pawn gets there.
         case 'card':
-          attachToArrival(view.actors[e.seat], e.cell, () => onCard({ ...e, player: state.players[e.seat] }));
+          onCard({ ...e, player: state.players[e.seat] });
           break;
         case 'turn':
           view.pan = true;
@@ -1053,19 +1055,15 @@ export function createPlay({
           onUsed(); // objectives appear
           break;
         case 'evidence':
-          attachToArrival(e.seat === null ? null : view.actors[e.seat], e.cell, () => {
-            view.shownFinds = Math.max(view.shownFinds, (g()?.mystery?.found.findIndex((f) => f.cell === e.cell && f.code === e.code) ?? -1) + 1);
-            refreshDiscoveries();
-            onEvidence({ ...e, player: g()?.players[e.seat] });
-          });
+          view.shownFinds = Math.max(view.shownFinds, (g()?.mystery?.found.findIndex((f) => f.cell === e.cell && f.code === e.code) ?? -1) + 1);
+          refreshDiscoveries();
+          onEvidence({ ...e, player: g()?.players[e.seat] });
           break;
         case 'attacked':
-          attachToArrival(view.actors[e.seat], e.cell, () => {
-            view.shownFinds = Math.max(view.shownFinds, g()?.mystery?.found.length ?? 0);
-            refreshDiscoveries();
-            onAttack({ seat: e.seat, cell: e.cell, attack: e.attack });
-            onAttacked({ ...e, player: g()?.players[e.seat] });
-          });
+          view.shownFinds = Math.max(view.shownFinds, g()?.mystery?.found.length ?? 0);
+          refreshDiscoveries();
+          onAttack({ seat: e.seat, cell: e.cell, attack: e.attack });
+          onAttacked({ ...e, player: g()?.players[e.seat] });
           break;
         // Objectives (objectives/verbs.js): a word over the site as the pawn arrives.
         case 'objStep':

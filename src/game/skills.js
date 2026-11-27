@@ -29,6 +29,12 @@ import { canRelightAtMemorial, memorialBeside, memorialsLive } from './objective
 import { hidingSpotAt, canBoard } from './travel.js';
 
 const USE_PHASES = ['idle', 'slotting', 'choosing', 'asking'];
+// Try an action on a copy of the state (the players' view, in the game). A rule
+// that trips over something hidden from the players counts as allowed: the real
+// game, which can see it, has the last word.
+function tryOnCopy(state, board, action) {
+  try { return applyAction(structuredClone(state), board, action); } catch { return { ok: true, events: [] }; }
+}
 const RANGE_WORD = { close: 'Close', mid: 'Mid', long: 'Long', self: 'Self', all: 'All' };
 
 // Every way to pick k of the list (k is 1-3, the list a handful of dice).
@@ -135,7 +141,7 @@ export function skillStatus(state, board, pl) {
 
       // The rules have the last word: try it on a copy.
       const action = { type: 'use', seat: state.cur, item: i, ability: k, dice, ...(target ? { target } : {}) };
-      const r = applyAction(structuredClone(state), board, action);
+      const r = tryOnCopy(state, board, action);
       if (!r.ok) return set('not', r.error ? r.error[0].toUpperCase() + r.error.slice(1) : 'Not right now');
       e.action = action;
       set('now');
@@ -171,7 +177,7 @@ function simpleSkill(state, board, pl, mine, item, card, act) {
   if (!mine) return set('not', `On ${pl.name}’s turn`);
   if (!USE_PHASES.includes(state.phase)) return set('not', state.phase === 'moving' ? 'Finish moving first' : 'Not right now');
   const action = { ...act, seat: state.cur };
-  const r = applyAction(structuredClone(state), board, action);
+  const r = tryOnCopy(state, board, action);
   if (!r.ok) return set('not', r.error ? r.error[0].toUpperCase() + r.error.slice(1) : 'Not right now');
   e.action = action;
   return set('now');
@@ -189,7 +195,7 @@ function relightSkill(state, board, pl, mine) {
   if (!USE_PHASES.includes(state.phase)) return set('not', state.phase === 'moving' ? 'Finish moving first' : 'Not right now');
   if (!canRelightAtMemorial(state, board, pl)) return set('almost', '1 more Obol needed');
   const action = { type: 'relight', seat: state.cur };
-  const r = applyAction(structuredClone(state), board, action);
+  const r = tryOnCopy(state, board, action);
   if (!r.ok) return set('not', r.error ? r.error[0].toUpperCase() + r.error.slice(1) : 'Not right now');
   e.action = action;
   return set('now');
@@ -212,7 +218,7 @@ function forceDoor(state, board, pl, mine, free) {
   if (!six) return set('almost', 'Needs a free 6');
   const door = doorsAround(state, board, pl.pos).find((d) => d.status === 'blocked');
   const action = { type: 'force', seat: state.cur, die: six.n, edge: door.edge };
-  const r = applyAction(structuredClone(state), board, action);
+  const r = tryOnCopy(state, board, action);
   if (!r.ok) return set('not', r.error ? r.error[0].toUpperCase() + r.error.slice(1) : 'Not right now');
   e.action = action;
   return set('now');
@@ -239,7 +245,7 @@ function cosorStrike(state, board, pl, mine, free) {
   // The highest free die: the most damage.
   const best = free.reduce((a, d) => (d.v > a.v ? d : a));
   const action = { type: 'strike', seat: state.cur, die: best.n };
-  const r = applyAction(structuredClone(state), board, action);
+  const r = tryOnCopy(state, board, action);
   if (!r.ok) return set('not', r.error ? r.error[0].toUpperCase() + r.error.slice(1) : 'Not right now');
   e.action = action;
   return set('now');
