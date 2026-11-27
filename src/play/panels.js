@@ -466,30 +466,53 @@ export function guideDetails(c, found, open, { reveal = false } = {}) {
     chip(`⚰ ${esc(LAIRS[ev.lair].label)}`, `lair${hitLair === ev.lair ? ' hit' : ''}`),
   ].join('');
   const stat = (v) => (v === null || v === undefined ? '∞' : v);
-  const kinds = (list, cls, word) => list.map((k) => chip(`${word} ${DAMAGE_KINDS[k].icon} ${esc(DAMAGE_KINDS[k].label)}`, cls)).join('');
+  // One chip for all it's weak to, one for all it's immune to.
+  const kinds = (list, cls, word) => (list.length ? chip(`${word} ${list.map((k) => `${DAMAGE_KINDS[k].icon} ${esc(DAMAGE_KINDS[k].label)}`).join(' · ')}`, cls) : '');
   const roll = (r) => (r === 'Persistent' ? 'Always' : String(r).replace('-', '–'));
   const abil = c.abilities.map((a) => {
     const t = kindType(a.kind);
+    if (tx.abilityRows) return `<div class="mc-ab mc-ab-row k-${t ?? 'none'}"><span class="mc-roll">${roll(a.roll)}</span>` +
+      `<b class="mc-ab-name">${t ? dmgIcon(t) : ''} ${monsterText(tx.says?.[a.name] ?? a.name)}</b></div>`;
     return `<div class="mc-ab k-${t ?? 'none'}"><span class="mc-roll${a.roll === 'Persistent' ? ' always' : ''}" title="${a.roll === 'Persistent' ? 'Always in effect' : `Its action die rolls ${roll(a.roll)}`}">${roll(a.roll)}</span>` +
       `<div class="mc-ab-body"><b class="mc-ab-name">${t ? dmgIcon(t) : '<span class="mc-none">◇</span>'} ${esc(a.name)}</b>` +
       `<span class="mc-ab-text">${monsterText(tx.says?.[a.name] ?? a.text)}</span></div></div>`;
   }).join('');
   const weak = c.weakness.map((k) => `${DAMAGE_KINDS[k].icon} ${esc(DAMAGE_KINDS[k].label)}`).join(' or ');
-  const track = c.weaknessTrack.length ? `<div class="mc-track"><span class="mc-label">Weakness track · hits with ${weak}</span><ol>${c.weaknessTrack.map((w, k) =>
+  const trackText = (w, k) => tx.track?.[k] ?? w.text;
+  const short = c.weaknessTrack.length && c.weaknessTrack.every((w, k) => trackText(w, k).length <= 22);
+  const track = short ? `<div class="mc-track mc-track-row"><span class="mc-label">Weakness track · hits with ${weak}</span><ol>${c.weaknessTrack.map((w, k) =>
+    `<li><span class="mc-hits">${w.hits === null ? '∞' : w.hits}</span><span>${monsterText(trackText(w, k))}</span></li>`).join('')}</ol></div>`
+    : c.weaknessTrack.length ? `<div class="mc-track"><span class="mc-label">Weakness track · hits with ${weak}</span><ol>${c.weaknessTrack.map((w, k) =>
     `<li><span class="mc-hits" title="${w.hits === null ? 'Any time' : `After ${w.hits} hit${w.hits === 1 ? '' : 's'}`}">${w.hits === null ? '∞' : w.hits}</span><span>${monsterText(tx.track?.[k] ?? w.text)}</span></li>`).join('')}</ol></div>` : '';
+  // Constant rules: loose lines as a list; { h, items } as labelled blocks; solo rules
+  // (on the reveal, only when playing solo; in the guide, folded away).
   const rules = (tx.rules ?? [c.note]).filter(Boolean);
+  const li = (r) => `<li>${monsterText(r)}</li>`;
+  let rulesHTML = '';
+  for (let k = 0; k < rules.length;) {
+    if (typeof rules[k] === 'string') {
+      const run = [];
+      while (k < rules.length && typeof rules[k] === 'string') run.push(rules[k++]);
+      rulesHTML += `<ul class="mc-rules">${run.map(li).join('')}</ul>`;
+    } else { const b = rules[k++]; rulesHTML += `<div class="mc-block"><span class="mc-label">${esc(b.h)}</span><ul class="mc-rules">${b.items.map(li).join('')}</ul></div>`; }
+  }
+  if (tx.solo) {
+    const solo = (play.state?.config?.players ?? play.state?.players?.length) === 1;
+    const list = `<ul class="mc-rules">${tx.solo.map(li).join('')}</ul>`;
+    if (!reveal) rulesHTML += `<details class="mc-block mc-solo"><summary class="mc-label">Playing solo</summary>${list}</details>`;
+    else if (solo) rulesHTML += `<div class="mc-block mc-solo"><span class="mc-label">Playing solo</span>${list}</div>`;
+  }
   return `<div class="ge-body mc">` +
     `<div class="mc-stats">` +
       `<span class="mc-stat" title="Health"><i>♥</i>${stat(c.hp)}<small>health</small></span>` +
       `<span class="mc-stat" title="Toughness: damage up to this much doesn’t get through"><i>⛨</i>${stat(c.toughness)}<small>tough</small></span>` +
       `<span class="mc-stat" title="Action dice it rolls each round"><i>🎲</i>${c.badge}<small>actions</small></span>` +
-      (reveal ? `<span class="mc-stat mc-stars" title="Difficulty ${c.stars ?? 1} of 5">${starsText(c.stars ?? 1)}<small>difficulty</small></span>` : '') +
     `</div>` +
-    `<div class="ge-chips">${c.traits.map((t) => chip(esc(t), 'trait')).join('')}${kinds(c.weakness, 'weak', 'Weak:')}${kinds(c.immune, 'imm', 'Immune:')}</div>` +
-    (rules.length ? `<ul class="mc-rules">${rules.map((r) => `<li>${monsterText(r)}</li>`).join('')}</ul>` : '') +
-    `<div class="mc-abils">${abil}</div>` +
-    track +
     `<p class="mc-goal"><span class="mc-label">Objective</span>${monsterText(tx.goal ?? c.objective)}</p>` +
+    `<div class="ge-chips">${c.traits.map((t) => chip(esc(t), 'trait')).join('')}${kinds(c.weakness, 'weak', 'Weak:')}${kinds(c.immune, 'imm', 'Immune:')}</div>` +
+    rulesHTML +
+    `<div class="mc-abils${tx.abilityRows ? ' rows' : ''}">${abil}${tx.abilityNote ? `<p class="mc-ab-note">${monsterText(tx.abilityNote)}</p>` : ''}</div>` +
+    track +
     (reveal ? '' : `<div class="mc-ev"><span class="mc-label">Evidence</span><div class="ge-chips">${evChips}</div></div>`) +
     `</div>`;
 }

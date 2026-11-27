@@ -12,7 +12,11 @@
 //   {P} {M} {S} Physical, Mental, Spiritual damage
 //   {9}        a numbered site on the map (the Church): shown with its name
 //
-//   rules       constant rules, one short line each
+//   rules       constant rules, one short line each; or { h, items } for a
+//               labelled block of them
+//   solo        extra rules when playing solo (a block of their own)
+//   abilityNote one line under the abilities, for them all
+//   abilityRows the abilities as one short row each (roll · name · says)
 //   goal        the objective, as players read it
 //   says        ability name -> what it does
 //   track       one line per weakness-track step, in order
@@ -151,21 +155,31 @@ export const MONSTER_TEXT = {
   },
   adze: {
     rules: [
-      'It never leaves its Lair: fly swarms do its attacks, only at the townspeople (victims).',
-      'The victims show as soon as you know it’s the Adze (or at midnight). The turn it rises, its swarms only gather.',
-      'Its swarms fly {move} 6 a turn (walls stop them, nothing else), one per victim at a time. A swarm settles beside its victim and strikes on the Adze’s next turn.',
-      'Fire burns a swarm: each has 5 health, and any Fire attack counts. At 0 it’s alight: it flies back to the hive and burns the Nest for 3, through its toughness.',
-      'One victim per investigator (all three with three or more). Playing solo: all three, together in the Hospital {13}; one swarm on the map at a time, with 2 health; a failed block exhausts nothing; the Nest has no toughness.',
-      'Each swarm beaten off by a defender is lost to the hive: the Nest takes 2, through its toughness.',
-      'A victim survives the first hit that gets through (wounded); the second kills them. Stand beside one to Defend them.',
-      'A victim dies: everyone takes 🎲 × the number of dead victims. No victims left: every attack hits everyone.',
+      'Never leaves its Nest at the Lair. Its fly swarms attack only the victims.',
+      { h: 'Victims', items: [
+        'Appear once you know it’s the Adze (or at midnight). One per investigator, up to 3.',
+        'Stand beside one to Defend them.',
+        '1st hit through: wounded. 2nd: dead.',
+        'One dies: everyone takes 🎲 × dead victims. All dead: every attack hits everyone.',
+      ] },
+      { h: 'Swarms', items: [
+        '{move} 6 a turn. Only walls stop them. One per victim.',
+        'The turn the Adze rises, they only gather.',
+        'Settles beside its victim → strikes for 🎲 on the next turn.',
+        'Gets past the defender → {exhaust} their Defense die.',
+      ] },
+      { h: 'Hurting the Nest', items: [
+        '🔥 Fire a swarm to 0 (5 health): it flies home alight. Nest takes 3.',
+        '🛡 Block a swarm: Nest takes 2.',
+        'Both ignore its toughness.',
+      ] },
     ],
-    goal: 'Kill the Nest at its Lair, while defending the victims at the Hotel {1}, the Bar {5} and the Hospital {13}.',
-    says: {
-      'Hotel Victim': 'A swarm sets out for the Hotel {1} victim (or another no swarm is after); settled beside them, it attacks for 🎲 the next turn. If it gets past whoever defends them: {exhaust} that defender’s Defense die.',
-      'Bar Victim': 'A swarm sets out for the Bar {5} victim (or another no swarm is after); settled beside them, it attacks for 🎲 the next turn. If it gets past whoever defends them: {exhaust} that defender’s Defense die.',
-      'Infirmary Victim': 'A swarm sets out for the Hospital {13} victim (or another no swarm is after); settled beside them, it attacks for 🎲 the next turn. If it gets past whoever defends them: {exhaust} that defender’s Defense die.',
-    },
+    solo: ['All 3 victims in the Hospital {13}.', 'One swarm at a time, 2 health.', 'A failed block exhausts nothing.', 'The Nest has no toughness.'],
+    goal: 'Kill the Nest. Keep the victims at the Hotel {1}, Bar {5} and Hospital {13} alive.',
+    says: { 'Hotel Victim': 'Hotel {1}', 'Bar Victim': 'Bar {5}', 'Infirmary Victim': 'Hospital {13}' },
+    // The three abilities differ only in whom the swarm goes for: one short row each.
+    abilityRows: true,
+    abilityNote: 'A swarm sets out for that victim (dead or already hunted: another).',
     track: ['−1 toughness', '−1 toughness', 'One fewer action die'],
   },
   'shadow-people': {
