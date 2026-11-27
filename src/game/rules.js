@@ -122,6 +122,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   monsterPick: 'random', // or a monster id: always fight that one (testing)
   deckCounts: Object.freeze({}), // cards in the game: changes from 1 copy each (decks.js)
   scouting: true,        // a Scouting phase before the first turn (newGame with setup.scout)
+  bots: 0,               // how many of the seats bots play (the last ones: play/bots.js, game/bot.js)
 });
 export const defaultConfig = () => ({ ...DEFAULT_CONFIG, obols: { ...DEFAULT_CONFIG.obols }, deckCounts: {} });
 
@@ -186,6 +187,7 @@ export function newGame(board, setup = {}) {
     rng: (setup.seed ?? Date.now()) >>> 0,
     players: SEATS.slice(0, config.players).map((s, seat) => ({
       seat, name: s.name, colour: s.colour,
+      bot: seat >= config.players - Math.max(0, Math.min(config.players - 1, config.bots | 0)),   // played by a bot (at least one seat is yours)
       pos: start, prev: -1,
       white: 0,                                 // white dice in reserve (unrolled)
       injuries: { P: 0, M: 0, S: 0 },           // tiers per track (combat.js)

@@ -13,6 +13,7 @@ import { openCrate, renderCrate, craftUI, dmgIcon, hitText, injuryPips, markCase
 import { objectiveLive } from '../game/objectives/scripts.js';
 import { memorialsLive, memorialCells } from '../game/objectives/verbs.js';
 import { feedUpdate, feedReset } from './feed.js';
+import { initBots, botUpdate, botsReset, botActing } from './bots.js';
 import { describeItem } from '../game/objectives/verbs.js';
 import { RANGE, cellRange } from '../game/cards/injuries.js';
 import { __set_markerHidden, __set_markerExtras, __set_markerUsed, markers, refreshMarkers, refreshPropsAndWalls, visibleTop } from '../render/board.js';
@@ -62,7 +63,7 @@ export function init() {
     onNpc: (e) => showCard({ kind: 'npc', e }),
     onExhaust: (e) => showCard({ kind: 'exhaust', e }),
     onCraft: (e) => { craftUI.recipe = null; showCard({ kind: 'craft', e }); },
-    onReset: () => feedReset(),
+    onReset: () => { feedReset(); botsReset(); },
     // A Care Package falls: every camera turns to look at the purple portal.
     onCarePackage: (e) => {
       const { x, y } = grid.coords(e.cell);
@@ -88,7 +89,7 @@ export function init() {
     },
     grid, scene, camera, controls, cellToWorld, terrainify, cellLabel,
     cellTop: (i) => Math.max(visibleTop(i), WATER_Y) + 0.01,
-    onChange: () => { wake(); renderPlay(); onGameUpdate(); syncPowerOut(); },
+    onChange: () => { wake(); renderPlay(); onGameUpdate(); syncPowerOut(); botUpdate(); },
     onUsed: () => { refreshMarkers(); refreshPropsAndWalls(); },
     onCollect: (i, type, text) => {
       const { x, y } = grid.coords(i);
@@ -97,6 +98,7 @@ export function init() {
       markers.burst(type, p.x, fy, p.z, text);
     },
   });
+  initBots(play);
   __set_markerUsed((i) => ui.tool === 'play' && play.state.shownUsed.has(i));
   // Objectives appear once the monster is known (midnight, or named early), and only its own sites.
   // A Care Package replaces the Investigation marker it fell on.
@@ -120,7 +122,7 @@ export function renderPlay() {
   roll.disabled = !['idle', 'done'].includes(s.phase);
   const here = s.pos >= 0 ? (() => { const c = grid.coords(s.pos); return cellLabel(c.x, c.y); })() : '';
   const cur = s.players[s.cur];
-  const chip = cur ? `<span class="who-chip" style="background:${cur.colour}">${cur.name}</span> ` : '';
+  const chip = cur ? `<span class="who-chip" style="background:${cur.colour}">${cur.name}${cur.bot ? ' 🤖' : ''}</span> ` : '';
   $('#playStatus').innerHTML = chip + ({
     nostart: 'No Start space yet. Paint one (Spaces → Outdoor → Start space).',
     idle: `On <b>${here}</b>. Roll to move.`,
@@ -146,7 +148,7 @@ export function renderPlay() {
     const counts = obolCounts(p);
     const inDanger = s.monsters.some((mo) => mo.danger?.includes(k));
     const dangerType = s.monsters.flatMap((mo) => mo.dangerTypes?.[k] ?? [])[0];
-    return `<div class="pl${k === s.cur ? ' cur' : ''}${p.dead ? ' dead' : ''}${inDanger && !p.dead ? ` danger${dangerType ? ` danger-${dangerType}` : ''}` : ''}" data-inv="${k}" title="${p.name}'s injuries and skills"><span class="chip" style="background:${p.colour}">${p.name}</span>` +
+    return `<div class="pl${k === s.cur ? ' cur' : ''}${p.dead ? ' dead' : ''}${inDanger && !p.dead ? ` danger${dangerType ? ` danger-${dangerType}` : ''}` : ''}" data-inv="${k}" title="${p.name}'s injuries and skills"><span class="chip" style="background:${p.colour}">${p.name}${p.bot ? ' 🤖' : ''}</span>` +
       `<span>${c ? cellLabel(c.x, c.y) : '–'}</span><span>White dice ${p.white}</span>` +
       `<span class="inj-row">${injuryPips(p)}${p.dead ? ' <b>Dead</b>' : inDanger ? ` <b class="${dangerType ? `dmg-${dangerType}` : ''}" style="${dangerType ? '' : 'color:#ff6a50'}">${dangerType ? dmgIcon(dangerType) : ''}In danger</b>` : ''}` +
       // Through the monster's next turn (Viper Hood, Ice Axe).
@@ -197,6 +199,15 @@ export function renderPlay() {
   hud.dataset.act = next[0];
   hud.textContent = next[1];
   hud.disabled = next[0] === 'roll' && roll.disabled;
+  // A bot is playing (play/bots.js): say who, and the controls wait (body.bot-turn).
+  if (botActing()) {
+    const who = ss?.players?.[ss.reactions?.[0]?.seat ?? ss.cur];
+    $('#hudStatus').innerHTML = `${chip}🤖 <b>${who?.name ?? 'A bot'}</b> is playing…`;
+    renderChoices();
+    renderCrateBtn();
+    $('#stayBtn').hidden = true;
+    return;
+  }
   $('#hudStatus').innerHTML = chip + ({
     nostart: 'Paint a Start space first.',
     driving: `🛻 Driving the truck · <b>${ss?.drive?.steps ?? 0}</b> spaces of road left · tap an arrow, or Park`,

@@ -185,6 +185,9 @@ function showNewGame() {
     <div class="map-check" id="ngCheck"></div>
     <h3 class="screen-sub">Investigators</h3>
     <div class="seg" id="ngPlayers">${[1, 2, 3, 4].map((n) => `<button data-n="${n}" class="${gameConfig.players === n ? 'on' : ''}">${n}</button>`).join('')}</div>
+    <h3 class="screen-sub">You play</h3>
+    <div class="seg" id="ngHumans"></div>
+    <p class="screen-note" id="ngBotNote"></p>
     <h3 class="screen-sub">Monster</h3>
     <select id="ngMonster" class="screen-select">${monsterOptions}</select>
     <h3 class="screen-sub">Movement</h3>
@@ -202,6 +205,16 @@ function showNewGame() {
     el.querySelector('[data-back]').addEventListener('click', showTitle);
     el.querySelector('#ngMonster').value = current;
     let players = gameConfig.players ?? 1;
+    // How many of the investigators you play; expert bots play the rest (the last seats).
+    let humans = Math.max(1, players - (gameConfig.bots ?? 0));
+    const drawHumans = () => {
+      humans = Math.min(Math.max(1, humans), players);
+      el.querySelector('#ngHumans').innerHTML = Array.from({ length: players }, (_, k) => k + 1)
+        .map((n) => `<button data-h="${n}" class="${n === humans ? 'on' : ''}">${n === players && players > 1 ? `All ${n}` : n}</button>`).join('');
+      el.querySelectorAll('#ngHumans button').forEach((b) => b.addEventListener('click', () => { humans = Number(b.dataset.h); drawHumans(); }));
+      const bots = players - humans;
+      el.querySelector('#ngBotNote').textContent = bots ? `🤖 ${bots === 1 ? 'A bot plays' : `Bots play`} the last ${bots === 1 ? 'seat' : `${bots} seats`} (P${humans + 1}${bots > 1 ? `–P${players}` : ''}), as a team that knows the rules inside out.` : players === 1 ? 'Just you.' : 'You play every investigator (pass the device round).';
+    };
     let startMode = 'standard';
     let movement = gameConfig.movement === 'tactical' ? 'tactical' : 'quick';
     const moveNote = () => { el.querySelector('#ngMoveNote').textContent = movement === 'tactical' ? 'Choose a direction at every step.' : 'Run on by yourself to the next fork or marker.'; };
@@ -248,6 +261,7 @@ function showNewGame() {
     el.querySelectorAll('#ngPlayers button').forEach((b) => b.addEventListener('click', () => {
       players = Number(b.dataset.n);
       el.querySelectorAll('#ngPlayers button').forEach((x) => x.classList.toggle('on', x === b));
+      drawHumans();
     }));
     el.querySelectorAll('#ngStart button').forEach((b) => b.addEventListener('click', () => {
       startMode = b.dataset.start;
@@ -256,15 +270,17 @@ function showNewGame() {
     el.querySelector('#ngGo').addEventListener('click', () => {
       if (!chosen) return;
       const [kind, id] = el.querySelector('#ngMonster').value.split(':');
-      startGame({ map: chosen.file, name: chosen.name, players, startMode, movement, monster: { kind, id } });
+      startGame({ map: chosen.file, name: chosen.name, players, bots: players - humans, startMode, movement, monster: { kind, id } });
     });
+    drawHumans();
     recheck();
   });
 }
 
-function startGame({ map, name, players, startMode, movement = 'quick', monster }) {
+function startGame({ map, name, players, bots = 0, startMode, movement = 'quick', monster }) {
   // The choices also become the defaults for the play demo and next time.
   gameConfig.players = players;
+  gameConfig.bots = Math.max(0, Math.min(players - 1, bots));
   gameConfig.movement = movement;
   gameConfig.monster = 'mystery'; // the real game: a secret monster found out through evidence
   if (monster.kind === 'pick') gameConfig.monsterPick = monster.id;

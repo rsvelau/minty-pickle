@@ -1550,3 +1550,11 @@ body.mode-title .title-name { font-size: 24px; margin: 0; text-align: center; }
 body.mode-title .screen-card:has(.title-block) .screen-menu { grid-template-columns: 1fr 1fr; gap: 6px; }
 body.mode-title .screen-card:has(.title-block) .screen-menu button { min-height: 36px; padding: 6px 10px; font-size: 14px; }
 body.mode-title .screen-card:has(.title-block) .screen-menu button.primary { grid-column: 1 / -1; }
+
+/* A bot is playing (src/play/bots.js): the play controls wait; the sheets stay open for a look. */
+body.bot-turn #hudRoll, body.bot-turn #playTray, body.bot-turn #trayPill, body.bot-turn .choice-btn,
+body.bot-turn #askCard, body.bot-turn #eventChoice, body.bot-turn #scoutScreen, body.bot-turn #sacrificeAsk,
+body.bot-turn #revealSheet, body.bot-turn #crateBtn, body.bot-turn #stayBtn, body.bot-turn #pickBar {
+  pointer-events: none !important;
+}
+body.bot-turn #hudRoll, body.bot-turn .choice-btn, body.bot-turn #playTray { opacity: 0.5; }

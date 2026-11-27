@@ -19,9 +19,15 @@ stars fade out on the way down.
 
 - **Continue**: the most recent game, from its autosave.
 - **New game**: pick a map (the built-in **Hawthorn Bend**, any of **My maps**, or whatever is in the map
-  editor now), 1 to 4 investigators, the monster (random from a pool, or a specific one) and an 11 PM or
-  Midnight start. The map is checked as you pick it, the same check as **Ready to play?**: a map with
+  editor now), 1 to 4 investigators and **how many of them you play** (the rest are bots), the monster
+  (random from a pool, or a specific one) and an 11 PM or Midnight start. The map is checked as you pick it, the same check as **Ready to play?**: a map with
   errors can't be started, and the list says what to fix.
+- **Bots** (`src/game/bot.js`, driven by `src/play/bots.js`): play a team of up to 4 with you playing 1 to 3
+  of them; the last seats are played by the expert bot (the same one the playtests use, marked 🤖). It plays
+  everything a player does (scouting, investigating, naming the monster from the evidence, the objective's
+  steps, skills and Obolcraft, defense, discards and the Fetish when they're its to decide, the truck) at a
+  pace you can follow, waiting for the board to finish moving; while it plays the dock says so and the play
+  controls wait. It only sees what the players see (never the hidden monster). Saved games keep who's a bot.
 - **Load game**: the autosave and 3 save slots.
 - **Map editor**: the planner described below, exactly as before (⌂ in its panel goes back to the title).
 - **Game settings**: the rules settings (Obols, slots, turn length...), the defaults for new games.

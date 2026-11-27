@@ -214,6 +214,7 @@ let tapStart = null;
 // A tap on the board in play: a space being picked (Distract), or a direction
 // choice (on or near its cell).
 function playTap(ev) {
+  if (document.body.classList.contains('bot-turn')) return;   // a bot is playing (play/bots.js)
   const cell = pickCell(ev);
   if (cellPick) {
     const i = cell ? grid.index(cell.x, cell.y) : -1;
