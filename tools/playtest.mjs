@@ -3,6 +3,7 @@
 // investigators win.
 //
 //   node tools/playtest.mjs [games per setup = 8] [monster ids, comma-separated] [team sizes = 1,2,3,4]
+//   Follow streets is on, as in the game (STREETS=0 turns it off).
 //
 // The bot: before midnight it investigates the nearest markers; once the
 // monster is known it follows the monster's objective script (collect,
@@ -44,7 +45,7 @@ function play(monster, players, seed) {
   const { grid } = gridFromMap(MAP);
   const board = createBoard(grid);
   // Follow streets off: the bot's walking distances don't know the road's lanes.
-  const { state } = newGame(board, { seed, scout: true, followStreets: false, config: { players, monsterPick: monster } });
+  const { state } = newGame(board, { seed, scout: true, followStreets: process.env.STREETS !== "0", config: { players, monsterPick: monster } });
   const bot = makeBot(board, { expert: EXPERT, trace: TRACE });
   state.fullLog = [];
   let seenN = state.logN ?? 0;

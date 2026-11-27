@@ -847,7 +847,7 @@ export function unlockedFn(state, board) {
 // On a street, start space or bridge (with Follow streets on), the pawn keeps
 // to the road: only the sides the road continues on, plus any side with a
 // door in it (stepping off the road into a building).
-function roadSides(state, board, x, y) {
+export function roadSides(state, board, x, y) {
   const grid = board.grid;
   const c = grid.cells[grid.index(x, y)];
   if (!state.followStreets || !(c.sub === 'street' || c.sub === 'start' || c.bridge)) return null;

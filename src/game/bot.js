@@ -17,7 +17,7 @@
 // It only reads the state it's given (the players' view is enough: it never
 // needs the hidden monster).
 import { parseEdgeKey } from '../core/state.js';
-import { unlockedFn } from './rules.js';
+import { unlockedFn, roadSides, DIRS } from './rules.js';
 import { MONSTER_BY_ID } from './cards/monsters.js';
 import { skillStatus } from './skills.js';
 import { EQUIPMENT_BY_ID } from './cards/equipment.js';
@@ -44,7 +44,7 @@ export function makeBot(board, { expert = true, trace = false } = {}) {
   const distTo = (goal) => {
     const lit = avoidLit();
     const ov = doorOverride(state);
-    const k = `${goal}:${state.keys ?? 0}:${lit}:${ov ? JSON.stringify([state.doors, state.lockdown, state.allDoorsOpen, state.doorPass]) : ''}`;
+    const k = `${goal}:${state.keys ?? 0}:${lit}:${state.followStreets ? 'r' : ''}:${ov ? JSON.stringify([state.doors, state.lockdown, state.allDoorsOpen, state.doorPass]) : ''}`;
     if (!fields.has(k)) {
       const open = unlockedFn(state, board);
       const n = g.cells.length;
@@ -62,6 +62,12 @@ export function makeBot(board, { expert = true, trace = false } = {}) {
             if (!g.inBounds(x + dx, y + dy)) continue;
             // From the neighbour back to here: walking toward the goal.
             if (!g.canStep(x + dx, y + dy, -dx, -dy, open, ov)) continue;
+            // Follow streets (on in the game): on a road the pawn keeps to it,
+            // leaving only through a door, so the routes do too.
+            if (state.followStreets) {
+              const sides = roadSides(state, board, x + dx, y + dy);
+              if (sides !== null && !(sides & DIRS.find(([ddx, ddy]) => ddx === -dx && ddy === -dy)[3])) continue;
+            }
             const j = g.index(x + dx, y + dy);
             const cost = c + 1 + (lit && (board.light[i] ?? 0) >= state.config.litThreshold ? 3 : 0);
             if (cost < best[j]) { best[j] = cost; (buckets[cost] ??= []).push(j); }
