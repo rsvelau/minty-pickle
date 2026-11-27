@@ -171,7 +171,8 @@ function render(s) {
   // The receipts.
   const box = $('#botReceipts');
   if (box) {
-    const list = receipts.filter((r) => s?.players?.[r.seat]?.bot);
+    // (A receipt with nothing on it yet, no dice, no move, no gains, isn't shown.)
+    const list = receipts.filter((r) => s?.players?.[r.seat]?.bot && (r.dice.length || r.gains.length || r.from !== r.to));
     box.hidden = !playing || !on('botReceipts') || !list.length;
     if (!box.hidden) {
       box.innerHTML = list.map((r, n) => {

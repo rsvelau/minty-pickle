@@ -62,6 +62,11 @@ export function init() {
   $('#openSettings').addEventListener('click', openSettings);
   $('#setDone').addEventListener('click', closeSettings);
   $('#settings').addEventListener('click', (e) => { if (e.target === $('#settings')) closeSettings(); });
+  // Copy the settings as text (to paste somewhere: a message, a note).
+  $('#setCopy').addEventListener('click', async () => {
+    const text = JSON.stringify({ midnightShiftSettings: gameConfig }, null, 1);
+    try { await navigator.clipboard.writeText(text); toast('Settings copied: paste them anywhere.'); } catch { window.prompt('Copy your settings:', JSON.stringify({ midnightShiftSettings: gameConfig })); }
+  });
   $('#setDefaults').addEventListener('click', () => {
     const d = defaultConfig();
     Object.assign(gameConfig, d);

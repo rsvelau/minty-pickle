@@ -1654,3 +1654,16 @@ body.intro .bot-banner { opacity: 0; }
 }
 .bw-fly.go { opacity: 0.15; transform: translate(-50%, -50%) scale(0.7); }
 body.intro .team-strip, body.intro .bot-receipts { opacity: 0; }
+
+/* Bot turns, second pass: your own dice tray is hidden (nothing in it is yours to
+   use), and the bot's banner is one small pill: who, the dice, the one thing that mattered. */
+body.bot-turn #playTray, body.bot-turn #trayPill { display: none !important; }
+.bot-banner {
+  width: auto; max-width: min(420px, calc(100vw - 32px)); padding: 3px 10px 3px 4px; border-radius: 999px;
+  display: flex; align-items: center; gap: 7px; font-size: 12px; white-space: nowrap; overflow: hidden;
+  top: calc(env(safe-area-inset-top, 0px) + 38px);
+}
+.bot-banner[hidden] { display: none; }
+.bot-banner .bb-dice { gap: 2px; }
+.bot-banner .bb-die { font-size: 16px; }
+.bot-banner .bb-say { overflow: hidden; text-overflow: ellipsis; color: #d8d1c0; }

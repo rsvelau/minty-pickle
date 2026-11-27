@@ -93,6 +93,7 @@ function step() {
 
 // --- what the bot did, shown -------------------------------------------------------------
 const FACE = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+const IMPORTANT = /(found|takes|collected|picked up|picks up|uses|investigated|names|hits|attacks|brings|delivers|strikes|craft|dies|falls|relights|hides|climbs)/i;
 const QUIET = /('s turn\.|rolled (black|a white)|braces: defense|^The scouting is done)/;
 function record(seat, a, logN) {
   const s = play.session.state;
@@ -119,9 +120,14 @@ function drawBanner() {
   const pl = s.players[banner.seat];
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   el.hidden = false;
-  el.innerHTML = `<div class="bb-head"><span class="bb-chip" style="background:${pl?.colour ?? '#888'}">${esc(pl?.name ?? '')} 🤖</span>` +
-    (banner.dice.length ? `<span class="bb-dice">rolled ${banner.dice.map((d) => `<b class="bb-die ${d.kind}" title="${d.kind} ${d.v}">${FACE[d.v] ?? d.v}<i>${d.v}</i></b>`).join('')}</span>` : '') + '</div>' +
-    `<ul>${banner.lines.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>`;
+  // One small line: who, the dice, and the one thing that matters most from the
+  // turn so far (a find, a pickup, an attack, a skill; else where it stopped).
+  const name = pl?.name ?? '';
+  const key = [...banner.lines].reverse().find((t) => IMPORTANT.test(t)) ?? banner.lines.at(-1) ?? '';
+  const said = key.replace(new RegExp(`^${name}('s)? `), '').replace(/\.$/, '');
+  el.innerHTML = `<span class="bb-chip" style="background:${pl?.colour ?? '#888'}">${esc(name)}</span>` +
+    (banner.dice.length ? `<span class="bb-dice">${banner.dice.map((d) => `<b class="bb-die ${d.kind}" title="${d.kind} ${d.v}">${FACE[d.v] ?? d.v}</b>`).join('')}</span>` : '') +
+    (said ? `<span class="bb-say">${esc(said)}</span>` : '');
 }
 
 // A new or loaded game: forget the last one's bot.
