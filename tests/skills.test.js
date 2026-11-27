@@ -56,7 +56,8 @@ test('after rolling: the lowest dice that meet the requirement, and a monster in
   assert.deepEqual(s.find(s.pl, 'Blind').action.dice, [1]);
   // ...and the ready-made action really works.
   assert.ok(applyAction(s.state, s.board, s.find(s.pl, 'Blind').action).ok);
-  assert.equal(s.find(s.pl, 'Blind').status, 'almost', 'the 6 is spent: the dice left can’t make it');
+  assert.equal(s.find(s.pl, 'Blind').status, 'not', 'used this turn (once a turn per card)');
+  assert.match(s.find(s.pl, 'Blind').why, /once a turn/);
 });
 
 test('dice that can’t make it, Obols short, passive skills, someone else’s turn', () => {

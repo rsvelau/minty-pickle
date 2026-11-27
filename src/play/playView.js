@@ -59,7 +59,8 @@ export function init() {
     onNamed: (e) => showCard({ kind: 'named', monster: e.monster, correct: e.correct }),
     onDamage: (e) => showCard({ kind: 'hurt', code: e.attack, e }),
     onIntent: () => renderIntent(),
-    onGameOver: (e) => showCard({ kind: e?.won ? 'won' : 'over' }),
+    // The end of the game: the window asking about another round (gameShell.js showGameEnd).
+    onGameOver: () => window.dispatchEvent(new Event('game-end')),
     onNpc: (e) => showCard({ kind: 'npc', e }),
     onExhaust: (e) => showCard({ kind: 'exhaust', e }),
     onCraft: (e) => { craftUI.recipe = null; showCard({ kind: 'craft', e }); },
@@ -131,7 +132,7 @@ export function renderPlay() {
     asking: `${s.ask?.relight ? 'A memorial. Relight your candle?' : s.ask?.anchor ? 'An anchor. Destroy it?' : 'Investigation spot. Investigate?'} <b>${s.steps}</b> move${s.steps === 1 ? '' : 's'} left.`,
     revealing: 'Evidence! Choose a face-down card to turn over.',
     eventing: 'An event: make your choice.',
-    over: 'Everyone is dead. The night wins. Press Restart to play again.',
+    over: play.session?.state?.won ? 'The investigators win: dawn, at last.' : play.session?.state?.lostInNight ? 'Lost in the night: dawn never came.' : 'Everyone is dead. The night wins.',
     moving: s.fast ? `Fast-forward ⏩ <b>${s.steps}</b> left` : `Running… <b>${s.steps}</b> left (press and hold the board to fast-forward)`,
     choosing: `${s.stopReason ? `Stopped at <b>${s.stopReason}</b>. ` : ''}Choose a direction: <b>${s.steps}</b> move${s.steps === 1 ? '' : 's'} left (${s.options.map((o) => o.name).join(', ')}). You can also roll and slot dice, use equipment or Obolcraft.`,
     done: `On <b>${here}</b>. Roll again.`,
@@ -221,7 +222,7 @@ export function renderPlay() {
     scouting: 'Scouting: choose a card',
     revealing: 'Evidence! Choose a card',
     eventing: 'An event: make your choice',
-    over: 'Everyone is dead. Restart to play again.',
+    over: ss?.won ? '☀ The investigators win' : ss?.lostInNight ? '☾ Lost in the night' : '☠ Everyone is dead',
     done: `On <b>${here}</b>. Roll again.`,
   }[s.phase] ?? '');
   renderChoices();

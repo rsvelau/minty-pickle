@@ -404,6 +404,39 @@ function showSave(onBack = showPauseMenu) {
   });
 }
 
+// The game is over (won, everyone dead, or lost in the night): say how it went
+// and ask whether the team plays another round (a fresh night on the same map,
+// same investigators and bots, same monster setting) or goes back to the title.
+export function showGameEnd() {
+  const st = play.session.state;
+  if (!st || ui.mode !== 'game') return;
+  const escaped = st.players.filter((p) => p.escaped);
+  const outcome = st.won
+    ? { kind: 'Dawn, at last', glyph: '☀', title: escaped.length ? 'They got away' : 'The investigators win',
+      sub: escaped.length ? `${escaped.map((p) => p.name).join(', ')} escaped the night.` : 'The monster is beaten and the night is survived.' }
+    : st.lostInNight
+      ? { kind: 'The night wins', glyph: '☾', title: 'Lost in the night', sub: '24 turns after midnight the monster still stands. Dawn never comes.' }
+      : { kind: 'The night wins', glyph: '☠', title: 'Everyone is dead', sub: 'No one made it to morning.' };
+  const dead = st.players.filter((p) => p.dead).length;
+  openScreen(`
+    <div class="end-block ${st.won ? 'won' : 'lost'}">
+      <div class="end-kind">${esc(outcome.kind)}</div>
+      <div class="end-glyph">${outcome.glyph}</div>
+      <h2 class="screen-title">${esc(outcome.title)}</h2>
+      <p class="screen-note">${esc(outcome.sub)} ${st.round} rounds · ${dead ? `${dead} of ${st.players.length} fell` : 'everyone lived'}.</p>
+    </div>
+    <p class="end-ask">Play another round?</p>
+    <div class="screen-menu end-menu">
+      <button class="primary" data-act="again" data-focus>Play another round</button>
+      <button data-act="look">Look at the board</button>
+      <button data-act="quit">Quit to title</button>
+    </div>`, (el) => {
+    el.querySelector('[data-act="again"]').addEventListener('click', () => { closeScreen(); play.reset(); renderPlay(); playIntro(); autosaveNow(); });
+    el.querySelector('[data-act="look"]').addEventListener('click', closeScreen);
+    el.querySelector('[data-act="quit"]').addEventListener('click', showTitle);
+  });
+}
+
 export function showPauseMenu() {
   if (ui.mode !== 'game') return;
   openScreen(`
@@ -514,6 +547,8 @@ export function showMyMaps() {
 // Run once at startup (called from src/main.js, after everything else).
 export function init() {
   $('#gameMenuBtn').addEventListener('click', showPauseMenu);
+  // The play view says when a game ends (playView.js onGameOver): a moment to see the board, then the window.
+  window.addEventListener('game-end', () => setTimeout(showGameEnd, 1400));
   // The dock's More sheet: settings, and (in a game) save, load, restart, quit.
   $('#moreMenu').innerHTML = `<span class="vm-label">Game</span><div class="more-grid">
     <button type="button" data-more="settings">Game settings</button>

@@ -58,6 +58,9 @@ export const actionRoll = (monster) => (monster.intents ?? []).reduce((a, i) => 
 
 // Is the item's ability available (not spent by 1️⃣)?
 export const abilityReady = (item, k) => !(item.spent ?? []).includes(k);
+// Every skill can be used once a turn; each card in hand has its own (two of the
+// same card: each once). item.usedTurn: { ability index: the turn it was used }.
+export const usedThisTurn = (state, item, k) => item.usedTurn?.[k] === state.turn;
 
 // What the UI needs to offer an ability: which targets are in range.
 // Lunge (Fencing Shoes), always on while carried: Close-range attacks reach Mid.
@@ -119,6 +122,8 @@ export function useEquipment(state, board, pl, action, ctx, events) {
   const a = card.abilities[k];
   if (!a) return 'no such skill';
   if (!abilityReady(item, k)) return `${a.name} is used up until it is refreshed`;
+  // Each skill once a turn (each copy of a card has its own).
+  if (usedThisTurn(state, item, k)) return `${a.name} has been used this turn (this card's once a turn)`;
   const fx = a.fx ?? { manual: true };
   if (fx.passive) return `${a.name} is always on while you carry the ${card.name}`;
   if (fx.sacrifice) return `the ${card.name} is used the moment you or a teammate would die`;
@@ -328,6 +333,8 @@ export function useEquipment(state, board, pl, action, ctx, events) {
   }
   if (fx.manual) parts.push(`resolve at the table: ${a.text}`);
 
+  // Once a turn, for this card.
+  item.usedTurn = { ...(item.usedTurn ?? {}), [k]: state.turn };
   // Limits: 1️⃣ until refreshed; 🔗 the card breaks.
   if (a.limit === 'once') item.spent = [...new Set([...(item.spent ?? []), k])];
   let broke = false;

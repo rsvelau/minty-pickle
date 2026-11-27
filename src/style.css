@@ -1576,3 +1576,12 @@ body.bot-turn #hudRoll, body.bot-turn .choice-btn, body.bot-turn #playTray { opa
 .bot-banner ul { margin: 0; padding: 0 0 0 16px; }
 .bot-banner li { margin: 1px 0; }
 body.intro .bot-banner { opacity: 0; }
+
+/* The end of a game (gameShell.js showGameEnd). */
+.end-block { text-align: center; padding: 6px 0 4px; }
+.end-kind { color: var(--muted); font: italic 15px Georgia, 'Times New Roman', serif; letter-spacing: 0.04em; }
+.end-glyph { font-size: 46px; line-height: 1.2; margin: 4px 0; }
+.end-block.won .end-glyph { color: #f3c460; text-shadow: 0 0 24px rgba(243, 196, 96, 0.5); }
+.end-block.lost .end-glyph { color: #d0453d; text-shadow: 0 0 24px rgba(208, 69, 61, 0.45); }
+.end-block .screen-title { margin: 0 0 6px; }
+.end-ask { text-align: center; margin: 14px 0 8px; font-weight: 600; color: #e9e2d2; }

@@ -31,6 +31,9 @@ stars fade out on the way down.
   the clock shows its turn: the dice it rolled and what it did. While it plays the dock says so and the play
   controls wait. It only sees what the players see (never the hidden monster). Saved games keep who's a bot.
 - **Load game**: the autosave and 3 save slots.
+- **The end of a game**: a window says how it went (**The investigators win**, **Everyone is dead**, or **Lost in
+  the night**, with the rounds played and how many fell) and asks **Play another round?**: a fresh night on the
+  same map with the same investigators, bots and monster setting, or **Look at the board**, or **Quit to title**.
 - **Map editor**: the planner described below, exactly as before (⌂ in its panel goes back to the title).
 - **Game settings**: the rules settings (Obols, slots, turn length...), the defaults for new games.
 
@@ -309,6 +312,9 @@ immune to new attacks for up to 2 rounds; roll to come out, or 🫥 Stay hidden)
 nearest road; get in from Skills within a space; after everyone's turn, before the monster's, its finder drives
 it up to 25 spaces of road with the arrows, riders aboard, and Parks to stop; hitting the monster deals 🎲🎲🎲
 through its toughness and Stuns it; the truck is wrecked when the drive ends). Lockdown's doors are drawn locked.
+
+**Each skill once a turn, per card**: a skill can be used once each turn; two copies of the same card are two
+uses (each copy once). The Skills menu says "Used this turn" until the next turn.
 
 **Skills don't offer pointless healing**: a heal with no matching injury (yours, or a teammate's in range) is
 "Not now: No Physical injury to heal".

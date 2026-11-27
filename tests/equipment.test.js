@@ -51,11 +51,12 @@ test('requirements, range and immunity', () => {
 
 test('weakness hits count up the track and apply its effects', () => {
   const { monster, use, state } = setup('werewolf', { items: ['cursebreaker-dagger'], pool: [6, 6, 6, 6, 6, 6] }); // weak to silver
-  for (let k = 0; k < 2; k++) assert.ok(use(0, 0, [k]).ok);
+  // (Once a turn per card: a new turn between uses.)
+  for (let k = 0; k < 2; k++) { assert.ok(use(0, 0, [k]).ok); state.turn++; }
   assert.equal(monster.weakHits, 2);
   assert.equal(monster.toughLost, 2);                 // track: at 2 hits, −2 toughness
   assert.equal(toughnessOf(monster), 2);
-  for (let k = 2; k < 4; k++) use(0, 0, [k]);
+  for (let k = 2; k < 4; k++) { use(0, 0, [k]); state.turn++; }
   assert.equal(monster.diceLost, 1);                  // at 4: −1 die
   assert.match(state.log.join(' '), /weakness: −1 die/);
 });
@@ -76,6 +77,7 @@ test('Choke needs twice the monster’s action roll; Obols any colour; 🔗 brea
   assert.match(s.use(2, 0, [9, 10]).error, /used up/);
   assert.ok(s.use(2, 1, [6]).ok);                     // Retrieval [3+] with a 4
   assert.deepEqual(s.pl.inventory.equipment[2].spent, []);  // Piercing Tip is ready again
+  s.state.turn++;                                       // (and once a turn: the next turn)
   assert.match(s.use(2, 0, [9, 10]).error, /\[10\]/);     // (6 + 6 is not 10, but it isn't 'used up')
   // Sacrifice isn't used from the sheet: it comes up when someone would die (tricks.test.js).
   assert.match(s.use(3, 0, []).error, /the moment/);
@@ -172,4 +174,14 @@ test('discarding an item of the right element for an ∞ weakness effect', () =>
   // The Banshee's Silver discard isn't offered here: it comes up when a Swoop lands (reactions.test.js).
   const b = setup('banshee', { items: ['heavy-silver-chain'] });
   assert.ok(!applyAction(b.state, b.board, { type: 'discard', item: 0, track: 2, monster: 'm1' }).ok);
+});
+
+test('each skill once a turn per card; a second copy of the card has its own', () => {
+  const s = setup('werewolf', { items: ['cursebreaker-dagger', 'cursebreaker-dagger'], pool: [6, 6, 6, 6] });
+  assert.ok(s.use(0, 0, [0]).ok);
+  assert.match(s.use(0, 0, [1]).error, /used this turn/);
+  assert.ok(s.use(1, 0, [1]).ok, 'the other copy');
+  assert.match(s.use(1, 0, [2]).error, /used this turn/);
+  s.state.turn++;
+  assert.ok(s.use(0, 0, [2]).ok, 'a new turn');
 });

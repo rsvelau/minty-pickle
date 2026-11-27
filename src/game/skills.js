@@ -21,7 +21,7 @@
 import { EQUIPMENT_BY_ID } from './cards/equipment.js';
 import { MONSTER_BY_ID, DAMAGE_KINDS } from './cards/monsters.js';
 import { checkRequirement } from './cards/requirements.js';
-import { abilityReady, targetsFor, actionRoll } from './equipmentPlay.js';
+import { abilityReady, targetsFor, actionRoll, usedThisTurn } from './equipmentPlay.js';
 import { applyAction } from './rules.js';
 import { RANGE, cellRange, INJURY_TRACKS } from './cards/injuries.js';
 import { doorsAround } from './doors.js';
@@ -66,6 +66,7 @@ export function skillStatus(state, board, pl) {
       if (fx.passive) return set('auto', `Always on while you carry the ${card.name}`);
       if (fx.sacrifice) return set('auto', 'Comes up by itself when someone would die');
       if (!abilityReady(item, k)) return set('not', 'Used up until refreshed');
+      if (usedThisTurn(state, item, k)) return set('not', 'Used this turn: once a turn per card');
       if (pl.dead) return set('not', `${pl.name} is dead`);
       if (!mine) return set('not', `On ${pl.name}’s turn`);
       if (state.phase === 'over') return set('not', 'The game is over');
