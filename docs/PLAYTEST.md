@@ -243,3 +243,27 @@ anyway. The big gain is at the table with a human seat: the bots no longer freez
 | 3 | 75% | 78% |
 | 4 | 92% | 92% |
 Most Fire attacks either light a swarm or don't come close, so one point of health moves little.
+
+## Reload for firearms and crossbows (expert bot, 40 games × 4 team sizes × 13 monsters, before → after)
+Guns and crossbows reload instead of 1️⃣ / 🔗 (the Revolver, Rifle and Flare Gun no longer break; the crossbow's
+Retrieval is now Flighted Bolt). 0 anomalies, 0 undecided in each run.
+
+| Monster | Solo | 2 | 3 | 4 | Wins ± (of 160) |
+|---|---|---|---|---|---|
+| Werewolf | 2% → 2% | 18% → 22% | 48% → 58% | 55% → 70% | +12 |
+| Barghest | 82% → 82% | 95% → 95% | 98% → 98% | 100% → 100% | +0 |
+| Hellhounds | 20% → 22% | 55% → 55% | 90% → 92% | 92% → 92% | +2 |
+| Skinwalker | 10% → 18% | 62% → 62% | 85% → 85% | 92% → 92% | +3 |
+| Wendigo | 8% → 10% | 40% → 38% | 68% → 70% | 65% → 65% | +1 |
+| Banshee | 75% → 75% | 92% → 92% | 92% → 95% | 100% → 100% | +1 |
+| Ushi-Oni | 2% → 2% | 20% → 28% | 50% → 55% | 65% → 65% | +5 |
+| Redcap | 2% → 0% | 10% → 12% | 45% → 52% | 58% → 65% | +6 |
+| Poltergeist | 10% → 10% | 38% → 38% | 75% → 78% | 95% → 95% | +1 |
+| White Lady | 62% → 60% | 90% → 90% | 92% → 92% | 95% → 95% | -1 |
+| Strigoi | 12% → 12% | 35% → 40% | 68% → 68% | 82% → 85% | +3 |
+| Adze | 68% → 75% | 65% → 72% | 78% → 82% | 92% → 92% | +8 |
+| Shadow People | 80% → 80% | 68% → 68% | 62% → 62% | 62% → 62% | +0 |
+
+All: 1,251 → 1,292 wins of 2,080 (60% → 62%). The fights decided by damage gain most (Werewolf, Redcap,
+Ushi-Oni, the Adze's Nest); objective monsters barely move. Solo hardly changes: one investigator rarely
+has the dice to fire and reload as well as move.
