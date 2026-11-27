@@ -40,7 +40,14 @@ export function initBotWatch(p) {
   play = p;
   window.addEventListener('watch-settings', () => render(play.session?.state));
   window.addEventListener('intro-done', () => render(play.session?.state));
-  $('#roundSummary')?.addEventListener('click', () => $('#roundSummary').classList.toggle('pinned'));
+  // First tap keeps it up; the next tap puts it away.
+  $('#roundSummary')?.addEventListener('click', () => {
+    const el = $('#roundSummary');
+    if (el.classList.contains('pinned')) { el.classList.remove('pinned'); el.hidden = true; return; }
+    el.classList.add('pinned');
+    const hint = el.querySelector('.rs-hint');
+    if (hint) hint.textContent = 'Tap again to close';
+  });
 }
 export function watchReset() {
   last = null; receipts = []; summary = []; lastCur = -1;
