@@ -22,6 +22,10 @@ import * as THREE from 'three';
 const slow = () => (typeof window !== 'undefined' && window.__introSlow) || 1;
 const MOVE = 5;        // s: from the moon down to the player
 const FADE = 700;      // ms: menus and markers fade in
+const SETTLE_FRAMES = 3;   // frames in a row quicker than SETTLE_DT before the flight starts
+const SETTLE_DT = 45;      // ms
+const SETTLE_MAX = 1500;   // ms: start anyway after this long
+const MAX_STEP = 34;       // ms: the most a slow frame moves the flight on (more on a slow machine)
 
 let running = null;    // the intro in progress: { cancel }
 
@@ -112,11 +116,30 @@ export function playIntro() {
   autoRes.paused = true;
   holdShadowsWhole(true);
   warmUp([[over.pos, over.target], [pose.pos, pose.target]]);
-  let t0 = null;         // the clock starts on the first frame drawn after all that
+  // The flight's own clock. It doesn't start until the frames have settled
+  // (just after a game loads, the first few frames are slow while the browser
+  // finishes its one-off work: garbage from reading the save, shaders linked
+  // and textures uploaded on first use); the camera holds still on the sky
+  // until then. After that a slow frame moves the flight on by at most
+  // MAX_STEP, so a hitch is a brief pause rather than a jump.
+  // ("Slow" is against the device's usual frame time, so a machine that always
+  // runs at 25 fps still flies at full speed.)
+  let flown = 0, last = null, calm = 0, since = null, settled = false, usual = 1000 / 60;
   driveCamera((now) => {
     if (cancelled) { driveCamera(null); return; }
-    t0 ??= now;
-    const k = Math.min(1, (now - t0) / (MOVE * slow() * 1000));
+    const dt = last === null ? Infinity : now - last;
+    last = now;
+    since ??= now;
+    if (!settled) {
+      calm = dt < SETTLE_DT ? calm + 1 : 0;
+      settled = calm >= SETTLE_FRAMES || now - since > SETTLE_MAX;
+      if (!settled) return;   // still on the sky
+      if (dt < 200) usual = dt;
+    } else {
+      flown += Math.min(dt, Math.max(MAX_STEP, usual * 1.6));
+      usual += (Math.min(dt, 200) - usual) * 0.1;
+    }
+    const k = Math.min(1, flown / (MOVE * slow() * 1000));
     // Slow start, speeding up, then easing in to the player (cubic in-out).
     const e = k < 0.5 ? 4 * k ** 3 : 1 - Math.pow(-2 * k + 2, 3) / 2;
     const pos = curve(e);
