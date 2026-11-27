@@ -171,6 +171,7 @@ function finish() {
   controls.enabled = true;
   play.holdCamera(false);
   document.body.classList.remove('intro');
+  window.dispatchEvent(new Event('intro-done'));   // what waited for the move can show now (botWatch.js)
   labelGroup.visible = ui.labels;
   ui.hideMarkers = false;
   refreshMarkers();

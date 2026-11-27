@@ -14,6 +14,7 @@ import { objectiveLive } from '../game/objectives/scripts.js';
 import { memorialsLive, memorialCells } from '../game/objectives/verbs.js';
 import { feedUpdate, feedReset } from './feed.js';
 import { initBots, botUpdate, botsReset, botActing } from './bots.js';
+import { initBotWatch, watchUpdate, watchReset } from './botWatch.js';
 import { describeItem } from '../game/objectives/verbs.js';
 import { RANGE, cellRange } from '../game/cards/injuries.js';
 import { __set_markerHidden, __set_markerExtras, __set_markerUsed, markers, refreshMarkers, refreshPropsAndWalls, visibleTop } from '../render/board.js';
@@ -64,7 +65,7 @@ export function init() {
     onNpc: (e) => showCard({ kind: 'npc', e }),
     onExhaust: (e) => showCard({ kind: 'exhaust', e }),
     onCraft: (e) => { craftUI.recipe = null; showCard({ kind: 'craft', e }); },
-    onReset: () => { feedReset(); botsReset(); },
+    onReset: () => { feedReset(); botsReset(); watchReset(); },
     // A Care Package falls: every camera turns to look at the purple portal.
     onCarePackage: (e) => {
       const { x, y } = grid.coords(e.cell);
@@ -90,7 +91,7 @@ export function init() {
     },
     grid, scene, camera, controls, cellToWorld, terrainify, cellLabel,
     cellTop: (i) => Math.max(visibleTop(i), WATER_Y) + 0.01,
-    onChange: () => { wake(); renderPlay(); onGameUpdate(); syncPowerOut(); botUpdate(); },
+    onChange: () => { wake(); renderPlay(); onGameUpdate(); syncPowerOut(); botUpdate(); watchUpdate(play.session?.state); },
     onUsed: () => { refreshMarkers(); refreshPropsAndWalls(); },
     onCollect: (i, type, text) => {
       const { x, y } = grid.coords(i);
@@ -100,6 +101,7 @@ export function init() {
     },
   });
   initBots(play);
+  initBotWatch(play);
   __set_markerUsed((i) => ui.tool === 'play' && play.state.shownUsed.has(i));
   // Objectives appear once the monster is known (midnight, or named early), and only its own sites.
   // A Care Package replaces the Investigation marker it fell on.

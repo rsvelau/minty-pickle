@@ -123,6 +123,13 @@ export const DEFAULT_CONFIG = Object.freeze({
   deckCounts: Object.freeze({}), // cards in the game: changes from 1 copy each (decks.js)
   scouting: true,        // a Scouting phase before the first turn (newGame with setup.scout)
   bots: 0,               // how many of the seats bots play (the last ones: play/bots.js, game/bot.js)
+  // Following the bots (play/botWatch.js; the screen only, never the rules):
+  botReceipts: true,     // a card per bot turn: dice, route, what it gained (until the next round)
+  botFly: true,          // gains fly from the pawn to its investigator's chip
+  teamStrip: true,       // everyone's Obols, cards and injuries always on screen
+  roundSummary: true,    // when your turn comes: what everyone else did since your last
+  botTrails: true,       // a fading trail of where each bot just walked
+  botSpeed: 'fast',      // 'fast' | 'normal' | 'watch' (waits for every animation)
 });
 export const defaultConfig = () => ({ ...DEFAULT_CONFIG, obols: { ...DEFAULT_CONFIG.obols }, deckCounts: {} });
 

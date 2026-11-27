@@ -30,6 +30,13 @@ stars fade out on the way down.
   still walking to its destination (outlined in its colour, pulsing) when the next turn starts. A banner under
   the clock shows its turn: the dice it rolled and what it did. While it plays the dock says so and the play
   controls wait. It only sees what the players see (never the hidden monster). Saved games keep who's a bot.
+- **Following the bots** (Game settings → Following the bots, each on or off, live; `src/play/botWatch.js`):
+  **Bot speed** (Fast, Normal, or Watch: waits for every animation); **Turn receipts** (a card per bot turn
+  down the right side until the next round: its dice, where it went, what it gained or lost; tap one and the
+  camera looks); **Gains fly to the team** (an Obol, card, key or evidence pops off the pawn and flies to its
+  chip); **Team strip** (top left: everyone's Obols by colour, Equipment, carried items and injuries, the chip
+  that just changed glows); **Round summary** (when your turn comes: what the others gained and lost since
+  your last; tap to keep it up); **Bot trails** (dots in the bot's colour along the way it just walked, fading).
 - **Load game**: the autosave and 3 save slots.
 - **The end of a game**: a window says how it went (**The investigators win**, **Everyone is dead**, or **Lost in
   the night**, with the rounds played and how many fell) and asks **Play another round?**: a fresh night on the

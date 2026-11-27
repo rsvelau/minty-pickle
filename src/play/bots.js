@@ -13,6 +13,11 @@
 // stay open for a look.
 import { makeBot } from '../game/bot.js';
 import { sacrificeSeat } from '../game/rules.js';
+import { botAction, botWillAct } from './botWatch.js';
+import { gameConfig } from './playView.js';
+// Bot speed (Game settings → Following the bots): pauses ×, and whether to wait for the board.
+const SPEED = { fast: { k: 1, wait: false }, normal: { k: 1.8, wait: false }, watch: { k: 2.2, wait: true } };
+const speed = () => SPEED[gameConfig?.botSpeed] ?? SPEED.fast;
 
 const PAUSE = 400;        // ms between a bot's actions
 const AFTER_ROLL = 1300;  // ms after a roll (to see the dice)
@@ -46,7 +51,7 @@ export function botUpdate() {
     return;
   }
   if (timer) return;
-  const wait = lastAction === 'roll' ? AFTER_ROLL : lastAction === 'move' || lastAction === 'choose' ? AFTER_MOVE : PAUSE;
+  const wait = (lastAction === 'roll' ? AFTER_ROLL : lastAction === 'move' || lastAction === 'choose' ? AFTER_MOVE : PAUSE) * speed().k;
   timer = setTimeout(step, wait);
 }
 
@@ -55,7 +60,7 @@ function step() {
   if (!botActing()) return;
   // Only the opening camera move holds it up (and, briefly, a card that just popped up).
   const cardUp = !document.getElementById('cardPop')?.hidden;
-  if (document.body.classList.contains('intro')) { timer = setTimeout(step, 250); return; }
+  if (document.body.classList.contains('intro') || (speed().wait && play.busy())) { timer = setTimeout(step, 250); return; }
   if (cardUp) {
     step.cardSince ??= performance.now();
     if (performance.now() - step.cardSince < CARD_WAIT) { timer = setTimeout(step, 120); return; }
@@ -69,6 +74,7 @@ function step() {
   try { a = bot.act(s); } catch (e) { console.error(e); }
   if (!a) a = { type: 'end', seat: s.cur };
   const logN = s.logN ?? 0;
+  botWillAct(seat, s);
   let r = play.session.dispatch(a);
   if (!r.ok) {
     // It thought that would work: try again, then pass rather than stall; if
@@ -81,7 +87,7 @@ function step() {
     }
   } else fails = 0;
   lastAction = a.type;
-  if (r.ok) record(seat, a, logN);
+  if (r.ok) { record(seat, a, logN); botAction(seat, a, play.session.state, r.events); }
   botUpdate();
 }
 

@@ -817,6 +817,35 @@ export function createPlay({
     group.add(obj);
     botTarget.obj = obj;
   }
+  // A bot's trail (play/botWatch.js): dots along the way it just walked, in its
+  // colour, fading out over a few seconds.
+  const trails = [];   // { obj, age, life }
+  const trailGeo = new THREE.CircleGeometry(0.07, 10).rotateX(-Math.PI / 2);
+  function showTrail(cells, colour = '#ffffff', life = 6) {
+    const path = (cells ?? []).filter(inBoard);
+    if (path.length < 2) return;
+    const pts = [];
+    for (let k = 0; k < path.length; k++) {
+      const a = centreOf(path[k]);
+      pts.push(a);
+      if (k + 1 < path.length) { const b = centreOf(path[k + 1]); if (a.distanceTo(b) < 1.6) pts.push(a.clone().lerp(b, 0.5)); }
+    }
+    const mat = new THREE.MeshBasicMaterial({ color: colour, transparent: true, opacity: 0.85, depthWrite: false });
+    const obj = new THREE.InstancedMesh(trailGeo, mat, pts.length);
+    const m4 = new THREE.Matrix4();
+    pts.forEach((p, n) => { m4.makeTranslation(p.x, p.y + 0.03, p.z); obj.setMatrixAt(n, m4); });
+    obj.renderOrder = 5;
+    obj.raycast = () => {};
+    group.add(obj);
+    trails.push({ obj, age: 0, life });
+  }
+  function tickTrails(dt) {
+    for (const tr of [...trails]) {
+      tr.age += dt;
+      tr.obj.material.opacity = 0.85 * Math.max(0, 1 - tr.age / tr.life);
+      if (tr.age >= tr.life) { group.remove(tr.obj); tr.obj.material.dispose(); trails.splice(trails.indexOf(tr), 1); }
+    }
+  }
   function tickBotTarget(t) {
     const o = botTarget.obj;
     if (!o) return;
@@ -1317,7 +1346,7 @@ export function createPlay({
   // The game-start camera move (app/intro.js) holds the follow camera off.
   function holdCamera(on) { view.hold = !!on; if (!on) view.pan = false; }
   function busy() {
-    return rolling() || !!view.watch || drops.length > 0 || truckView.moves.length > 0 || !!botTarget.obj || grabs.length > 0 || pops.length > 0 || swarmClouds.size > 0 || view.actors.some(running) || [...view.monsters.values()].some((mv) => running(mv) || mv.lunge > 0)
+    return rolling() || !!view.watch || drops.length > 0 || truckView.moves.length > 0 || !!botTarget.obj || trails.length > 0 || grabs.length > 0 || pops.length > 0 || swarmClouds.size > 0 || view.actors.some(running) || [...view.monsters.values()].some((mv) => running(mv) || mv.lunge > 0)
       || (view.pan && !view.hold && group.visible);
   }
   function tick(_dt, t) {
@@ -1363,6 +1392,7 @@ export function createPlay({
     tickDrops(dt);
     tickTruck(dt);
     tickBotTarget(t);
+    tickTrails(dt);
     tickSwarms(t, dt);
     for (const [, mv] of view.monsters) {
       if (!mv.anim && mv.queue.length) mv.anim = Object.assign(mv.queue.shift(), { t: 0 });
@@ -1602,7 +1632,7 @@ export function createPlay({
     // Game settings changed outside a game: the next game starts fresh with them.
     invalidate: () => { stale = true; },
     state, session, board, roll, reset, setStartMode, saveState, loadState, useEquipment, answerInvestigate, choose, chooseByKey, tick, setActive,
-    boardChanged, setPlayers, toggleSlot, confirmMove, endTurn, unusedCount, slotTotal, rollWhite, busy, holdCamera, showBotTarget, revealCard, nameMonster, craft, sacrifice, setDie, react, strike, scout,
+    boardChanged, setPlayers, toggleSlot, confirmMove, endTurn, unusedCount, slotTotal, rollWhite, busy, holdCamera, showBotTarget, showTrail, revealCard, nameMonster, craft, sacrifice, setDie, react, strike, scout,
     clockMinutes: () => (g() ? rulesClockMinutes(g()) : rulesStartMinutesFor(cfg)),
     startMinutes: () => (g() ? rulesStartMinutes(g()) : rulesStartMinutesFor(cfg)),
     midnight: () => (g() ? isMidnight(g()) : false),

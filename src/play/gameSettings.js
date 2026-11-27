@@ -39,6 +39,14 @@ export function init() {
     { section: 'Markers' },
     { key: 'stopAtMarkers', label: 'Stop on every marker', note: 'Choose a way on at each marker', bool: true },
     { key: 'askInvestigate', label: 'Ask before investigating', note: '"Investigate?" on Investigation spaces', bool: true },
+    { section: 'Following the bots' },
+    { key: 'botSpeed', live: true, label: 'Bot speed', note: 'Watch: each bot waits for the board to finish moving',
+      choice: [['fast', 'Fast'], ['normal', 'Normal'], ['watch', 'Watch']] },
+    { key: 'botReceipts', live: true, label: 'Turn receipts', note: 'A card for each bot turn (dice, route, what it gained); tap one to look', bool: true },
+    { key: 'botFly', live: true, label: 'Gains fly to the team', note: 'Obols, cards and evidence fly from the pawn to its chip', bool: true },
+    { key: 'teamStrip', live: true, label: 'Team strip', note: 'Everyone’s Obols, cards and injuries always on screen', bool: true },
+    { key: 'roundSummary', live: true, label: 'Round summary', note: 'When your turn comes: what the others did since your last', bool: true },
+    { key: 'botTrails', live: true, label: 'Bot trails', note: 'A fading line of where each bot just walked', bool: true },
     { section: 'Monster' },
     { key: 'monster', label: 'Monster', note: 'Mystery: a secret monster you uncover through evidence',
       choice: [['mystery', 'Mystery'], ...Object.entries(MONSTERS).map(([id, d]) => [id, d.label]), ['none', 'None']] },
@@ -139,7 +147,8 @@ export function renderSettings() {
       // Keep the lit slots at least the normal slots.
       if (f.key === 'moveSlots' && gameConfig.litSlots < v) gameConfig.litSlots = v;
       if (f.key === 'litSlots' && gameConfig.moveSlots > v) gameConfig.moveSlots = v;
-      settingsDirty = true;
+      // Display settings (Following the bots) take effect at once; rules settings restart the game.
+      if (f.live) window.dispatchEvent(new Event('watch-settings')); else settingsDirty = true;
       saveConfig();
       renderSettings();
     };

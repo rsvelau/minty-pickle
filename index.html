@@ -291,6 +291,10 @@
     <div id="gameClock" class="game-clock" hidden aria-live="polite"></div>
     <!-- A bot's turn (src/play/bots.js): what it rolled and what it did. -->
     <div id="botBanner" class="bot-banner" hidden aria-live="polite"></div>
+    <!-- Following the bots (src/play/botWatch.js): the team strip, turn receipts, the round summary. -->
+    <div id="teamStrip" class="team-strip" hidden></div>
+    <div id="botReceipts" class="bot-receipts" hidden></div>
+    <div id="roundSummary" class="round-summary" hidden role="status"></div>
     <!-- Play: switch between Quick and Tactical movement mid-game. -->
     <button id="moveModeBtn" class="move-mode" type="button" hidden title="Quick: run on to the next fork or marker. Tactical: choose every step"></button>
     <!-- Play: the dock along the bottom. A status line, then four menus and the
