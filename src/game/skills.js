@@ -26,6 +26,7 @@ import { applyAction } from './rules.js';
 import { RANGE, cellRange, INJURY_TRACKS } from './cards/injuries.js';
 import { doorsAround } from './doors.js';
 import { canRelightAtMemorial, memorialBeside, memorialsLive } from './objectives/verbs.js';
+import { hidingSpotAt, canBoard } from './travel.js';
 
 const USE_PHASES = ['idle', 'slotting', 'choosing', 'asking'];
 const RANGE_WORD = { close: 'Close', mid: 'Mid', long: 'Long', self: 'Self', all: 'All' };
@@ -146,7 +147,34 @@ export function skillStatus(state, board, pl) {
   if (doorsAround(state, board, pl.pos).some((d) => d.status === 'blocked')) out.push(forceDoor(state, board, pl, mine, free));
   // Shadow People: beside a memorial with a candle that went out: relight it for an Obol.
   if (memorialsLive(state) && memorialBeside(board, pl.pos) >= 0 && (pl.carry ?? []).some((c) => c.item === 'candle' && c.lit === false)) out.push(relightSkill(state, board, pl, mine));
+  // The travel Events (travel.js): a Hiding Spot underfoot, the truck within a space.
+  if (!pl.hiding && hidingSpotAt(state, pl.pos)) out.push(simpleSkill(state, board, pl, mine, 'hide', HIDE_CARD, { type: 'hide' }));
+  if (canBoard(state, board, pl)) out.push(simpleSkill(state, board, pl, mine, 'board', TRUCK_CARD, { type: 'board' }));
   return out;
+}
+
+export const HIDE_CARD = {
+  name: 'Hiding Spot',
+  abilities: [{ range: 'self', kind: null, name: 'Hide here', dice: 0, req: null, limit: null,
+    text: 'Out of reach of every new attack for up to 2 rounds (your injuries stay). Your turn ends; on your next, roll to come out or stay hidden. Once in the game.', fx: {} }],
+};
+export const TRUCK_CARD = {
+  name: 'Decrepit Truck',
+  abilities: [{ range: 'close', kind: null, name: 'Get in the truck', dice: 0, req: null, limit: null,
+    text: 'Climb aboard: you go wherever it is driven. Stepping off on foot leaves it.', fx: {} }],
+};
+// A skill with nothing to pay or pick: offered when the rules would take it.
+function simpleSkill(state, board, pl, mine, item, card, act) {
+  const e = { item, ability: 0, name: card.abilities[0].name, card, status: 'not', why: '', action: null, manual: false };
+  const set = (status, why = '') => { e.status = status; e.why = why; return e; };
+  if (pl.dead) return set('not', `${pl.name} is dead`);
+  if (!mine) return set('not', `On ${pl.name}’s turn`);
+  if (!USE_PHASES.includes(state.phase)) return set('not', state.phase === 'moving' ? 'Finish moving first' : 'Not right now');
+  const action = { ...act, seat: state.cur };
+  const r = applyAction(structuredClone(state), board, action);
+  if (!r.ok) return set('not', r.error ? r.error[0].toUpperCase() + r.error.slice(1) : 'Not right now');
+  e.action = action;
+  return set('now');
 }
 
 export const RELIGHT_CARD = {

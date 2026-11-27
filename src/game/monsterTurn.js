@@ -225,7 +225,7 @@ const label = (board, i) => { const { x, y } = board.grid.coords(i); return cell
 
 // The living player nearest the monster by walking (ties: lowest seat).
 // Bumped Shelf (after midnight): a hidden player can't be targeted this round.
-const targetable = (state) => alive(state).filter((pl) => pl.hiddenRound !== state.round);
+const targetable = (state) => alive(state).filter((pl) => pl.hiddenRound !== state.round && !pl.hiding);
 // Who it will come for (and strike up close): not the camouflaged (Viper Hood).
 const chaseable = (state) => targetable(state).filter((pl) => pl.camoRound !== state.round);
 // The Strigoi always targets the Cosor holder (while someone holds it).
@@ -738,7 +738,7 @@ function attackVictim(state, board, monster, card, intent, o, ctx, events) {
   let v = o.victim ?? victims.find((x) => x.target === o.target) ?? victims[0];
   const type = KIND_TO_TYPE[intent.kind] ?? card.evidence.attack;
   const dmg = rollDamage(ctx, o.dmg);
-  const guards = alive(state).filter((pl) => cellRange(board.grid, pl.pos, v.cell) <= RANGE.close);
+  const guards = alive(state).filter((pl) => !pl.hiding && cellRange(board.grid, pl.pos, v.cell) <= RANGE.close);   // a hidden player can't assist
   const left = (pl) => Math.max(0, defenseValue(pl, type) - (pl.defenseUsed ?? 0));
   const best = guards.reduce((a, pl) => (!a || left(pl) > left(a) ? pl : a), null);
   const block = best ? left(best) : 0;

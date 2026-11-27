@@ -84,6 +84,11 @@ const where = (board, i) => { const { x, y } = board.grid.coords(i); return cell
 // Deal `amount` damage of `type` (P/M/S) to a player. Returns the outcome.
 export function applyDamage(state, board, pl, type, amount, { log, source = 'An attack', ignoreLowest = false }, events) {
   if (pl.dead || pl.dying) return 'dead';
+  if (pl.hiding) {                                         // Hiding Spot (travel.js): out of reach
+    log(state, `${source} can't reach ${pl.name}: they're hidden.`);
+    events.push({ type: 'damage', seat: pl.seat, cell: pl.pos, attack: type, amount, defense: amount, source, outcome: 'blocked' });
+    return 'blocked';
+  }
   if (pl.mods?.negateAll) {                                // Purity Seal
     log(state, `${source} hits ${pl.name} for ${amount}, but the Purity Seal negates it.`);
     events.push({ type: 'damage', seat: pl.seat, cell: pl.pos, attack: type, amount, defense: amount, source, outcome: 'blocked' });

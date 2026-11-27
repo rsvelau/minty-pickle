@@ -234,9 +234,12 @@ function makeBot(state, board) {
       case 'eventing': {
         const pe = state.pendingEvent;
         const opts = pe ? choicesFor(pe.id, state, pl) : null;
-        const pick = opts?.find((o) => o.ok);
-        return { type: 'event', choice: pick?.value, seat: state.cur };
+        // (A Hiding Spot is kept for later; a passage or mirror's far end: the first space offered.)
+        const pick = opts?.find((o) => o.ok && o.value !== 'hide') ?? opts?.find((o) => o.ok);
+        return { type: 'event', choice: pick?.value, ...(pick?.pick ? { cell: pick.pick[0] } : {}), seat: state.cur };
       }
+      // The truck's turn (travel.js): the bot parks it straight away.
+      case 'driving': return { type: 'park', seat: state.cur };
       case 'slotting':
       case 'choosing': {
         // Skills first: anything ready that hurts a monster, or heals me.

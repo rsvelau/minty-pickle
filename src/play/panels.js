@@ -11,7 +11,7 @@ import { matchesEvidence } from '../game/mystery.js';
 import { grid, ui } from '../app/config.js';
 import { $ } from '../app/dom.js';
 import { toast } from '../app/files.js';
-import { defenseTotal, dieHTML, endCellPick, play, startCellPick } from './playView.js';
+import { defenseTotal, dieHTML, endCellPick, play, startCellPick, cellPicking } from './playView.js';
 import { __set_camTween, camera, cellToWorld, controls } from '../render/scene.js';
 import { EQUIPMENT_BY_ID } from '../game/cards/equipment.js';
 import { EVENT_CATEGORIES } from '../game/cards/events.js';
@@ -701,7 +701,7 @@ function renderInventoryTab(s, pl, body) {
   body.querySelectorAll('[data-use]').forEach((b) => { b.onclick = () => {
     const [i0, k0] = b.dataset.use.split(':');
     const st = statusByKey(pl).get(b.dataset.use);
-    if (i0 === 'force' || i0 === 'relight') {
+    if (['force', 'relight', 'hide', 'board'].includes(i0)) {
       // Forcing a blocked door (the 6 is already chosen) or relighting at a memorial: nothing to pick.
       const r = st?.action ? play.session.dispatch(st.action) : { ok: false, error: 'not right now' };
       if (r.ok) closeInventory(); else { b.textContent = r.error; }
@@ -1040,7 +1040,7 @@ export function renderEventChoice() {
   const st = play.session.state;
   const pe = st?.pendingEvent;
   // Wait for the drawn card to be read (its card pops up first).
-  const show = ui.tool === 'play' && play.state.phase === 'eventing' && !!pe && $('#cardPop').hidden;
+  const show = ui.tool === 'play' && play.state.phase === 'eventing' && !!pe && $('#cardPop').hidden && !cellPicking();
   $('#eventChoice').hidden = !show;
   if (!show) return;
   const card = eventCard(pe.id);
@@ -1051,7 +1051,21 @@ export function renderEventChoice() {
   const opts = choicesFor(pe.id, st, pl) ?? [];
   const host = $('#evActions');
   host.innerHTML = opts.map((o) => `<button type="button" data-ev="${o.value}" ${o.ok ? '' : 'disabled title="You can’t pay for this"'}>${esc(o.label)}</button>`).join('');
-  host.querySelectorAll('[data-ev]').forEach((b) => { b.onclick = () => play.session.dispatch({ type: 'event', choice: b.dataset.ev, seat: st.cur }); });
+  host.querySelectorAll('[data-ev]').forEach((b) => { b.onclick = () => {
+    const o = opts.find((x) => x.value === b.dataset.ev);
+    // Hidden Passage, Peculiar Mirror: tap the space for the far end.
+    if (o?.pick) {
+      $('#eventChoice').hidden = true;
+      startCellPick({
+        cells: o.pick,
+        label: pe.id === 'hidden-passage' ? 'Tap an Investigation space for the passage’s other end' : 'Tap an Investigation space for the twin mirror',
+        onPick: (cell) => { endCellPick(); play.session.dispatch({ type: 'event', choice: o.value, cell, seat: st.cur }); },
+        onCancel: () => renderEventChoice(),
+      });
+      return;
+    }
+    play.session.dispatch({ type: 'event', choice: b.dataset.ev, seat: st.cur });
+  }; });
 }
 
 // Someone has fallen and the Sacrificial Fetish could save them: its carrier

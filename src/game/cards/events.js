@@ -61,7 +61,7 @@ export const EVENT_CARDS = [
   E('flickering-lights', 'Flickering Lights', 'hazard', '💥 [P] ignores lowest defense 🎲 within R[4].', { lasting: true }),
   E('message-cypher', 'Message Cypher', 'opportunity', 'Can advance ⏳⏳ to reveal one evidence card.', { afterMidnight: 'Can spend two of your rolled 🎲 to trigger one of the monster’s weakness effects.' }),
   E('wooden-boards', 'Wooden Boards', 'opportunity', 'Can spend ⏳ to investigate this space again and every other space in this building this turn, ignoring Attacks (their Obols are still collected).', { afterMidnight: 'Can end your turn now to board up the doors: the monster can’t use any door within 3 spaces of here this round.' }),
-  E('hidden-passage', 'Hidden Passage', 'event', 'A hole opens in the floor here, and another at a chosen spot on the map. For the rest of the game, travelling through costs 5 movement (not possible with less).', { lasting: true }),
+  E('hidden-passage', 'Hidden Passage', 'event', 'A hole opens in the floor here, and another on an Investigation space within 10 spaces that you choose. For the rest of the game, anyone can travel through for 5 movement (not possible with less). Monsters can’t.', { lasting: true }),
   E('bright-moon', 'Bright Moon', 'global', 'Mental and Physical damage rolls −1 (easier to defend). If the monster is identified as a Beast, Physical damage rolls +2 instead.', { lasting: true }),
   E('strong-winds', 'Strong Winds', 'global', 'Each turn, a player starting outside a building flips 🪙: HEADS, Favorable Wind (double your slotted movement); TAILS, Unfavorable Wind (lose use of one movement slot).', { lasting: true }),
   // Page 3
@@ -81,11 +81,11 @@ export const EVENT_CARDS = [
   E('lockdown', 'Lockdown', 'event', 'Every door becomes a locked door until the discovering player’s next turn. If any player touches a Key space (even one already picked up), every door on the map becomes an unlocked door for good, locked and one-way doors included.'),
   E('chalk-scrawled-narrative', 'Chalk-Scrawled Narrative', 'cursedObject', 'Can reveal all evidence cards, but the game skips straight to the end of this player’s turn on the last turn before midnight.', { afterMidnight: 'Can trigger two of the monster’s weakness effects, but this player skips their next turn.' }),
   E('lightning-storm', 'Lightning Storm', 'global', 'If you end your turn outside, flip a coin. On tails, take 💥 [P].', { lasting: true }),
-  E('decrepit-truck', 'Decrepit Truck', 'opportunity', 'An old truck appears on the road space nearest this player. Walk to it to start it and drive up to 25 spaces (road and bridge spaces only). A monster driven into takes 🎲🎲🎲 (added) damage, and the drive stops. 1️⃣', { lasting: true }),
+  E('decrepit-truck', 'Decrepit Truck', 'opportunity', 'An old truck appears on the road space nearest this player. Anyone within 1 space can get in on their turn. After everyone’s turn, before the monster’s, you drive it (if you’re aboard) up to 25 road and bridge spaces, one at a time; stop whenever you like. A monster driven into takes 🎲🎲🎲 (added, through its toughness) and is Stunned (it loses its queued actions), and the drive stops. When the drive ends, the truck is wrecked. 1️⃣', { lasting: true }),
   E('consecrated-ash', 'Consecrated Ash', 'hazard', 'Incorporeal and semi-corporeal monsters are stunned for ⏳ when crossing this space. Players reduce spiritual injuries by 1 tier when crossing this space. 1️⃣', { lasting: true }),
-  E('hiding-spot', 'Hiding Spot', 'opportunity', 'Can remain immobile and become immune from all interactions for up to ⏳⏳. Cannot assist teammates.'),
+  E('hiding-spot', 'Hiding Spot', 'opportunity', 'A hiding spot here. Once in the game, anyone on it (you now, or anyone later) can hide: immobile and immune to new attacks for up to ⏳⏳ (injuries stay). Cannot assist teammates. Roll to come out.'),
   // Page 5
-  E('peculiar-mirror', 'Peculiar Mirror', 'cursedObject', 'A blue-glowing mirror appears. Link two spots: travelling between them costs no movement (other effects may still apply). Flip 🪙: if tails, lose it.', { lasting: true }),
+  E('peculiar-mirror', 'Peculiar Mirror', 'cursedObject', 'A blue-glowing mirror appears here, its twin on any Investigation space you choose. Anyone can travel between them for no movement (other effects may still apply). Each trip, flip 🪙: if tails, lose an Obol.', { lasting: true }),
 ];
 
 // Mindsets (page 5): a lasting trait for an investigator.

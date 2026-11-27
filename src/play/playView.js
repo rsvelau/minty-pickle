@@ -187,7 +187,11 @@ export function renderPlay() {
   // The dock's big button does what comes next: Roll, then Move (the dice
   // slotted), then End turn; the tray keeps its own buttons too.
   const hud = $('#hudRoll'), tm = $('#trayMove'), te = $('#trayEnd');
-  const next = !roll.disabled ? ['roll', 'Roll']
+  const ss = play.session?.state;
+  const hidingNow = s.phase === 'idle' && !!ss?.players?.[ss.cur]?.hiding;
+  const next = s.phase === 'driving' ? ['park', 'Park the truck']
+    : hidingNow ? ['roll', 'Come out & roll']
+    : !roll.disabled ? ['roll', 'Roll']
     : !tm.hidden && !tm.disabled ? ['move', tm.textContent]
       : ['slotting', 'choosing'].includes(s.phase) && !te.hidden && !te.disabled ? ['end', 'End turn'] : ['roll', 'Roll'];
   hud.dataset.act = next[0];
@@ -195,7 +199,8 @@ export function renderPlay() {
   hud.disabled = next[0] === 'roll' && roll.disabled;
   $('#hudStatus').innerHTML = chip + ({
     nostart: 'Paint a Start space first.',
-    idle: `On <b>${here}</b>${s.pos >= 0 ? ` · light ${Math.round(lightLevels[s.pos] * 100)}%` : ''}. Roll.` +
+    driving: `🛻 Driving the truck · <b>${ss?.drive?.steps ?? 0}</b> spaces of road left · tap an arrow, or Park`,
+    idle: hidingNow ? `Hiding at <b>${here}</b>: out of reach. Roll to come out, or 🫥 Stay hidden.` : `On <b>${here}</b>${s.pos >= 0 ? ` · light ${Math.round(lightLevels[s.pos] * 100)}%` : ''}. Roll.` +
       (play.anyRunning() ? (s.fast ? ' · ⏩' : ' · <span class="muted">hold board to fast-forward</span>') : ''),
     rolling: 'Rolling…',
     slotting: s.pool.some((d) => d.spent) ? 'Slot more, adjust defense, or end turn' : `Slot dice · move <b>${play.slotTotal()}</b>`,
@@ -210,11 +215,12 @@ export function renderPlay() {
   }[s.phase] ?? '');
   renderChoices();
   renderCrateBtn();
+  $('#stayBtn').hidden = !(ui.tool === 'play' && hidingNow);
 }
 export function renderChoices() {
   const host = $('#playChoices');
   const s = play.state;
-  const opts = ui.tool === 'play' && s.phase === 'choosing' ? s.options : [];
+  const opts = ui.tool === 'play' && ['choosing', 'driving'].includes(s.phase) ? s.options : [];
   const key = opts.map((o) => o.i).join(',');
   if (host.dataset.key === key) return;
   host.dataset.key = key;
@@ -421,14 +427,15 @@ export function syncPowerOut() {
 // --- Picking a space on the board (Distract) ------------------------------------------
 // The board lights the spaces that can be chosen; a tap on one calls onPick.
 export let cellPick = null; // { cells: Set, onPick(cell) }
-export function startCellPick({ cells, label, onPick }) {
+export function startCellPick({ cells, label, onPick, onCancel = null }) {
   cellPick = { cells: new Set(cells), onPick };
   play.showPick(cells);
   $('#pickText').textContent = label;
   $('#pickBar').hidden = false;
-  $('#pickCancel').onclick = endCellPick;
+  $('#pickCancel').onclick = () => { endCellPick(); onCancel?.(); };
   renderTray();
 }
+export const cellPicking = () => !!cellPick;
 export function endCellPick() {
   cellPick = null;
   play.showPick(null);

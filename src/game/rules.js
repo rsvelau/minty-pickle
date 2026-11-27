@@ -26,6 +26,7 @@ import { onSiteEnter, crossingBlocked, suffocate, relightHere, memorialPass, rel
 import { siteOf, siteLabel } from '../core/sites.js';
 import { craft } from './obolcraft.js';
 import { nightTurn, crateAt, takeFromCrate } from './carePackage.js';
+import { travelOptions, afterTravel, isTravelEnd, hide, comeOut, board_ as boardTruck, leftTruck, truckDue, driveOptions, driveStep, wreckTruck, TRUCK_DRIVE } from './travel.js';
 import { refreshThreat, onPlayerEnters, setupVictims } from './monsterTurn.js';
 import { setupMystery, evidenceObol, revealEvidence, attackObol, nameMonster, revealMonster } from './mystery.js';
 import { setupDecks, drawEquipment, drawCard, eventCard, isMindset } from './decks.js';
@@ -312,7 +313,7 @@ function scout(state, action, events) {
 // equipment and Obolcraft.
 const STOPPED = ['slotting', 'choosing', 'asking'];
 // Every action: { type, seat? }. Returns { ok, error?, events }.
-export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective', 'event', 'setting', 'sacrifice', 'setDie', 'react', 'strike', 'scout', 'drop', 'force', 'relight', 'crate'];
+export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective', 'event', 'setting', 'sacrifice', 'setDie', 'react', 'strike', 'scout', 'drop', 'force', 'relight', 'crate', 'hide', 'stay', 'board', 'drive', 'park'];
 
 export function applyAction(state, board, action) {
   // Doors the game changed (nailed, breached) count for every move made while
@@ -347,6 +348,7 @@ function applyActionNow(state, board, action) {
     case 'roll': {
       if (state.phase !== 'idle') return fail('cannot roll now');
       const pl = curPlayer(state);
+      if (pl.hiding) comeOut(state, pl, { log }, events);   // rolling brings a hidden player out
       const lim = turnLimits(state, board, pl);
       pl.defense = [];                               // last turn's defense is spent
       // ...and equipment's "this turn" effects (a teammate's Rally this round
@@ -577,6 +579,46 @@ function applyActionNow(state, board, action) {
       strikeMonster(state, board, m, dmg, 'holy', { log, state, randInt }, events);
       events.push({ type: 'cosorStrike', seat: state.cur, id: m.id, amount: dmg });
       restop(state, board, events);
+      break;
+    }
+    case 'hide': {
+      // Hide on a Hiding Spot (travel.js): the turn ends there.
+      if (!['idle', ...STOPPED].includes(state.phase)) return fail('finish moving first');
+      const err = hide(state, board, curPlayer(state), { log }, events);
+      if (err) return fail(err);
+      syncDefense(state);
+      state.steps = 0;
+      state.options = [];
+      endTurn(state, board, events);
+      break;
+    }
+    case 'stay': {
+      // Stay hidden: the turn passes.
+      if (state.phase !== 'idle' || !curPlayer(state).hiding) return fail('only while hiding, before rolling');
+      log(state, `${who(state)} stays hidden.`);
+      endTurn(state, board, events);
+      break;
+    }
+    case 'board': {
+      // Get into the Decrepit Truck (within a space of it).
+      if (!['idle', ...STOPPED].includes(state.phase)) return fail('finish moving first');
+      const err = boardTruck(state, board, curPlayer(state), { log }, events);
+      if (err) return fail(err);
+      if (state.phase !== 'idle') restop(state, board, events);
+      break;
+    }
+    case 'drive': {
+      if (state.phase !== 'driving') return fail('the truck isn’t being driven');
+      const r = driveStep(state, board, action.cell, { log, randInt, state }, events);
+      if (typeof r === 'string') return fail(r);
+      if (r || state.phase === 'over') { if (state.phase !== 'over') endDrive(state, board, events); break; }
+      state.options = driveOptions(state, board);
+      if (!state.options.length) endDrive(state, board, events);
+      break;
+    }
+    case 'park': {
+      if (state.phase !== 'driving') return fail('the truck isn’t being driven');
+      endDrive(state, board, events);
       break;
     }
     case 'crate': {
@@ -836,9 +878,11 @@ export function nextOptions(state, board, { back = false } = {}) {
     if (cost !== Infinity && cost > state.steps) continue; // a Sinkhole needs 5 moves left
     all.push({ i, dx, dy, name });
   }
-  if (back) return all;
+  // Hidden Passages and Peculiar Mirrors: the way through to the other end (travel.js).
+  const through = travelOptions(state, pl);
+  if (back) return [...all, ...through];
   const forward = all.filter((o) => o.i !== pl.prev);
-  return forward.length ? forward : all;
+  return [...(forward.length ? forward : all), ...through.filter((o) => o.i !== pl.prev || !forward.length)];
 }
 
 // Movement dice slotted but not yet moved: spend them and say what they add.
@@ -888,6 +932,8 @@ function enter(state, board, i, events) {
     events.push({ type: 'crateHere', seat: state.cur, cell: i });
     return;
   }
+  // The end of a Hidden Passage or a Peculiar Mirror: stop, to go through or not.
+  if (isTravelEnd(state, i)) { state.stopAt = i; state.stopReason = state.travel.passages.some((l) => l.a === i || l.b === i) ? 'Hidden Passage' : 'Peculiar Mirror'; }
   const m = board.grid.cells[i].marker;
   if (!m || !MARKERS[m]) return;
   if (m === 'objective' && !objectiveLive(state, board.grid, i)) return; // the monster isn't known yet, or not its site
@@ -1076,10 +1122,12 @@ function takeStep(state, board, o, events) {
   const from = pl.pos;
   pl.prev = from;
   pl.pos = o.i;
-  const cost = playerStepCost(state, board, o.i, state.cur);
+  const cost = o.travel ? o.cost : playerStepCost(state, board, o.i, state.cur);
   state.steps = cost === Infinity ? 0 : state.steps - cost;
   if (cost === Infinity) log(state, `${who(state)} is caught in the brambles: that's all the movement for this turn.`);
-  events.push({ type: 'step', seat: state.cur, from, to: o.i });
+  events.push({ type: 'step', seat: state.cur, from, to: o.i, ...(o.travel ? { teleport: true } : {}) });
+  if (o.travel) afterTravel(state, board, pl, o, { log, randInt, state }, events);
+  leftTruck(state, pl);   // walking off the truck's space: no longer aboard
   playerEnters(state, pl, o.i, eventCtx(state));
   enter(state, board, o.i, events);
   onSiteEnter(state, board, pl, o.i, { state, log, randInt }, events);
@@ -1101,6 +1149,8 @@ function nextPlayer(state, board, events) {
   const gone = (pl) => pl.dead || pl.escaped;
   for (let k = 0; k < state.players.length; k++) {
     state.cur = (state.cur + 1) % state.players.length;
+    // Everyone has had their turn: the truck's turn (travel.js), before the monster's.
+    if (state.cur === 0 && truckDue(state)) { startDrive(state, board, events); return; }
     if (state.cur === 0) endRound(state, board, events);
     if (state.phase === 'over') return;          // Lost in the night
     if (state.players.every(gone)) break;
@@ -1128,7 +1178,30 @@ function nextPlayer(state, board, events) {
   }
   state.phase = 'idle';
   if (state.players.length > 1) log(state, `${who(state)}'s turn.`);
+  // Hiding (travel.js): out after up to two rounds; until then, roll to come out or stay hidden.
+  const up = curPlayer(state);
+  if (up.hiding && state.round > up.hiding.until) comeOut(state, up, { log }, events, ': the time is up');
+  else if (up.hiding) log(state, `${who(state)} is hiding: roll to come out, or stay hidden.`);
   events.push({ type: 'turn', cur: state.cur });
+}
+// The Decrepit Truck's turn: its finder drives it (phase 'driving').
+function startDrive(state, board, events) {
+  const tr = state.travel.truck;
+  tr.droveRound = state.round;
+  state.cur = tr.owner;
+  state.drive = { steps: TRUCK_DRIVE };
+  state.phase = 'driving';
+  state.options = driveOptions(state, board);
+  state.stopAt = -1;
+  log(state, `The truck's turn: ${who(state)} drives (up to ${TRUCK_DRIVE} spaces of road; park to stop).`);
+  events.push({ type: 'turn', cur: state.cur, truck: true });
+}
+// The drive is over: the truck is wrecked, then the round goes on (the monster's turn).
+function endDrive(state, board, events) {
+  wreckTruck(state, board, { log }, events);
+  state.options = [];
+  state.cur = state.players.length - 1;
+  nextPlayer(state, board, events);
 }
 
 // Defense is live: whatever sits in the Defense slots protects right now.

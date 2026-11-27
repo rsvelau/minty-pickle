@@ -506,7 +506,8 @@ export function refreshPropsAndWalls() {
   for (const [k, type1] of grid.allEdges()) {
     const look = anyDoor(type1) ? doorLooks.get(k) : null;
     // Blocked: boarded over with planks, like a condemned door.
-    const type0 = look === 'blocked' ? 'boardedDoor' : look === 'breached' ? 'breachedDoor' : type1;
+    // Lockdown: drawn as a locked door; a Key that broke it: every door drawn plain.
+    const type0 = look === 'blocked' ? 'boardedDoor' : look === 'breached' ? 'breachedDoor' : look === 'locked' ? 'lockedDoor' : look === 'open' && (type1 === 'lockedDoor' || type1.startsWith('oneWayDoor')) ? 'door' : type1;
     const unlockedDoor = unlockedNow.has(k) && (type0 === 'lockedDoor' || type0.startsWith('oneWayDoor'));
     const type = unlockedDoor ? 'door' : type0;
     const { o, x, y } = parseEdgeKey(k);

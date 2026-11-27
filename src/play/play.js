@@ -31,6 +31,7 @@ export {
 } from '../game/rules.js';
 import { MONSTERS, monsterDef } from '../game/monsters.js';
 import { DOOR_HP } from '../game/monsterTurn.js';
+import { makeHole, makeMirror, makeHideSpot, setHiding, makeTruck } from '../render/travelProps.js';
 export { MONSTERS, monsterDef };
 
 // The four players' looks: jacket colour (also the name tag), hair, extras.
@@ -871,9 +872,66 @@ export function createPlay({
     }
   }
 
+  // The travel Events (game/travel.js) on the board: passage holes, mirrors,
+  // hiding spots and the truck (which rolls from space to space as it's driven).
+  const travelTokens = new Map();     // key -> group
+  const truckView = { obj: null, moves: [], t: 0 };
+  function syncTravel() {
+    const t = g()?.travel;
+    const want = new Map();
+    for (const l of t?.passages ?? []) for (const c of [l.a, l.b]) want.set(`hole:${c}`, { c, make: makeHole });
+    for (const l of t?.mirrors ?? []) for (const c of [l.a, l.b]) want.set(`mirror:${c}`, { c, make: makeMirror, face: c === l.a ? l.b : l.a });
+    for (const h of t?.hiding ?? []) {
+      const hider = g().players.find((p) => p.hiding && p.pos === h.cell);
+      if (!h.used || hider) want.set(`hide:${h.cell}`, { c: h.cell, make: makeHideSpot, hiding: !!hider });
+    }
+    for (const [k, obj] of travelTokens) if (!want.has(k)) { group.remove(obj); travelTokens.delete(k); }
+    for (const [k, w] of want) {
+      if (!inBoard(w.c)) continue;
+      let obj = travelTokens.get(k);
+      if (!obj) {
+        obj = w.make();
+        obj.traverse((o) => { for (const mt of [].concat(o.material ?? [])) terrainify(mt, { bridge: true }); });
+        const at = centreOf(w.c);
+        obj.position.set(at.x, at.y, at.z);
+        if (w.face !== undefined) { const p = centreOf(w.face); obj.rotation.y = Math.atan2(p.x - at.x, p.z - at.z); }
+        group.add(obj);
+        travelTokens.set(k, obj);
+      }
+      if (k.startsWith('hide:')) setHiding(obj, w.hiding);
+    }
+    // The truck.
+    const tr = t?.truck;
+    if (!tr) { if (truckView.obj) { group.remove(truckView.obj); truckView.obj = null; truckView.moves = []; } return; }
+    if (!truckView.obj) {
+      truckView.obj = makeTruck();
+      truckView.obj.traverse((o) => { for (const mt of [].concat(o.material ?? [])) terrainify(mt, { bridge: true }); });
+      group.add(truckView.obj);
+      const at = centreOf(tr.cell);
+      truckView.obj.position.set(at.x, at.y, at.z);
+      truckView.obj.rotation.y = roadHeading(tr.cell);
+    }
+  }
+  // Which way a parked truck faces: along the road it's on.
+  function roadHeading(i) {
+    const { x, y } = grid.coords(i);
+    const road = (dx, dy) => grid.inBounds(x + dx, y + dy) && (grid.cells[grid.index(x + dx, y + dy)].sub === 'street' || grid.cells[grid.index(x + dx, y + dy)].bridge);
+    return road(0, 1) || road(0, -1) ? 0 : Math.PI / 2;
+  }
+  function tickTruck(dt) {
+    const mv = truckView.moves[0];
+    if (!mv || !truckView.obj) return;
+    truckView.t = Math.min(1, truckView.t + dt / 0.28);
+    const a = centreOf(mv.from), b = centreOf(mv.to);
+    truckView.obj.position.lerpVectors(a, b, truckView.t);
+    truckView.obj.rotation.y = mv.heading;
+    if (truckView.t >= 1) { truckView.moves.shift(); truckView.t = 0; }
+  }
+
   function refreshDiscoveries() {
     syncHazards();
     syncDropped();
+    syncTravel();
     if (!drops.length) syncCrates();
     syncWards();
     const my = g()?.mystery;
@@ -918,9 +976,18 @@ export function createPlay({
           break;
         case 'step': {
           const a = view.actors[e.seat];
-          if (a) a.queue.push({ from: e.from, to: e.to, fx: null });
+          if (a) a.queue.push({ from: e.from, to: e.to, fx: null, jump: !!e.teleport });
           break;
         }
+        case 'travel':
+        case 'hide':
+        case 'truckBoard':
+          syncTravel();
+          break;
+        case 'truck':
+          if (e.gone) syncTravel();
+          else { syncTravel(); if (e.from !== undefined && truckView.obj) truckView.moves.push({ from: e.from, to: e.cell, heading: e.heading }); }
+          break;
         case 'collect':
           attachToArrival(view.actors[e.seat], e.cell, () => {
             view.shownUsed.add(e.cell);
@@ -1102,6 +1169,9 @@ export function createPlay({
         default:
       }
     }
+    // A Lockdown lifting, or a Key breaking it: redraw the doors.
+    const lockSig = `${!!g()?.lockdown}|${!!g()?.allDoorsOpen}`;
+    if (lockSig !== view.lockSig) { if (view.lockSig !== undefined) onUsed(); view.lockSig = lockSig; }
     refreshDiscoveries();
     syncSwarms();
     applyVisibility();
@@ -1122,7 +1192,8 @@ export function createPlay({
   function confirmMove() { if (!rolling()) act({ type: 'move' }); }
   function endTurn() { if (!rolling()) act({ type: 'end' }); }
   function answerInvestigate(yes) { act({ type: 'investigate', yes: !!yes }); }
-  function choose(i) { return g()?.phase === 'choosing' && act({ type: 'choose', cell: i }); }
+  // At a fork: that way. Driving the truck (travel.js): one space along the road.
+  function choose(i) { return g()?.phase === 'choosing' ? act({ type: 'choose', cell: i }) : g()?.phase === 'driving' && act({ type: 'drive', cell: i }); }
   function craft(recipe, pay, target) { return act({ type: 'craft', recipe, pay, target }); }
   // Equipment: returns { ok, error } so the sheet can say why not.
   function useEquipment(use) {
@@ -1221,7 +1292,7 @@ export function createPlay({
   // The game-start camera move (app/intro.js) holds the follow camera off.
   function holdCamera(on) { view.hold = !!on; if (!on) view.pan = false; }
   function busy() {
-    return rolling() || !!view.watch || drops.length > 0 || grabs.length > 0 || pops.length > 0 || swarmClouds.size > 0 || view.actors.some(running) || [...view.monsters.values()].some((mv) => running(mv) || mv.lunge > 0)
+    return rolling() || !!view.watch || drops.length > 0 || truckView.moves.length > 0 || grabs.length > 0 || pops.length > 0 || swarmClouds.size > 0 || view.actors.some(running) || [...view.monsters.values()].some((mv) => running(mv) || mv.lunge > 0)
       || (view.pan && !view.hold && group.visible);
   }
   function tick(_dt, t) {
@@ -1246,7 +1317,7 @@ export function createPlay({
       if (!a.anim && a.queue.length) a.anim = { ...a.queue.shift(), t: 0 };
       const an = a.anim;
       if (!an) return;
-      an.t = Math.min(1, an.t + dt / stepTime);
+      an.t = an.jump ? 1 : Math.min(1, an.t + dt / stepTime);   // through a passage or mirror: there at once
       a.at = standAt(k, an.from).lerp(standAt(k, an.to), an.t); // steady jog, no stop between cells
       figures[k].fig.userData.phase += (METERS_PER_CELL * dt / stepTime) * STRIDES_PER_M * Math.PI * 2;
       const da = grid.coords(an.from), db = grid.coords(an.to);
@@ -1265,6 +1336,7 @@ export function createPlay({
     tickDarkness(t, s);
     tickNpcs(t, s);
     tickDrops(dt);
+    tickTruck(dt);
     tickSwarms(t, dt);
     for (const [, mv] of view.monsters) {
       if (!mv.anim && mv.queue.length) mv.anim = Object.assign(mv.queue.shift(), { t: 0 });
@@ -1456,7 +1528,7 @@ export function createPlay({
     get white() { return cp()?.white ?? 0; },
     get steps() { return g()?.steps ?? 0; },
     get roll() { return g()?.roll ?? 0; },
-    get options() { return g()?.phase === 'choosing' ? g().options : []; },
+    get options() { return ['choosing', 'driving'].includes(g()?.phase) ? g().options : []; },
     get stopReason() { return g()?.stopReason ?? ''; },
     get pool() { return g()?.pool ?? []; },
     get slots() { return g()?.slots ?? []; },
@@ -1518,7 +1590,14 @@ export function createPlay({
     },
     showPick,
     // Doors the game changed: edge key -> 'blocked' | 'breached' | 'open'.
-    doorLooks: () => new Map(Object.entries(g()?.doors ?? {})),
+    // Doors the game changed (nailed, breached), and during a Lockdown every
+    // other door drawn locked (then, after a Key breaks it, every door open).
+    doorLooks: () => {
+      const s = g();
+      const looks = new Map(Object.entries(s?.doors ?? {}));
+      if (s?.lockdown || s?.allDoorsOpen) for (const [k, t] of grid.allEdges()) if (/door/i.test(t) && t !== 'boardedDoor' && !looks.has(k)) looks.set(k, s.lockdown ? 'locked' : 'open');
+      return looks;
+    },
     // Doors a monster has been bashing: edge key -> share of health gone (0..1).
     doorDamage: () => {
       const s = g();

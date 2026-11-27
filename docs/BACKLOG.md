@@ -36,15 +36,20 @@ Physical injuries ignored for the rest of the turn), Sacrifice (when someone wou
 the Fetish's carrier to spend it, or not) and Lunge (always on: Close damage skills reach Mid) are played.
 Toss and Drink used mid-turn give back the slots and dice the injuries took (a lost die is rolled at once).
 
-## 5. Travel (events)  ·  needs picking spots on the map and new ways to move
-- [ ] **Hidden Passage** — A hole opens in the floor here, and another at a chosen spot on the map. For the rest of the game, travelling through costs 5 movement (not possible with less).
-- [ ] **Peculiar Mirror** — A blue-glowing mirror appears. Link two spots: travelling between them costs no movement (other effects may still apply). Flip 🪙: if tails, lose it.
-- [ ] **Decrepit Truck** — An old truck appears on the road space nearest this player. Walk to it to start it and drive up to 25 spaces (road and bridge spaces only). A monster driven into takes 🎲🎲🎲 (added) damage, and the drive stops. 1️⃣
-- [ ] **Hiding Spot** — Can remain immobile and become immune from all interactions for up to ⏳⏳. Cannot assist teammates.
-- Needs: 3D props (holes, mirror, truck); a "travel" option at forks; driving along roads.
-- Questions: Hidden Passage: who chooses the far end, and how far away can it be? Mirror: "lose it":
-  the mirror disappears, or you lose something else? Truck: can other players ride along? Is it
-  reusable (1️⃣ says once)?
+## ~~5. Travel (events)~~ — done (2026-11-27)
+Played in `src/game/travel.js`, drawn by `src/render/travelProps.js`:
+- **Hidden Passage**: the finder taps an Investigation space within 10 for the far end (two holes in the
+  floor); anyone standing on either end can go through for 5 movement (not with less); monsters can't.
+- **Peculiar Mirror**: the twin goes on any Investigation space the finder taps; anyone can step through
+  for free, then flips a coin: tails, they lose an Obol (the kind they hold most of).
+- **Hiding Spot**: left where it was found; once in the game, anyone on it (the finder at once, or anyone
+  later, from Skills) hides: their turn ends, they're immune to new attacks (injuries stay) and can't defend
+  the Adze's victims, for up to 2 rounds; on their turn, roll to come out or Stay hidden.
+- **Decrepit Truck**: on the road space nearest the finder; anyone within a space gets in from Skills; after
+  the players' turns and before the monster's, if the finder is aboard, they drive it up to 25 road / bridge
+  spaces one at a time (arrows, Park to stop), riders with it; into the monster: 🎲🎲🎲 through its toughness
+  and a Stun (its queued actions are lost); when the drive ends the truck is wrecked. A rusty brown pickup.
+- Lockdown's locked doors are now drawn locked (and every door drawn plain after a Key breaks it).
 
 ## ~~6. Mindset~~ — done (2026-11-24)
 Curious: after an Event drawn while investigating is resolved, the player is asked to keep investigating
@@ -113,5 +118,5 @@ over sites, `src/game/objectives/scripts.js`).
 
 ### Suggested order
 ~~1~~ → ~~2~~ → ~~3~~ → ~~4~~ · ~~9 and 8~~ (Perch and the candle wait for the objective rework) ·
-~~6~~ · 5 (new movement) · 7 and 10 together, one monster at a time.
+~~6~~ · ~~5~~ · 7 and 10 together, one monster at a time.
 

@@ -293,6 +293,15 @@ stand there). An empty crate is gone.
 **Dropped on death**: an investigator who dies drops what they carried (the White Lady's relics, the Cosor, the
 heirloom, holy water, a candle...) where they fell, drawn on the ground; anyone stepping there picks it up.
 
+**Travel events** (`src/game/travel.js`): **Hidden Passage** (the finder taps an Investigation space within 10
+for the far end; anyone on either hole can go through for 5 movement, offered as a way at the stop; monsters
+can't), **Peculiar Mirror** (the twin on any Investigation space; anyone steps through free, then flips a
+coin: tails, an Obol is lost), **Hiding Spot** (once in the game, anyone on it hides from Skills: the turn ends,
+immune to new attacks for up to 2 rounds; roll to come out, or 🫥 Stay hidden) and **Decrepit Truck** (on the
+nearest road; get in from Skills within a space; after everyone's turn, before the monster's, its finder drives
+it up to 25 spaces of road with the arrows, riders aboard, and Parks to stop; hitting the monster deals 🎲🎲🎲
+through its toughness and Stuns it; the truck is wrecked when the drive ends). Lockdown's doors are drawn locked.
+
 **Skills don't offer pointless healing**: a heal with no matching injury (yours, or a teammate's in range) is
 "Not now: No Physical injury to heal".
 

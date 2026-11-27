@@ -19,8 +19,8 @@
 //   flags     this round's effects: negateAttackCards, avoidAttacks
 //
 // 💥 [P]/[M]/[S] damage on a card is one die of that type, defended as usual.
-// Cards whose travel rules aren't built yet (Hidden Passage, Peculiar Mirror,
-// Decrepit Truck, Hiding Spot) are shown and logged to be played at the table.
+// The travel cards (Hidden Passage, Peculiar Mirror, Decrepit Truck, Hiding
+// Spot) are played in travel.js.
 import { EVENT_BY_ID } from './cards/events.js';
 import { MONSTER_BY_ID } from './cards/monsters.js';
 import { EQUIPMENT_BY_ID } from './cards/equipment.js';
@@ -29,6 +29,7 @@ import { triggerWeakness } from './equipmentPlay.js';
 import { exhaust } from './monsterTurn.js';
 import { cellRange } from './cards/injuries.js';
 import { blockDoor } from './doors.js';
+import { farEndCells, placeLink, placeHidingSpot, hide, placeTruck } from './travel.js';
 
 export const PORTRAIT_CURSE = 'portrait-curse'; // shuffled in by Haunted Portrait
 
@@ -44,7 +45,7 @@ const CHOICES = {
 const OPTIONAL = new Set(['enigmatic-hourglass', 'spirit-board', 'ominous-vhs', 'tarot-cards', 'haunted-portrait',
   'chalk-scrawled-narrative', 'message-cypher', 'wooden-boards', 'rusty-bear-trap']);
 // Not built yet: played at the table.
-export const TABLE_ONLY = new Set(['hidden-passage', 'peculiar-mirror', 'decrepit-truck', 'hiding-spot']);
+export const TABLE_ONLY = new Set();
 // Hazards placed where the card was found (found = affect players and monsters).
 const FOUND_HAZARDS = new Set(['flooded-out', 'flickering-lights', 'sinkhole', 'overgrown-brambles', 'consecrated-ash']);
 // Traps laid by the player (only affect monsters).
@@ -58,6 +59,11 @@ const AFTER_CHOICES = {
 const freeDice = (state) => state.pool.map((d, n) => ({ d, n })).filter(({ d, n }) => !d.spent && !state.slots.includes(n) && !state.defSlots.includes(n));
 
 export function choicesFor(id, state, pl) {
+  // Hidden Passage, Peculiar Mirror: pick where the far end goes (an Investigation space).
+  if ((id === 'hidden-passage' || id === 'peculiar-mirror') && state.pendingEvent?.cells) {
+    return [{ value: 'place', label: id === 'hidden-passage' ? 'Choose where it comes out (an Investigation space within 10)' : 'Choose where its twin stands (any Investigation space)', ok: true, pick: state.pendingEvent.cells }];
+  }
+  if (id === 'hiding-spot') return [{ value: 'hide', label: 'Hide here now (up to 2 rounds)', ok: true }, { value: 'later', label: 'Leave it for later (anyone can use it, once)', ok: true }];
   const late = pastMidnight(state);
   if (late && AFTER_CHOICES[id]) return AFTER_CHOICES[id].map(([value, label]) => ({ value, label, ok: true }));
   if (late && id === 'message-cypher') return [{ value: 'use', label: 'Spend two rolled dice: trigger a weakness', ok: freeDice(state).length >= 2 && state.monsters.length > 0 }, { value: 'skip', label: 'Leave it', ok: true }];
@@ -99,6 +105,15 @@ export function resolveEvent(state, board, id, cell, ctx, events) {
   const card = EVENT_BY_ID[id];
   if (!card || card.category === 'global') return;
   if (TABLE_ONLY.has(id)) { ctx.log(state, `(${card.name}: play this one at the table for now.)`); return; }
+  // The travel cards (travel.js).
+  if (id === 'hidden-passage' || id === 'peculiar-mirror') {
+    const cells = farEndCells(state, board, id, cell);
+    if (!cells.length) { ctx.log(state, `${card.name}: there's no Investigation space for the other end${id === 'hidden-passage' ? ' within 10 spaces' : ''}, so nothing comes of it.`); return; }
+    state.pendingEvent = { id, seat: state.cur, cell, cells };
+    return;
+  }
+  if (id === 'decrepit-truck') { placeTruck(state, board, pl, ctx, events); return; }
+  if (id === 'hiding-spot') placeHidingSpot(state, board, cell, ctx, events);
   if (choicesFor(id, state, pl)) {
     state.pendingEvent = { id, seat: state.cur, cell };
     return;
@@ -115,6 +130,7 @@ export function answerEvent(state, board, action, ctx, events) {
   const pick = opts?.find((o) => o.value === action.choice);
   if (!pick) return 'choose one of the options';
   if (!pick.ok) return 'that option is not available';
+  if (pick.pick && !pick.pick.includes(action.cell)) return 'choose one of the marked spaces';
   state.pendingEvent = null;
   runEvent(state, board, pe.id, action.choice, pe.cell, ctx, events, action);
   return null;
@@ -136,6 +152,12 @@ function runEvent(state, board, id, choice, cell, ctx, events, action = {}) {
     events.push({ type: 'survivor', outcome: s, tally: { ...state.survivors } });
   };
   if (choice === 'skip') { ctx.log(state, `${pl.name} leaves the ${src} alone.`); return; }
+  if (choice === 'place') { placeLink(state, board, id, cell, action.cell, ctx, events); return; }
+  if (id === 'hiding-spot') {
+    if (choice === 'hide' && !hide(state, board, pl, ctx, events)) { state.steps = 0; state.endTurnNow = true; }
+    else ctx.log(state, `${pl.name} leaves the hiding spot for later.`);
+    return;
+  }
   if (pastMidnight(state) && card.afterMidnight && afterMidnight(state, board, id, choice, cell, pl, ctx, events)) return;
   switch (id) {
     case 'roof-collapse': {

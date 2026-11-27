@@ -80,9 +80,12 @@ export function init() {
   $('#trayPill').addEventListener('click', () => setTrayMin(false));
   $('#endNo').addEventListener('click', () => { $('#endConfirm').hidden = true; });
   $('#endYes').addEventListener('click', () => { $('#endConfirm').hidden = true; play.endTurn(); });
+  $('#stayBtn').addEventListener('click', () => play.session.dispatch({ type: 'stay', seat: play.session.state.cur }));
   $('#hudRoll').addEventListener('click', (e) => {
     const act = e.currentTarget.dataset.act;
-    if (act === 'move') play.confirmMove(); else if (act === 'end') requestEndTurn(); else play.roll();
+    if (act === 'move') play.confirmMove(); else if (act === 'end') requestEndTurn();
+    else if (act === 'park') play.session.dispatch({ type: 'park', seat: play.session.state.cur });
+    else play.roll();
   });
   $('#playStreets').addEventListener('change', (e) => { play.state.followStreets = e.target.checked; });
   $('#playReset').addEventListener('click', () => play.reset());
