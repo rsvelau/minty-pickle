@@ -1066,7 +1066,10 @@ the Nest has toughness 2 and isn't immune to Iron (Iron weapons hurt it); its
 victims come out as soon as the team knows it's the Adze (all its evidence, or named right), or at midnight;
 the turn it rises its swarms only gather; then each swarm flies from the Lair 6 spaces a turn toward its
 victim (walls and windows stop it, doors don't, locked or not; with no way through it scatters; one swarm per victim at a time, so a second one goes after another
-victim), shown as a ghastly green cloud on the board; it settles right beside its victim and strikes on the
+victim), shown as a cloud in its victim's colour (each victim has one: a ring at their feet), with its flight
+line on the board (solid for next turn's 6 spaces, ending in a landing ring; dots the rest of the way) and a
+badge over the victim ("Swarm: strikes in N turns", or a pulsing "Strikes next turn"; Defended or No one
+guarding) (src/play/swarmGuide.js); it settles right beside its victim and strikes on the
 Adze's next turn (on the nearest living victim if its own has died); each swarm has 5 health that any Fire
 attack wears down (Skills lists swarms in range as targets): at 0 it's alight, flaming orange, and it flies
 back to the hive and burns the Nest for 3 piercing damage; a defender's Defense die is exhausted only when a

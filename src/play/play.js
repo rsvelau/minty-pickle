@@ -31,6 +31,7 @@ export {
 } from '../game/rules.js';
 import { MONSTERS, monsterDef } from '../game/monsters.js';
 import { DOOR_HP } from '../game/monsterTurn.js';
+import { createSwarmGuide } from './swarmGuide.js';
 import { makeHole, makeMirror, makeHideSpot, setHiding, makeTruck } from '../render/travelProps.js';
 export { MONSTERS, monsterDef };
 
@@ -516,6 +517,8 @@ export function createPlay({
 
   // --- swarms in flight (Adze): a cloud where each one is, drifting on --------------------------
   const swarmClouds = new Map();   // swarm id -> cloud
+  // Flight lines, victim colours and badges (play/swarmGuide.js).
+  const swarmGuide = createSwarmGuide({ group, centreOf, board, getState: () => g() });
   const syncAt = new Map();        // where a re-coloured cloud picks up from
   function syncSwarms() {
     const live = new Map((g()?.swarms ?? []).map((sw) => [sw.id, sw]));
@@ -523,11 +526,13 @@ export function createPlay({
     for (const [id, sw] of live) {
       if (!inBoard(sw.pos)) continue;
       let c = swarmClouds.get(id);
-      // Green; orange once alight (a new cloud where the old one was).
-      if (c && !!c.userData.burning !== !!sw.burning) { group.remove(c); swarmClouds.delete(id); syncAt.set(id, c.position.clone()); c = null; }
+      // In its victim's colour; orange once alight (a new cloud where the old one was).
+      const tint = swarmGuide.swarmColour(sw);
+      if (c && (!!c.userData.burning !== !!sw.burning || c.userData.tint !== tint)) { group.remove(c); swarmClouds.delete(id); syncAt.set(id, c.position.clone()); c = null; }
       if (!c) {
-        c = models.makeSwarm({ burning: !!sw.burning });
+        c = models.makeSwarm({ burning: !!sw.burning, tint });
         c.userData.burning = !!sw.burning;
+        c.userData.tint = tint;
         c.userData.goal = centreOf(sw.pos);
         c.position.copy(syncAt.get(id) ?? c.userData.goal);
         syncAt.delete(id);
@@ -535,8 +540,10 @@ export function createPlay({
       }
       c.userData.goal = centreOf(sw.pos);
     }
+    swarmGuide.sync();
   }
   function tickSwarms(t, dt) {
+    swarmGuide.tick(t);
     for (const [, c] of swarmClouds) {
       c.position.lerp(c.userData.goal, Math.min(1, dt * 1.5));
       c.userData.tick(t);
