@@ -800,6 +800,33 @@ export function createPlay({
     group.add(pickMesh);
   }
 
+  // A bot's destination (play/bots.js): the space it's walking to, outlined in
+  // its colour and gently pulsing, until its pawn gets there.
+  const botTarget = { obj: null, cell: -1, seat: -1 };
+  function showBotTarget(cell, colour = '#ffffff', seat = -1) {
+    if (botTarget.obj) { group.remove(botTarget.obj); botTarget.obj = null; }
+    botTarget.cell = cell ?? -1;
+    botTarget.seat = seat;
+    if (cell === null || cell === undefined || !inBoard(cell)) return;
+    const obj = new THREE.Group();
+    const fill = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: colour, transparent: true, opacity: 0.28, depthWrite: false }));
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.36, 0.45, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: colour, transparent: true, opacity: 0.9, depthWrite: false }));
+    for (const mh of [fill, ring]) { mh.renderOrder = 5; mh.raycast = () => {}; obj.add(mh); }
+    const at = centreOf(cell);
+    obj.position.set(at.x, at.y + 0.035, at.z);
+    group.add(obj);
+    botTarget.obj = obj;
+  }
+  function tickBotTarget(t) {
+    const o = botTarget.obj;
+    if (!o) return;
+    const a = view.actors[botTarget.seat];
+    if (a && !running(a) && a.vis === botTarget.cell) { showBotTarget(null); return; }   // arrived
+    const k = 0.5 + 0.5 * Math.sin(t * 6);
+    o.children[0].material.opacity = 0.18 + 0.2 * k;
+    o.scale.setScalar(0.92 + 0.1 * k);
+  }
+
   // Care Packages: a military crate on each (state.crates), and the drop itself:
   // a purple portal opens over the space and the crate falls out of it.
   const crateTokens = new Map();   // cell -> group
@@ -1292,7 +1319,7 @@ export function createPlay({
   // The game-start camera move (app/intro.js) holds the follow camera off.
   function holdCamera(on) { view.hold = !!on; if (!on) view.pan = false; }
   function busy() {
-    return rolling() || !!view.watch || drops.length > 0 || truckView.moves.length > 0 || grabs.length > 0 || pops.length > 0 || swarmClouds.size > 0 || view.actors.some(running) || [...view.monsters.values()].some((mv) => running(mv) || mv.lunge > 0)
+    return rolling() || !!view.watch || drops.length > 0 || truckView.moves.length > 0 || !!botTarget.obj || grabs.length > 0 || pops.length > 0 || swarmClouds.size > 0 || view.actors.some(running) || [...view.monsters.values()].some((mv) => running(mv) || mv.lunge > 0)
       || (view.pan && !view.hold && group.visible);
   }
   function tick(_dt, t) {
@@ -1337,6 +1364,7 @@ export function createPlay({
     tickNpcs(t, s);
     tickDrops(dt);
     tickTruck(dt);
+    tickBotTarget(t);
     tickSwarms(t, dt);
     for (const [, mv] of view.monsters) {
       if (!mv.anim && mv.queue.length) mv.anim = Object.assign(mv.queue.shift(), { t: 0 });
@@ -1576,7 +1604,7 @@ export function createPlay({
     // Game settings changed outside a game: the next game starts fresh with them.
     invalidate: () => { stale = true; },
     state, session, board, roll, reset, setStartMode, saveState, loadState, useEquipment, answerInvestigate, choose, chooseByKey, tick, setActive,
-    boardChanged, setPlayers, toggleSlot, confirmMove, endTurn, unusedCount, slotTotal, rollWhite, busy, holdCamera, revealCard, nameMonster, craft, sacrifice, setDie, react, strike, scout,
+    boardChanged, setPlayers, toggleSlot, confirmMove, endTurn, unusedCount, slotTotal, rollWhite, busy, holdCamera, showBotTarget, revealCard, nameMonster, craft, sacrifice, setDie, react, strike, scout,
     clockMinutes: () => (g() ? rulesClockMinutes(g()) : rulesStartMinutesFor(cfg)),
     startMinutes: () => (g() ? rulesStartMinutes(g()) : rulesStartMinutesFor(cfg)),
     midnight: () => (g() ? isMidnight(g()) : false),

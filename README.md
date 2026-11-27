@@ -25,8 +25,10 @@ stars fade out on the way down.
 - **Bots** (`src/game/bot.js`, driven by `src/play/bots.js`): play a team of up to 4 with you playing 1 to 3
   of them; the last seats are played by the expert bot (the same one the playtests use, marked 🤖). It plays
   everything a player does (scouting, investigating, naming the monster from the evidence, the objective's
-  steps, skills and Obolcraft, defense, discards and the Fetish when they're its to decide, the truck) at a
-  pace you can follow, waiting for the board to finish moving; while it plays the dock says so and the play
+  steps, skills and Obolcraft, defense, discards and the Fetish when they're its to decide, the truck)
+  quickly, a turn in about 4 to 6 seconds: it doesn't wait for the board to finish moving, so its pawn is
+  still walking to its destination (outlined in its colour, pulsing) when the next turn starts. A banner under
+  the clock shows its turn: the dice it rolled and what it did. While it plays the dock says so and the play
   controls wait. It only sees what the players see (never the hidden monster). Saved games keep who's a bot.
 - **Load game**: the autosave and 3 save slots.
 - **Map editor**: the planner described below, exactly as before (⌂ in its panel goes back to the title).

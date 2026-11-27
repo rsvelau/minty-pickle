@@ -1558,3 +1558,21 @@ body.bot-turn #revealSheet, body.bot-turn #crateBtn, body.bot-turn #stayBtn, bod
   pointer-events: none !important;
 }
 body.bot-turn #hudRoll, body.bot-turn .choice-btn, body.bot-turn #playTray { opacity: 0.5; }
+
+/* A bot's turn: the dice it rolled and what it did, top centre under the clock. */
+.bot-banner {
+  position: fixed; top: calc(env(safe-area-inset-top, 0px) + 40px); left: 50%; transform: translateX(-50%);
+  z-index: 25; width: min(440px, calc(100vw - 32px)); padding: 8px 12px 9px; border-radius: 12px;
+  background: rgba(12, 14, 20, 0.86); border: 1px solid rgba(255, 255, 255, 0.12); color: #e9e2d2;
+  font-size: 13px; line-height: 1.35; pointer-events: none; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+}
+.bot-banner[hidden] { display: none; }
+.bot-banner .bb-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.bot-banner .bb-chip { padding: 1px 8px; border-radius: 999px; color: #0c0c0c; font-weight: 700; font-size: 12px; }
+.bot-banner .bb-dice { display: inline-flex; align-items: center; gap: 4px; color: #b9b3a5; }
+.bot-banner .bb-die { display: inline-flex; align-items: center; gap: 2px; font-size: 20px; line-height: 1; color: #f2f0ea; }
+.bot-banner .bb-die.white { color: #ffffff; }
+.bot-banner .bb-die i { font-style: normal; font-size: 12px; font-weight: 700; color: #e9c46a; }
+.bot-banner ul { margin: 0; padding: 0 0 0 16px; }
+.bot-banner li { margin: 1px 0; }
+body.intro .bot-banner { opacity: 0; }
