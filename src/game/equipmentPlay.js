@@ -56,8 +56,32 @@ export function toughnessOf(monster) {
 // The target monster's action roll this turn (all its dice added), for Choke.
 export const actionRoll = (monster) => (monster.intents ?? []).reduce((a, i) => a + (i.roll ?? 0), 0);
 
-// Is the item's ability available (not spent by 1️⃣)?
-export const abilityReady = (item, k) => !(item.spent ?? []).includes(k);
+// Is the item's ability available (not spent by 1️⃣)? (A fired gun isn't spent:
+// it offers its Reload instead, see abilityAt.)
+export const abilityReady = (item, k) => !(item.spent ?? []).includes(k) || EQUIPMENT_BY_ID[item.id]?.abilities[k]?.limit === 'reload';
+
+// --- Reloading (firearms and crossbows: limit 'reload') ---------------------------
+// Firing empties the skill (item.empty); until it's reloaded the skill is offered
+// as "Reload <skill>": one die [3+]. Reloaded, it's ready on the player's next
+// turn; with a 6 it's a quick reload, ready to fire again at once.
+export const RELOAD_REQ = '3+';
+export const QUICK_RELOAD = 6;
+export const isEmpty = (item, k) => {
+  const a = EQUIPMENT_BY_ID[item.id]?.abilities[k];
+  return a?.limit === 'reload' && ((item.empty ?? []).includes(k) || (item.spent ?? []).includes(k));   // (spent: a save from before reloading)
+};
+// The skill as it stands: the printed one, or its Reload while it's empty.
+export function abilityAt(item, k) {
+  const a = EQUIPMENT_BY_ID[item.id]?.abilities[k];
+  if (!a || !isEmpty(item, k)) return a;
+  return {
+    range: 'self', kind: null, name: `Reload ${a.name}`, dice: 1, req: RELOAD_REQ, obols: 0, limit: 'empty', of: a,
+    text: `Ready again on your next turn. With a ${QUICK_RELOAD}: quick reload, fire again now.`,
+    fx: { target: 'self', reload: true },
+  };
+}
+// Reloaded with a 3-5 this turn: it fires on the player's next turn.
+export const reloadedThisTurn = (state, item, k) => item.reloadedTurn?.[k] === state.turn;
 // Every skill can be used once a turn; each card in hand has its own (two of the
 // same card: each once). item.usedTurn: { ability index: the turn it was used }.
 export const usedThisTurn = (state, item, k) => item.usedTurn?.[k] === state.turn;
@@ -119,11 +143,12 @@ export function useEquipment(state, board, pl, action, ctx, events) {
   const card = item && EQUIPMENT_BY_ID[item.id];
   if (!card) return 'no such equipment';
   const k = action.ability | 0;
-  const a = card.abilities[k];
+  const a = abilityAt(item, k);
   if (!a) return 'no such skill';
   if (!abilityReady(item, k)) return `${a.name} is used up until it is refreshed`;
-  // Each skill once a turn (each copy of a card has its own).
-  if (usedThisTurn(state, item, k)) return `${a.name} has been used this turn (this card's once a turn)`;
+  // Each skill once a turn (each copy of a card has its own); a Reload can follow the shot.
+  if (reloadedThisTurn(state, item, k) && !a.fx?.reload) return `${a.name} was reloaded this turn: it fires on your next turn (a ${QUICK_RELOAD} reloads at once)`;
+  if (usedThisTurn(state, item, k) && !a.fx?.reload) return `${a.name} has been used this turn (this card's once a turn)`;
   const fx = a.fx ?? { manual: true };
   if (fx.passive) return `${a.name} is always on while you carry the ${card.name}`;
   if (fx.sacrifice) return `the ${card.name} is used the moment you or a teammate would die`;
@@ -335,8 +360,21 @@ export function useEquipment(state, board, pl, action, ctx, events) {
 
   // Once a turn, for this card.
   item.usedTurn = { ...(item.usedTurn ?? {}), [k]: state.turn };
-  // Limits: 1️⃣ until refreshed; 🔗 the card breaks.
+  // Limits: 1️⃣ until refreshed; 🔗 the card breaks; a gun or crossbow is empty until reloaded.
   if (a.limit === 'once') item.spent = [...new Set([...(item.spent ?? []), k])];
+  if (a.limit === 'reload') item.empty = [...new Set([...(item.empty ?? []), k])];
+  if (fx.reload) {
+    item.empty = (item.empty ?? []).filter((x) => x !== k);
+    item.spent = (item.spent ?? []).filter((x) => x !== k);
+    if (values[0] >= QUICK_RELOAD) {
+      // Quick reload: ready to fire again this turn.
+      const used = { ...(item.usedTurn ?? {}) }; delete used[k]; item.usedTurn = used;
+      parts.push(`quick reload: ${a.of.name} can fire again right away`);
+    } else {
+      item.reloadedTurn = { ...(item.reloadedTurn ?? {}), [k]: state.turn };
+      parts.push(`${a.of.name} is loaded for ${who}'s next turn`);
+    }
+  }
   let broke = false;
   // 🔗 breaks; Mighty: any weapon breaks after a single use.
   if (a.limit === 'breaks' || (pl.mindset === 'mighty' && fx.dmg !== undefined)) { pl.inventory.equipment.splice(action.item | 0, 1); broke = true; }

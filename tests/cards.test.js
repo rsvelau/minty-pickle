@@ -18,7 +18,7 @@ test('the card list matches the PDF', () => {
     for (const a of c.abilities) {
       assert.ok(a.kind === null || DAMAGE_KINDS[a.kind], `${c.name} ${a.name}: kind ${a.kind}`);
       assert.ok([null, 'close', 'mid', 'long', 'self', 'all'].includes(a.range), `${c.name} ${a.name}: range`);
-      assert.ok([null, 'once', 'breaks'].includes(a.limit));
+      assert.ok([null, 'once', 'breaks', 'reload'].includes(a.limit));
     }
   }
 });

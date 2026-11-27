@@ -15,7 +15,7 @@ import { defenseTotal, dieHTML, endCellPick, play, startCellPick, cellPicking } 
 import { __set_camTween, camera, cellToWorld, controls } from '../render/scene.js';
 import { EQUIPMENT_BY_ID } from '../game/cards/equipment.js';
 import { EVENT_CATEGORIES } from '../game/cards/events.js';
-import { targetsFor, actionRoll, abilityReady, killObjective, discardOptions } from '../game/equipmentPlay.js';
+import { targetsFor, actionRoll, abilityReady, killObjective, discardOptions, abilityAt, RELOAD_REQ, QUICK_RELOAD } from '../game/equipmentPlay.js';
 import { checkRequirement } from '../game/cards/requirements.js';
 import { eventCard } from '../game/decks.js';
 import { choicesFor } from '../game/eventPlay.js';
@@ -760,7 +760,7 @@ function readySkillsHTML(pl) {
     const rows = list.filter((e) => e.status === g);
     if (!rows.length) return '';
     return `<div class="sk-group sk-${g}"><b class="sk-head">${label}<span>${rows.length}</span></b><ul class="eq-abilities sk-list">${rows.map((e) => {
-      const a = e.card.abilities[e.ability];
+      const a = e.a ?? e.card.abilities[e.ability];
       const dice = e.action?.dice?.length ? ` · ${e.action.dice.map((n) => st.pool[n].v).join(' + ')}` : '';
       return abilityRow(a, `<small class="sk-from">${esc(e.card.name)}${g === 'now' ? dice : ''}</small>`,
         g === 'now' ? `<button type="button" class="eq-use go" data-use="${e.item}:${e.ability}">Use</button>` : '',
@@ -824,15 +824,27 @@ export function renderTeam() {
   }
 }
 
+// A cartridge: loaded (a firearm or crossbow skill: it reloads after firing), or
+// empty (fired: the skill is its Reload until reloaded).
+export function ammoIcon(full = true) {
+  const title = full ? `Reloads: after firing, Reload with a die [${RELOAD_REQ}] (ready next turn; a ${QUICK_RELOAD}: at once)` : 'Empty: reload to fire again';
+  return `<span class="ammo ${full ? 'full' : 'spent'}" title="${title}" aria-label="${full ? 'Reloads' : 'Empty'}"><svg viewBox="0 0 10 24" aria-hidden="true">` +
+    (full
+      ? '<path class="tip" d="M5 1C2.6 3.4 2 6 2 8.5h6C8 6 7.4 3.4 5 1z"/><rect class="case" x="2" y="8.5" width="6" height="12" rx="0.6"/><rect class="rim" x="1.4" y="20.5" width="7.2" height="2.2" rx="0.5"/>'
+      : '<rect class="case" x="2" y="8.5" width="6" height="12" rx="0.6"/><rect class="rim" x="1.4" y="20.5" width="7.2" height="2.2" rx="0.5"/><ellipse class="mouth" cx="5" cy="8.6" rx="2.6" ry="0.9"/>') +
+    '</svg></span>';
+}
+
 // An Equipment card's abilities, as printed: range, damage kind, name, cost
-// [requirement], effect, and its 1️⃣ / 🔗 limit.
+// [requirement], effect, and its limit (1️⃣, 🔗, or a cartridge for Reload).
 const RANGE_LABEL = { close: 'Close', mid: 'Mid', long: 'Long', self: 'Self', all: 'All' };
 // With `use` ({ item, i }): a Use button per ability that is ready.
 // One printed skill as a row; `extra` (where it's from), a Use button, a reason.
 function abilityRow(a, extra = '', button = '', why = '') {
   const kind = a.kind ? DAMAGE_KINDS[a.kind] : null;
   const cost = a.obols ? `${a.obols} ◉` : '🎲'.repeat(a.dice);
-  const limit = a.limit === 'once' ? ' <span title="Once, until refreshed">1️⃣</span>' : a.limit === 'breaks' ? ' <span title="Breaks: the card is discarded after this skill">🔗</span>' : '';
+  const limit = a.limit === 'once' ? ' <span title="Once, until refreshed">1️⃣</span>' : a.limit === 'breaks' ? ' <span title="Breaks: the card is discarded after this skill">🔗</span>'
+    : a.limit === 'reload' ? ` ${ammoIcon(true)}` : a.limit === 'empty' ? ` ${ammoIcon(false)}` : '';
   const manual = a.fx?.manual ? ' <span class="eq-manual" title="Played at the table for now">✋</span>' : '';
   return `<li><span class="eq-range">${RANGE_LABEL[a.range] ?? '—'}</span>` +
     `<span class="eq-kind" title="${kind ? esc(kind.label) : 'Untyped'}">${kind ? kind.icon : '◯'}</span>` +
@@ -842,7 +854,8 @@ function abilityRow(a, extra = '', button = '', why = '') {
 // With `use` ({ item, i, status }): a Use button per skill, lit when it can be
 // used now; otherwise the reason it can't, under the skill.
 export function abilitiesHTML(card, use = null) {
-  return `<ul class="eq-abilities">${card.abilities.map((a, k) => {
+  return `<ul class="eq-abilities">${card.abilities.map((printed, k) => {
+    const a = use ? abilityAt(use.item, k) : printed;   // a fired gun: its Reload
     // Lunge is always on; Sacrifice comes up by itself when someone would die.
     const auto = a.fx?.passive ? 'Always on' : a.fx?.sacrifice ? 'When needed' : '';
     const st = use?.status?.get(`${use.i}:${k}`);
@@ -961,7 +974,7 @@ function renderUseSheet(body, pl, items) {
   const s = play.state;
   const item = items[useUI.item];
   const card = EQUIPMENT_BY_ID[item.id];
-  const a = card.abilities[useUI.ability];
+  const a = abilityAt(item, useUI.ability);   // a fired gun: its Reload
   const fx = a.fx ?? {};
   const free = s.pool.map((d, n) => ({ ...d, n })).filter((d) => !d.spent && !s.defSlots.includes(d.n) && !s.slots.includes(d.n));
   const targets = targetsFor(play.session.state, play.board, pl, a);

@@ -118,7 +118,7 @@ with the built-in name and prints the Ready to play? report.
 ## Cards
 
 All the cards from the card PDF are in the game as data (`src/game/cards/`): **44 Equipment** cards
-(`equipment.js`: each ability's range, damage kind, dice cost, requirement and 1️⃣ / 🔗 limit, word for word),
+(`equipment.js`: each ability's range, damage kind, dice cost, requirement and Reload / 1️⃣ / 🔗 limit, word for word),
 **37 Event** cards in six categories (Event, Decision, Cursed Object, Hazard, Opportunity, Global) and
 **6 Mindsets** (`events.js`). `requirements.js` reads the bracketed die requirements ([4+], [12], [11-],
 [1,2], [2-3], [2, 5+], [Any], [2x Target's 🎲]).
@@ -194,7 +194,13 @@ teammates in your space for heals like the Medical Kit). Obol costs (◉) take a
   rolls 1), Powerful Flashlight (damage dice above 3 count as 3), Stock Strike (+3 to the next attack on it).
 - On yourself: healing, bonus defense (typed, until your next turn), refreshed dice (back with a new value,
   ready to slot), raising other dice, +movement, Purity Seal.
-- **1️⃣** once until refreshed (Retrieval refreshes Piercing Tip); **🔗 breaks**: the card is discarded.
+- **Reload** (a bullet icon): every firearm and crossbow skill (both shotguns, Breach included, the Compact
+  Revolver, the Hunting Rifle, the Eccentric Crossbow and the Flare Gun). Firing empties the skill: it becomes
+  "Reload <skill>" with an empty-cartridge icon, one die [3+]. Reloaded, it fires on that player's next turn; with
+  a 6 it's a quick reload and fires again right away. The crossbow's Retrieval is now **Flighted Bolt** (Long,
+  one die [3+], 🎲 damage through toughness; it reloads too). (equipmentPlay.js `abilityAt`; the bot quick-reloads
+  with a spare 6 when it has a target, and otherwise reloads once it has moved.)
+- **1️⃣** once until refreshed; **🔗 breaks**: the card is discarded.
 - **Objective sites**: each Objective marker stands for a site: the type of the building it is in (Buildings
   tool), or one picked in Markers → Objective → Site. A site type always has the same fixtures (the Church: a Votive Candle Stand and a Holy Water
   Basin). Each monster's objective script (`src/game/objectives/scripts.js`) names the sites it needs: a map

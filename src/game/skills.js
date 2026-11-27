@@ -21,7 +21,7 @@
 import { EQUIPMENT_BY_ID } from './cards/equipment.js';
 import { MONSTER_BY_ID, DAMAGE_KINDS } from './cards/monsters.js';
 import { checkRequirement } from './cards/requirements.js';
-import { abilityReady, targetsFor, actionRoll, usedThisTurn } from './equipmentPlay.js';
+import { abilityReady, targetsFor, actionRoll, usedThisTurn, abilityAt, reloadedThisTurn, QUICK_RELOAD } from './equipmentPlay.js';
 import { applyAction } from './rules.js';
 import { RANGE, cellRange, INJURY_TRACKS } from './cards/injuries.js';
 import { doorsAround } from './doors.js';
@@ -58,15 +58,17 @@ export function skillStatus(state, board, pl) {
   pl.inventory.equipment.forEach((item, i) => {
     const card = EQUIPMENT_BY_ID[item.id];
     if (!card) return;
-    card.abilities.forEach((a, k) => {
+    card.abilities.forEach((_, k) => {
+      const a = abilityAt(item, k);   // the printed skill, or its Reload while the gun is empty
       const fx = a.fx ?? { manual: true };
-      const e = { item: i, ability: k, name: a.name, card, status: 'not', why: '', action: null, manual: !!fx.manual };
+      const e = { item: i, ability: k, name: a.name, a, card, status: 'not', why: '', action: null, manual: !!fx.manual };
       out.push(e);
       const set = (status, why = '') => { e.status = status; e.why = why; };
       if (fx.passive) return set('auto', `Always on while you carry the ${card.name}`);
       if (fx.sacrifice) return set('auto', 'Comes up by itself when someone would die');
       if (!abilityReady(item, k)) return set('not', 'Used up until refreshed');
-      if (usedThisTurn(state, item, k)) return set('not', 'Used this turn: once a turn per card');
+      if (reloadedThisTurn(state, item, k) && !fx.reload) return set('not', `Reloaded: fires on your next turn (a ${QUICK_RELOAD} reloads at once)`);
+      if (usedThisTurn(state, item, k) && !fx.reload) return set('not', 'Used this turn: once a turn per card');
       if (pl.dead) return set('not', `${pl.name} is dead`);
       if (!mine) return set('not', `On ${pl.name}’s turn`);
       if (state.phase === 'over') return set('not', 'The game is over');

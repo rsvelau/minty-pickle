@@ -12,7 +12,11 @@
 //   req     the bracket: the slotted dice ADDED TOGETHER must equal it ('12'), reach it
 //           ('4+', '11-'), fall in it ('2-3', '1,2'), or ('2, 5+') one die each; see
 //           cards/requirements.js. '2x Target’s': twice the target's action roll this turn.
-//   limit   'once' 1️⃣: one use until something refreshes it (Retrieval)
+//   limit   'reload' (bullet icon): firearms and crossbows. Firing turns the skill into
+//           "Reload <skill>" (an empty-cartridge icon): one die [3+] reloads it, ready on
+//           your next turn; a 6 is a quick reload, ready to fire again at once
+//           (equipmentPlay.js abilityAt / reload).
+//           'once' 1️⃣: one use until something refreshes it
 //           'breaks' 🔗: the card is discarded after this skill is used (out of ammo, snapped)
 //   text    the effect (reworded only where the designer clarified it)
 //   fx      what the game plays (cards/../equipmentPlay.js); `manual` = shown and paid
@@ -33,7 +37,7 @@ export const EQUIPMENT_CARDS = [
     A('mid', 'holy', 'Bless', 2, '7', 'Double target’s attack this turn', { target: 'ally', doubleAttack: true }),
   ] },
   { id: 'rock-salt-shotgun', name: 'Rock Salt Shotgun', abilities: [
-    A('close', 'salt', 'Salt Shot', 2, '12', 'Deal 6 damage and Blind (its next attack rolls 1)', HIT(6, { blind: true }), 'once'),
+    A('close', 'salt', 'Salt Shot', 2, '12', 'Deal 6 damage and Blind (its next attack rolls 1)', HIT(6, { blind: true }), 'reload'),
     A('close', null, 'Bludgeon', 1, '3+', 'Deal 🎲 damage', HIT('die')),
   ] },
   { id: 'heavy-silver-crucifix', name: 'Heavy Silver Crucifix', abilities: [
@@ -46,33 +50,33 @@ export const EQUIPMENT_CARDS = [
     A('mid', 'crystal', 'Bind', 2, '10', 'Reduce target’s movement by 5 this turn', { target: 'monster', moveDown: 5 }),
   ] },
   { id: 'dragons-breath-shotgun', name: 'Dragon’s Breath Shotgun', abilities: [
-    A('close', 'fire', 'Incendiary Shot', 2, '8+', 'Deal 6 damage, ignore toughness.', HIT(6, { ignoreToughness: true }), 'once'),
+    A('close', 'fire', 'Incendiary Shot', 2, '8+', 'Deal 6 damage, ignore toughness.', HIT(6, { ignoreToughness: true }), 'reload'),
     A('close', null, 'Stock Strike', 1, '2', 'The next attack against the target this turn deals 3 more damage', { target: 'monster', bonusNext: 3 }),
-    A('close', null, 'Breach', 2, '2+', 'Destroy an adjacent door.', { door: 'breach' }, 'once'),
+    A('close', null, 'Breach', 2, '2+', 'Destroy an adjacent door.', { door: 'breach' }, 'reload'),
   ] },
   { id: 'cut-spike', name: 'Cut Spike', abilities: [
     A('close', 'iron', 'Pierce', 1, '4+', 'Deal 🎲 damage', HIT('die')),
     A('close', null, 'Nail Shut', 2, '2+', 'Block an adjacent door.', { door: 'block', how: 'nailed shut' }, 'breaks'),
   ] },
   { id: 'compact-revolver', name: 'Compact Revolver', abilities: [
-    A('mid', null, 'Controlled Shots', 3, '12+', 'Deal 🎲 damage (the three dice added)', HIT('sum'), 'breaks'),
-    A('mid', null, 'Hip Fire', 3, '11-', 'Deal 8 damage.', HIT(8), 'breaks'),
+    A('mid', null, 'Controlled Shots', 3, '12+', 'Deal 🎲 damage (the three dice added)', HIT('sum'), 'reload'),
+    A('mid', null, 'Hip Fire', 3, '11-', 'Deal 8 damage.', HIT(8), 'reload'),
   ] },
   { id: 'hunting-rifle', name: 'Hunting Rifle', abilities: [
-    A('long', null, 'Sniper Shots', 3, '18', 'Deal 18 damage, ignore toughness.', HIT(18, { ignoreToughness: true }), 'breaks'),
-    A('mid', null, 'Center Shots', 3, '12+', 'Deal 🎲 damage (the three dice added)', HIT('sum'), 'breaks'),
+    A('long', null, 'Sniper Shots', 3, '18', 'Deal 18 damage, ignore toughness.', HIT(18, { ignoreToughness: true }), 'reload'),
+    A('mid', null, 'Center Shots', 3, '12+', 'Deal 🎲 damage (the three dice added)', HIT('sum'), 'reload'),
   ] },
   { id: 'eccentric-crossbow', name: 'Eccentric Crossbow', abilities: [
-    A('mid', null, 'Piercing Tip', 2, '10', 'Deal 5 damage, ignore toughness.', HIT(5, { ignoreToughness: true }), 'once'),
-    A('self', null, 'Retrieval', 1, '3+', 'Refresh Piercing Tip', { target: 'self', refresh: 'Piercing Tip' }),
+    A('mid', null, 'Piercing Tip', 2, '10', 'Deal 5 damage, ignore toughness.', HIT(5, { ignoreToughness: true }), 'reload'),
+    A('long', null, 'Flighted Bolt', 1, '3+', 'Deal 🎲 damage', HIT('die'), 'reload'),
   ] },
   { id: 'firemans-axe', name: 'Fireman’s Axe', abilities: [
     A('close', null, 'Chop', 1, '4+', 'Reduce target’s toughness by 1 this turn, then deal 🎲 damage', HIT('die', { toughDown: 1 })),
     A('close', null, 'Breach', 2, '2+', 'Destroy an adjacent door', { door: 'breach' }),
   ] },
   { id: 'flare-gun', name: 'Flare Gun', abilities: [
-    A('mid', 'fire', 'Direct Impact', 2, '7', 'Reduce target’s toughness by 2 this turn, then deal 7 damage.', HIT(7, { toughDown: 2 }), 'breaks'),
-    A('self', null, 'Illuminate', 1, 'Any', 'Increase two other 🎲 to 6.', { target: 'dice', raise: 2, to: 6 }, 'breaks'),
+    A('mid', 'fire', 'Direct Impact', 2, '7', 'Reduce target’s toughness by 2 this turn, then deal 7 damage.', HIT(7, { toughDown: 2 }), 'reload'),
+    A('self', null, 'Illuminate', 1, 'Any', 'Increase two other 🎲 to 6.', { target: 'dice', raise: 2, to: 6 }, 'reload'),
   ] },
   { id: 'weathered-machete', name: 'Weathered Machete', abilities: [
     A('close', null, 'Chop', 1, '4+', 'Reduce target’s toughness by 1 this turn, then deal 🎲 damage', HIT('die', { toughDown: 1 })),

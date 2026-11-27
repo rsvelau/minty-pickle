@@ -9,7 +9,7 @@ import { KEYWORDS } from '../game/cards/keywords.js';
 import { $ } from '../app/dom.js';
 import { gameConfig, saveConfig } from './playView.js';
 import { markSettingsDirty } from './gameSettings.js';
-import { abilitiesHTML } from './panels.js';
+import { abilitiesHTML, ammoIcon } from './panels.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 let tab = 'equipment';
@@ -43,7 +43,7 @@ export function openDecks() {
       <button class="screen-back" data-back>‹ Back</button>
       <h2 class="screen-title">Cards in the game</h2>
       <div class="seg dk-tabs">${tabsHTML()}</div>
-      <dl class="dk-glossary">${KEYWORDS.map((k) => `<dt>${esc(k.term)}</dt><dd>${esc(k.text)}</dd>`).join('')}</dl>
+      <dl class="dk-glossary">${KEYWORDS.map((k) => `<dt>${k.icon === 'ammo' ? `${ammoIcon(true)} ` : ''}${esc(k.term)}</dt><dd>${esc(k.text)}</dd>`).join('')}</dl>
     </div>`;
     el.hidden = false;
     el.querySelector('[data-back]').onclick = () => { el.hidden = true; el.innerHTML = ''; };

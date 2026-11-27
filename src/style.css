@@ -1685,3 +1685,11 @@ body.bot-turn #playTray, body.bot-turn #trayPill { display: none !important; }
 .bot-banner .bb-dice { gap: 2px; }
 .bot-banner .bb-die { font-size: 16px; }
 .bot-banner .bb-say { overflow: hidden; text-overflow: ellipsis; color: #d8d1c0; }
+
+/* Firearm and crossbow skills: a cartridge (loaded), or an empty case (fired: Reload). */
+.ammo { display: inline-block; width: 0.62em; height: 1.45em; vertical-align: -0.35em; margin: 0 1px; }
+.ammo svg { width: 100%; height: 100%; display: block; }
+.ammo.full .tip { fill: #b87333; }
+.ammo.full .case, .ammo.full .rim { fill: #d4a93c; stroke: #7a5a14; stroke-width: 0.6; }
+.ammo.spent .case, .ammo.spent .rim { fill: #6e6658; stroke: #b4aa96; stroke-width: 0.7; }
+.ammo.spent .mouth { fill: #1c1a16; stroke: #b4aa96; stroke-width: 0.5; }

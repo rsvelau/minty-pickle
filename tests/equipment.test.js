@@ -61,24 +61,20 @@ test('weakness hits count up the track and apply its effects', () => {
   assert.match(state.log.join(' '), /weakness: −1 die/);
 });
 
-test('Choke needs twice the monster’s action roll; Obols any colour; 🔗 breaks; 1️⃣ until refreshed', () => {
+test('Choke needs twice the monster’s action roll; guns go empty after firing', () => {
   const s = setup('werewolf', { items: ['iron-chain', 'rock-salt-shotgun', 'eccentric-crossbow', 'sacrificial-fetish'], pool: [3, 4, 6, 6, 5, 5, 4], obols: ['attack', 'event'] });
   s.monster.intents = [{ roll: 4, ops: [], unknown: [] }];
   assert.match(s.use(0, 0, [0, 1]).error, /twice 4/); // 7 < 8
   assert.ok(s.use(0, 0, [2, 3]).ok);                  // 12 ≥ 8
   assert.equal(s.monster.mods.immobile, true);
-  // Salt Shot [12] once: used up until refreshed (no refresh on this card).
+  // Salt Shot [12]: fired, it's empty: the skill is now Reload Salt Shot (one die).
   s.state.pool.push({ kind: 'black', v: 6 }, { kind: 'black', v: 6 }, { kind: 'black', v: 6 }, { kind: 'black', v: 6 });
   assert.ok(s.use(1, 0, [7, 8]).ok);
   assert.equal(s.monster.mods.blind, true);
-  assert.match(s.use(1, 0, [9, 10]).error, /used up/);
-  // Crossbow: Piercing Tip [10] once, Retrieval refreshes it.
+  assert.match(s.use(1, 0, [9, 10]).error, /Reload Salt Shot needs one die/);
+  // Crossbow: Piercing Tip [10], then (empty) its Reload.
   assert.ok(s.use(2, 0, [4, 5]).ok);
-  assert.match(s.use(2, 0, [9, 10]).error, /used up/);
-  assert.ok(s.use(2, 1, [6]).ok);                     // Retrieval [3+] with a 4
-  assert.deepEqual(s.pl.inventory.equipment[2].spent, []);  // Piercing Tip is ready again
-  s.state.turn++;                                       // (and once a turn: the next turn)
-  assert.match(s.use(2, 0, [9, 10]).error, /\[10\]/);     // (6 + 6 is not 10, but it isn't 'used up')
+  assert.deepEqual(s.pl.inventory.equipment[2].empty, [0]);
   // Sacrifice isn't used from the sheet: it comes up when someone would die (tricks.test.js).
   assert.match(s.use(3, 0, []).error, /the moment/);
 });
@@ -156,7 +152,7 @@ test('objectives decide the win', () => {
   assert.equal(h.monster.hp, 3);
   assert.ok(applyAction(h.state, h.board, { type: 'objective' }).ok);
   h.monster.pos = h.g.index(14, 5);
-  assert.ok(h.use(0, 0, [3, 4, 5]).ok);
+  assert.ok(h.use(1, 0, [3, 4, 5]).ok);                                // the other rifle (the first is empty now)
   assert.equal(h.state.won, true);
   // ∞ health (Barghest, Escape): the objective alone wins.
   const b = setup('barghest');
@@ -184,4 +180,52 @@ test('each skill once a turn per card; a second copy of the card has its own', (
   assert.match(s.use(1, 0, [2]).error, /used this turn/);
   s.state.turn++;
   assert.ok(s.use(0, 0, [2]).ok, 'a new turn');
+});
+
+test('Reload: a fired gun reloads with a 3+ (ready next turn), or a 6 (fire again now)', () => {
+  const s = setup('werewolf', { items: ['compact-revolver'], pool: [6, 6, 1, 2, 4, 6, 6, 6, 3, 3, 3] });   // Hip Fire [11-]: 8 damage
+  const gun = s.pl.inventory.equipment[0];
+  const hp = s.monster.hp;
+  assert.ok(s.use(0, 1, [2, 3, 4]).ok, 'Hip Fire with 1 + 2 + 4');
+  assert.equal(s.monster.hp, hp - (8 - 4));
+  assert.equal(s.pl.inventory.equipment.length, 1, 'the revolver no longer breaks');
+  assert.deepEqual(gun.empty, [1]);
+  // Empty: Reload Hip Fire takes one die [3+].
+  s.state.pool[2].spent = false;
+  assert.match(s.use(0, 1, [2]).error, /\[3\+\]/, 'a 1 won’t reload it');
+  // A 3: reloaded, but it fires on the next turn.
+  assert.ok(s.use(0, 1, [8]).ok, 'reload with a 3');
+  assert.deepEqual(gun.empty, []);
+  assert.match(s.use(0, 1, [9, 10, 2]).error, /next turn/);
+  s.state.turn++;
+  s.state.pool[2].spent = false; s.state.pool[3].spent = false;
+  assert.ok(s.use(0, 1, [2, 3, 9]).ok, 'next turn it fires (1 + 2 + 3)');
+  // A 6: quick reload, and it fires again this turn.
+  assert.ok(s.use(0, 1, [0]).ok, 'quick reload with a 6');
+  assert.deepEqual(gun.empty, []);
+  s.state.pool[2].spent = false; s.state.pool[3].spent = false; s.state.pool[4].spent = false;
+  assert.ok(s.use(0, 1, [2, 3, 4]).ok, 'fires again right away');
+  assert.deepEqual(gun.empty, [1]);
+  assert.match(s.state.log.join(' '), /quick reload/);
+});
+
+test('Reload: the skill shows as Reload <skill> in the Skills list; Flighted Bolt is Long range', async () => {
+  const { skillStatus } = await import('../src/game/skills.js');
+  const { EQUIPMENT_BY_ID } = await import('../src/game/cards/equipment.js');
+  const s = setup('werewolf', { items: ['eccentric-crossbow'], pool: [5, 5, 4] });
+  assert.ok(s.use(0, 0, [0, 1]).ok, 'Piercing Tip [10]');
+  const list = skillStatus(s.state, s.board, s.pl);
+  const e = list.find((x) => x.ability === 0);
+  assert.equal(e.name, 'Reload Piercing Tip');
+  assert.equal(e.status, 'now');
+  const bolt = EQUIPMENT_BY_ID['eccentric-crossbow'].abilities[1];
+  assert.equal(bolt.name, 'Flighted Bolt');
+  assert.equal(bolt.range, 'long');
+  assert.equal(bolt.limit, 'reload');
+  // Every firearm and crossbow skill reloads.
+  for (const id of ['rock-salt-shotgun', 'dragons-breath-shotgun', 'compact-revolver', 'hunting-rifle', 'eccentric-crossbow', 'flare-gun']) {
+    const fired = EQUIPMENT_BY_ID[id].abilities.filter((a) => a.limit === 'reload');
+    assert.ok(fired.length, id);
+    assert.ok(!EQUIPMENT_BY_ID[id].abilities.some((a) => a.limit === 'breaks' || a.limit === 'once'), `${id}: no 🔗 or 1️⃣ left`);
+  }
 });

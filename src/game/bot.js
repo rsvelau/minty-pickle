@@ -265,14 +265,21 @@ export function makeBot(board, { expert = true, trace = false, controls = () => 
         // Shut in (a blocked door between me and where I'm going): force it with a 6.
         const force = ready.find((e) => e.item === 'force');
         if (force && !nearest(pl.pos, goals(pl))) return force.action;
+        // A fired gun or crossbow: with a free 6 and something to shoot at, a quick reload (it fires next).
+        const reloads = ready.filter((e) => (e.a ?? e.card.abilities[e.ability]).fx?.reload);
+        const six = state.pool.findIndex((d, n) => !d.spent && d.v >= 6 && !state.slots.includes(n) && !state.defSlots.includes(n));
+        if (expert && six >= 0 && !(sc6(pl))) {
+          const quick = reloads.find((e) => { const of = e.a.of; return of.fx?.dmg !== undefined && targetsFor(state, board, pl, of).length > 0; });
+          if (quick) return { ...quick.action, dice: [six] };
+        }
         if (expert) {
           const best = bestAttack(pl, ready);
           if (best) return best;
-          const heal = injured && ready.find((e) => { const fx = e.card.abilities[e.ability].fx ?? {}; return (fx.heal && Object.keys(fx.heal).some((k) => (pl.injuries?.[k] ?? 0) > 0)) || fx.healAround; });
+          const heal = injured && ready.find((e) => { const fx = (e.a ?? e.card.abilities[e.ability]).fx ?? {}; return (fx.heal && Object.keys(fx.heal).some((k) => (pl.injuries?.[k] ?? 0) > 0)) || fx.healAround; });
           if (heal) return heal.action;
         } else {
           for (const e of ready) {
-            const fx = e.card.abilities[e.ability].fx ?? {};
+            const fx = (e.a ?? e.card.abilities[e.ability]).fx ?? {};
             const useful = e.item === 'cosor' || fx.dmg !== undefined || (injured && ((fx.heal && Object.keys(fx.heal).some((k) => (pl.injuries?.[k] ?? 0) > 0)) || fx.healAround))
               || (fx.target === 'monster' && (fx.toughDown || fx.immobile || fx.halve));
             if (useful) return e.action;
@@ -326,6 +333,11 @@ export function makeBot(board, { expert = true, trace = false, controls = () => 
           if (!(monster && free.length === 1 && state.slots.length && canDef && !hunting)) return { type: 'slot', die: fit.n, to: 'move', seat: state.cur };
         }
         if (pending > 0 && !state.noMove) return { type: 'move', seat: state.cur };
+        // Done moving: reload a fired gun with the lowest die that will do (unless the monster is about to strike: Defense first).
+        if (!threat) {
+          const reload = skillStatus(state, board, pl).find((e) => e.status === 'now' && e.action && e.a?.fx?.reload);
+          if (reload) return reload.action;
+        }
         const forDef = free.filter((d) => !(sc6(pl) && d.v === 6));
         if (forDef.length && canDef && night) return { type: 'slot', die: forDef[0].n, to: 'defense', seat: state.cur };
         if (free.length && !state.noMove && state.slots.length < state.maxSlots && !night && need > 0) return { type: 'slot', die: free[0].n, to: 'move', seat: state.cur };
@@ -341,7 +353,7 @@ export function makeBot(board, { expert = true, trace = false, controls = () => 
     let best = null;
     // Adze: burn the swarms with Fire (4 health; alight, they turn back and burn the Nest).
     for (const e of ready) {
-      const a = e.card.abilities[e.ability];
+      const a = (e.a ?? e.card.abilities[e.ability]);
       if (e.item === 'cosor' || a.kind !== 'fire' || a.fx?.dmg === undefined) continue;
       const sw = targetsFor(state, board, pl, a).find((t) => t.swarm !== undefined);
       if (!sw) continue;
@@ -353,7 +365,7 @@ export function makeBot(board, { expert = true, trace = false, controls = () => 
       if (raw > 0) return { ...e.action, dice, target: { swarm: sw.swarm } };   // every bit of Fire counts (4 health)
     }
     for (const e of ready) {
-      const a = e.card.abilities[e.ability];
+      const a = (e.a ?? e.card.abilities[e.ability]);
       const fx = a.fx ?? {};
       if (e.item === 'cosor') {
         const n = state.pool.map((d, i) => ({ ...d, i })).filter((d) => !d.spent && !state.slots.includes(d.i) && !state.defSlots.includes(d.i)).sort((x, y) => y.v - x.v)[0];

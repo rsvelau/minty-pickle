@@ -3,7 +3,8 @@
 export const KEYWORDS = [
   { term: '🎲 [n]', text: 'Slot that many rolled dice. Added together, they must equal the bracket ([12]), reach it ([4+], [11-]) or fall in it ([2-3]). [2, 5+]: one die each. [Any]: any value.' },
   { term: '[2x Target’s 🎲]', text: 'At least twice the target monster’s action roll this turn (all its action dice added).' },
-  { term: '1️⃣ Once', text: 'One use, until something refreshes it (the Crossbow’s Retrieval).' },
+  { term: 'Reload', icon: 'ammo', text: 'Firearms and crossbows. Firing a skill empties it: it becomes “Reload <skill>” (an empty cartridge). Reload with one die [3+]: ready on your next turn. With a 6, a quick reload: fire again right away.' },
+  { term: '1️⃣ Once', text: 'One use, until something refreshes it.' },
   { term: '🔗 Breaks', text: 'The card is discarded after this skill is used: out of ammo, snapped, spent.' },
   { term: '◉ Obol cost', text: 'Spend that many Obols, any colour. (🪙 on its own is a coin flip.)' },
   { term: 'Refresh a die', text: 'A die already slotted can be rolled again and slotted again.' },
