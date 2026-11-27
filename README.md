@@ -19,7 +19,8 @@ stars fade out on the way down.
 
 - **Continue**: the most recent game, from its autosave.
 - **New game**: pick a map (the built-in **Hawthorn Bend**, any of **My maps**, or whatever is in the map
-  editor now), 1 to 4 investigators and **how many of them you play** (the rest are bots), the monster
+  editor now), 1 to 4 investigators and **how many of them you play** (the rest are bots; by default 4
+  investigators, you play 1 and bots the other 3), the monster
   (random from a pool, or a specific one) and an 11 PM or Midnight start. The map is checked as you pick it, the same check as **Ready to play?**: a map with
   errors can't be started, and the list says what to fix.
 - **Bots** (`src/game/bot.js`, driven by `src/play/bots.js`): play a team of up to 4 with you playing 1 to 3
@@ -30,7 +31,8 @@ stars fade out on the way down.
   still walking to its destination (outlined in its colour, pulsing) when the next turn starts. A banner under
   the clock shows its turn: the dice it rolled and what it did. While it plays the dock says so and the play
   controls wait. It only sees what the players see (never the hidden monster). Saved games keep who's a bot.
-- **Following the bots** (Game settings → Following the bots, each on or off, live; `src/play/botWatch.js`):
+- **Following the bots** (Game settings → Following the bots, each on or off, live; `src/play/botWatch.js`;
+  by default the round summary and trails are on, the receipts, flying gains and team strip off, speed Fast):
   **Bot speed** (Fast, Normal, or Watch: waits for every animation); **Turn receipts** (a card per bot turn
   down the right side until the next round: its dice, where it went, what it gained or lost; tap one and the
   camera looks); **Gains fly to the team** (an Obol, card, key or evidence pops off the pawn and flies to its
