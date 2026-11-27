@@ -68,7 +68,7 @@ function step() {
   step.cardSince = null;
   const s = play.session.state;
   if (play.board !== board) { board = play.board; bot = null; }
-  bot ??= makeBot(board, { expert: true });
+  bot ??= makeBot(board, { expert: true, controls: (seat) => !!play.session.state.players[seat]?.bot });
   const seat = actingSeat(s);
   let a = null;
   try { a = bot.act(s); } catch (e) { console.error(e); }

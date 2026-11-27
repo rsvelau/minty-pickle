@@ -9,7 +9,7 @@
 // Obols, slots its best die to Defense when it is in danger, and says yes to
 // investigating, reactions and sacrifices. `expert`: a team that knows every
 // rule and plays to it (but not which monster was drawn): names the monster
-// from the evidence, picks the best attack, guards the Adze's victims, arms
+// from the evidence, picks the best attack, guards the Adze's victims a swarm is flying at (only once the Nest has risen; one bot stays on the Nest), arms
 // itself, and so on.
 //
 //   const bot = makeBot(board, { expert: true });
@@ -31,7 +31,8 @@ import { toughnessOf, targetsFor } from './equipmentPlay.js';
 import { checkRequirement } from './cards/requirements.js';
 
 // --- the bot ------------------------------------------------------------------------
-export function makeBot(board, { expert = true, trace = false } = {}) {
+export function makeBot(board, { expert = true, trace = false, controls = () => true } = {}) {
+  // controls(seat): is that seat a bot's? (In-game, humans play some seats: the bots don't count on them to guard.)
   let state = null;   // the game as the bot sees it: set on every act(state)
   const memo = { crates: new Map(), waits: new Map() };   // its own notes (never written into the game)
   const g = board.grid;
@@ -127,27 +128,37 @@ export function makeBot(board, { expert = true, trace = false } = {}) {
           }
           return at;
         } else if (st.do === 'defend') {
-          // Adze: stand with a victim (each investigator its own, in seat order).
-          // One guard per victim; anyone left over goes for the Nest.
-          const victims = (state.npcs ?? []).filter((v) => v.alive);
-          const guards = state.players.filter((p) => !p.dead).sort((a, b) => a.seat - b.seat);
-          const k = guards.indexOf(pl);
+          // Adze. Before the Nest rises there are no swarms: nothing to guard
+          // yet, so carry on investigating (the step below). Once it has risen,
+          // guard only a victim a swarm is actually flying at: the nearest free
+          // bot goes and stands with them (a victim with a human beside them is
+          // covered already); everyone else hunts the Nest.
+          if (!monster) continue;
           // Solo: one guard can't cover three victims; the Nest has no toughness, so go and kill it.
-          if (state.players.length === 1 && monster) { fighting = true; return [monster.pos]; }
-          // More victims than guards (solo: all three in the Hospital): a
-          // space beside as many of them as possible, if the last guard.
-          if (victims.length > guards.length && k === guards.length - 1) {
-            const rest = victims.slice(k);
-            let most = 0; let spots = [];
-            g.cells.forEach((c, i) => {
-              if (!c.walkable) return;
-              const n = rest.filter((v) => cellRange(g, i, v.cell) <= RANGE.close).length;
-              if (n > most) { most = n; spots = [i]; } else if (n === most && n) spots.push(i);
-            });
-            if (most > 1) return spots;
+          if (state.players.length === 1) { fighting = true; return [monster.pos]; }
+          const victims = (state.npcs ?? []).filter((v) => v.alive);
+          const coming = (state.swarms ?? []).filter((sw) => !sw.burning);
+          const near = (p, v) => cellRange(g, p.pos, v.cell) <= RANGE.close;
+          const threatened = victims
+            .filter((v) => coming.some((sw) => sw.victim === v.id))
+            .filter((v) => !state.players.some((p) => !p.dead && !controls(p.seat) && near(p, v)))
+            .map((v) => ({ v, eta: Math.min(...coming.filter((sw) => sw.victim === v.id).map((sw) => cellRange(g, sw.pos, v.cell))) }))
+            .sort((a, b) => a.eta - b.eta || a.v.id.localeCompare(b.v.id));
+          const free = state.players.filter((p) => !p.dead && controls(p.seat));
+          // Keep one bot on the Nest when there are enough of them.
+          const spare = Math.max(0, free.length - 1);
+          for (const { v } of threatened.slice(0, spare || free.length)) {
+            let best = null;
+            for (const p of free) {
+              const d = distTo(v.cell)[p.pos];
+              const dd = d < 0 ? 1e6 : d;
+              if (!best || dd < best.d || (dd === best.d && p.seat < best.p.seat)) best = { p, d: dd };
+            }
+            if (!best) break;
+            if (best.p === pl) return [v.cell];
+            free.splice(free.indexOf(best.p), 1);
           }
-          if (victims.length && k >= 0 && k < victims.length && (guards.length > victims.length || k < guards.length - 1 || guards.length === 1)) return [victims[k].cell];
-          if (monster) { fighting = true; return [monster.pos]; }
+          fighting = true; return [monster.pos];
         }
         else if (st.do === 'upgrade') {
           const it = carrying(pl, st.item);

@@ -37,3 +37,30 @@ test('a whole bot game from the players’ view runs without errors', () => {
   }
   assert.ok(state.round > 12, 'past midnight');
 });
+
+test('Adze: once it is named, the bots keep investigating till the Nest rises (they don’t park on the victims)', () => {
+  const { grid } = gridFromMap(MAP);
+  const board = createBoard(grid);
+  for (const seed of [5, 7]) {
+    const { state } = newGame(board, { seed, scout: true, followStreets: true, config: { players: 4, monsterPick: 'adze' } });
+    // Seat 0 is a human's (it ends its turns where it stands); the bots mustn't count on it to guard.
+    const bot = makeBot(board, { expert: true, controls: (s) => s !== 0 });
+    const human = makeBot(board, { expert: true });
+    const still = [0, 0, 0, 0];
+    let last = state.players.map((p) => p.pos), round = state.round, worst = 0;
+    for (let n = 0; n < 8000 && state.phase !== 'over' && !state.monsters.length; n++) {
+      let r;
+      if (!(state.cur === 0 && state.phase !== 'scouting' && (r = applyAction(state, board, { type: 'end', seat: 0 })).ok)) {
+        r = applyAction(state, board, (state.cur === 0 ? human : bot).act(publicState(state)) ?? { type: 'end', seat: state.cur });
+        if (!r.ok) applyAction(state, board, { type: 'end', seat: state.cur });
+      }
+      if (state.round !== round) {
+        round = state.round;
+        const named = state.npcs?.length && !state.monsters.length;
+        state.players.forEach((p, k) => { if (k === 0 || p.dead) return; still[k] = named && p.pos === last[k] ? still[k] + 1 : 0; worst = Math.max(worst, still[k]); });
+        last = state.players.map((p) => p.pos);
+      }
+    }
+    assert.ok(worst < 3, `seed ${seed}: a bot stood still for ${worst} rounds before the Nest rose`);
+  }
+});

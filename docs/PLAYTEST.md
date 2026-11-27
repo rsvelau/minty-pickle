@@ -18,7 +18,8 @@ escape, hold, destroy, defend) or hunts the monster; it fetches a key when its g
 it uses any "Use now" skill that hurts the monster (or heals it), crafts heals, moves only as far as it
 needs, fills its Defense slots when the monster's declared actions threaten it (keeping a die to attack
 with when it's beside the monster), names the monster as soon as the evidence fits only one, keeps a 6
-back for the Poltergeist's anchors, relights candles, stands with the Adze's victims (one each), and
+back for the Poltergeist's anchors, relights candles, stands with an Adze victim a swarm is flying at
+(only once the Nest has risen, the nearest bot, never counting on a human seat; one stays on the Nest), and
 avoids lit spaces while the Shadow People hunt. It doesn't plan around the monster's declared moves or
 play its team as one.
 Follow streets is off for the bot (its routes don't know the road's lanes; every marker is reachable
@@ -215,3 +216,21 @@ Strigoi 18 across sizes, White Lady 12, Redcap 8, Shadow People 6, others 1-4. A
 
 Adze wins: solo 26, 2p 27, 3p 29, 4p 35 of 40. All monsters: 1,389 wins, 651 losses (55 Lost in the night), 0
 undecided, 0 anomalies.
+
+### Adze guarding fix (expert bot, 40 games per team size)
+Found at the table: once the Adze was named the bots walked to the victims and stood there for the
+rest of the game. The guard step started at identification (before the Nest had risen, with no swarms
+yet), never finished, and counted a human seat as a guard. Now nobody guards before the Nest rises (they
+keep investigating); after it rises the nearest free bot stands only with a victim a swarm is actually
+flying at (a human beside the victim covers them), one bot always stays on the Nest, and the rest hunt it.
+Test: tests/bot.test.js (a human seat that never moves; no bot may stand still before the Nest rises).
+
+| Team | Before | After |
+|---|---|---|
+| 1 | 65% | 67% |
+| 2 | 67% | 65% |
+| 3 | 72% | 75% |
+| 4 | 87% | 92% |
+
+The headless numbers barely move, because there all seats are bots and the victims were usually covered
+anyway. The big gain is at the table with a human seat: the bots no longer freeze.
