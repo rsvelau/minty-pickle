@@ -653,7 +653,7 @@ const livingVictims = (state) => (state.npcs ?? []).filter((v) => v.alive);
 //   state.swarms = [{ id, victim, pos, dmg, type, exhaust, name, ready?, burning? }]
 export const SWARM_SPEED = 6;
 export const SWARM_BURN = 3;
-export const SWARM_HP = 5;
+export const SWARM_HP = 4;
 export const SWARM_HP_SOLO = 2;   // playing solo: easy to bat away
 export const SWARM_BLOCKED = 2;   // the Nest's loss each time a defender beats a swarm off        // Fire it takes to set it alight (any Fire attack counts)
 function launchSwarm(state, board, monster, card, intent, o, ctx, events) {
@@ -668,7 +668,7 @@ function launchSwarm(state, board, monster, card, intent, o, ctx, events) {
   const sw = {
     id: `s${(state.swarmCount = (state.swarmCount ?? 0) + 1)}`, victim: v.id, pos: monster.pos, dmg: o.dmg,
     type: KIND_TO_TYPE[intent.kind] ?? card.evidence.attack, exhaust: intent.ops.some((x) => x.op === 'exhaust'), name: intent.name,
-    hp: solo ? SWARM_HP_SOLO : SWARM_HP,
+    hp: solo ? SWARM_HP_SOLO : SWARM_HP, maxHp: solo ? SWARM_HP_SOLO : SWARM_HP,
   };
   (state.swarms ??= []).push(sw);
   ctx.log(state, `The ${card.name} sends a swarm after the ${v.name}.`);

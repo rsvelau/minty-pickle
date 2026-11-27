@@ -225,7 +225,7 @@ export function useEquipment(state, board, pl, action, ctx, events) {
     if (swarm.hp === 0) {
       swarm.burning = true;
       parts.push(`${dmg} Fire: the swarm bursts into flame and turns back for the hive`);
-    } else parts.push(`${dmg} Fire: the swarm smoulders (${swarm.hp} more to set it alight)`);
+    } else parts.push(`${dmg} Fire: the swarm is only singed (${swarm.hp}/${swarm.maxHp ?? SWARM_HP} health left) and still coming; ${swarm.hp} more Fire sets it alight`);
     events.push({ type: 'swarms' });
   }
   if (ally) {

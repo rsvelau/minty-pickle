@@ -339,7 +339,7 @@ export function makeBot(board, { expert = true, trace = false, controls = () => 
   // worth extra (it advances the weakness track), one-die weapons with the highest die.
   function bestAttack(pl, ready) {
     let best = null;
-    // Adze: burn the swarms with Fire (5 health; alight, they turn back and burn the Nest).
+    // Adze: burn the swarms with Fire (4 health; alight, they turn back and burn the Nest).
     for (const e of ready) {
       const a = e.card.abilities[e.ability];
       if (e.item === 'cosor' || a.kind !== 'fire' || a.fx?.dmg === undefined) continue;
@@ -350,7 +350,7 @@ export function makeBot(board, { expert = true, trace = false, controls = () => 
       if (dice.length < a.dice || !checkRequirement(a.req, dice.map((n) => state.pool[n].v), {})) continue;
       const vals = dice.map((n) => state.pool[n].v);
       const raw = a.fx.dmg === 'die' ? vals[0] : a.fx.dmg === 'sum' ? vals.reduce((x, y) => x + y, 0) : a.fx.dmg;
-      if (raw > 0) return { ...e.action, dice, target: { swarm: sw.swarm } };   // every bit of Fire counts (5 health)
+      if (raw > 0) return { ...e.action, dice, target: { swarm: sw.swarm } };   // every bit of Fire counts (4 health)
     }
     for (const e of ready) {
       const a = e.card.abilities[e.ability];

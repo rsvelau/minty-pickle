@@ -436,6 +436,13 @@ export function createMonsterModels(terrainify) {
       g.add(f);
       flies.push(f);
     }
+    // Singed by Fire (0..1 of the way to alight): that share of the flies glow orange.
+    const own = flies.map((f) => f.material);
+    const ember = [spriteMat('#ff7a1a', 0.95), spriteMat('#ffd04a', 0.95)];
+    g.userData.setSinge = (frac) => {
+      const n = Math.round(Math.max(0, Math.min(1, frac)) * flies.length);
+      flies.forEach((f, k) => { f.material = (k * 7) % flies.length < n ? ember[k % 2] : own[k]; });   // spread through the cloud
+    };
     g.userData.tick = (t) => {
       for (const f of flies) {
         const u = f.userData, a = u.a + t * u.s;

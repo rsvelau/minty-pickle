@@ -234,3 +234,12 @@ Test: tests/bot.test.js (a human seat that never moves; no bot may stand still b
 
 The headless numbers barely move, because there all seats are bots and the victims were usually covered
 anyway. The big gain is at the table with a human seat: the bots no longer freeze.
+
+### Swarm health 5 → 4 (expert bot, 40 games per team size)
+| Team | 5 health | 4 health |
+|---|---|---|
+| 1 | 67% | 67% (solo swarms have 2 either way) |
+| 2 | 65% | 65% |
+| 3 | 75% | 78% |
+| 4 | 92% | 92% |
+Most Fire attacks either light a swarm or don't come close, so one point of health moves little.

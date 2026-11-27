@@ -30,7 +30,7 @@ export {
   DEFAULT_CONFIG, defaultConfig, OBOLS, OBOL_TYPES, obolCounts, INVENTORY_TABS, formatClock, MIDNIGHT,
 } from '../game/rules.js';
 import { MONSTERS, monsterDef } from '../game/monsters.js';
-import { DOOR_HP } from '../game/monsterTurn.js';
+import { DOOR_HP, SWARM_HP } from '../game/monsterTurn.js';
 import { createSwarmGuide } from './swarmGuide.js';
 import { makeHole, makeMirror, makeHideSpot, setHiding, makeTruck } from '../render/travelProps.js';
 export { MONSTERS, monsterDef };
@@ -539,6 +539,8 @@ export function createPlay({
         group.add(c); swarmClouds.set(id, c);
       }
       c.userData.goal = centreOf(sw.pos);
+      // Singed by Fire but not alight: part of the cloud glows orange.
+      c.userData.setSinge?.(sw.burning ? 0 : 1 - (sw.hp ?? sw.maxHp ?? 1) / (sw.maxHp ?? SWARM_HP));
     }
     swarmGuide.sync();
   }
@@ -1029,6 +1031,7 @@ export function createPlay({
           view.monsters.clear();
           view.shownFinds = state.mystery?.found.length ?? 0;
           syncNpcs(true);
+          swarmGuide.reset();   // a new or loaded game: its swarms aren't new arrivals
           view.actors = [];
           placeAll(true);
           if (e.type === 'loaded') { syncMonsters(true); refreshDiscoveries(); }
@@ -1353,7 +1356,7 @@ export function createPlay({
   // The game-start camera move (app/intro.js) holds the follow camera off.
   function holdCamera(on) { view.hold = !!on; if (!on) view.pan = false; }
   function busy() {
-    return rolling() || !!view.watch || drops.length > 0 || truckView.moves.length > 0 || !!botTarget.obj || trails.length > 0 || grabs.length > 0 || pops.length > 0 || swarmClouds.size > 0 || view.actors.some(running) || [...view.monsters.values()].some((mv) => running(mv) || mv.lunge > 0)
+    return rolling() || !!view.watch || drops.length > 0 || truckView.moves.length > 0 || !!botTarget.obj || trails.length > 0 || grabs.length > 0 || pops.length > 0 || swarmClouds.size > 0 || swarmGuide.busy() || view.actors.some(running) || [...view.monsters.values()].some((mv) => running(mv) || mv.lunge > 0)
       || (view.pan && !view.hold && group.visible);
   }
   function tick(_dt, t) {

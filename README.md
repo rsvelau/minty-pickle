@@ -1069,13 +1069,15 @@ victim (walls and windows stop it, doors don't, locked or not; with no way throu
 victim), shown as a cloud in its victim's colour (each victim has one: a ring at their feet), with its flight
 line on the board (solid for next turn's 6 spaces, ending in a landing ring; dots the rest of the way) and a
 badge over the victim ("Swarm: strikes in N turns", or a pulsing "Strikes next turn"; Defended or No one
-guarding) (src/play/swarmGuide.js); it settles right beside its victim and strikes on the
-Adze's next turn (on the nearest living victim if its own has died); each swarm has 5 health that any Fire
+guarding; the swarm's health, orange once Fire has singed it, and the cloud itself turns partly orange); a swarm
+just sent out leaves a fading trail from the Lair, its line draws itself out and its badge says "New swarm" for
+a few seconds (src/play/swarmGuide.js); it settles right beside its victim and strikes on the
+Adze's next turn (on the nearest living victim if its own has died); each swarm has 4 health that any Fire
 attack wears down (Skills lists swarms in range as targets): at 0 it's alight, flaming orange, and it flies
 back to the hive and burns the Nest for 3 piercing damage; a defender's Defense die is exhausted only when a
 strike gets past them (a block costs nothing for good), and each swarm a defender beats off costs the Nest 2
 health, through its toughness; one victim per investigator (all three with three or more), and playing solo
-all three wait together in the Hospital, only one swarm is on the map at a time (2 health instead of 5), a
+all three wait together in the Hospital, only one swarm is on the map at a time (2 health instead of 4), a
 failed block exhausts nothing and the Nest has no toughness (0); a victim survives the first hit
 that gets through (wounded) and dies to the second; a victim's death costs everyone one die × the dead. Redcap: toughness-ignoring (Piercing) hits can't kill it.
 Monster heals now really heal.

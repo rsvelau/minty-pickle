@@ -169,7 +169,7 @@ export const MONSTER_TEXT = {
         'Gets past the defender → {exhaust} their Defense die.',
       ] },
       { h: 'Hurting the Nest', items: [
-        '🔥 Fire a swarm to 0 (5 health): it flies home alight. Nest takes 3.',
+        '🔥 Fire a swarm to 0 (4 health): it flies home alight. Nest takes 3. Less only singes it.',
         '🛡 Block a swarm: Nest takes 2.',
         'Both ignore its toughness.',
       ] },

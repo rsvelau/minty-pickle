@@ -433,7 +433,7 @@ test('Adze: victims out when identified; a gathering turn; one swarm per victim,
   assert.equal(s2.npcs.length, 3, 'out as soon as the team knows');
 });
 
-test('Adze: Fire wears a swarm down (5 health); alight, it flies back and burns the Nest for 3, through its toughness', () => {
+test('Adze: Fire wears a swarm down (4 health); alight, it flies back and burns the Nest for 3, through its toughness', () => {
   const { g, board, state, act } = adzeGame();
   const pl = state.players[0];
   const mo = state.monsters[0];
@@ -457,7 +457,7 @@ test('Adze: Fire wears a swarm down (5 health); alight, it flies back and burns 
   void board;
 });
 
-test('Adze: any Fire attack counts against a swarm’s 5 health (two Molotovs light it)', () => {
+test('Adze: any Fire attack counts against a swarm’s 4 health (two Molotovs light it)', () => {
   const { g, state, act } = adzeGame();
   const pl = state.players[0];
   const v = state.npcs.find((x) => x.target === 13);
@@ -467,7 +467,7 @@ test('Adze: any Fire attack counts against a swarm’s 5 health (two Molotovs li
   act({ type: 'roll' });
   state.pool = [3, 3, 3, 3].map((v2) => ({ kind: 'black', v: v2 }));   // Immolate: exactly 6 on two dice state.slots = []; state.defSlots = [];
   assert.ok(act({ type: 'use', item: 0, ability: 0, dice: [0, 1], target: { swarm: 'f2' } }).ok);
-  assert.equal(state.swarms[0].hp, 2);
+  assert.equal(state.swarms[0].hp, 1, '4 − 3: singed');
   assert.ok(!state.swarms[0].burning);
   assert.ok(act({ type: 'use', item: 0, ability: 0, dice: [2, 3], target: { swarm: 'f2' } }).ok);
   assert.ok(state.swarms[0].burning);

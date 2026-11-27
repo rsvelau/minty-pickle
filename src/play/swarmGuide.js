@@ -8,21 +8,28 @@
 //               Nest, orange.
 //   badges      over each victim a swarm is after: how many Adze turns until
 //               it strikes ("Strikes next turn", pulsing, once it has settled
-//               beside them), and whether anyone stands guard.
+//               beside them), whether anyone stands guard, and the swarm's
+//               health (orange once Fire has singed it).
+//   new swarms  a swarm just sent out: a fading trail from the Lair to where
+//               it got to, its flight line drawing itself out, and "New swarm"
+//               on the badge for a few seconds.
 //
 // Drawn over the scenery (like the map markers), so roofs and trees don't hide
 // it. It only reads the state; play.js calls sync() after every update and tick()
 // every frame.
 import * as THREE from 'three';
 import { m } from '../core/scale.js';
-import { swarmRouteTo, SWARM_SPEED } from '../game/monsterTurn.js';
+import { swarmRouteTo, SWARM_SPEED, SWARM_HP } from '../game/monsterTurn.js';
 import { cellRange, RANGE } from '../game/cards/injuries.js';
 
 // Victim colours, in the order they appear (Hotel, Bar, Hospital...).
 export const VICTIM_COLOURS = ['#4aa8ff', '#ffb03a', '#e070ff', '#7dffb0'];
 const BURNING = '#ff7a1a';
 const LIFT = 0.05;   // above the ground
-const W = 640, H = 156, BADGE = 0.2;   // badge canvas, and its width (a share of the view's height)
+const W = 640, H = 156, BADGE = 0.2;
+const NEW_FOR = 5000;   // ms a new swarm is called new
+const GROW = 1400;     // ms its line takes to draw out
+const TRAIL = 3500;    // ms its trail from the Lair takes to fade   // badge canvas, and its width (a share of the view's height)
 
 export function createSwarmGuide({ group, centreOf, board, getState }) {
   const g = board.grid;
@@ -48,6 +55,34 @@ export function createSwarmGuide({ group, centreOf, board, getState }) {
   };
   const at = (i) => { const p = centreOf(i); return new THREE.Vector3(p.x, p.y + LIFT, p.z); };
 
+  // --- new swarms -------------------------------------------------------------
+  let known = null;                 // swarm ids seen so far (null: nothing yet, so nothing is "new")
+  const born = new Map();           // swarm id -> when it was first seen (ms)
+  const trails = [];                // { obj, mat, t0 }: a new swarm's way out from the Lair, fading
+  function reset() { known = null; born.clear(); }
+  function noteBirths(state, swarms) {
+    const now = performance.now();
+    const ids = new Set(swarms.map((sw) => sw.id));
+    if (known) for (const sw of swarms) if (!known.has(sw.id) && !sw.burning) { born.set(sw.id, now); trailFor(state, sw); }
+    known = ids;
+    for (const id of born.keys()) if (!ids.has(id)) born.delete(id);
+  }
+  // Dots from the Lair to where the new swarm got to this turn.
+  function trailFor(state, sw) {
+    const nest = state.monsters?.[0]?.pos;
+    if (nest === undefined || nest === sw.pos) return;
+    const route = swarmRouteTo(board, nest, new Set([sw.pos]));
+    if (!route) return;
+    const m2 = new THREE.MeshBasicMaterial({ color: colourOf(state, sw.victim), transparent: true, opacity: 0.9, depthWrite: false, depthTest: false, fog: false });
+    const obj = new THREE.Group();
+    for (let k = 0; k < route.length - 1; k++) {
+      const a = at(route[k]), b = at(route[k + 1]);
+      for (const f of [0.5, 1]) { const d = noRay(new THREE.Mesh(dotGeo, m2)); d.position.copy(a).lerp(b, f); obj.add(d); }
+    }
+    root.add(obj);
+    trails.push({ obj, mat: m2, t0: performance.now() });
+  }
+
   // --- flight lines (rebuilt when something they show changes) -------------
   let lines = new THREE.Group(); root.add(lines);
   let lineSig = '';
@@ -66,6 +101,12 @@ export function createSwarmGuide({ group, centreOf, board, getState }) {
     root.add(lines);
     for (const { sw, route } of routes) {
       if (!route || route.length < 2) continue;
+      // Each piece numbered from the swarm outward, so a new swarm's line can draw itself out.
+      const own = new THREE.Group();
+      own.userData.id = sw.id;
+      lines.add(own);
+      let order = 0;
+      const put = (o) => { o.userData.order = order++; own.add(o); };
       const colour = sw.burning ? BURNING : colourOf(state, sw.victim);
       // It stops beside its victim (not on them); a burning one flies right into the Nest.
       const stop = sw.burning ? route.length - 1 : route.length - 2;
@@ -74,7 +115,7 @@ export function createSwarmGuide({ group, centreOf, board, getState }) {
       // Where the swarm is now: a disc in its colour under the cloud.
       const here = noRay(new THREE.Mesh(startGeo, mat(colour, 0.55)));
       here.position.copy(at(route[0]));
-      lines.add(here);
+      put(here);
       // Next turn's stretch: solid.
       for (let k = 0; k < leg; k++) {
         const a = at(route[k]), b = at(route[k + 1]);
@@ -82,22 +123,23 @@ export function createSwarmGuide({ group, centreOf, board, getState }) {
         s.position.copy(a).lerp(b, 0.5);
         s.scale.x = a.distanceTo(b);
         s.lookAt(b.x, s.position.y, b.z); s.rotateY(Math.PI / 2);
-        lines.add(s);
+        put(s);
       }
       // Where it lands.
       const land = noRay(new THREE.Mesh(landGeo, mat(colour, 0.9)));
       land.position.copy(at(route[leg]));
       land.userData.pulse = true;
-      lines.add(land);
+      put(land);
       // The rest of the way: dots (one per cell, and between).
       for (let k = leg; k < stop; k++) {
         const a = at(route[k]), b = at(route[k + 1]);
         for (const f of [0.5, 1]) {
           const d = noRay(new THREE.Mesh(dotGeo, mat(colour, 0.85)));
           d.position.copy(a).lerp(b, f);
-          lines.add(d);
+          put(d);
         }
       }
+      own.userData.count = order;
     }
   }
 
@@ -121,8 +163,9 @@ export function createSwarmGuide({ group, centreOf, board, getState }) {
     victims.set(id, v);
     return v;
   }
+  // l2: [text, colour] pieces, side by side.
   function drawBadge(v, colour, l1, l2, warn) {
-    const key = `${colour}|${l1}|${l2}|${warn}`;
+    const key = `${colour}|${l1}|${JSON.stringify(l2)}|${warn}`;
     if (v.text === key) return;
     v.text = key;
     const x = v.canvas.getContext('2d');
@@ -135,14 +178,19 @@ export function createSwarmGuide({ group, centreOf, board, getState }) {
     x.fillStyle = warn ? '#ffd0c8' : colour;
     x.fillText(l1, W / 2, 54);
     x.font = '600 34px system-ui, -apple-system, "Segoe UI", sans-serif';
-    x.fillStyle = l2.startsWith('🛡') ? '#9fe8a8' : '#ffb0a0';
-    x.fillText(l2, W / 2, 112);
+    const sep = '  ·  ';
+    const parts = l2.flatMap((pc, k) => (k ? [[sep, '#8a8578'], pc] : [pc]));
+    const width = parts.reduce((n, [t]) => n + x.measureText(t).width, 0);
+    let cx = W / 2 - width / 2;
+    x.textAlign = 'left';
+    for (const [t, c] of parts) { x.fillStyle = c; x.fillText(t, cx, 112); cx += x.measureText(t).width; }
     v.tex.needsUpdate = true;
   }
 
   function sync() {
     const state = getState();
     const swarms = (state?.swarms ?? []).filter((sw) => sw.pos >= 0 && sw.pos < g.cells.length);
+    noteBirths(state, swarms);
     const routes = swarms.map((sw) => ({ sw, route: routeOf(state, sw) }));
     const sig = JSON.stringify(routes.map(({ sw, route }) => [sw.id, sw.victim, !!sw.burning, route])) + JSON.stringify((state?.npcs ?? []).map((v) => v.id));
     if (sig !== lineSig) { lineSig = sig; buildLines(state, routes); }
@@ -166,8 +214,16 @@ export function createSwarmGuide({ group, centreOf, board, getState }) {
         return Math.max(1, Math.ceil(d / SWARM_SPEED)) + 1;           // settles, then strikes the turn after
       }));
       const guarded = state.players.some((pl) => !pl.dead && !pl.hiding && cellRange(g, pl.pos, npc.cell) <= RANGE.close);
-      const l1 = turns <= 1 ? '⚠ Strikes next turn' : `Swarm: strikes in ${turns} turns`;
-      const l2 = guarded ? '🛡 Defended' : 'No one guarding';
+      const now = performance.now();
+      const fresh = coming.some(({ sw }) => born.has(sw.id) && now - born.get(sw.id) < NEW_FOR);
+      const when = turns <= 1 ? 'strikes next turn' : `strikes in ${turns} turns`;
+      const l1 = fresh ? `New swarm: ${when}` : turns <= 1 ? '⚠ Strikes next turn' : `Swarm: ${when}`;
+      // Its health: orange once Fire has singed it.
+      const sw0 = coming[0].sw;
+      const max = sw0.maxHp ?? SWARM_HP, hp = sw0.hp ?? max;
+      const l2 = [guarded ? ['🛡 Defended', '#9fe8a8'] : ['No one guarding', '#ffb0a0'], hp < max ? [`🔥 singed ${hp}/${max}`, '#ffa040'] : [`health ${hp}/${max}`, '#c8c2b4']];
+      v.fresh = fresh;
+      v.freshUntil = fresh ? Math.max(...coming.filter(({ sw }) => born.has(sw.id)).map(({ sw }) => born.get(sw.id))) + NEW_FOR : 0;
       v.warn = turns <= 1;
       drawBadge(v, colour, l1, l2, v.warn);
       v.badge.visible = true;
@@ -184,9 +240,26 @@ export function createSwarmGuide({ group, centreOf, board, getState }) {
       v.badge.scale.set(s, s * H / W, 1);
     }
     lines.traverse((o) => { if (o.userData.pulse) o.scale.setScalar(0.9 + 0.2 * pulse); });
+    // A new swarm's line draws out from it, piece by piece.
+    const now = performance.now();
+    for (const own of lines.children) {
+      const b = born.get(own.userData.id);
+      const shown = b === undefined ? Infinity : ((now - b) / GROW) * own.userData.count;
+      for (const o of own.children) o.visible = o.userData.order <= shown;
+    }
+    // Trails from the Lair fade away.
+    for (let k = trails.length - 1; k >= 0; k--) {
+      const tr = trails[k], f = (now - tr.t0) / TRAIL;
+      tr.mat.opacity = 0.9 * Math.max(0, 1 - f);
+      if (f >= 1) { root.remove(tr.obj); tr.mat.dispose(); trails.splice(k, 1); }
+    }
+    // "New swarm" runs out: redraw the badges.
+    if ([...victims.values()].some((v) => v.fresh && v.badge.visible && now >= v.freshUntil)) sync();
   }
+  // Still animating (so the renderer keeps drawing)?
+  const busy = () => trails.length > 0 || [...born.values()].some((b) => performance.now() - b < NEW_FOR);
 
   // The swarm's colour (for the cloud itself).
   const swarmColour = (sw) => (sw.burning ? null : colourOf(getState(), sw.victim));
-  return { sync, tick, swarmColour, colourOf: (id) => colourOf(getState(), id) };
+  return { sync, tick, reset, busy, swarmColour, colourOf: (id) => colourOf(getState(), id) };
 }
