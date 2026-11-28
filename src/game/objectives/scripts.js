@@ -73,7 +73,7 @@ export const OBJECTIVES = {
   banshee: {
     steps: [
       { do: 'collect', at: 'funeral', item: 'heirloom', unique: true, text: 'The heirloom, a signed ring, lies at the Funeral Parlor {11}. She perches on the rooftop nearest whoever is closest to it. Carry it, or set it down, to draw her where you want her' },
-      { do: 'deliver', at: 'grave', item: 'heirloom', banish: true, text: 'Side objective: bring the heirloom to the Unmarked Grave in the cemetery and she is defeated at once' },
+      { do: 'deliver', at: 'grave', item: 'heirloom', banish: true, text: 'Side objective: from 3 rounds after she rises, bring the heirloom to the Unmarked Grave in the cemetery and she is defeated at once' },
       { do: 'kill', at: 'lair', text: 'Or kill her: wear her health down to 0' },
     ],
   },

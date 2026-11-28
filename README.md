@@ -1088,6 +1088,11 @@ failed block exhausts nothing and the Nest has no toughness (0); a victim surviv
 that gets through (wounded) and dies to the second; a victim's death costs everyone one die × the dead. Redcap: toughness-ignoring (Piercing) hits can't kill it.
 Monster heals now really heal.
 
+### Skip to midnight
+Once all the evidence is in (before midnight), the Casebook offers **Skip to midnight**: at the start of a turn,
+before rolling, the clock goes to 12 and midnight strikes at once, just as the clock would (the monster rises,
+the objectives appear, the night's 24 turns start). rules.js `canSkipToMidnight` / action `midnight`.
+
 ### Monster cards as players read them
 
 `src/game/cards/monsterText.js` holds each card's player-facing wording: short constant rules, what each

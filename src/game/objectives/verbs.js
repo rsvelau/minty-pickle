@@ -106,6 +106,11 @@ export function onSiteEnter(state, board, pl, cell, ctx, events) {
     } else if (step.do === 'deliver') {
       const k = (pl.carry ?? []).findIndex((c) => c.item === step.item && (!ITEMS[step.item]?.lit || c.lit));
       if (k < 0) continue;
+      if (step.banish && !graveOpen(state)) {
+        const told = (state.objective ??= { delivered: {} }).toldGrave ??= {};
+        if (told[pl.seat] !== state.round) { told[pl.seat] = state.round; say(`${pl.name} reaches ${where} with the ${itemLabel(step.item).toLowerCase()}, but the grave won't take it until ${GRAVE_AFTER} rounds after she rises.`); }
+        continue;
+      }
       pl.carry.splice(k, 1);
       state.objective ??= { delivered: {} };
       const n = state.objective.delivered[step.item] = (state.objective.delivered[step.item] ?? 0) + 1;
@@ -218,6 +223,11 @@ export const atMidnight = (state) => state.midnightRound !== undefined && state.
 // many turns to hunt the team before anyone can leave).
 export const WAY_OUT_AFTER = 3;
 export const wayOutOpen = (state) => atMidnight(state) && state.round - state.midnightRound >= WAY_OUT_AFTER;
+
+// The Banshee's grave takes the heirloom only this many rounds after she rises
+// (laid early, she was beaten before she ever appeared).
+export const GRAVE_AFTER = 3;
+export const graveOpen = (state) => state.monsters.length > 0 && atMidnight(state) && state.round - state.midnightRound >= GRAVE_AFTER;
 
 // Barghest: an investigator who isn't cleansed can't cross the river (onto a bridge).
 export function crossingBlocked(state, board, pl, to) {

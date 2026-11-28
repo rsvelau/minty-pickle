@@ -1693,3 +1693,7 @@ body.bot-turn #playTray, body.bot-turn #trayPill { display: none !important; }
 .ammo.full .case, .ammo.full .rim { fill: #d4a93c; stroke: #7a5a14; stroke-width: 0.6; }
 .ammo.spent .case, .ammo.spent .rim { fill: #6e6658; stroke: #b4aa96; stroke-width: 0.7; }
 .ammo.spent .mouth { fill: #1c1a16; stroke: #b4aa96; stroke-width: 0.5; }
+
+/* Casebook: skip to midnight (all the evidence is in). */
+.case-skip { margin: 10px 0; padding: 10px 12px; border-radius: 10px; border: 1px dashed rgba(122, 26, 16, 0.45); background: rgba(122, 26, 16, 0.06); display: grid; gap: 6px; justify-items: start; }
+.case-skip .case-note { margin: 0; }

@@ -113,7 +113,7 @@ export const MONSTER_CARDS = [
     id: 'banshee', name: 'Banshee', hp: 15, toughness: 2, badge: 1, stars: 1,
     traits: ['Corporeal', 'Fae'],
     note: 'While on rooftops, Banshee is outside Close range.',
-    objective: 'Kill: wear its health down to 0. Side objective: bring the heirloom to the Unmarked Grave in the cemetery, and she is defeated at once.',
+    objective: 'Kill: wear its health down to 0. Side objective: from 3 rounds after she rises, bring the heirloom to the Unmarked Grave in the cemetery, and she is defeated at once.',
     weakness: ['iron', 'silver'], immune: [],
     weaknessTrack: [{ hits: 1, text: 'Grounded until next Perch' }, { hits: 3, text: 'Grounded until next Perch' }, { hits: null, text: 'Discard Silver to avoid Swoop damage', react: 'Swoop' }],
     abilities: [

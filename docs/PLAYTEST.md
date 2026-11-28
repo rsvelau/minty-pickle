@@ -282,3 +282,20 @@ midnight and leave on the next turn, before it acts; 2 rounds after: 55 / 95 / 9
 | 2 | 95% | 75% |
 | 3 | 98% | 75% |
 | 4 | 100% | 70% (2.6 dead a game, was 0.1) |
+
+### Banshee (was 75 / 92 / 95 / 100%)
+33 of the 40 four-player wins came before she rose: the heirloom was laid on the Unmarked Grave around round 10,
+and no one ever killed her. (That turned up a bug: a win in the middle of a move didn't end the game; she rose
+at midnight and play went on. A win is final now.) The grave now takes the heirloom only 3 rounds after she
+rises, the same timing as the Barghest's way out. A tougher Banshee didn't help on its own (20 health with the
+grave open a round after she rises: 65 / 88 / 92 / 90%): teams just wait for the grave.
+
+| Team | Before | After |
+|---|---|---|
+| 1 | 75% | 58% |
+| 2 | 92% | 75% |
+| 3 | 95% | 88% |
+| 4 | 100% | 82% (10 heirloom wins, the rest by killing her) |
+
+New: **Skip to midnight** (Casebook). Once all the evidence is in, at the start of a turn, the team can skip
+ahead: the clock goes to 12 and the monster rises at once. (The playtest bots don't use it.)

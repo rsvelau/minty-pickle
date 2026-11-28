@@ -25,7 +25,7 @@ import { RECIPES, blocked as craftBlocked } from './obolcraft.js';
 import { choicesFor, doorOverride } from './eventPlay.js';
 import { scriptOf, mapSites, knownMonster } from './objectives/scripts.js';
 import { RANGE, cellRange } from './cards/injuries.js';
-import { sixToSpend, memorialCells, wayOutOpen } from './objectives/verbs.js';
+import { sixToSpend, memorialCells, wayOutOpen, graveOpen } from './objectives/verbs.js';
 import { matchesEvidence } from './mystery.js';
 import { toughnessOf, targetsFor } from './equipmentPlay.js';
 import { checkRequirement } from './cards/requirements.js';
@@ -112,7 +112,7 @@ export function makeBot(board, { expert = true, trace = false, controls = () => 
           if (lying.length) return lying;
           if (!done && !(st.unique && ob.taken?.[st.item]) && at.length) return at;
           if (st.item === 'candle' && !carrying(pl, 'candle') && at.length) return at; // candles: everyone carries
-        } else if (st.do === 'deliver' && carrying(pl, st.item) && at.length) {
+        } else if (st.do === 'deliver' && carrying(pl, st.item) && at.length && (!st.banish || graveOpen(state))) {   // (the grave opens 3 rounds after she rises)
           // A candle that went out: relight it where it came from first.
           const it = carrying(pl, st.item);
           if (it.lit === false) {

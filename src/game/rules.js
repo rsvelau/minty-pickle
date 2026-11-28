@@ -322,7 +322,7 @@ function scout(state, action, events) {
 // equipment and Obolcraft.
 const STOPPED = ['slotting', 'choosing', 'asking'];
 // Every action: { type, seat? }. Returns { ok, error?, events }.
-export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective', 'event', 'setting', 'sacrifice', 'setDie', 'react', 'strike', 'scout', 'drop', 'force', 'relight', 'crate', 'hide', 'stay', 'board', 'drive', 'park'];
+export const ACTIONS = ['roll', 'slot', 'rollWhite', 'move', 'end', 'choose', 'investigate', 'reveal', 'name', 'craft', 'use', 'discard', 'objective', 'event', 'setting', 'sacrifice', 'setDie', 'react', 'strike', 'scout', 'drop', 'force', 'relight', 'crate', 'hide', 'stay', 'board', 'drive', 'park', 'midnight'];
 
 export function applyAction(state, board, action) {
   // Doors the game changed (nailed, breached) count for every move made while
@@ -459,6 +459,13 @@ function applyActionNow(state, board, action) {
       log(state, `${who(state)} moves ${state.roll} (${fresh.dice}).`);
       state.phase = 'moving';
       advance(state, board, events);
+      break;
+    }
+    case 'midnight': {
+      const why = canSkipToMidnight(state);
+      if (why) return fail(why);
+      state.clockShift = (state.clockShift ?? 0) + (state.config.turnsToMidnight + 1 - clockTurn(state));
+      strikeMidnight(state, board, events, true);
       break;
     }
     case 'end': {
@@ -1264,15 +1271,25 @@ function endRound(state, board, events) {
   // Rally's defense lasts through the monster's turn: gone now.
   for (const p of state.players) if (p.bonusDefense) p.bonusDefense = p.bonusDefense.filter((b) => b.round === undefined);
   summon(state, eventCtx(state), events);
-  if (isMidnight(state) && !state.midnightDone) {
-    state.midnightDone = true;
-    state.midnightRound = state.round;   // the night's 24 turns count from here (carePackage.js)
-    log(state, 'Midnight. The clocktower strikes twelve, and the objectives appear.');
-    events.push({ type: 'midnight' });
-    revealMonster(state, board, mysteryCtx(state), events);
-    spawnMonsters(state, board, events, random, log);
-  }
+  if (isMidnight(state) && !state.midnightDone) strikeMidnight(state, board, events);
   nightTurn(state, board, { state, log, randInt }, events);   // Care Packages, and the night's end
+}
+// The clocktower strikes twelve: the monster rises (by the clock, or skipped to).
+function strikeMidnight(state, board, events, skipped = false) {
+  state.midnightDone = true;
+  state.midnightRound = state.round;   // the night's 24 turns count from here (carePackage.js)
+  log(state, skipped ? 'The team knows what hunts them and won’t wait: the hands sweep round to twelve. Midnight, and the objectives appear.'
+    : 'Midnight. The clocktower strikes twelve, and the objectives appear.');
+  events.push({ type: 'midnight', skipped });
+  revealMonster(state, board, mysteryCtx(state), events);
+  spawnMonsters(state, board, events, random, log);
+}
+// Skip to midnight: once all the evidence is in, at the start of a turn (before rolling).
+export function canSkipToMidnight(state) {
+  if (state.midnightDone || isMidnight(state)) return 'it is already midnight';
+  if (!state.mystery?.identified) return 'find all the evidence first';
+  if (state.phase !== 'idle' || state.pool?.length) return 'only at the start of a turn, before rolling';
+  return null;
 }
 
 export { MONSTERS };

@@ -19,7 +19,7 @@ import { targetsFor, actionRoll, abilityReady, killObjective, discardOptions, ab
 import { checkRequirement } from '../game/cards/requirements.js';
 import { eventCard } from '../game/decks.js';
 import { choicesFor } from '../game/eventPlay.js';
-import { sacrificeSeat, SCOUTING_STORY } from '../game/rules.js';
+import { sacrificeSeat, SCOUTING_STORY, canSkipToMidnight } from '../game/rules.js';
 import { scriptOf, mapSites, knownMonster } from '../game/objectives/scripts.js';
 import { progressLines, describeItem } from '../game/objectives/verbs.js';
 import { skillStatus, COSOR_CARD } from '../game/skills.js';
@@ -390,6 +390,12 @@ export function renderCasebook() {
     play.session.dispatch({ type: 'objective', seat: play.state.cur });
     renderCasebook();
   });
+  body.querySelector('#skipMidnight')?.addEventListener('click', (ev) => {
+    if (!ev.currentTarget.dataset.confirm) { ev.currentTarget.dataset.confirm = '1'; ev.currentTarget.textContent = 'Tap again: skip to midnight'; return; }
+    const r = play.session.dispatch({ type: 'midnight', seat: play.session.state.cur });
+    if (!r.ok) toast(r.error ?? 'Not right now.');
+    else closeCasebook();
+  });
   body.querySelector('#guideAll')?.addEventListener('change', (e) => { caseUI.showAll = e.target.checked; renderCasebook(); });
   body.querySelectorAll('[data-name]').forEach((b) => b.addEventListener('click', (e) => {
     e.preventDefault();
@@ -400,6 +406,17 @@ export function renderCasebook() {
 }
 export function confirmName(id) {
   return window.confirm(`Name the ${MONSTER_BY_ID[id].name}?\n\nThe team gets one try before midnight. If you're right, you earn Initiative.`);
+}
+
+// All the evidence is in before midnight: the team can skip ahead to it.
+function skipHTML(my) {
+  const st = play.session.state;
+  if (!my.identified || st.midnightDone) return '';
+  const bot = !!st.players[st.cur]?.bot;
+  const why = bot ? 'on your own turn' : canSkipToMidnight(st);
+  return `<div class="case-skip"><p class="case-note">You know what hunts you. Waiting for midnight gains nothing more: skip ahead, and it rises now.</p>` +
+    `<button type="button" class="ink" id="skipMidnight"${why ? ' disabled' : ''}>🕛 Skip to midnight</button>` +
+    (why ? `<small class="sk-why">${esc(why[0].toUpperCase() + why.slice(1))}</small>` : '') + '</div>';
 }
 
 export function casebookHTML(my) {
@@ -426,6 +443,7 @@ export function casebookHTML(my) {
     `</div>` +
     `<p class="case-note">${fits.length === 1 ? 'Only <b>one</b> monster fits' : `<b>${fits.length}</b> of ${pool.length} monsters fit`} the evidence so far.</p>` +
     `<p class="case-note">${status}</p>` +
+    skipHTML(my) +
     objectiveHTML(my) +
     mapEffectsHTML() +
     `<div class="case-actions"><button type="button" class="ink" id="openGuide">Open the Field Guide</button></div>`;

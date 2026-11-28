@@ -209,6 +209,12 @@ test('Banshee: the heirloom brought to the Unmarked Grave (an Objective marker i
   assert.equal(siteOf(s.g.cells[grave], s.g, grave), 'grave');
   s.state.mystery = { ...s.state.mystery, monster: 'banshee', revealed: true };
   s.pl.carry = [{ item: 'heirloom' }];
+  // The grave takes it only 3 rounds after she rises.
+  s.state.midnightRound = s.state.round - 2;
+  onSiteEnter(s.state, s.board, s.pl, grave, s.ctx, []);
+  assert.equal(s.state.monsters.length, 1, 'two rounds after: not yet');
+  assert.deepEqual(s.pl.carry, [{ item: 'heirloom' }], 'still carried');
+  s.state.midnightRound = s.state.round - 3;
   const events = [];
   onSiteEnter(s.state, s.board, s.pl, grave, s.ctx, events);
   assert.equal(s.state.monsters.length, 0);
@@ -231,7 +237,7 @@ test('an objective finished before midnight (the monster named by its evidence) 
   assert.equal(w.state.won, true);
 });
 
-test('Banshee: the heirloom laid on the Unmarked Grave before midnight wins too', async () => {
+test('Banshee: before she rises the grave won’t take the heirloom; a win is final', async () => {
   const { onSiteEnter } = await import('../src/game/objectives/verbs.js');
   const s = setup('banshee');
   s.state.monsters = [];
@@ -240,9 +246,30 @@ test('Banshee: the heirloom laid on the Unmarked Grave before midnight wins too'
   s.state.mystery = { ...s.state.mystery, monster: 'banshee', identified: true };
   s.pl.carry = [{ item: 'heirloom' }];
   onSiteEnter(s.state, s.board, s.pl, grave, s.ctx, []);
+  assert.ok(!s.state.won, 'not before she rises');
+  // A win is final: a move putting play back on (as it used to) doesn't reopen the game.
+  const { banishMonster } = await import('../src/game/equipmentPlay.js');
+  banishMonster(s.state, s.ctx, []);
   assert.equal(s.state.won, true);
-  // The win is final: the move that got there putting play back on (as it used to) doesn't reopen the game.
   s.state.phase = 'slotting';
   applyAction(s.state, s.board, { type: 'end', seat: s.state.cur });
   assert.equal(s.state.phase, 'over');
+});
+
+test('Skip to midnight: once all the evidence is in, at the start of a turn; the monster rises at once', () => {
+  const g = new GridState(20, 10);
+  for (let x = 0; x < 20; x++) g.apply(g.index(x, 5), { area: 'outdoor', sub: 'street' }, { silent: true });
+  g.apply(g.index(19, 5), { area: 'outdoor', sub: 'start', walkable: false, facing: 3 }, { silent: true });
+  const board = createBoard(g);
+  const { state } = newGame(board, { seed: 1, config: { players: 2, monsterPick: 'werewolf' } });
+  state.phase = 'idle';
+  assert.match(applyAction(state, board, { type: 'midnight', seat: state.cur }).error, /evidence/);
+  state.mystery.identified = true;
+  const r = applyAction(state, board, { type: 'midnight', seat: state.cur });
+  assert.ok(r.ok, r.error);
+  assert.ok(state.midnightDone);
+  assert.equal(state.midnightRound, state.round);
+  assert.ok(state.monsters.length, 'the monster rises');
+  assert.ok(r.events.some((e) => e.type === 'midnight' && e.skipped));
+  assert.match(applyAction(state, board, { type: 'midnight', seat: state.cur }).error, /already midnight/);
 });
