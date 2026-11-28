@@ -344,3 +344,27 @@ Shots 112, Flighted Bolt 108, Hip Fire 75. Strigoi now loses 7-11 games a size t
 | Adze | 75% | 82% | 82% | 100% |
 | Shadow People | 65% | 60% | 52% | 55% |
 | Skinwalker | 18% | 62% | 85% | 92% |
+
+### Reload [4+], then precision skills on precise low rolls (expert bot, 40 games × 4 sizes × 13 monsters)
+Reload [4+] alone moved nothing (within a game or two of 40 everywhere). Precision skills (Hunting Rifle,
+Controlled Shots, Piercing Tip, Flighted Bolt 🎲🎲 [4-] 6, Javelin, Direct Impact, every Pierce [2-3] 5; each
+requirement picked to keep roughly the old odds of having the dice) then, before → after:
+
+| Monster | Solo | 2 | 3 | 4 |
+|---|---|---|---|---|
+| Werewolf | 2 → 2% | 22 → 20% | 58 → 55% | 70 → 70% |
+| Barghest | 65 → 65% | 85 → 85% | 85 → 88% | 82 → 80% |
+| Hellhounds | 20 → 15% | 42 → 42% | 70 → 65% | 80 → 82% |
+| Skinwalker | 18 → 22% | 62 → 62% | 85 → 85% | 92 → 92% |
+| Wendigo | 10 → 10% | 40 → 42% | 70 → 70% | 68 → 60% |
+| Banshee | 68 → 68% | 78 → 82% | 88 → 80% | 95 → 98% |
+| Ushi-Oni | 2 → 2% | 28 → 25% | 55 → 52% | 65 → 60% |
+| Redcap | 0 → 0% | 12 → 10% | 52 → 42% | 65 → 48% |
+| Poltergeist | 5 → 5% | 42 → 42% | 70 → 72% | 88 → 88% |
+| White Lady | 35 → 38% | 70 → 70% | 82 → 82% | 88 → 88% |
+| Strigoi | 5 → 5% | 18 → 15% | 45 → 45% | 62 → 60% |
+| Adze | 75 → 70% | 82 → 80% | 82 → 85% | 100 → 100% |
+| Shadow People | 65 → 65% | 60 → 60% | 52 → 52% | 55 → 55% |
+
+All: 1,167 → 1,144 wins of 2,080. No single skill dominates the Banshee, Adze or Skinwalker any more: their
+kills spread over a dozen weapons. Still above 90% at 4 players: Banshee 98%, Adze 100%, Skinwalker 92%.
