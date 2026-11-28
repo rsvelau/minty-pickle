@@ -114,3 +114,23 @@ test('a team that has won is never Lost in the night', () => {
   nightTurn(state, board, ctx, []);
   assert.ok(!state.lostInNight);
 });
+
+test('a Care Package always holds a card in the monster’s weakness (swapped in from the deck; nothing lost)', async () => {
+  const { weakCard } = await import('../src/game/carePackage.js');
+  const { EQUIPMENT_CARDS } = await import('../src/game/cards/equipment.js');
+  const { MONSTER_BY_ID } = await import('../src/game/cards/monsters.js');
+  for (const kind of ['werewolf', 'redcap', 'shadow-people', 'barghest']) {
+    const { board, state, ctx } = setup();
+    state.monsters = [{ id: 'm1', kind, pos: 0 }];
+    const weak = MONSTER_BY_ID[kind].weakness;
+    // Stack the deck: five cards with no weakness skill on top, one that has it at the bottom.
+    const plain = EQUIPMENT_CARDS.filter((c) => !weakCard(c.id, weak)).map((c) => c.id);
+    const hit = EQUIPMENT_CARDS.find((c) => c.abilities.some((a) => weak.includes(a.kind) && a.fx?.dmg !== undefined)).id;
+    state.decks.equipment = [hit, ...plain.slice(0, 7)];   // drawn from the end (pop)
+    const before = [...state.decks.equipment].sort();
+    const cell = dropCrate(state, board, ctx, []);
+    const crate = crateAt(state, cell);
+    assert.ok(crate.items.some((id) => weakCard(id, weak)), `${kind}: a weakness card in the package`);
+    assert.deepEqual([...state.decks.equipment, ...crate.items].sort(), before, 'the same cards: one swapped, none lost');
+  }
+});

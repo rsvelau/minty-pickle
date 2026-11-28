@@ -435,3 +435,9 @@ Tried and dropped: retreating at Death's Door even when not targeted (no effect)
 
 All: 1,134 → 1,170 wins of 2,080. At 4 players: 379 → 388 of 520.
 Gains: Strigoi (2-4 players +7 to +23 points), White Lady solo/2p, Shadow People. 40-game rows move ±8% by chance.
+
+### Care Packages always hold a weakness card
+Each package now holds at least one card with a skill in the monster's weakness elements (swapped in from the
+deck). 4 players, 40 games: Werewolf 70%, Barghest 82%, Hellhounds 87%, Skinwalker 87%, Wendigo 70%, Banshee 82%,
+Ushi-Oni 62%, Redcap 45%, Poltergeist 85%, White Lady 82%, Strigoi 72%, Adze 75%, Shadow People 60%: no real
+change, because the first package falls 6 turns after midnight and most fights end 2-4 turns after it.

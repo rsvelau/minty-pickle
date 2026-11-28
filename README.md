@@ -317,7 +317,9 @@ team is **Lost in the night** and everyone loses.
 
 **Care Packages**: every 6 turns after midnight (6, 12 and 18) a purple portal opens over a random Investigation
 marker (investigated or not) and a military crate falls onto it; every camera turns to watch, and the feed says
-where. The crate replaces the marker and holds 5 Equipment cards from the deck. Stopping on it (the pawn always
+where. The crate replaces the marker and holds 5 Equipment cards from the deck, always at least one with a skill
+in one of the monster's weakness elements (swapped in from further down the deck if none was drawn; a damaging
+one if there is one). Stopping on it (the pawn always
 stops there) opens it: take what you need, the rest stays for the others (📦 in the dock reopens it while you
 stand there). An empty crate is gone.
 
