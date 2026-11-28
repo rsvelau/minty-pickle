@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Board Grid Planner</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Special+Elite&display=swap" />
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <aside id="panel" class="panel">
+      <header class="panel-head">
+        <h1 id="panelTitle">Grid Planner</h1>
+        <button id="toTitle" class="icon-btn editor-only" title="Title screen" aria-label="Title screen">⌂</button>
+        <button id="collapse" class="icon-btn" title="Hide panel" aria-label="Hide panel">–</button>
+      </header>
+
+      <div class="panel-body">
+        <section>
+          <h2 class="editor-only">Paint</h2>
+          <div class="seg tool-seg editor-only" role="group" aria-label="Tool">
+            <button data-tool="cells" class="on">Spaces</button>
+            <button data-tool="walls">Walls &amp; doors</button>
+            <button data-tool="move">Movement <kbd>M</kbd></button>
+            <button data-tool="markers">Markers <kbd>P</kbd></button>
+            <button data-tool="buildings">Buildings <kbd>B</kbd></button>
+            <button data-tool="play" data-start="standard" class="play-btn">Play demo <kbd>Y</kbd></button>
+            <button data-tool="play" data-start="midnight" class="play-btn play-btn-midnight">Midnight demo</button>
+            <button id="openSettings" class="settings-btn" type="button">⚙ Game settings</button>
+          </div>
+
+          <div id="cellTools">
+            <!-- Area/subcategory brushes are generated from AREAS in src/state.js -->
+            <div id="areaBrushes"></div>
+            <div class="brush-row">
+              <span class="row-label">Bridge</span>
+              <button class="brush" data-brush="bridge" title="Only applies to water cells"><i class="sw sw-bridge"></i>Bridge<kbd>9</kbd></button>
+              <button class="brush" data-brush="unbridge"><i class="sw sw-unbridge"></i>Remove</button>
+            </div>
+            <div class="brush-row">
+              <span class="row-label">Light</span>
+              <button class="brush" data-brush="unlit" title="Remove the light source (and switch off a street lamp)"><i class="sw sw-unlit"></i>No light<kbd>3</kbd></button>
+              <button class="brush" data-brush="lit" title="Place a light source with the radius below"><i class="sw sw-lit"></i>Light source<kbd>4</kbd></button>
+            </div>
+            <div class="radius-row">
+              <label for="lightRadius">Radius</label>
+              <input type="range" id="lightRadius" min="0" max="6" step="0.5" value="1" />
+              <output id="lightRadiusOut" for="lightRadius"></output>
+            </div>
+            <p class="note" id="lightRadiusNote"></p>
+            <div class="brush-row">
+              <span class="row-label">Lamp</span>
+              <button class="brush wide" data-brush="lamp" title="Street lamp cells only (junctions, and the posts spaced along streets). Lights the cell fully and its neighbours dimly; Unlit switches it off."><i class="sw sw-lamp"></i>Lit lamp<kbd>L</kbd></button>
+            </div>
+            <div class="brush-row">
+              <span class="row-label">Move</span>
+              <button class="brush" data-brush="walkable"><i class="sw sw-walk"></i>Walkable<kbd>5</kbd></button>
+              <button class="brush" data-brush="blocked"><i class="sw sw-blocked"></i>Blocked<kbd>6</kbd></button>
+            </div>
+            <div class="brush-row">
+              <span class="row-label"></span>
+              <button class="brush wide" data-brush="reset">Reset cell to default<kbd>0</kbd></button>
+            </div>
+          </div>
+
+          <div id="playTools" hidden>
+            <div class="seg editor-only" role="group" aria-label="Players" id="playCount">
+              <span class="row-label">Players</span>
+              <button data-players="1">1</button>
+              <button data-players="2">2</button>
+              <button data-players="3">3</button>
+              <button data-players="4" class="on">4</button>
+            </div>
+            <div class="play-row">
+              <div class="die" id="playDie" aria-label="Black die"></div>
+              <div class="play-main">
+                <button id="playRoll" class="on">Roll dice <kbd>Enter</kbd></button>
+                <p class="play-status" id="playStatus"></p>
+              </div>
+            </div>
+            <div class="file-row">
+              <button id="playReset" class="editor-only">Restart</button>
+            </div>
+            <p class="note">Players take turns. Each starts on the Start space and moves one cell per pip. It keeps going while there's one way forward and stops at forks: tap or click a round arrow button (or use the arrow keys). With Follow streets on, roads only go where they lead. Walls, windows, locked and one-way doors and blocked cells stop it; walking over a Key unlocks its building.</p>
+          </div>
+
+          <div id="markerTools" hidden>
+            <div class="marker-grid">
+              <button class="brush" data-marker="investigation"><i class="marker-icon"></i>Investigation</button>
+              <button class="brush" data-marker="objective"><i class="marker-icon"></i>Objective</button>
+              <button class="brush" data-marker="whiteDice"><i class="marker-icon"></i>White Dice</button>
+              <button class="brush" data-marker="blackDice"><i class="marker-icon"></i>Black Dice</button>
+              <button class="brush" data-marker="key"><i class="marker-icon"></i>Key</button>
+              <button class="brush" data-marker="research"><i class="marker-icon"></i>Research</button>
+            </div>
+            <div class="brush-row">
+              <span class="row-label"></span>
+              <button class="brush wide" data-marker="erase"><i class="sw sw-erase"></i>Remove marker</button>
+            </div>
+            <!-- Objective markers: which site (src/core/sites.js) the marker stands for. -->
+            <div class="site-row" id="siteRow" hidden>
+              <label for="siteBrush" class="row-label">Site</label>
+              <select id="siteBrush"></select>
+            </div>
+            <p class="note site-note" id="siteNote" hidden></p>
+            <p class="note site-avail" id="siteAvail"></p>
+            <p class="note">Click or drag to place on walkable cells (Shift-drag fills a rectangle). Markers sit on top of a cell and never change it. Hover a Key to see the locked and one-way doors it unlocks in its building.</p>
+          </div>
+
+          <!-- Buildings: what each building is (src/core/buildings.js). -->
+          <div id="buildingTools" hidden>
+            <div class="building-grid" id="buildingTypes"></div>
+            <p class="note">Tap a building to make it this type: the whole building takes it (floors joined by open floor or doors; walls and windows split buildings). Lay it out with plain floor, walls, windows and doors first: walkable cells stay clear to walk, blocked cells get the heavy furniture. A sign goes over its front door, and Objective markers inside become that site. In a Hotel or Apartments, small rooms behind one door are private rooms; the rest are halls and lobbies.</p>
+            <p class="note" id="buildingList"></p>
+          </div>
+
+          <div id="moveTools" hidden>
+            <p class="note">Click a start cell, then hover any cell to see the shortest route; click to pin it. Click the start again (or press Esc) to clear. Blocked cells, walls, windows and locked doors stop movement; one-way doors only go their arrow's way. Walking onto a Key picks it up and unlocks its building's locked and one-way doors; routes fetch keys when needed.</p>
+            <div class="radius-row">
+              <label for="moveRange">Range</label>
+              <input type="range" id="moveRange" min="0" max="20" step="1" value="0" />
+              <output id="moveRangeOut" for="moveRange">off</output>
+            </div>
+            <label class="check"><input type="checkbox" id="moveDiagonal" /> Allow diagonal moves</label>
+            <label class="check" title="Walking onto a Key marker picks it up; its building's locked and one-way doors then pass both ways"><input type="checkbox" id="moveKeys" checked /> Keys unlock doors</label>
+            <p class="move-info" id="moveInfo">No start cell yet.</p>
+          </div>
+
+          <div id="wallTools" hidden>
+            <div class="brush-row three">
+              <button class="brush" data-edge="wall"><i class="sw sw-wall"></i>Wall<kbd>W</kbd></button>
+              <button class="brush" data-edge="window"><i class="sw sw-window"></i>Window<kbd>G</kbd></button>
+              <button class="brush" data-edge="erase"><i class="sw sw-erase"></i>Erase<kbd>X</kbd></button>
+            </div>
+            <div class="brush-row three">
+              <button class="brush" data-edge="door" title="Unlocked: drawn open; passable, lets light through"><i class="sw sw-door"></i>Unlocked<kbd>D</kbd></button>
+              <button class="brush" data-edge="lockedDoor" title="Locked: shut; blocks movement and light"><i class="sw sw-locked"></i>Locked<kbd>K</kbd></button>
+              <button class="brush" data-edge="oneWayDoor" title="One-way: click on the side people come FROM; click from the other side to flip"><i class="sw sw-oneway"></i>One-way<kbd>O</kbd></button>
+            </div>
+            <p class="note">Drag along grid lines to draw. Click an edge to place or remove one piece; doors and storefront windows sit centred between two cells. For a one-way door, click on the side people come from (click from the other side to flip it). Walls, locked and one-way doors block light; unlocked doors and windows let it through. Rectangle draws a room outline (Erase clears everything inside it).</p>
+          </div>
+          <div class="seg editor-only" role="group" aria-label="Paint shape">
+            <button data-shape="brush" class="on">Freehand</button>
+            <button data-shape="rect">Rectangle <kbd>R</kbd></button>
+          </div>
+        </section>
+
+        <section class="editor-only">
+          <h2>Board size</h2>
+          <div class="size-row">
+            <label for="sizeCols">Columns</label>
+            <input type="number" id="sizeCols" inputmode="numeric" />
+            <label for="sizeRows">Rows</label>
+            <input type="number" id="sizeRows" inputmode="numeric" />
+            <button id="sizeApply">Apply</button>
+          </div>
+          <p class="note" id="sizeReadout"></p>
+          <p class="note">Scale: 1 cell ≈ 7 m (23 ft), the width of a narrow two-lane street with sidewalks. A small home is about 1.3 × 1.1 cells. Shrinking removes cells past the new edge; undo restores them.</p>
+          <label class="check"><input type="checkbox" id="optGhost" /> Show small home (9 × 8 m) at cursor</label>
+        </section>
+
+        <section class="editor-only">
+          <h2>Elevation</h2>
+          <div class="seg" role="group" aria-label="Elevation preset" id="terrainPresets"></div>
+          <p class="note" id="terrainNote"></p>
+        </section>
+
+        <section class="editor-only">
+          <h2>File</h2>
+          <div class="file-row">
+            <button id="undo" title="Ctrl/Cmd+Z">Undo</button>
+            <button id="redo" title="Ctrl/Cmd+Shift+Z">Redo</button>
+            <button id="clear">Clear</button>
+          </div>
+          <div class="file-row">
+            <button id="export">Export JSON</button>
+            <button id="import">Import JSON</button>
+            <button id="png">Save PNG</button>
+          </div>
+          <div class="file-row two">
+            <button id="myMaps" title="Save this board to My maps, or open one (saved maps can be played from New game)">My maps</button>
+            <button id="checkMap" title="Check this map has what the game needs: a start, investigation spots, reachable markers">Ready to play?</button>
+          </div>
+          <div class="file-row single">
+            <button id="stressTest" title="How heavy is a tile, a building or this map on this device? Fills a board and measures frame rate, triangles and draw calls">Stress test</button>
+          </div>
+          <input type="file" id="importFile" accept="application/json,.json" hidden />
+          <p class="note" id="saveNote">Autosaves in this browser.</p>
+        </section>
+      </div>
+    </aside>
+
+    <div id="dialog" class="dialog" hidden role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+      <div class="dialog-card">
+        <h3 id="dlgTitle"></h3>
+        <p id="dlgText"></p>
+        <textarea id="dlgArea" spellcheck="false" hidden></textarea>
+        <img id="dlgImg" alt="Snapshot of the board" hidden />
+        <div id="dlgActions" class="dialog-actions"></div>
+      </div>
+    </div>
+    <div id="toast" class="toast" role="status" hidden></div>
+
+    <!-- A monster attack: a soft red flash at the screen edges. -->
+    <div id="attackFlash" class="attack-flash" aria-hidden="true"></div>
+    <div id="fps" class="fps" hidden></div>
+    <!-- Play demo: "Investigate?" when a runner reaches an Investigation space. -->
+    <div id="askCard" class="ask-card" hidden role="dialog" aria-labelledby="askTitle">
+      <div class="ask-top">
+        <span class="ask-icon" aria-hidden="true"></span>
+        <div><b id="askTitle">Investigate?</b><p class="ask-sub" id="askSub"></p></div>
+      </div>
+      <!-- Last chance to brace: slot rolled (or white) dice into Defense. -->
+      <div class="ask-defense" id="askDefense">
+        <div class="tray-row"><span class="tray-label">Dice</span><div class="tray-dice" id="askPool"></div></div>
+        <div class="tray-row"><span class="tray-label">Defense</span><div class="tray-dice" id="askDef"></div><b class="tray-total def" id="askDefTotal">0</b></div>
+        <p class="ask-sub" id="askDefHint"></p>
+      </div>
+      <div class="ask-actions">
+        <button id="askNo" type="button">No</button>
+        <button id="askYes" type="button" class="on">Yes</button>
+      </div>
+    </div>
+    <!-- An Event card that needs a choice (src/play/panels.js renderEventChoice). -->
+    <div id="eventChoice" class="ask-card event-choice" hidden role="dialog" aria-labelledby="evTitle">
+      <div class="ask-top"><div><span class="ev-kind" id="evKind"></span><b id="evTitle"></b><p class="ask-sub" id="evText"></p></div></div>
+      <div class="ev-actions" id="evActions"></div>
+    </div>
+    <!-- Sacrifice: someone has fallen; the Fetish's carrier decides (src/play/panels.js renderSacrifice). -->
+    <div id="sacrificeAsk" class="ask-card event-choice" hidden role="dialog" aria-labelledby="sacTitle">
+      <div class="ask-top"><div><span class="ev-kind" id="sacKind">Sacrificial Fetish</span><b id="sacTitle"></b><p class="ask-sub" id="sacText"></p></div></div>
+      <div class="ev-actions"><button id="sacNo" type="button">Let them die</button><button id="sacYes" type="button" class="on">Spend it</button></div>
+    </div>
+    <!-- Evidence Obol: choose one of the face-down Evidence cards. -->
+    <div id="revealSheet" class="reveal-sheet" hidden role="dialog" aria-labelledby="revealTitle">
+      <b id="revealTitle">Evidence found</b>
+      <p class="reveal-sub" id="revealSub">Choose a card to turn over</p>
+      <div class="reveal-cards" id="revealCards"></div>
+    </div>
+    <!-- A card turning over (evidence, an attack, naming, the midnight reveal). Tap to dismiss. -->
+    <div id="cardPop" class="card-pop" hidden role="status">
+      <div class="paper-card" id="cardPopCard"></div>
+      <p class="card-pop-hint" id="cardPopHint">Tap to continue</p>
+    </div>
+    <!-- Casebook and Field Guide. -->
+    <div id="casebook" class="dialog sheet" hidden role="dialog" aria-modal="true" aria-labelledby="caseTitle">
+      <div class="dialog-card journal">
+        <div class="inv-head">
+          <h3 id="caseTitle" class="journal-title">Casebook</h3>
+          <button id="caseClose" type="button" class="inv-close" aria-label="Close">✕</button>
+        </div>
+        <div class="inv-tabs" id="caseTabs" role="tablist">
+          <button type="button" role="tab" data-ctab="case" class="on">Casebook</button>
+          <button type="button" role="tab" data-ctab="guide">Field Guide</button>
+        </div>
+        <div class="journal-body" id="caseBody"></div>
+      </div>
+    </div>
+    <!-- Play demo: the Obol a player just drew. Tap to dismiss. -->
+    <div id="obolReveal" class="obol-reveal" hidden role="status">
+      <span id="obolCoin"></span>
+      <div><b id="obolTitle"></b><p id="obolSub"></p></div>
+    </div>
+    <!-- Game settings: the adjustable mechanics. -->
+    <div id="settings" class="dialog" hidden role="dialog" aria-modal="true" aria-labelledby="setTitle">
+      <div class="dialog-card settings-card">
+        <h3 id="setTitle">Game settings</h3>
+        <p>Saved on this device. Changes restart a game in progress.</p>
+        <div id="settingsBody"></div>
+        <div class="dialog-actions">
+          <button id="setDefaults" type="button">Reset to defaults</button>
+          <button id="setCopy" type="button" title="Copy these settings, to send them to someone (or to make them the defaults)">Copy my settings</button>
+          <button id="setDone" type="button" class="on">Done</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ending a turn with dice still unused. -->
+    <div id="endConfirm" class="ask-card" hidden role="dialog" aria-labelledby="endTitle">
+      <div class="ask-top"><div><b id="endTitle">End your turn?</b><p class="ask-sub" id="endSub"></p></div></div>
+      <div class="ask-actions">
+        <button id="endNo" type="button" class="on">Keep playing</button>
+        <button id="endYes" type="button">End turn</button>
+      </div>
+    </div>
+    <!-- The monster's declared action for this round, and who's in danger. -->
+    <div id="intentBanner" class="intent-banner" hidden role="status"></div>
+    <!-- Play demo: small game clock (time and turn), top centre. -->
+    <div id="gameClock" class="game-clock" hidden aria-live="polite"></div>
+    <!-- A bot's turn (src/play/bots.js): what it rolled and what it did. -->
+    <div id="botBanner" class="bot-banner" hidden aria-live="polite"></div>
+    <!-- Following the bots (src/play/botWatch.js): the team strip, turn receipts, the round summary. -->
+    <div id="teamStrip" class="team-strip" hidden></div>
+    <div id="botReceipts" class="bot-receipts" hidden></div>
+    <div id="roundSummary" class="round-summary" hidden role="status"></div>
+    <!-- Play: switch between Quick and Tactical movement mid-game. -->
+    <button id="moveModeBtn" class="move-mode" type="button" hidden title="Quick: run on to the next fork or marker. Tactical: choose every step"></button>
+    <!-- Play: the dock along the bottom. A status line, then four menus and the
+         big action button (src/play/dock.js). Each menu opens as a sheet over
+         the board, just above the dock; one at a time. -->
+    <div id="playHud" class="play-hud dock" hidden>
+      <div class="dock-status"><div class="die die-sm" id="hudDie" aria-label="Black die"></div><p class="hud-status" id="hudStatus"></p>
+        <button id="stayBtn" class="crate-btn" type="button" hidden title="Stay hidden: your turn passes">🫥 Stay hidden</button>
+        <button id="crateBtn" class="crate-btn" type="button" hidden title="A Care Package is here: take what you need">📦 Care Package</button>
+        <button id="feedToggle" class="feed-toggle" type="button" aria-label="Messages on or off" aria-pressed="true">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 5.5h15v10h-9l-4.5 3.5v-3.5h-1.5z"/><path d="M8 9.5h8M8 12.5h5"/></svg>
+        </button></div>
+      <div class="dock-row">
+        <button id="hudTeam" class="dock-btn" type="button" data-sheet="teamSheet" title="Team: investigators, injuries, the log">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19.5c.6-3.4 2.8-5.3 5.5-5.3s4.9 1.9 5.5 5.3"/><circle cx="16.8" cy="9" r="2.5"/><path d="M15.6 14.4c2.6-.4 4.4 1.4 4.9 4.6"/></svg>
+          <span>Team</span>
+        </button>
+        <button id="hudInv" class="dock-btn" type="button" data-sheet="inventory" title="Skills and Obolcraft (I)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2.8 5.5 13.2h5.6L10 21.2l8.5-11h-5.8z"/></svg>
+          <span>Skills</span>
+          <span class="hud-badge n" id="skillBadge" hidden></span>
+        </button>
+        <button id="hudCase" class="dock-btn" type="button" data-sheet="casebook" title="Casebook and Field Guide (C)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h10.5a3 3 0 0 1 3 3V20H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h10.5"/><circle cx="11.5" cy="8.6" r="2"/><path d="M13 10.1l1.8 1.8"/></svg>
+          <span>Case</span>
+          <span class="hud-badge" id="caseBadge" hidden></span>
+        </button>
+        <button id="hudMore" class="dock-btn" type="button" data-sheet="moreSheet" title="More: view, movement, settings, save and quit (Esc)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18.5" cy="12" r="1.6"/></svg>
+          <span>More</span>
+        </button>
+        <button id="hudRoll" class="hud-roll">Roll</button>
+      </div>
+    </div>
+    <!-- Scouting (start of the game): pick one of the cards left at the edge of town. -->
+    <div id="scoutScreen" class="scout-screen" hidden role="dialog" aria-modal="true" aria-labelledby="scoutTitle">
+      <div class="scout-inner">
+        <h2 id="scoutTitle" class="scout-title">Scouting</h2>
+        <p class="scout-story" id="scoutStory"></p>
+        <p class="scout-who" id="scoutWho"></p>
+        <div class="scout-cards" id="scoutCards"></div>
+        <button id="scoutTake" type="button" class="scout-take" disabled>Choose a card</button>
+      </div>
+    </div>
+    <!-- The message feed (src/play/feed.js): what just happened, colour-coded, fading. -->
+    <div id="feed" class="feed" role="log" aria-live="polite" title="Tap for recent messages"><div id="feedLines" class="feed-lines"></div></div>
+    <!-- Team: everyone's place, dice, injuries and Obols; one player's injuries in full; the log. -->
+    <!-- A Care Package: the Equipment in the crate under the current player. -->
+    <div id="crateSheet" class="dialog sheet" hidden role="dialog" aria-labelledby="crateTitle">
+      <div class="dialog-card sheet-card">
+        <div class="inv-head sheet-head"><h3 id="crateTitle">Care Package</h3><button type="button" class="inv-close" data-close aria-label="Close">✕</button></div>
+        <div class="sheet-body" id="crateBody"></div>
+      </div>
+    </div>
+    <div id="teamSheet" class="dialog sheet" hidden role="dialog" aria-labelledby="teamTitle">
+      <div class="dialog-card sheet-card">
+        <div class="inv-head sheet-head"><h3 id="teamTitle">Team</h3><button type="button" class="inv-close" data-close aria-label="Close">✕</button></div>
+        <div class="sheet-body">
+          <p class="play-stats" id="playStats"></p>
+          <div class="play-board" id="playBoard"></div>
+          <div class="team-detail" id="teamDetail"></div>
+          <b class="sheet-sub">Log</b>
+          <ol class="play-log" id="playLog"></ol>
+        </div>
+      </div>
+    </div>
+    <!-- More: view, movement, camera, settings, save / load / quit. -->
+    <div id="moreSheet" class="dialog sheet" hidden role="dialog" aria-labelledby="moreTitle">
+      <div class="dialog-card sheet-card">
+        <div class="inv-head sheet-head"><h3 id="moreTitle">More</h3><button type="button" class="inv-close" data-close aria-label="Close">✕</button></div>
+        <div class="sheet-body more-body">
+          <span class="vm-label">Movement</span>
+          <div class="vm-grid" id="moreMove">
+            <button type="button" data-movemode="quick">Quick</button>
+            <button type="button" data-movemode="tactical">Tactical</button>
+          </div>
+          <div class="more-checks">
+            <label class="check play-follow"><input type="checkbox" id="playFollow" checked /> Follow camera</label>
+            <label class="check play-follow" title="On streets, the start space and bridges, only move where the road goes (or through a door)"><input type="checkbox" id="playStreets" checked /> Follow streets</label>
+          </div>
+          <div id="moreView"></div>
+          <div class="more-menu" id="moreMenu"></div>
+        </div>
+      </div>
+    </div>
+    <!-- Skills: each player's Equipment skills (Ready first, or By item) and Obolcraft, in tabs. -->
+    <div id="inventory" class="dialog sheet" hidden role="dialog" aria-labelledby="invTitle">
+      <div class="dialog-card inv-card sheet-card">
+        <div class="inv-head sheet-head">
+          <h3 id="invTitle">Skills</h3>
+          <button id="invClose" type="button" class="inv-close" aria-label="Close">✕</button>
+        </div>
+        <div class="inv-players" id="invPlayers" role="tablist" aria-label="Player"></div>
+        <div class="inv-tabs" id="invTabs" role="tablist" aria-label="Skills or Obolcraft"></div>
+        <div class="inv-body" id="invBody" role="tabpanel"></div>
+      </div>
+    </div>
+    <!-- Dice tray: rolled dice and movement slots (shown after a roll). -->
+    <button id="trayPill" class="tray-pill" type="button" hidden aria-label="Show the dice tray">🎲 Dice</button>
+    <div id="playTray" class="play-tray" hidden>
+      <button id="trayMin" class="tray-min" type="button" aria-label="Minimize the dice tray" title="Minimize">–</button>
+      <div class="tray-target seg" id="trayTarget" role="group" aria-label="Tap a die to put it into">
+        <button type="button" data-to="move" class="on">Slot to Move</button>
+        <button type="button" data-to="defense">Slot to Defense</button>
+      </div>
+      <div class="tray-row"><span class="tray-label">Rolled</span><div class="tray-dice" id="trayPool"></div></div>
+      <div class="tray-row" id="trayLuckyRow" hidden><span class="tray-label">Lucky</span><div class="tray-dice lucky" id="trayLucky"></div></div>
+      <div class="tray-row" id="trayReserveRow"><span class="tray-label">Reserve</span><div class="tray-dice" id="trayReserve"></div></div>
+      <div class="tray-row"><span class="tray-label">Move</span><div class="tray-dice" id="traySlots"></div><b class="tray-total" id="trayTotal">0</b></div>
+      <div class="tray-row"><span class="tray-label">Defense</span><div class="tray-dice" id="trayDefense"></div><b class="tray-total def" id="trayDefTotal">0</b></div>
+      <div class="tray-row tray-actions">
+        <span class="tray-hint" id="trayHint">Tap dice to slot them</span>
+        <button id="trayDice" type="button" class="tray-end" hidden aria-expanded="false">Dice ▴</button>
+        <button id="trayStrike" type="button" class="tray-end tray-strike" hidden title="Blessed Cosor: one die, ignoring the Strigoi's toughness (once a turn)">Strike ✝</button>
+        <button id="trayEnd" type="button" class="tray-end">End turn</button>
+        <button id="trayMove" class="hud-roll">Move</button>
+      </div>
+    </div>
+    <div id="playChoices" class="play-choices"></div>
+
+    <button id="expand" class="panel-tab" hidden>Grid Planner ☰</button>
+
+    <!-- View menu: a small button top-right that opens a column of view controls. -->
+    <nav id="viewMenu" class="view-menu" aria-label="View">
+      <button id="viewToggle" class="view-toggle" aria-expanded="false" aria-controls="viewList" title="View options (V)">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3.2" fill="currentColor"/></svg>
+        <span class="view-current" id="viewCurrent">All</span>
+      </button>
+      <div id="viewList" class="view-list" hidden>
+        <span class="vm-label">Layer</span>
+        <div class="vm-grid">
+          <button data-view="all" class="on">All</button>
+          <button data-view="area">Area</button>
+          <button data-view="light">Light</button>
+          <button data-view="walk">Move</button>
+        </div>
+        <span class="vm-label">Camera</span>
+        <div class="vm-grid">
+          <button data-cam="angled">Angled</button>
+          <button data-cam="top">Top</button>
+          <button id="camMode" class="vm-wide" title="One-finger / left-drag orbits instead of paints (or hold Space)">Orbit mode</button>
+        </div>
+        <span class="vm-label">Show</span>
+        <div class="vm-col">
+          <label class="vm-chip"><input type="checkbox" id="optLabels" checked />Labels</label>
+          <label class="vm-chip"><input type="checkbox" id="optAtmos" checked />Atmosphere</label>
+          <label class="vm-chip"><input type="checkbox" id="optLowWalls" />Low walls</label>
+          <label class="vm-chip"><input type="checkbox" id="optMarkers" checked />Markers</label>
+          <label class="vm-chip"><input type="checkbox" id="optFps" />FPS</label>
+          <label class="vm-chip" title="Draw fewer pixels when the frame rate drops below 30, and more again when it recovers"><input type="checkbox" id="optAutoRes" checked />Auto resolution</label>
+        </div>
+        <span class="vm-label">Quality</span>
+        <div class="vm-grid vm-grid-3" id="qualityButtons">
+          <button data-quality="low" title="Phones that run warm: lower resolution, no shadows, fewer trees and less rain">Low</button>
+          <button data-quality="medium" title="Most phones">Medium</button>
+          <button data-quality="high" title="Computers and recent phones">High</button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Game shell (src/app/gameShell.js): title, new game, load/save, in-game menu. -->
+    <div id="screen" class="screen" hidden role="dialog" aria-modal="true"></div>
+    <div id="deckScreen" class="screen deck-screen" hidden role="dialog" aria-modal="true" aria-label="Cards in the game"></div>
+    <button id="gameMenuBtn" class="game-menu-btn" type="button" hidden aria-label="Game menu" title="Menu (Esc)">☰</button>
+
+    <div id="stressPanel" class="stress-panel" hidden role="dialog" aria-label="Stress test"></div>
+    <!-- Play: picking a space on the board (Distract). -->
+    <div id="pickBar" class="pick-bar" hidden role="status"><span id="pickText"></span><button id="pickCancel" type="button">Cancel</button></div>
+    <div id="placeBar" class="place-bar" hidden>
+      <div id="placeName" class="place-name"></div>
+      <div class="place-btns">
+        <button id="placeRotate" type="button" title="Turn it a quarter (R)">⟳ Rotate</button>
+        <button id="placeFlip" type="button" title="Mirror it left to right (F)">⇋ Flip</button>
+        <button id="placeOk" type="button" class="on" title="Lay the building here (Enter)">✓ Place</button>
+        <button id="placeCancel" type="button" title="Cancel (Esc)" aria-label="Cancel">✕</button>
+      </div>
+    </div>
+
+    <div id="info" class="info">
+      <button id="infoToggle" class="info-toggle" type="button" aria-expanded="true" aria-controls="info" title="Hide cell info">–</button>
+      <div id="hover" class="hover">Hover a cell</div>
+      <div id="counts" class="counts"></div>
+    </div>
+
+    <div class="help">
+      <b>Left-drag</b> paint · <b>Shift-drag</b> rectangle · <b>Right-drag</b> / <b>Space</b>+drag orbit ·
+      <b>Middle-drag</b>, <b>Shift+right-drag</b> or <b>arrows</b> pan · <b>Wheel</b> zoom at pointer ·
+      <b>F</b> focus cell · touch: 1 finger paints, 2 fingers pinch/pan
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
