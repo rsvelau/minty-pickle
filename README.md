@@ -48,8 +48,10 @@ stars fade out on the way down.
 
 **Scouting** (the start of every new game; Game settings → Start → Scouting turns it off): someone got
 here first, and what they gathered was left at the edge of town. How it went depends on the night's monster's
-**difficulty**, 1 to 5 stars on its card (`stars` in `src/game/cards/monsters.js`; the Adze is 2 stars,
-the Shadow People 3, every other monster 1 for now). Difficulty isn't evidence: the stars only show when the monster's identity comes out (on its card,
+**difficulty**, 1 to 5 stars on its card (`stars` in `src/game/cards/monsters.js`), set from the expert bots'
+4-player win rate: 1★ 80% or more (Barghest, Banshee, White Lady, Poltergeist, Hellhounds, Skinwalker), 2★ 60-79%
+(Shadow People, Ushi-Oni, Werewolf, Wendigo, Strigoi, Adze), 3★ below that (Redcap). 4★ and 5★ are kept for
+monsters that need real team strategy to beat. Difficulty isn't evidence: the stars only show when the monster's identity comes out (on its card,
 with its name), and in the card list under Game settings. The Scouting screen shows only the story
 (`SCOUTING_STORY` in rules.js): 1 ★ whoever called us left supplies; 2 ★ somebody left in a hurry; 3 ★ a
 scouting team found this much before things got too hot; 4 ★ paid for in blood; 5 ★ a slaughter, the

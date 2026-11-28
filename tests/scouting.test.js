@@ -51,12 +51,13 @@ test('solo: two cards, one choice; turned off, no scouting', () => {
   assert.equal(setup(2, false).state.phase, 'idle');
 });
 
-test('the story follows the night’s monster’s stars (the Adze is 2 stars, the Shadow People 3)', async () => {
-  const { MONSTER_CARDS } = await import('../src/game/cards/monsters.js');
+test('the story follows the night’s monster’s stars (from the 4-player win rates: the Redcap 3, six at 2, the rest 1)', async () => {
   const { SCOUTING_STORY } = await import('../src/game/rules.js');
-  assert.equal(MONSTER_CARDS.find((c) => c.id === 'adze').stars, 2);
-  assert.equal(MONSTER_CARDS.find((c) => c.id === 'shadow-people').stars, 3);
-  assert.ok(MONSTER_CARDS.filter((c) => !['adze', 'shadow-people'].includes(c.id)).every((c) => c.stars === 1));
+  const { MONSTER_CARDS } = await import('../src/game/cards/monsters.js');
+  const by = Object.fromEntries(MONSTER_CARDS.map((c) => [c.id, c.stars]));
+  assert.equal(by.redcap, 3);
+  for (const id of ['shadow-people', 'ushi-oni', 'werewolf', 'wendigo', 'strigoi', 'adze']) assert.equal(by[id], 2, id);
+  for (const id of ['barghest', 'banshee', 'white-lady', 'poltergeist', 'hellhounds', 'skinwalker']) assert.equal(by[id], 1, id);
   const g = new GridState(20, 10);
   for (let x = 0; x < 20; x++) g.apply(g.index(x, 5), { area: 'outdoor', sub: 'street' }, { silent: true });
   g.apply(g.index(19, 5), { area: 'outdoor', sub: 'start', walkable: false, facing: 3 }, { silent: true });

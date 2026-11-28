@@ -8,7 +8,8 @@
 //   The game is designed for 4 investigators and balanced there first; a monster
 //   too soft for a full table gets this rather than new printed stats (docs/PLAYTEST.md).
 //   id, name, hp, toughness (null = ∞), badge (the number in the top-right
-//   corner), stars (difficulty, 1 to 5: sets the Scouting story), traits, note (the rules text under the name), objective,
+//   corner), stars (difficulty, 1 to 5: sets the Scouting story; set from the expert bots' 4-player win rate:
+//   1★ 80%+, 2★ 60-79%, 3★ below that; 4-5★ are for monsters that need real team strategy), traits, note (the rules text under the name), objective,
 //   weakness / immune (damage kinds, see DAMAGE_KINDS), weaknessTrack (the
 //   arrows on the art: after `hits` attacks with a weapon of a weakness element,
 //   that effect happens, once; hits null = the purple ∞, an effect that can
@@ -39,7 +40,7 @@ const A = (kind, name, roll, text, tags = {}) => ({ kind, name, roll, text, ...t
 
 export const MONSTER_CARDS = [
   {
-    id: 'werewolf', name: 'Werewolf', hp: 20, toughness: 4, badge: 3, stars: 1,
+    id: 'werewolf', name: 'Werewolf', hp: 20, toughness: 4, badge: 3, stars: 2,
     traits: ['Corporeal', 'Beast'],
     note: 'Half speed indoors.',
     objective: 'Kill: wear its health down to 0.',
@@ -100,7 +101,7 @@ export const MONSTER_CARDS = [
     evidence: { attack: 'S', observations: ['SD', 'SH', 'ES'], lair: 'TS' },
   },
   {
-    id: 'wendigo', name: 'Wendigo', hp: 20, toughness: 1, badge: 2, stars: 1,
+    id: 'wendigo', name: 'Wendigo', hp: 20, toughness: 1, badge: 2, stars: 2,
     traits: ['Corporeal', 'Intelligent', 'Regenerative'],
     note: 'Avoids traps. Consume heals equal to damage. Lure causes players to move towards Wendigo.',
     objective: 'Kill: wear its health down to 0.',
@@ -129,7 +130,7 @@ export const MONSTER_CARDS = [
     evidence: { attack: 'M', observations: ['CS', 'LT', 'IS'], lair: 'UG' },
   },
   {
-    id: 'ushi-oni', name: 'Ushi-Oni', hp: 30, toughness: 5, badge: 1, stars: 1,
+    id: 'ushi-oni', name: 'Ushi-Oni', hp: 30, toughness: 5, badge: 1, stars: 2,
     traits: ['Corporeal', 'Demon'],
     note: 'End of turn: Move (10) toward Lair. Ignores walls; can’t cross salt. Seized players are at Death’s Door. Carried to Lair = killed.',
     objective: 'Kill: wear its health down to 0.',
@@ -143,7 +144,7 @@ export const MONSTER_CARDS = [
     evidence: { attack: 'P', observations: ['OT', 'LT', 'WT'], lair: 'HC' },
   },
   {
-    id: 'redcap', name: 'Redcap', hp: 9, toughness: 10, badge: 1, stars: 1,
+    id: 'redcap', name: 'Redcap', hp: 9, toughness: 10, badge: 1, stars: 3,
     traits: ['Corporeal', 'Fae'],
     note: 'Piercing attacks can damage Redcap, but can’t land the killing blow.',
     objective: 'Kill: wear its health down to 0.',
@@ -183,7 +184,7 @@ export const MONSTER_CARDS = [
     evidence: { attack: 'M', observations: ['CS', 'WT', 'EV'], lair: 'UG' },
   },
   {
-    id: 'strigoi', name: 'Strigoi', hp: 10, toughness: null, badge: 1, stars: 1,
+    id: 'strigoi', name: 'Strigoi', hp: 10, toughness: null, badge: 1, stars: 2,
     traits: ['Corporeal', 'Revenant'],
     note: 'Only damaged by the Blessed Cosor (one of your dice, ignoring toughness). Drain and Unholy Burn always target the Cosor holder, wherever they are; with no one holding it, they strike whoever is in Close range.',
     objective: 'Kill with the Blessed Cosor: take the Cosor (a Romanian knife) from the Lair, sharpen it at the Outdoor Store {12}, bless it at the Church {9}, then strike the Strigoi with it.',
@@ -216,7 +217,7 @@ export const MONSTER_CARDS = [
     evidence: { attack: 'S', observations: ['UI', 'FW', 'SL'], lair: 'TS' },
   },
   {
-    id: 'shadow-people', name: 'Shadow People', hp: null, toughness: null, badge: 0, stars: 3,
+    id: 'shadow-people', name: 'Shadow People', hp: null, toughness: null, badge: 0, stars: 2,
     // No body: the darkness around players ripples; it only takes shape to
     // strike (Umbral Stab, when a player enters a lit space).
     body: 'none', onEnterLit: { kind: 'physical', dmg: 'die' },

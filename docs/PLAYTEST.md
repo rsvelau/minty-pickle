@@ -441,3 +441,10 @@ Each package now holds at least one card with a skill in the monster's weakness 
 deck). 4 players, 40 games: Werewolf 70%, Barghest 82%, Hellhounds 87%, Skinwalker 87%, Wendigo 70%, Banshee 82%,
 Ushi-Oni 62%, Redcap 45%, Poltergeist 85%, White Lady 82%, Strigoi 72%, Adze 75%, Shadow People 60%: no real
 change, because the first package falls 6 turns after midnight and most fights end 2-4 turns after it.
+
+### Difficulty stars from the 4-player win rates (expert bots, 40 games)
+1★ (80%+): Barghest 82, Banshee 82, White Lady 82, Poltergeist 85, Hellhounds 87, Skinwalker 87.
+2★ (60-79%): Shadow People 60, Ushi-Oni 62, Werewolf 70, Wendigo 70, Strigoi 72, Adze 75.
+3★: Redcap 45. 4★ and 5★ are reserved for monsters that need sophisticated team strategy.
+(The gap between 75% and 82% is the natural split. 40 games move a rate ±8%, so a monster near a line may
+change band in a re-run.)
