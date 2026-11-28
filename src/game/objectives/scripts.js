@@ -22,7 +22,7 @@ export const OBJECTIVES = {
     played: true,
     steps: [
       { do: 'cleanse', at: 'church', fixture: 'holy-water-basin', who: 'each', text: 'Each investigator cleanses at the Church’s Holy Water Basin (the uncleansed can’t cross the river)' },
-      { do: 'escape', at: 'start', requires: 'cleanse', text: 'Escape at the Start space: one escape wins for the team, and play goes on until everyone has escaped or died' },
+      { do: 'escape', at: 'start', requires: 'cleanse', opens: 'midnight', text: 'Escape at the Start space (the way out opens 3 rounds after midnight): one escape wins for the team, and play goes on until everyone has escaped or died' },
     ],
   },
   hellhounds: {

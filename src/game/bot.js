@@ -25,7 +25,7 @@ import { RECIPES, blocked as craftBlocked } from './obolcraft.js';
 import { choicesFor, doorOverride } from './eventPlay.js';
 import { scriptOf, mapSites, knownMonster } from './objectives/scripts.js';
 import { RANGE, cellRange } from './cards/injuries.js';
-import { sixToSpend, memorialCells } from './objectives/verbs.js';
+import { sixToSpend, memorialCells, wayOutOpen } from './objectives/verbs.js';
 import { matchesEvidence } from './mystery.js';
 import { toughnessOf, targetsFor } from './equipmentPlay.js';
 import { checkRequirement } from './cards/requirements.js';
@@ -164,7 +164,7 @@ export function makeBot(board, { expert = true, trace = false, controls = () => 
           const it = carrying(pl, st.item);
           if (it && !it[st.set] && (!st.requires || it[st.requires]) && at.length) return at;
         } else if (st.do === 'cleanse' && !pl.status?.cleanse && at.length) return at;
-        else if (st.do === 'escape' && pl.status?.cleanse) return at;
+        else if (st.do === 'escape' && pl.status?.cleanse && (st.opens !== 'midnight' || wayOutOpen(state))) return at;   // (before midnight the way out is shut: go on investigating)
         else if (st.do === 'hold' && ob.ceremony && at.length) return at;
         else if (st.do === 'destroy') {
           // An anchor is broken by stepping onto its marker with a 6: not the one underfoot.

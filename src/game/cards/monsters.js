@@ -53,8 +53,8 @@ export const MONSTER_CARDS = [
     id: 'barghest', name: 'Barghest', hp: null, toughness: null, badge: 2, stars: 1,
     outdoorsOnly: true,   // can't enter buildings
     traits: ['Semi-Corporeal', 'Dissipating'],
-    note: 'Start: Town Entrance. Can’t enter buildings. Midnight: all players Corrupted. Cleanse at {9}.',
-    objective: 'Escape: every investigator must be cleansed at the Holy Water Basin in the Church {9} before they can cross the river. One cleansed investigator reaching the Start space wins for the team.',
+    note: 'Start: Town Entrance. Can’t enter buildings. Cleanse at {9} to cross the river. The way out opens 3 rounds after midnight.',
+    objective: 'Escape: every investigator must be cleansed at the Holy Water Basin in the Church {9} before they can cross the river. The way out opens 3 rounds after midnight: from then, one cleansed investigator reaching the Start space wins for the team.',
     weakness: ['salt', 'holy'], immune: ['crystal', 'iron', 'fire', 'silver'],
     weaknessTrack: [{ hits: 1, text: 'Disable Death Gaze for ⌛' }, { hits: 2, text: 'Disable Death Gaze for ⌛' }, { hits: 4, text: 'Disable Shadow Trap' }],
     abilities: [

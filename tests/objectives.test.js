@@ -164,6 +164,17 @@ test('Barghest: cleanse at the Church; the uncleansed can’t step onto a bridge
   s.at(a, 0, 0);
   assert.ok(a.status.cleanse);
   assert.ok(!crossingBlocked(s.state, s.board, a, s.g.index(12, 5)));
+  // The way out opens 3 rounds after midnight: cleansed, but before then they can't leave.
+  const struck = s.state.midnightRound;
+  s.state.midnightRound = null;
+  s.at(a, ...Object.values(s.g.coords(start)));
+  assert.ok(!a.escaped && !s.state.won, 'not before midnight');
+  s.state.midnightRound = s.state.round - 2;
+  s.at(a, 0, 0); s.at(a, ...Object.values(s.g.coords(start)));
+  assert.ok(!a.escaped, 'two rounds after midnight: still shut');
+  s.state.midnightRound = s.state.round - 3;
+  void struck;
+  s.at(a, 0, 0);
   s.at(a, ...Object.values(s.g.coords(start)));
   assert.ok(a.escaped && s.state.won);
   assert.notEqual(s.state.phase, 'over', 'play goes on for the others');

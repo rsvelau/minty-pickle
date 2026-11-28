@@ -141,6 +141,12 @@ export function onSiteEnter(state, board, pl, cell, ctx, events) {
       (pl.status ??= {}).cleanse = true;
       say(`${pl.name} is cleansed at ${where}.`);
     } else if (step.do === 'escape') {
+      // The way out opens WAY_OUT_AFTER rounds after midnight (Barghest).
+      if (step.opens === 'midnight' && !wayOutOpen(state)) {
+        const told = (ob.toldShut ??= {});
+        if (told[pl.seat] !== state.round) { told[pl.seat] = state.round; say(`${pl.name} reaches ${where}, but the way out won't open until ${WAY_OUT_AFTER} rounds after midnight.`); }
+        continue;
+      }
       if (step.requires && !pl.status?.[step.requires]) {
         say(`${pl.name} reaches ${where}, but can't leave without being cleansed.`);
         continue;
@@ -205,6 +211,13 @@ function escape(state, pl, ctx, events, where) {
   events.push({ type: 'escaped', seat: pl.seat, first });
   if (pl.seat === state.cur) state.endTurnNow = true;
 }
+
+// Midnight has struck (the clock reached it, or the game started there).
+export const atMidnight = (state) => state.midnightRound !== undefined && state.midnightRound !== null;
+// The Barghest's way out opens this many rounds after midnight (it gets that
+// many turns to hunt the team before anyone can leave).
+export const WAY_OUT_AFTER = 3;
+export const wayOutOpen = (state) => atMidnight(state) && state.round - state.midnightRound >= WAY_OUT_AFTER;
 
 // Barghest: an investigator who isn't cleansed can't cross the river (onto a bridge).
 export function crossingBlocked(state, board, pl, to) {

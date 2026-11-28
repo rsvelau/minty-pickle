@@ -267,3 +267,18 @@ Retrieval is now Flighted Bolt). 0 anomalies, 0 undecided in each run.
 All: 1,251 → 1,292 wins of 2,080 (60% → 62%). The fights decided by damage gain most (Werewolf, Redcap,
 Ushi-Oni, the Adze's Nest); objective monsters barely move. Solo hardly changes: one investigator rarely
 has the dice to fire and reload as well as move.
+
+## Balancing the 4-player fights above 90%, one at a time
+
+### Barghest (was 82 / 95 / 98 / 100%)
+Half the 4-player wins came before it ever appeared: the team named it early, cleansed, and walked out of town
+before midnight (Death Gaze fired 0.3 times a game). Now the way out opens 3 rounds after midnight, so the team
+has to survive it first. Opening at midnight (or 1 round after) changed nothing: the bots investigate till
+midnight and leave on the next turn, before it acts; 2 rounds after: 55 / 95 / 98 / 90%.
+
+| Team | Before | After (3 rounds) |
+|---|---|---|
+| 1 | 82% | 48% |
+| 2 | 95% | 75% |
+| 3 | 98% | 75% |
+| 4 | 100% | 70% (2.6 dead a game, was 0.1) |

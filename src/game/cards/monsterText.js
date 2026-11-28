@@ -36,9 +36,10 @@ export const MONSTER_TEXT = {
     rules: [
       'Starts at the town entrance and can’t enter buildings.',
       'Death Gaze sees in straight lines; walls, doors and buildings block it (windows don’t).',
-      'At midnight every investigator is Corrupted: cleanse at the Church {9} before crossing the river.',
+      'Cleanse at the Church {9} before crossing the river.',
+      'The way out opens 3 rounds after midnight: until then, survive the Barghest.',
     ],
-    goal: 'Escape: get cleansed at the Church {9}, then reach the Start space. One investigator escaping wins for the team.',
+    goal: 'Escape: get cleansed at the Church {9}, then reach the Start space once the way out opens (3 rounds after midnight). One investigator escaping wins for the team.',
     says: {
       'Death Gaze': 'End of its turn: attacks for 10 everyone it can see.',
       Stalk: '{move} 5 toward the nearest player.',
