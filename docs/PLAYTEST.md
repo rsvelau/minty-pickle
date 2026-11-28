@@ -1,5 +1,12 @@
 # Playtests (bot games)
 
+> **Balance priority (designer's rule).** The game is designed for **4 investigators**, and 4-player balance
+> matters most for the full release: tune every monster at 4 players first (target: under 90% for the expert
+> bots), then check the smaller teams. When a monster is too soft for a full table, prefer a **"With 4
+> investigators"** rule on its card (`fourPlayers` in cards/monsters.js: more action dice, more health, harder
+> swarms...) over changing its printed stats, so solo to 3 players play as printed. Plain health rarely helps
+> (a team of four burns through it); more threat does.
+
 `node tools/playtest.mjs [games per setup] [monsters|all] [team sizes]` plays whole games headless on
 Hawthorn Bend: Scouting, investigating, midnight, the monster's turns, objectives, to a win, a wipe, or
 round 60 ("undecided"). It also watches for crashes, stuck games, players or monsters off the board and

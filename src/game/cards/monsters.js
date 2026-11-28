@@ -4,6 +4,9 @@
 // (Monsters_and_Injuries_11-20-2026.xlsx).
 //
 // Each card:
+//   fourPlayers (optional) the card's "With 4 investigators" rule: { dice, hp, swarmDice }.
+//   The game is designed for 4 investigators and balanced there first; a monster
+//   too soft for a full table gets this rather than new printed stats (docs/PLAYTEST.md).
 //   id, name, hp, toughness (null = ∞), badge (the number in the top-right
 //   corner), stars (difficulty, 1 to 5: sets the Scouting story), traits, note (the rules text under the name), objective,
 //   weakness / immune (damage kinds, see DAMAGE_KINDS), weaknessTrack (the
