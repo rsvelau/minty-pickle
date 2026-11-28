@@ -10,6 +10,7 @@
 //   '2-3'         total is 2 or 3
 //   '2-'          total is 2 or less
 //   '2, 5+'       two dice: one shows 2, the other 5 or more (one condition per die, any order)
+//   '4, 6'        (as many values as dice, 2 or more) one die each: a 4 and a 6, any order (spells)
 //   'Any'         any value
 //   '2x Target’s' total at least twice the target's die (the monster's current die)
 //   null          no dice needed
@@ -21,8 +22,9 @@ export function checkRequirement(req, values, { targetDie = null } = {}) {
   const total = values.reduce((a, b) => a + b, 0);
   if (/^any$/i.test(r)) return values.length > 0;
   if (/^2x target/i.test(r)) return targetDie !== null && total >= 2 * targetDie;
-  // One condition per die ('2, 5+'): match them in any order.
-  if (r.includes(',') && r.split(',').some((p) => /[+\-]$/.test(p.trim()))) {
+  // One condition per die ('2, 5+', or a spell's exact faces '4, 6' / '1, 3, 5'
+  // when there are as many as the dice): match them in any order.
+  if (r.includes(',') && (r.split(',').some((p) => /[+\-]$/.test(p.trim())) || (values.length > 1 && r.split(',').length === values.length))) {
     const conds = r.split(',').map((p) => p.trim());
     if (conds.length !== values.length) return false;
     const fits = (c, v) => single(c, v);

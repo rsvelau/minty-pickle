@@ -37,8 +37,8 @@ const HIT = (dmg, more = {}) => ({ target: 'monster', dmg, ...more });
 export const EQUIPMENT_CARDS = [
   { id: 'witch-hunters-sword', name: 'Witch Hunter’s Sword', abilities: [
     A('close', 'holy', 'Smite', 1, '4+', 'Deal 🎲 damage', HIT('die')),
-    A('mid', 'crystal', 'Bind', 2, '10', 'Reduce target’s movement by 5 this turn', { target: 'monster', moveDown: 5 }),
-    A('mid', 'holy', 'Bless', 2, '7', 'Double target’s attack this turn', { target: 'ally', doubleAttack: true }),
+    A('mid', 'crystal', 'Bind', 2, '4, 6', 'Reduce target’s movement by 8 this turn', { target: 'monster', moveDown: 8 }),
+    A('mid', 'holy', 'Bless', 2, '1, 6', 'Double target’s attack this turn; it ignores toughness', { target: 'ally', doubleAttack: true, pierce: true }),
   ] },
   { id: 'rock-salt-shotgun', name: 'Rock Salt Shotgun', abilities: [
     A('close', 'salt', 'Salt Shot', 2, '12', 'Deal 6 damage and Blind (its next attack rolls 1)', HIT(6, { blind: true }), 'reload'),
@@ -46,12 +46,12 @@ export const EQUIPMENT_CARDS = [
   ] },
   { id: 'heavy-silver-crucifix', name: 'Heavy Silver Crucifix', abilities: [
     A('close', 'holy', 'Smite', 1, '4+', 'Deal 🎲 damage', HIT('die')),
-    A('close', 'silver', 'Seal', 2, '2', 'Halve target’s attack damage this turn (round down)', { target: 'monster', halve: true }),
+    A('close', 'silver', 'Seal', 2, '1, 2', 'Halve target’s attack damage this turn (round down)', { target: 'monster', halve: true }),
   ] },
   { id: 'cursebreaker-dagger', name: 'Cursebreaker Dagger', abilities: [
     A('close', 'silver', 'Pierce', 1, '2-3', 'Deal 5 damage', HIT(5)),
-    A('close', 'silver', 'Seal', 2, '2', 'Halve target’s attack damage this turn (round down)', { target: 'monster', halve: true }),
-    A('mid', 'crystal', 'Bind', 2, '10', 'Reduce target’s movement by 5 this turn', { target: 'monster', moveDown: 5 }),
+    A('close', 'silver', 'Seal', 2, '1, 2', 'Halve target’s attack damage this turn (round down)', { target: 'monster', halve: true }),
+    A('mid', 'crystal', 'Bind', 2, '4, 6', 'Reduce target’s movement by 8 this turn', { target: 'monster', moveDown: 8 }),
   ] },
   { id: 'dragons-breath-shotgun', name: 'Dragon’s Breath Shotgun', abilities: [
     A('close', 'fire', 'Incendiary Shot', 2, '8+', 'Deal 6 damage, ignore toughness.', HIT(6, { ignoreToughness: true }), 'reload'),
@@ -128,7 +128,7 @@ export const EQUIPMENT_CARDS = [
   ] },
   { id: 'singing-bowl', name: 'Singing Bowl', abilities: [
     A('self', null, 'Pacifying Song', 1, '1,2', 'Change this 🎲 to 6 and set as bonus Mental defense this turn', { target: 'self', bonusDefense: { type: 'M', v: 6 } }),
-    A('mid', null, 'Ethereal Tap', 2, '2', 'Reduce Mental injury tier by 1 for self and allies', { target: 'self', healAround: { M: 1 } }),
+    A('mid', null, 'Ethereal Tap', 2, '1, 2', 'Reduce Mental injury tier by 1 for self and allies', { target: 'self', healAround: { M: 1 } }),
   ] },
   { id: 'ornamental-crucifix', name: 'Ornamental Crucifix', abilities: [
     A('self', null, 'Invoke', 1, '1,2', 'Change this 🎲 to 6 and set as bonus Spiritual defense this turn', { target: 'self', bonusDefense: { type: 'S', v: 6 } }),
@@ -192,7 +192,7 @@ export const EQUIPMENT_CARDS = [
   ] },
   { id: 'crystal-talisman', name: 'Crystal Talisman', abilities: [
     A('self', null, 'Barrier', 1, '1', 'Gain 6 additional defense this turn', { target: 'self', bonusDefense: { type: null, v: 6 } }),
-    A('mid', 'crystal', 'Bind', 2, '10', 'Reduce monster movement by 5 this turn', { target: 'monster', moveDown: 5 }),
+    A('mid', 'crystal', 'Bind', 2, '4, 6', 'Reduce monster movement by 8 this turn', { target: 'monster', moveDown: 8 }),
   ] },
   { id: 'questionable-stimulant', name: 'Questionable Stimulant', abilities: [
     A('self', null, 'Drink', 0, null, 'Double movement and ignore physical injuries this turn.', { drink: true }, 'breaks'),

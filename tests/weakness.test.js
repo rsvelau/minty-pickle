@@ -65,9 +65,9 @@ test('Reset Curseblood Ritual (Skinwalker’s first weakness mark): a Crystal hi
   s.monster.pos = s.g.index(9, 5);
   assert.ok(s.act({ type: 'roll' }).ok);
   s.give(s.pl, ['crystal-talisman']);
-  s.state.pool = [{ kind: 'black', v: 5 }, { kind: 'black', v: 5 }];
+  s.state.pool = [{ kind: 'black', v: 4 }, { kind: 'black', v: 6 }];
   s.state.slots = []; s.state.defSlots = [];
-  assert.ok(s.act({ type: 'use', item: 0, ability: 1, dice: [0, 1] }).ok);   // Bind, Crystal
+  assert.ok(s.act({ type: 'use', item: 0, ability: 1, dice: [0, 1] }).ok);   // Bind [4, 6], Crystal
   assert.equal(s.monster.rituals, 0);
 });
 

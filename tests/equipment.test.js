@@ -118,16 +118,16 @@ test('attacks wear defense down', async () => {
   assert.equal(applyDamage(s.state, s.board, s.pl, 'M', 1, { log }, ev), 'injured');  // nothing left
 });
 
-test('Long only reaches 3+; Medical Kit heals a teammate in your space; Bless doubles before toughness', () => {
-  const s = setup('werewolf', { items: ['hunting-rifle', 'medical-kit', 'witch-hunters-sword', 'baseball-bat'], pool: [1, 1, 1, 1, 3, 4, 6] });
+test('Long only reaches 3+; Medical Kit heals a teammate in your space; Bless doubles and ignores toughness', () => {
+  const s = setup('werewolf', { items: ['hunting-rifle', 'medical-kit', 'witch-hunters-sword', 'baseball-bat'], pool: [1, 1, 1, 1, 1, 6, 6] });
   assert.match(s.use(0, 0, [0, 1, 2]).error, /no monster in range/);   // adjacent: too close for Long
   s.state.players[1].pos = s.pl.pos;
   s.state.players[1].injuries = { P: 2, M: 0, S: 0 };
   assert.ok(s.use(1, 0, [3], { target: { seat: 1 } }).ok);
   assert.equal(s.state.players[1].injuries.P, 0);
-  assert.ok(s.use(2, 2, [4, 5], { target: { seat: 0 } }).ok);         // Bless [7]: 3 + 4
-  assert.ok(s.use(3, 0, [6]).ok);                                      // 6 doubled = 12, − toughness 4
-  assert.equal(s.monster.hp, 12);
+  assert.ok(s.use(2, 2, [4, 5], { target: { seat: 0 } }).ok);         // Bless [1, 6]: a 1 and a 6
+  assert.ok(s.use(3, 0, [6]).ok);                                      // 6 doubled = 12, and Bless ignores toughness
+  assert.equal(s.monster.hp, 8);
 });
 
 test('objectives decide the win', () => {

@@ -139,3 +139,14 @@ test('a Mindset drawn from the Event deck replaces the old one', async () => {
   assert.equal(state.players[0].mindset, 'reckless');
   assert.ok(lines.some((l) => /Reckless Mindset replaces Mighty/.test(l)));
 });
+
+test('spell brackets: exact faces, one die each, any order ([4, 6], [1, 3, 5]); a one-die list stays a list of totals', async () => {
+  const { checkRequirement } = await import('../src/game/cards/requirements.js');
+  assert.ok(checkRequirement('4, 6', [6, 4]));
+  assert.ok(!checkRequirement('4, 6', [5, 5]), 'the same total isn’t enough');
+  assert.ok(!checkRequirement('4, 6', [4, 4]));
+  assert.ok(checkRequirement('1, 3, 5', [5, 1, 3]));
+  assert.ok(!checkRequirement('1, 3, 5', [3, 3, 3]));
+  assert.ok(checkRequirement('1,2', [2]) && checkRequirement('1,2', [1]), 'Invoke [1,2]: one die showing 1 or 2');
+  assert.ok(checkRequirement('2, 5+', [6, 2]));
+});

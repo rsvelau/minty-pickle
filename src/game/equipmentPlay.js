@@ -254,7 +254,7 @@ export function useEquipment(state, board, pl, action, ctx, events) {
     events.push({ type: 'swarms' });
   }
   if (ally) {
-    if (fx.doubleAttack) { ally.mods = { ...(ally.mods ?? {}), doubleAttack: true }; parts.push(`${ally.name}'s attacks deal double this turn`); }
+    if (fx.doubleAttack) { ally.mods = { ...(ally.mods ?? {}), doubleAttack: true, ...(fx.pierce ? { blessPierce: true } : {}) }; parts.push(`${ally.name}'s attacks deal double this turn${fx.pierce ? ' and ignore toughness' : ''}`); }
     if (fx.heal) parts.push(heal(ally, fx.heal));
   }
   if (fx.target === 'self') {
@@ -391,7 +391,8 @@ function damageMonster(state, monster, mcard, fx, a, values, pl) {
   if (monster.mods.bonusNext) { dmg += monster.mods.bonusNext; monster.mods.bonusNext = 0; }
   if (pl.mods?.doubleAttack) dmg *= 2;                                  // Bless
   if (pl.mindset === 'reckless' || pl.mindset === 'mighty') dmg *= 2;    // Mindsets: double attacking damage
-  const tough = fx.ignoreToughness ? 0 : toughnessOf(monster);
+  const pierce = fx.ignoreToughness || !!pl.mods?.blessPierce;          // Bless: the doubled blow ignores toughness too
+  const tough = pierce ? 0 : toughnessOf(monster);
   const through = tough === Infinity ? 0 : Math.max(0, dmg - tough);
   // Seized (Ushi-Oni): any damage through its defense frees the one it holds.
   const freed = through > 0 && monster.carrying === pl.seat ? release(state, monster) : null;
@@ -399,9 +400,9 @@ function damageMonster(state, monster, mcard, fx, a, values, pl) {
   if (monster.hp === null) return `${dmg} damage, but the ${mcard.name} cannot be worn down by damage${tail}`;
   monster.hp = Math.max(0, monster.hp - through);
   // Redcap: Piercing attacks (the ones that ignore toughness) can't land the killing blow.
-  const spared = mcard.id === 'redcap' && fx.ignoreToughness && monster.hp === 0 && through > 0;
+  const spared = mcard.id === 'redcap' && pierce && monster.hp === 0 && through > 0;
   if (spared) monster.hp = 1;
-  return `${dmg} damage${fx.ignoreToughness ? ' (ignoring toughness)' : tough ? ` − toughness ${tough}` : ''}: ${through} gets through (${monster.hp}/${monster.maxHp} health left)` +
+  return `${dmg} damage${pierce ? ' (ignoring toughness)' : tough ? ` − toughness ${tough}` : ''}: ${through} gets through (${monster.hp}/${monster.maxHp} health left)` +
     `${spared ? '. A Piercing blow can’t kill the Redcap: it clings on at 1' : ''}${tail}`;
 }
 
