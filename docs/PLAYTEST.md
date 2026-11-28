@@ -299,3 +299,24 @@ grave open a round after she rises: 65 / 88 / 92 / 90%): teams just wait for the
 
 New: **Skip to midnight** (Casebook). Once all the evidence is in, at the start of a turn, the team can skip
 ahead: the clock goes to 12 and the monster rises at once. (The playtest bots don't use it.)
+
+### Kill counts and the night timer, the monsters still above 90% at 4 players (40 games each)
+
+| Monster | Won | How | Won before midnight | Night turns used by winners (of 24): median / mean / max | Lost in the night |
+|---|---|---|---|---|---|
+| Poltergeist | 39 | objective 39 | 19 | 2 / 3.4 / 11 | 0 |
+| White Lady | 39 | objective 39 | 20 | 1 / 2.3 / 9 | 0 |
+| Hellhounds | 36 | killed 36 | 0 (ritual done before midnight) | 0 / 0.6 / 4 | 0 |
+| Skinwalker | 38 | killed 38 | 0 | 2 / 2.3 / 10 | 0 |
+| Adze | 39 | killed 39 | 0 | 2 / 3.9 / 20 | 0 |
+
+Killing blows / damage by skill:
+- Poltergeist, White Lady: no damage (objective only).
+- Hellhounds: the ritual is done before midnight, so the first hit after it rises kills: Flighted Bolt 6, Smite
+  (Witch Hunter's Sword) 3, Pierce (Cursebreaker Dagger) 3, 18 other skills 1-2 each.
+- Skinwalker: damage Controlled Shots 118, Center Shots 80, Smite (Witch Hunter's Sword) 52, Javelin 48,
+  Bludgeon (Railroad Hammer) 47, Flighted Bolt 37; killing blows Center Shots 8, Controlled Shots 4, Chop (Ice
+  Axe) 4, Smite (Heavy Silver Crucifix) 3.
+- Adze: damage Smite (Witch Hunter's Sword) 102, Controlled Shots 101, Center Shots 91, Flighted Bolt 77,
+  Incendiary Shot 73, Hip Fire 72, swarms blocked 50; killing blows Smite (Heavy Silver Crucifix) 5, Center Shots 4.
+The night limit never binds: fights end 2-4 turns after midnight.
