@@ -196,7 +196,7 @@ teammates in your space for heals like the Medical Kit). Obol costs (◉) take a
   ready to slot), raising other dice, +movement, Purity Seal.
 - **Reload** (a bullet icon): every firearm and crossbow skill (both shotguns, Breach included, the Compact
   Revolver, the Hunting Rifle, the Eccentric Crossbow and the Flare Gun). Firing empties the skill: it becomes
-  "Reload <skill>" with an empty-cartridge icon, one die [3+]. Reloaded, it fires on that player's next turn; with
+  "Reload <skill>" with an empty-cartridge icon, one die [4+]. Reloaded, it fires on that player's next turn; with
   a 6 it's a quick reload and fires again right away. The crossbow's Retrieval is now **Flighted Bolt** (Long,
   one die [3+], 🎲 damage through toughness; it reloads too). (equipmentPlay.js `abilityAt`; the bot quick-reloads
   with a spare 6 when it has a target, and otherwise reloads once it has moved.)

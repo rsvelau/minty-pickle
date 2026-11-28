@@ -183,19 +183,19 @@ test('each skill once a turn per card; a second copy of the card has its own', (
   assert.ok(s.use(0, 0, [2]).ok, 'a new turn');
 });
 
-test('Reload: a fired gun reloads with a 3+ (ready next turn), or a 6 (fire again now)', () => {
-  const s = setup('werewolf', { items: ['compact-revolver'], pool: [6, 6, 1, 2, 4, 6, 6, 6, 3, 3, 3] });   // Hip Fire [11-]: 8 damage
+test('Reload: a fired gun reloads with a 4+ (ready next turn), or a 6 (fire again now)', () => {
+  const s = setup('werewolf', { items: ['compact-revolver'], pool: [6, 6, 1, 2, 4, 6, 6, 6, 4, 3, 3] });   // Hip Fire [11-]: 8 damage
   const gun = s.pl.inventory.equipment[0];
   const hp = s.monster.hp;
   assert.ok(s.use(0, 1, [2, 3, 4]).ok, 'Hip Fire with 1 + 2 + 4');
   assert.equal(s.monster.hp, hp - (8 - 4));
   assert.equal(s.pl.inventory.equipment.length, 1, 'the revolver no longer breaks');
   assert.deepEqual(gun.empty, [1]);
-  // Empty: Reload Hip Fire takes one die [3+].
+  // Empty: Reload Hip Fire takes one die [4+].
   s.state.pool[2].spent = false;
-  assert.match(s.use(0, 1, [2]).error, /\[3\+\]/, 'a 1 won’t reload it');
-  // A 3: reloaded, but it fires on the next turn.
-  assert.ok(s.use(0, 1, [8]).ok, 'reload with a 3');
+  assert.match(s.use(0, 1, [2]).error, /\[4\+\]/, 'a 1 won’t reload it');
+  // A 4: reloaded, but it fires on the next turn.
+  assert.ok(s.use(0, 1, [8]).ok, 'reload with a 4');
   assert.deepEqual(gun.empty, []);
   assert.match(s.use(0, 1, [9, 10, 2]).error, /next turn/);
   s.state.turn++;

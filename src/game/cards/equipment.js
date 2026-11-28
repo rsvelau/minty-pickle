@@ -13,7 +13,7 @@
 //           ('4+', '11-'), fall in it ('2-3', '1,2'), or ('2, 5+') one die each; see
 //           cards/requirements.js. '2x Target’s': twice the target's action roll this turn.
 //   limit   'reload' (bullet icon): firearms and crossbows. Firing turns the skill into
-//           "Reload <skill>" (an empty-cartridge icon): one die [3+] reloads it, ready on
+//           "Reload <skill>" (an empty-cartridge icon): one die [4+] reloads it, ready on
 //           your next turn; a 6 is a quick reload, ready to fire again at once
 //           (equipmentPlay.js abilityAt / reload).
 //           'once' 1️⃣: one use until something refreshes it

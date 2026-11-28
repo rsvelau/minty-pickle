@@ -62,9 +62,9 @@ export const abilityReady = (item, k) => !(item.spent ?? []).includes(k) || EQUI
 
 // --- Reloading (firearms and crossbows: limit 'reload') ---------------------------
 // Firing empties the skill (item.empty); until it's reloaded the skill is offered
-// as "Reload <skill>": one die [3+]. Reloaded, it's ready on the player's next
+// as "Reload <skill>": one die [4+]. Reloaded, it's ready on the player's next
 // turn; with a 6 it's a quick reload, ready to fire again at once.
-export const RELOAD_REQ = '3+';
+export const RELOAD_REQ = '4+';
 export const QUICK_RELOAD = 6;
 export const isEmpty = (item, k) => {
   const a = EQUIPMENT_BY_ID[item.id]?.abilities[k];
