@@ -506,6 +506,7 @@ function checkDefeat(state, board, monster, mcard, ctx, events) {
 
 function win(state, ctx, events) {
   state.won = true;
+  state.ended = true;   // final: whatever the action that got here does next, the game stays over (rules.js)
   state.phase = 'over';
   ctx.log(state, 'The objective is achieved and the night is survived. The investigators win.');
   events.push({ type: 'won' });

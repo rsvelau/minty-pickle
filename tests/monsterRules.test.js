@@ -241,4 +241,8 @@ test('Banshee: the heirloom laid on the Unmarked Grave before midnight wins too'
   s.pl.carry = [{ item: 'heirloom' }];
   onSiteEnter(s.state, s.board, s.pl, grave, s.ctx, []);
   assert.equal(s.state.won, true);
+  // The win is final: the move that got there putting play back on (as it used to) doesn't reopen the game.
+  s.state.phase = 'slotting';
+  applyAction(s.state, s.board, { type: 'end', seat: s.state.cur });
+  assert.equal(s.state.phase, 'over');
 });

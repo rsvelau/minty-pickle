@@ -328,7 +328,12 @@ export function applyAction(state, board, action) {
   // Doors the game changed (nailed, breached) count for every move made while
   // the rules run, monsters' included; then the board is left as drawn.
   board.grid.edgeOverride = gameDoorOverride(state, board);
-  try { return applyActionNow(state, board, action); } finally { board.grid.edgeOverride = null; }
+  try {
+    const r = applyActionNow(state, board, action);
+    // A win is final (the heirloom delivered mid-move used to let the move put play back on).
+    if (state.ended) state.phase = 'over';
+    return r;
+  } finally { board.grid.edgeOverride = null; }
 }
 function applyActionNow(state, board, action) {
   board.setPowerOut?.(state.global?.id === 'power-outage');
