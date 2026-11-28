@@ -288,3 +288,22 @@ test('Skip to midnight: once all the evidence is in, at the start of a turn; the
   assert.ok(r.events.some((e) => e.type === 'midnight' && e.skipped));
   assert.match(applyAction(state, board, { type: 'midnight', seat: state.cur }).error, /already midnight/);
 });
+
+test('With 4 investigators: the Banshee and Skinwalker roll one more action die; the Adze Nest has 60 health (3 players: as printed)', async () => {
+  const { fourPlayers } = await import('../src/game/monsterTurn.js');
+  const four = { config: { players: 4 }, players: [{}, {}, {}, {}] };
+  const three = { config: { players: 3 }, players: [{}, {}, {}] };
+  assert.equal(fourPlayers(four, MONSTER_BY_ID.banshee).dice, 1);
+  assert.equal(fourPlayers(four, MONSTER_BY_ID.skinwalker).dice, 1);
+  assert.equal(fourPlayers(three, MONSTER_BY_ID.banshee).dice, 0);
+  assert.deepEqual(fourPlayers(four, MONSTER_BY_ID.adze), { dice: 0, hp: 60, swarmDice: 1 });
+  assert.equal(fourPlayers(four, MONSTER_BY_ID.werewolf).dice, 0, 'others as printed');
+  const g = new GridState(20, 10);
+  for (let x = 0; x < 20; x++) g.apply(g.index(x, 5), { area: 'outdoor', sub: 'street' }, { silent: true });
+  g.apply(g.index(19, 5), { area: 'outdoor', sub: 'start', walkable: false, facing: 3 }, { silent: true });
+  const board = createBoard(g);
+  for (const [n, hp] of [[4, 60], [3, 30]]) {
+    const { state } = newGame(board, { seed: 1, startMode: 'midnight', config: { players: n, monster: 'adze' } });   // placed directly (this map has none of its sites)
+    assert.equal(state.monsters[0]?.maxHp, hp, `${n} players`);
+  }
+});

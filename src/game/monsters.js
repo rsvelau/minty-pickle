@@ -28,7 +28,7 @@
 // board's movement rules, the nearest player, light levels.
 import { cellLabel } from '../core/state.js';
 import { MONSTER_BY_ID } from './cards/monsters.js';
-import { declareIntent, executeIntent, setupVictims } from './monsterTurn.js';
+import { declareIntent, executeIntent, setupVictims, fourPlayers } from './monsterTurn.js';
 import { alive } from './combat.js';
 import { armMonster } from './equipmentPlay.js';
 
@@ -134,6 +134,9 @@ export function spawnMonsters(state, board, events, random, log) {
   if (cell < 0) return;
   const monster = { id: `m${state.monsters.length + 1}`, kind, pos: cell, prev: -1, revealed: true };
   armMonster(monster); // health, toughness, weakness track (equipmentPlay.js)
+  // With 4 investigators some monsters have more health (cards/monsters.js fourPlayers).
+  const big = fourPlayers(state, MONSTER_BY_ID[kind]);
+  if (big.hp && monster.hp !== null) monster.hp = monster.maxHp = big.hp;
   // The Adze played solo: the cocoon has no toughness at all.
   if (kind === 'adze' && (state.config.players ?? state.players.length) === 1) monster.tough = 0;
   state.monsters.push(monster);

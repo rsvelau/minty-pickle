@@ -62,6 +62,7 @@ export const MONSTER_TEXT = {
   },
   skinwalker: {
     rules: [
+      'With 4 investigators it rolls 3 action dice.',
       'Steps around traps.',
       'Once a game, the first investigator to reach its Lair stuns it: it skips its next turn, toughness 0 until then.',
     ],
@@ -86,6 +87,7 @@ export const MONSTER_TEXT = {
   banshee: {
     rules: [
       'On a rooftop (any real building) she is out of Close range.',
+      'With 4 investigators she rolls 2 action dice.',
       'The heirloom, a signed ring, lies at the Funeral Parlor {11}: carry it or set it down to draw her where you want.',
     ],
     goal: 'Kill her: wear her health down to 0. Or, from 3 rounds after she rises, bring the heirloom to the Unmarked Grave in the cemetery: she is defeated at once.',
@@ -157,6 +159,7 @@ export const MONSTER_TEXT = {
   adze: {
     rules: [
       'Never leaves its Nest at the Lair. Its fly swarms attack only the victims.',
+      'With 4 investigators: the Nest has 60 health, and swarms strike for 🎲🎲.',
       { h: 'Victims', items: [
         'Appear once you know it’s the Adze (or at midnight). One per investigator, up to 3.',
         'Stand beside one to Defend them.',

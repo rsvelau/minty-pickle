@@ -549,7 +549,7 @@ export function strikeNow(state, board, monster, name, ctx, events) {
 export function declareIntent(state, board, monster, ctx, events) {
   const card = MONSTER_BY_ID[monster.kind];
   if (!card) return;
-  const n = Math.max(0, (card.badge | 0) - (monster.diceLost ?? 0));
+  const n = Math.max(0, (card.badge | 0) + fourPlayers(state, card).dice - (monster.diceLost ?? 0));
   monster.intents = Array.from({ length: n }, () => actionFor(card, rollDie(ctx), monster));
   // Enigmatic Hourglass (after midnight): the next declared action is cancelled.
   if (monster.cancelNext && monster.intents.length) { monster.cancelNext = false; const gone = monster.intents.shift(); ctx.log(state, `The Enigmatic Hourglass cancels the ${card.name}'s ${gone.name}.`); }
@@ -651,6 +651,13 @@ const livingVictims = (state) => (state.npcs ?? []).filter((v) => v.alive);
 // exhausted only when the strike gets through (a block costs nothing for good).
 // Playing solo: one swarm strikes per Adze turn, and nothing is exhausted.
 //   state.swarms = [{ id, victim, pos, dmg, type, exhaust, name, ready?, burning? }]
+// A monster's card can be tougher with 4 investigators (cards/monsters.js `fourPlayers`):
+// more action dice, more health, harder swarms. The game counts the team it was set up for.
+export function fourPlayers(state, card) {
+  const n = state.config?.players ?? state.players.length;
+  const f = n >= 4 ? card?.fourPlayers ?? {} : {};
+  return { dice: f.dice ?? 0, hp: f.hp ?? null, swarmDice: f.swarmDice ?? 0 };
+}
 export const SWARM_SPEED = 6;
 export const SWARM_BURN = 3;
 export const SWARM_HP = 4;
@@ -666,7 +673,8 @@ function launchSwarm(state, board, monster, card, intent, o, ctx, events) {
   const solo = (state.config?.players ?? state.players.length) === 1;
   if (solo && (state.swarms ?? []).length) return;
   const sw = {
-    id: `s${(state.swarmCount = (state.swarmCount ?? 0) + 1)}`, victim: v.id, pos: monster.pos, dmg: o.dmg,
+    id: `s${(state.swarmCount = (state.swarmCount ?? 0) + 1)}`, victim: v.id, pos: monster.pos,
+    dmg: fourPlayers(state, card).swarmDice && o.dmg?.dice ? { ...o.dmg, dice: o.dmg.dice + fourPlayers(state, card).swarmDice } : o.dmg,
     type: KIND_TO_TYPE[intent.kind] ?? card.evidence.attack, exhaust: intent.ops.some((x) => x.op === 'exhaust'), name: intent.name,
     hp: solo ? SWARM_HP_SOLO : SWARM_HP, maxHp: solo ? SWARM_HP_SOLO : SWARM_HP,
   };

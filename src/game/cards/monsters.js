@@ -83,6 +83,7 @@ export const MONSTER_CARDS = [
   },
   {
     id: 'skinwalker', name: 'Skinwalker', hp: 20, toughness: 4, badge: 2, stars: 1,
+    fourPlayers: { dice: 1 },   // with 4 investigators: one more action die
     traits: ['Corporeal', 'Intelligent', 'Cursed'],
     note: 'Avoids traps. When the first player reaches the Lair, stun Skinwalker and reduce its toughness to 0 for ⌛.',
     objective: 'Kill: wear its health down to 0.',
@@ -111,6 +112,7 @@ export const MONSTER_CARDS = [
   },
   {
     id: 'banshee', name: 'Banshee', hp: 15, toughness: 2, badge: 1, stars: 1,
+    fourPlayers: { dice: 1 },   // with 4 investigators: one more action die
     traits: ['Corporeal', 'Fae'],
     note: 'While on rooftops, Banshee is outside Close range.',
     objective: 'Kill: wear its health down to 0. Side objective: from 3 rounds after she rises, bring the heirloom to the Unmarked Grave in the cemetery, and she is defeated at once.',
@@ -194,6 +196,7 @@ export const MONSTER_CARDS = [
   },
   {
     id: 'adze', name: 'Adze', hp: 30, toughness: 2, badge: 3, stars: 2,
+    fourPlayers: { hp: 60, swarmDice: 1 },   // with 4 investigators: the Nest has 60 health, swarms strike with one more die
     // It stays in its cocoon in the Lair; its actions are carried out by fly
     // swarms that cross any terrain but not walls.
     body: 'cocoon', actsBy: 'swarm',

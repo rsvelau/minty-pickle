@@ -368,3 +368,29 @@ requirement picked to keep roughly the old odds of having the dice) then, before
 
 All: 1,167 → 1,144 wins of 2,080. No single skill dominates the Banshee, Adze or Skinwalker any more: their
 kills spread over a dozen weapons. Still above 90% at 4 players: Banshee 98%, Adze 100%, Skinwalker 92%.
+
+### Spells on exact faces; the three monsters still above 90% at 4 players
+Spells: Bind [4, 6] (movement −8, was [10] −5), Bless [1, 6] (doubles, and now ignores toughness; was [7]),
+Seal and Ethereal Tap [1, 2] (were [2]). The bots rarely cast them, so the numbers don't move.
+
+Tested on Banshee / Adze / Skinwalker (4 players; solo, 2 and 3 players in brackets where they moved):
+| Change | Result at 4 players |
+|---|---|
+| Banshee 20 health / 25 health | 97% / 95% (the team takes 20 health off her in two rounds) |
+| Adze Nest 36 / 42 health | 100% / 97% (2 and 3 players fall to 72-75%) |
+| Skinwalker toughness 5 | 92% (solo 22 → 12%) |
+| Health ×1.5 / ×2 at 4 players | Banshee 95 / 95%, Adze 97 / 90%, Skinwalker 92 / 87% |
+| +2 action dice at 4 players (+1 at 3) | Banshee 65%, Skinwalker 77%, Adze 100% |
+| **+1 action die at 4 players** | **Banshee 80%, Skinwalker 87%** |
+| Adze swarms 🎲🎲 / 🎲🎲🎲 at 4 | 95% / 90% |
+| **Adze Nest 60 health + swarms 🎲🎲 at 4** | **80%** |
+
+Health doesn't hold a big team back; threat does (0.5 dead a game at 4 players). Implemented as a card rule
+(`fourPlayers`): with 4 investigators the Banshee and Skinwalker roll one more action die, and the Adze's Nest has
+60 health and its swarms strike for 🎲🎲. Solo to 3 players play as printed.
+
+| Monster | Solo | 2 | 3 | 4 |
+|---|---|---|---|---|
+| Banshee | 65% | 85% | 80% | 80% |
+| Adze | 70% | 80% | 85% | 80% |
+| Skinwalker | 22% | 62% | 85% | 87% |
