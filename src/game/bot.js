@@ -24,10 +24,11 @@ import { EQUIPMENT_BY_ID } from './cards/equipment.js';
 import { RECIPES, blocked as craftBlocked } from './obolcraft.js';
 import { choicesFor, doorOverride } from './eventPlay.js';
 import { scriptOf, mapSites, knownMonster } from './objectives/scripts.js';
-import { RANGE, cellRange } from './cards/injuries.js';
+import { RANGE, cellRange, DEATHS_DOOR } from './cards/injuries.js';
 import { sixToSpend, memorialCells, wayOutOpen, graveOpen } from './objectives/verbs.js';
 import { matchesEvidence } from './mystery.js';
 import { toughnessOf, targetsFor } from './equipmentPlay.js';
+import { wouldHit } from './monsterTurn.js';
 import { checkRequirement } from './cards/requirements.js';
 
 // --- the bot ------------------------------------------------------------------------
@@ -89,13 +90,73 @@ export function makeBot(board, { expert = true, trace = false, controls = () => 
   // place it happens to stand on (a Lair to deliver to).
   let fighting = false;
   // Can this investigator hurt the monster at all (a damaging skill it isn't immune to)?
+  // What a piece of Equipment is worth against this monster (expert): the
+  // damage it can expect to get through the toughness, more for a weakness hit
+  // (it advances the track), nothing for an element the monster is immune to.
+  const itemValue = (id, m) => {
+    const mc = MONSTER_BY_ID[m?.kind];
+    if (!mc) return 0;
+    const tough = m.tough ?? mc.toughness ?? 0;
+    let best = 0;
+    for (const a of EQUIPMENT_BY_ID[id]?.abilities ?? []) {
+      const fx = a.fx ?? {};
+      if (fx.dmg === undefined || mc.immune.includes(a.kind)) continue;
+      const raw = fx.dmg === 'die' ? 3.5 : fx.dmg === 'sum' ? 3.5 * a.dice : fx.dmg;
+      const through = fx.ignoreToughness ? raw : Math.max(0, raw - (tough === null ? Infinity : tough) + (fx.toughDown ?? 0));
+      best = Math.max(best, (Number.isFinite(through) ? through : 0) + (a.kind && mc.weakness.includes(a.kind) ? 4 : 0));
+    }
+    return best;
+  };
+  // How much this player's attack skills want a die showing v (to keep it for them).
+  const dieUse = (pl, v) => {
+    let n = 0;
+    for (const it of pl.inventory.equipment) for (const a of EQUIPMENT_BY_ID[it.id]?.abilities ?? []) {
+      if (a.fx?.dmg === undefined || !a.dice || !a.req) continue;
+      const r = String(a.req);
+      if (a.dice === 1) { if (checkRequirement(r, [v], {})) n++; continue; }
+      // Several dice against a total: does this die leave room (low for 'N-', high for 'N+')?
+      const m = /^(\d+)([+\-])$/.exec(r);
+      if (m) n += m[2] === '-' ? (v <= Math.floor(+m[1] / a.dice) ? 1 : 0) : (v >= Math.ceil(+m[1] / a.dice) ? 1 : 0);
+      else if (r.includes(',') && checkRequirement(r.split(',')[0].trim(), [v], {})) n++;   // a spell's face
+    }
+    return n;
+  };
   const armed = (pl) => {
     const m = state.monsters[0];
+    if (expert && m && m.hp !== null) return pl.inventory.equipment.some((it) => itemValue(it.id, m) >= 2);
     const immune = MONSTER_BY_ID[m?.kind]?.immune ?? [];
     return pl.inventory.equipment.some((it) => (EQUIPMENT_BY_ID[it.id]?.abilities ?? []).some((a) => a.fx?.dmg !== undefined && !immune.includes(a.kind)));
   };
+  // Survival (expert): when the monster's declared hits could kill me (each hit
+  // is one injury tier of its type; one past Death's Door is death), the spaces
+  // within reach (this turn's dice) where they wouldn't land. Empty when there's
+  // nowhere safe, or no need.
+  const safeMemo = new Map();
+  const lethal = (pl, m) => {
+    const hits = {};
+    for (const t of m.dangerTypes?.[pl.seat] ?? []) hits[t] = (hits[t] ?? 0) + 1;
+    return Object.entries(hits).some(([t, n]) => (pl.injuries?.[t] ?? 0) + n > DEATHS_DOOR) || (state.deathsDoor && Object.keys(hits).length > 0);
+  };
+  function safeSpots(pl) {
+    if (!expert || state.cur !== pl.seat) return [];
+    const m = state.monsters.find((x) => (x.danger ?? []).includes(pl.seat));
+    if (!m || !lethal(pl, m)) return [];
+    const reach = state.pool.filter((d, n) => !d.spent && !state.defSlots.includes(n)).reduce((t, d) => t + d.v, 0)
+      + state.slots.filter((n) => !state.pool[n].spent).reduce((t, n) => t + state.pool[n].v, 0) + (state.steps ?? 0);
+    if (!reach) return [];
+    const k = `${state.turn}:${pl.seat}:${pl.pos}:${reach}`;
+    if (safeMemo.has(k)) return safeMemo.get(k);
+    const from = distTo(pl.pos);
+    const out = [];
+    g.cells.forEach((c, i) => { if (c.walkable && from[i] > 0 && from[i] <= reach && !wouldHit(state, board, m, pl.seat, i)) out.push(i); });
+    safeMemo.set(k, out);
+    return out;
+  }
   function goals(pl) {
     fighting = false;
+    // At Death's Door with the monster's blow coming: get out of its way first.
+    const safe = safeSpots(pl);
+    if (safe.length) return safe;
     // Nothing that can hurt the monster, and a Care Package is out: go and get something.
     if (state.crates?.length && state.monsters.length && !armed(pl)) return state.crates.map((c) => c.cell);
     const ob = state.objective ?? {};
@@ -255,7 +316,11 @@ export function makeBot(board, { expert = true, trace = false, controls = () => 
         if (crate && (memo.crates.get(ck) ?? 0) < 3) {
           const immune = MONSTER_BY_ID[state.monsters[0]?.kind]?.immune ?? [];
           const hurts = (id) => (EQUIPMENT_BY_ID[id]?.abilities ?? []).some((a) => a.fx?.dmg !== undefined && !immune.includes(a.kind));
-          const k = Math.max(0, crate.items.findIndex(hurts));
+          const m0 = state.monsters[0];
+          // Expert: the piece worth most against this monster (through its toughness, its weaknesses).
+          const k = expert && m0 && m0.hp !== null
+            ? crate.items.map((id, i) => ({ i, v: itemValue(id, m0) })).sort((x, y) => y.v - x.v)[0]?.i ?? 0
+            : Math.max(0, crate.items.findIndex(hurts));
           memo.crates.set(ck, (memo.crates.get(ck) ?? 0) + 1);
           return { type: 'crate', item: k, seat: state.cur };
         }
@@ -273,7 +338,8 @@ export function makeBot(board, { expert = true, trace = false, controls = () => 
           if (quick) return { ...quick.action, dice: [six] };
         }
         if (expert) {
-          const best = bestAttack(pl, ready);
+          // At Death's Door with somewhere safe to run: only an attack that finishes the monster beats running.
+          const best = bestAttack(pl, ready, safeSpots(pl).length > 0);
           if (best) return best;
           const heal = injured && ready.find((e) => { const fx = (e.a ?? e.card.abilities[e.ability]).fx ?? {}; return (fx.heal && Object.keys(fx.heal).some((k) => (pl.injuries?.[k] ?? 0) > 0)) || fx.healAround; });
           if (heal) return heal.action;
@@ -315,20 +381,36 @@ export function makeBot(board, { expert = true, trace = false, controls = () => 
         }
         const canDef = state.defSlots.length < state.maxDefense;
         const threat = monster && (monster.danger ?? []).includes(pl.seat);
-        if (expert) {
+        // (Running for a safe space at Death's Door: the die goes on moving, not a Defense that can't hold.)
+        const fleeing = expert && safeSpots(pl).length > 0;
+        // Carrying an objective item to where it's needed (the Strigoi's Cosor: its Drain
+        // reaches the holder anywhere, so they are always in danger): the run comes first,
+        // Defense gets what's left once this turn's movement is slotted.
+        const carrying = expert && (pl.carry ?? []).length > 0 && near && near.d > 0 && pending < need && !state.noMove;
+        if (expert && !fleeing && !carrying) {
           const plan = expertDefense(pl, free, hunting && near && near.d <= 1);
           if (plan) return plan;
         }
+        // Shadow People: Umbral Stab strikes whoever steps into a lit space (not a declared
+        // action, so not in the danger list): set one die to Defense before walking.
+        if (expert && avoidLit() && need > 0 && !state.defSlots.length && canDef && free.length >= 2 && !fleeing) {
+          return { type: 'slot', die: free[1].n, to: 'defense', seat: state.cur };
+        }
         const guard = free.filter((d) => !(sc6(pl) && d.v === 6));
         const adjacent = hunting && near && near.d <= 1;
-        if (guard.length && threat && canDef && !(adjacent && guard.length === 1)) return { type: 'slot', die: guard[0].n, to: 'defense', seat: state.cur };
+        if (guard.length && threat && canDef && !fleeing && !carrying && !(adjacent && guard.length === 1)) return { type: 'slot', die: guard[0].n, to: 'defense', seat: state.cur };
         if (free.length && !state.noMove && pending < need && state.slots.length < state.maxSlots) {
           const short = need - pending;
           // Poltergeist: keep a 6 back to destroy an anchor with.
           const keepSix = sc6(pl) ? free.find((d) => d.v === 6) : null;
           const movers = free.filter((d) => d !== keepSix);
           if (!movers.length) { if (pending > 0 && !state.noMove) return { type: 'move', seat: state.cur }; return null; }
-          const fit = [...movers].reverse().find((d) => d.v >= short) ?? movers[0];
+          // The die that covers the walk; expert: of those, the one its weapons need least
+          // (precision skills want low dice, strength skills high ones).
+          const covering = movers.filter((d) => d.v >= short);
+          const fit = expert && covering.length > 1
+            ? [...covering].sort((x, y) => dieUse(pl, x.v) - dieUse(pl, y.v) || x.v - y.v)[0]
+            : [...movers].reverse().find((d) => d.v >= short) ?? movers[0];
           // Keep one die back from a long walk when a monster is about (Defense).
           if (!(monster && free.length === 1 && state.slots.length && canDef && !hunting)) return { type: 'slot', die: fit.n, to: 'move', seat: state.cur };
         }
@@ -349,7 +431,7 @@ export function makeBot(board, { expert = true, trace = false, controls = () => 
   // --- expert play ------------------------------------------------------------------
   // The attack that does the most: damage through toughness, a weakness hit
   // worth extra (it advances the weakness track), one-die weapons with the highest die.
-  function bestAttack(pl, ready) {
+  function bestAttack(pl, ready, onlyKills = false) {
     let best = null;
     // Adze: burn the swarms with Fire (4 health; alight, they turn back and burn the Nest).
     for (const e of ready) {
@@ -386,10 +468,13 @@ export function makeBot(board, { expert = true, trace = false, controls = () => 
       const vals = action.dice.map((n) => state.pool[n].v);
       const raw = fx.dmg === 'die' ? vals[0] ?? 0 : fx.dmg === 'sum' ? vals.reduce((x, y) => x + y, 0) : typeof fx.dmg === 'number' ? fx.dmg : 0;
       const tough = fx.ignoreToughness ? 0 : toughnessOf(m);
-      const through = tough === Infinity ? 0 : Math.max(0, raw - tough);
+      let through = tough === Infinity ? 0 : Math.max(0, raw - tough);
+      // Redcap: a piercing blow can't land the killing blow; it stops at 1 (worth nothing once it's there).
+      if (fx.ignoreToughness && mc.id === 'redcap' && m.hp !== null) through = Math.min(through, Math.max(0, m.hp - 1));
       const weak = a.kind && mc.weakness.includes(a.kind) ? 4 : 0;
       const support = fx.toughDown || fx.immobile || fx.halve || fx.blind ? 2 : 0;
       const score = through + weak + support - (a.limit === 'breaks' && through < 6 ? 3 : 0);
+      if (onlyKills && !(m.hp !== null && through >= m.hp)) continue;
       if (score > 0 && (!best || score > best.score)) best = { score, action };
     }
     return best?.action ?? null;

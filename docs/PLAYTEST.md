@@ -401,3 +401,37 @@ Health doesn't hold a big team back; threat does (0.5 dead a game at 4 players).
 | Banshee | 65% | 85% | 80% | 80% |
 | Adze | 70% | 80% | 85% | 80% |
 | Skinwalker | 22% | 62% | 85% | 87% |
+
+### Smarter expert bots against the tough monsters (40 games × 4 sizes × 13 monsters, old bot → new bot)
+Diagnosed first (30 four-player games each): who dies to what, attacks skipped next to the monster, dice use.
+1. Dodge a lethal blow: when the monster's declared hits could kill (each hit is one injury tier; one past
+   Death's Door is death), head for a space within reach where they wouldn't land (monsterTurn.js `wouldHit`
+   re-runs the danger forecast with the bot standing elsewhere); the die goes on moving, not a hopeless Defense.
+2. Redcap: a piercing blow can't land the kill, so it's worth nothing once the Redcap is at 1.
+3. Care Packages (expert): take the piece worth most against this monster (damage through its toughness, a
+   weakness hit), and "armed" means carrying something that can actually hurt it.
+4. Carrying an objective item (the Strigoi's Cosor, whose holder its Drain reaches anywhere): the run comes
+   first, Defense gets what's left. The holder used to brace every turn and never reach the Church.
+5. Shadow People: one die to Defense before walking (Umbral Stab strikes on entering a lit space).
+6. Walking: of the dice that cover the distance, spend the one its weapons need least (precision skills want
+   low dice, strength skills high).
+Tried and dropped: retreating at Death's Door even when not targeted (no effect).
+
+| Monster | Solo | 2 | 3 | 4 | dead/game at 4 |
+|---|---|---|---|---|---|
+| Werewolf | 2 → 5% | 20 → 15% | 52 → 42% | 70 → 70% | 1.5 → 1.4 |
+| Barghest | 68 → 65% | 88 → 90% | 88 → 88% | 80 → 82% | 2.1 → 2.0 |
+| Hellhounds | 15 → 18% | 42 → 42% | 68 → 62% | 82 → 88% | 1.1 → 0.9 |
+| Skinwalker | 22 → 22% | 62 → 62% | 85 → 88% | 88 → 88% | 0.8 → 0.8 |
+| Wendigo | 10 → 12% | 42 → 38% | 70 → 72% | 65 → 70% | 1.5 → 1.4 |
+| Banshee | 65 → 62% | 85 → 78% | 80 → 90% | 80 → 82% | 1.3 → 1.1 |
+| Ushi-Oni | 2 → 2% | 22 → 30% | 52 → 48% | 60 → 62% | 1.9 → 2.0 |
+| Redcap | 0 → 2% | 10 → 20% | 42 → 35% | 48 → 45% | 2.3 → 2.3 |
+| Poltergeist | 5 → 10% | 48 → 45% | 72 → 75% | 88 → 88% | 0.6 → 0.6 |
+| White Lady | 35 → 50% | 70 → 80% | 80 → 85% | 88 → 85% | 0.6 → 0.6 |
+| Strigoi | 5 → 8% | 15 → 38% | 48 → 58% | 65 → 72% | 1.6 → 1.4 |
+| Adze | 70 → 70% | 80 → 72% | 85 → 85% | 80 → 80% | 1.0 → 1.1 |
+| Shadow People | 65 → 72% | 62 → 68% | 52 → 50% | 55 → 58% | 1.6 → 1.2 |
+
+All: 1,134 → 1,170 wins of 2,080. At 4 players: 379 → 388 of 520.
+Gains: Strigoi (2-4 players +7 to +23 points), White Lady solo/2p, Shadow People. 40-game rows move ±8% by chance.

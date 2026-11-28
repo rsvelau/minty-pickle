@@ -405,6 +405,14 @@ function actionFor(card, roll, monster = null) {
   return { roll, ability: idx, name: a.name, kind: a.kind, text: a.text, ops, unknown };
 }
 
+// Would the monster's declared actions hit this investigator if they stood at
+// `pos` instead (the bot looking for a safe space: bot.js)? Nothing is changed.
+export function wouldHit(state, board, monster, seat, pos) {
+  if (!monster?.intents?.length) return false;
+  const view = { ...state, players: state.players.map((p) => (p.seat === seat ? { ...p, pos } : p)) };
+  return predictVictims(view, board, { ...monster }, monster.intents).includes(seat);
+}
+
 // Who the declared actions would hit if the round ended now: the actions
 // play in order, each starting where the last one left the monster.
 function predictVictims(state, board, monster, intents) {
