@@ -27,7 +27,7 @@
 // [{ item, cell, ... }], anchors: [cells], ceremony: { held } }.
 import { scriptOf, mapSites, knownMonster } from './scripts.js';
 import { siteLabel } from '../../core/sites.js';
-import { achieveObjective, banishMonster } from '../equipmentPlay.js';
+import { achieveObjective, banishMonster, FINISH_AFTER } from '../equipmentPlay.js';
 import { watch, offer } from '../reactions.js';
 import { buildingOf } from '../../core/mapCheck.js';
 import { buildingCells } from '../../core/buildings.js';
@@ -221,12 +221,12 @@ function escape(state, pl, ctx, events, where) {
 export const atMidnight = (state) => state.midnightRound !== undefined && state.midnightRound !== null;
 // The Barghest's way out opens this many rounds after midnight (it gets that
 // many turns to hunt the team before anyone can leave).
-export const WAY_OUT_AFTER = 3;
+export const WAY_OUT_AFTER = FINISH_AFTER;
 export const wayOutOpen = (state) => atMidnight(state) && state.round - state.midnightRound >= WAY_OUT_AFTER;
 
 // The Banshee's grave takes the heirloom only this many rounds after she rises
 // (laid early, she was beaten before she ever appeared).
-export const GRAVE_AFTER = 3;
+export const GRAVE_AFTER = FINISH_AFTER;
 export const graveOpen = (state) => state.monsters.length > 0 && atMidnight(state) && state.round - state.midnightRound >= GRAVE_AFTER;
 
 // Barghest: an investigator who isn't cleansed can't cross the river (onto a bridge).

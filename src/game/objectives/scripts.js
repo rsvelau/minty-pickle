@@ -138,12 +138,13 @@ export function objectiveProblems(grid) {
   }];
 }
 
-// The monster the players know: revealed, or named correctly early (initiative).
-// (All five pieces of evidence found identify it too: mystery.js.)
+// The monster the players know: revealed at midnight, or identified by all five
+// pieces of evidence (mystery.js). Naming it right early earns Initiative (its
+// spawn point marked), but its objectives only appear with all the evidence or at midnight.
 export function knownMonster(state) {
   const m = state.mystery;
-  if (!m || !(m.revealed || m.identified || m.initiative)) return null;
-  return m.monster ?? m.guess?.id ?? null;
+  if (!m || !(m.revealed || m.identified)) return null;
+  return m.monster ?? null;
 }
 
 // Is the Objective marker in `cell` in play? Once the monster is known: only

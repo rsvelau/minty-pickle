@@ -494,7 +494,9 @@ function checkDefeat(state, board, monster, mcard, ctx, events) {
     monster.pos = state.mystery.spawnCell;
     monster.hp = monster.maxHp;
     monster.intents = null;
-    ctx.log(state, `The ${mcard.name} falls, and rises again at its Lair. Its objective must be achieved before it can be finished: ${mcard.objective}`);
+    ctx.log(state, state.objectivePending
+      ? `The ${mcard.name} falls, and rises again at its Lair. Its objective is done but hasn't taken hold yet (${roundsUntilFinish(state)} more round${roundsUntilFinish(state) === 1 ? '' : 's'}): until then it can't be finished.`
+      : `The ${mcard.name} falls, and rises again at its Lair. Its objective must be achieved before it can be finished: ${mcard.objective}`);
     events.push({ type: 'monsterTeleport', id: monster.id, to: monster.pos });
     return;
   }
@@ -512,6 +514,18 @@ function win(state, ctx, events) {
   events.push({ type: 'won' });
 }
 
+// An objective can only finish the monster once it has been up this many rounds
+// (done earlier, it waits: pending, and takes hold then). Early knowledge is for
+// preparing; the end always comes at night. (The Barghest's way out and the
+// Banshee's grave use the same timing: objectives/verbs.js.)
+export const FINISH_AFTER = 3;
+export const finishOpen = (state) => state.midnightRound !== undefined && state.midnightRound !== null && state.monsters.length > 0 && state.round - state.midnightRound >= FINISH_AFTER;
+export const roundsUntilFinish = (state) => (state.midnightRound === undefined || state.midnightRound === null ? null : Math.max(0, FINISH_AFTER - (state.round - state.midnightRound)));
+// A pending objective whose time has come (rules.js endRound).
+export function settlePendingObjective(state, ctx, events) {
+  if (state.objectivePending && !state.objectiveDone && finishOpen(state)) achieveObjective(state, ctx, events);
+}
+
 // The players mark the monster's objective achieved (objectives other than Kill
 // are played at the table for now).
 export function achieveObjective(state, ctx, events) {
@@ -522,6 +536,14 @@ export function achieveObjective(state, ctx, events) {
   if (!mcard) return 'the monster has not appeared';
   if (killObjective(mcard)) return 'this monster’s objective is to destroy it';
   if (state.objectiveDone) return 'already achieved';
+  if (!finishOpen(state)) {
+    if (state.objectivePending) return null;
+    state.objectivePending = true;
+    ctx.log(state, `The ${mcard.name}'s objective is done, but it can't take hold yet: ${FINISH_AFTER} rounds after the ${mcard.name} rises, it will. Hold out till then.`);
+    events.push({ type: 'objectivePending', kind: mcard.id });
+    return null;
+  }
+  state.objectivePending = false;
   state.objectiveDone = true;
   const hp = m ? m.hp : mcard.hp ?? null;
   ctx.log(state, `Objective achieved: ${mcard.objective.replace(/\.$/, '')}.${hp === null ? '' : ` The ${mcard.name} can now be destroyed for good.`}`);

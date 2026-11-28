@@ -166,7 +166,7 @@ export function nameMonster(state, id, ctx, events) {
   m.initiative = correct;
   const name = MONSTER_BY_ID[id].name;
   ctx.log(state, correct
-    ? `${pl.name} names it: the ${name}. Correct. Initiative! Its spawn point and the objectives are marked.`
+    ? `${pl.name} names it: the ${name}. Correct. Initiative! Its spawn point is marked (its objectives appear with all the evidence, or at midnight).`
     : `${pl.name} names it: the ${name}. The signs don't fit. No Initiative this time.`);
   events.push({ type: 'named', seat: pl.seat, monster: id, correct, spawnCell: correct ? m.spawnCell : -1 });
   return null;

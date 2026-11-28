@@ -24,6 +24,7 @@ function setup({ players = 3 } = {}) {
   const monster = { id: 'm1', kind: 'werewolf', pos: g.index(13, 5), prev: -1, revealed: true };
   armMonster(monster);
   state.monsters = [monster];
+  state.midnightRound = state.round - 3;   // risen 3 rounds ago: its objective can finish it (FINISH_AFTER)
   const act = (a, seat = state.cur) => applyAction(state, board, { ...a, seat });
   const give = (p, items, obols = 0) => {
     p.inventory.equipment = items.map((id) => ({ id }));

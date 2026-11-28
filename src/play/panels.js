@@ -15,7 +15,7 @@ import { defenseTotal, dieHTML, endCellPick, play, startCellPick, cellPicking } 
 import { __set_camTween, camera, cellToWorld, controls } from '../render/scene.js';
 import { EQUIPMENT_BY_ID } from '../game/cards/equipment.js';
 import { EVENT_CATEGORIES } from '../game/cards/events.js';
-import { targetsFor, actionRoll, abilityReady, killObjective, discardOptions, abilityAt, RELOAD_REQ, QUICK_RELOAD } from '../game/equipmentPlay.js';
+import { targetsFor, actionRoll, abilityReady, killObjective, discardOptions, abilityAt, RELOAD_REQ, QUICK_RELOAD, FINISH_AFTER, roundsUntilFinish } from '../game/equipmentPlay.js';
 import { checkRequirement } from '../game/cards/requirements.js';
 import { eventCard } from '../game/decks.js';
 import { choicesFor } from '../game/eventPlay.js';
@@ -320,7 +320,7 @@ export function showCardNow(c) {
     const name = MONSTER_BY_ID[c.monster]?.name ?? '';
     html = c.correct
       ? `<div class="pc-kind">Initiative!</div><div class="pc-glyph">☠</div><div class="pc-title">The ${esc(name)}</div>` +
-        `<div class="pc-sub">The signs fit. Where it will rise is marked on the map, and the objectives are showing.</div>`
+        `<div class="pc-sub">The signs fit. Where it will rise is marked on the map. Its objectives appear with all the evidence, or at midnight.</div>`
       : `<div class="pc-kind">Named: the ${esc(name)}</div><div class="pc-glyph">✗</div><div class="pc-title">The signs don't fit</div>` +
         `<div class="pc-sub">No Initiative this time. Keep gathering evidence: you'll know at midnight.</div>`;
     stay = true;
@@ -1073,6 +1073,7 @@ function objectiveHTML(my) {
   return `<p class="case-note"><b>Objective:</b> ${esc(card.objective.replace(/\.$/, ''))}. ` +
     (kill ? 'Destroy it to win.'
       : done ? `Achieved.${st.monsters.length ? ' Now destroy it one more time.' : ''}`
+      : st?.objectivePending ? (roundsUntilFinish(st) === null ? `<b>Done</b>: it takes hold ${FINISH_AFTER} rounds after the monster rises. Hold out till then.` : `<b>Done</b>: it takes hold in ${roundsUntilFinish(st)} round${roundsUntilFinish(st) === 1 ? '' : 's'}. Hold out till then.`)
         : sc?.played ? 'The game tracks it: reach the sites below.' : 'Achieve it to win (play it at the table, then mark it here). Until then, destroying it only sends it back to its Lair.') + '</p>' +
     steps +
     // What the game is tracking (objectives/verbs.js).

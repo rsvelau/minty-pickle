@@ -1123,8 +1123,10 @@ pools: all, flesh and blood, spirits and shadows, old-world folklore). Its 13 ca
   to fly there), and how many monsters still fit.
 - **Field Guide**: every monster in the pool, narrowed automatically by the evidence (ruled-out entries fold
   away), with health, toughness, weaknesses, immunities, objective and abilities. The team may **name the
-  monster once before midnight**; a correct name earns **Initiative**: its spawn point is marked ☠ on the map
-  and the objective markers show early.
+  monster once before midnight**; a correct name earns **Initiative**: its spawn point is marked ☠ on the map.
+  (Its objectives appear only with all the evidence or at midnight.) An objective can only finish the monster
+  once it has been up 3 rounds (equipmentPlay.js `FINISH_AFTER`): done earlier it's **pending** and takes hold
+  then, so early knowledge buys preparation, and the end always comes at night.
 - **Midnight**: the monster is revealed (its full entry) and rises from its **Lair**: where the Lair card was
   found, or, if it's still hidden, a random undiscovered Investigation spot becomes the Lair (its card turns over
   and the cell transforms) and it rises there. With Initiative, that spot is the one marked ☠. Monsters only

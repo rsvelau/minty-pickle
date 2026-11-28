@@ -32,7 +32,7 @@ import { setupMystery, evidenceObol, revealEvidence, attackObol, nameMonster, re
 import { setupDecks, drawEquipment, drawCard, eventCard, isMindset } from './decks.js';
 import { EQUIPMENT_BY_ID } from './cards/equipment.js';
 import { MONSTER_BY_ID } from './cards/monsters.js';
-import { useEquipment, armMonster, achieveObjective, discardForWeakness, strikeMonster } from './equipmentPlay.js';
+import { useEquipment, armMonster, achieveObjective, discardForWeakness, strikeMonster, settlePendingObjective } from './equipmentPlay.js';
 import { EVENT_CATEGORIES } from './cards/events.js';
 import {
   resolveEvent, answerEvent, runQueue, doorOverride, startOfTurn, keyTouched, playerStepCost, playerEnters, summon,
@@ -1272,6 +1272,7 @@ function endRound(state, board, events) {
   for (const p of state.players) if (p.bonusDefense) p.bonusDefense = p.bonusDefense.filter((b) => b.round === undefined);
   summon(state, eventCtx(state), events);
   if (isMidnight(state) && !state.midnightDone) strikeMidnight(state, board, events);
+  settlePendingObjective(state, { state, log, randInt }, events);   // an objective done early takes hold now
   nightTurn(state, board, { state, log, randInt }, events);   // Care Packages, and the night's end
 }
 // The clocktower strikes twelve: the monster rises (by the clock, or skipped to).

@@ -26,6 +26,7 @@ function setup(kind, { items = [], pool = [], obols = [] } = {}) {
   const monster = { id: 'm1', kind, pos: g.index(11, 5), prev: -1, revealed: true };
   armMonster(monster);
   state.monsters = [monster];
+  state.midnightRound = state.round - 3;   // risen 3 rounds ago: its objective can finish it (FINISH_AFTER)
   const use = (item, ability, dice, more = {}) => applyAction(state, board, { type: 'use', item, ability, dice, ...more });
   return { state, board, pl, monster, use, g };
 }

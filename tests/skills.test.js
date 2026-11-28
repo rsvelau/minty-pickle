@@ -19,6 +19,7 @@ function setup() {
   const monster = { id: 'm1', kind: 'werewolf', pos: g.index(13, 5), prev: -1, revealed: true };
   armMonster(monster);
   state.monsters = [monster];
+  state.midnightRound = state.round - 3;   // risen 3 rounds ago: its objective can finish it (FINISH_AFTER)
   const give = (p, items, obols = 0) => {
     p.inventory.equipment = items.map((id) => ({ id }));
     p.inventory.obolcraft = Array.from({ length: obols }, () => ({ type: 'event' }));

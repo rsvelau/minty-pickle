@@ -27,6 +27,7 @@ function setup(kind, { at = [2, 5], die = 4, lair = [0, 5] } = {}) {
   const monster = { id: 'm1', kind, pos: g.index(...at), prev: -1, revealed: true };
   armMonster(monster);
   state.monsters = [monster];
+  state.midnightRound = state.round - 3;   // risen 3 rounds ago: its objective can finish it (FINISH_AFTER)
   const log = [];
   const ctx = { state, log: (s, m) => log.push(m), randInt: () => die - 1 };
   const turn = (...names) => {
@@ -222,18 +223,32 @@ test('Banshee: the heirloom brought to the Unmarked Grave (an Objective marker i
   assert.ok(events.some((e) => e.type === 'monsterDefeated'));
 });
 
-test('an objective finished before midnight (the monster named by its evidence) still counts', async () => {
-  const { achieveObjective } = await import('../src/game/equipmentPlay.js');
+test('an objective finished before it has been up 3 rounds waits (pending), then takes hold', async () => {
+  const { achieveObjective, settlePendingObjective } = await import('../src/game/equipmentPlay.js');
   const s = setup('hellhounds');
+  const hounds = s.state.monsters;
   s.state.monsters = [];                                     // not risen yet
+  s.state.midnightRound = null;
   s.state.mystery = { ...s.state.mystery, monster: 'hellhounds', identified: true };
   assert.equal(achieveObjective(s.state, s.ctx, []), null);
-  assert.equal(s.state.objectiveDone, true);
-  // A monster nothing can wear down (the White Lady): its objective alone wins.
+  assert.equal(s.state.objectiveDone, undefined, 'not yet');
+  assert.equal(s.state.objectivePending, true);
+  s.state.monsters = hounds; s.state.midnightRound = s.state.round - 2;
+  settlePendingObjective(s.state, s.ctx, []);
+  assert.ok(!s.state.objectiveDone, 'two rounds after it rises: still waiting');
+  s.state.midnightRound = s.state.round - 3;
+  settlePendingObjective(s.state, s.ctx, []);
+  assert.equal(s.state.objectiveDone, true, 'three rounds after: it takes hold');
+  // A monster nothing can wear down (the White Lady): its objective alone wins, once it takes hold.
   const w = setup('white-lady');
+  const lady = w.state.monsters;
   w.state.monsters = [];
+  w.state.midnightRound = null;
   w.state.mystery = { ...w.state.mystery, monster: 'white-lady', identified: true };
   achieveObjective(w.state, w.ctx, []);
+  assert.ok(!w.state.won, 'done before she rises: it waits');
+  w.state.monsters = lady; w.state.midnightRound = w.state.round - 3;
+  settlePendingObjective(w.state, w.ctx, []);
   assert.equal(w.state.won, true);
 });
 

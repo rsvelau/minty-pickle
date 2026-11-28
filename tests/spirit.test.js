@@ -22,6 +22,7 @@ function setup(kind = 'werewolf') {
   const monster = { id: 'm1', kind, pos: g.index(12, 5), prev: -1, revealed: true };
   armMonster(monster);
   state.monsters = [monster];
+  state.midnightRound = state.round - 3;   // risen 3 rounds ago: its objective can finish it (FINISH_AFTER)
   const act = (a) => applyAction(state, board, { ...a, seat: state.cur });
   const ready = (items, { dice = [6], obols = 0 } = {}) => {
     assert.ok(act({ type: 'roll' }).ok);

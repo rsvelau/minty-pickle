@@ -92,6 +92,7 @@ function fight(kind, { players = 3 } = {}) {
   const monster = { id: 'm1', kind, pos: g.index(19, 11), prev: -1, revealed: true };
   armMonster(monster);
   state.monsters = [monster];
+  state.midnightRound = state.round - 3;   // risen 3 rounds ago: its objective can finish it (FINISH_AFTER)
   const log = [];
   const ctx = { state, log: (s, m) => log.push(m), randInt: () => 1 };   // coins: tails
   const at = (pl, x, y) => { pl.pos = g.index(x, y); const ev = []; onSiteEnter(state, board, pl, pl.pos, ctx, ev); return ev; };
@@ -219,6 +220,7 @@ function fight3(kind, { players = 2 } = {}) {
   const monster = { id: 'm1', kind, pos: g.index(19, 11), prev: -1, revealed: true };
   armMonster(monster);
   state.monsters = [monster];
+  state.midnightRound = state.round - 3;   // risen 3 rounds ago: its objective can finish it (FINISH_AFTER)
   const ctx = { state, log: () => {}, randInt: () => 3 };          // dice roll 4
   const at = (pl, x, y) => { pl.pos = g.index(x, y); const ev = []; onSiteEnter(state, board, pl, pl.pos, ctx, ev); return ev; };
   const turn = (...names) => {
@@ -373,6 +375,7 @@ test('White Lady’s Infatuation: she appears inside the occupied building and s
   const monster = { id: 'm1', kind: 'white-lady', pos: g.index(15, 5), prev: -1, revealed: true };
   armMonster(monster);
   state.monsters = [monster];
+  state.midnightRound = state.round - 3;   // risen 3 rounds ago: its objective can finish it (FINISH_AFTER)
   const ctx = { state, log: () => {}, randInt: () => 0 };
   const act = (n) => { const a = MONSTER_BY_ID['white-lady'].abilities.find((x) => x.name === n); monster.intents = [{ roll: 1, ability: 1, name: a.name, kind: a.kind, text: a.text, ...parseAbility(a.text) }]; executeIntent(state, board, monster, ctx, []); };
   act('Wrath');                                                   // no one inside with her: Infatuation instead

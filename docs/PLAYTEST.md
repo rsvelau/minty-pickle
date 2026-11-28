@@ -320,3 +320,27 @@ Killing blows / damage by skill:
 - Adze: damage Smite (Witch Hunter's Sword) 102, Controlled Shots 101, Center Shots 91, Flighted Bolt 77,
   Incendiary Shot 73, Hip Fire 72, swarms blocked 50; killing blows Smite (Heavy Silver Crucifix) 5, Center Shots 4.
 The night limit never binds: fights end 2-4 turns after midnight.
+
+### Objectives take hold 3 rounds after the monster rises; naming it right no longer reveals them
+(expert bot, 40 games × 4 team sizes × 13 monsters; 4-player win rate before → after)
+
+Hellhounds 92 → 80% · Poltergeist 95 → 88% · White Lady 95 → 88% · Strigoi 85 → 62% · Shadow People 62 → 55%
+Barghest 70 → 82% · Banshee 82 → 95% · Adze 92 → 100% · Skinwalker 92% and the kill-only monsters unchanged.
+
+The objective fights came down. Three went up: not knowing the monster early, the bots investigate until
+midnight instead of chasing objectives, and come into the night better armed. The Banshee is now mostly shot
+down (31 kills, 8 heirloom wins of 39): Flighted Bolt (Long range reaches her rooftop) is her top damage
+dealer (115), then Controlled Shots 60, Direct Impact 56, Center Shots 54. The Adze's top damage: Controlled
+Shots 112, Flighted Bolt 108, Hip Fire 75. Strigoi now loses 7-11 games a size to the night limit.
+
+| Monster | Solo | 2 | 3 | 4 |
+|---|---|---|---|---|
+| Barghest | 65% | 85% | 85% | 82% |
+| Hellhounds | 20% | 42% | 70% | 80% |
+| Banshee | 68% | 78% | 88% | 95% |
+| Poltergeist | 5% | 42% | 70% | 88% |
+| White Lady | 35% | 70% | 82% | 88% |
+| Strigoi | 5% | 18% | 45% | 62% |
+| Adze | 75% | 82% | 82% | 100% |
+| Shadow People | 65% | 60% | 52% | 55% |
+| Skinwalker | 18% | 62% | 85% | 92% |
