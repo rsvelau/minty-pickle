@@ -198,8 +198,13 @@ teammates in your space for heals like the Medical Kit). Obol costs (◉) take a
   Revolver, the Hunting Rifle, the Eccentric Crossbow and the Flare Gun). Firing empties the skill: it becomes
   "Reload <skill>" with an empty-cartridge icon, one die [4+]. Reloaded, it fires on that player's next turn; with
   a 6 it's a quick reload and fires again right away. The crossbow's Retrieval is now **Flighted Bolt** (Long,
-  one die [3+], 🎲 damage through toughness; it reloads too). (equipmentPlay.js `abilityAt`; the bot quick-reloads
+  two dice [4-], 6 damage through toughness; it reloads too). (equipmentPlay.js `abilityAt`; the bot quick-reloads
   with a spare 6 when it has a target, and otherwise reloads once it has moved.)
+- **Dice archetypes:** *precision* skills (aimed shots, thrown weapons, stabs) need precise **low** rolls and deal
+  fixed damage: Sniper Shots 🎲🎲🎲 [4-] 18 through toughness, Center Shots 🎲🎲🎲 [8-] 10, Controlled Shots
+  🎲🎲🎲 [8-] 9, Piercing Tip 🎲🎲 [3-] 5 through toughness, Flighted Bolt 🎲🎲 [4-] 6, Javelin 🎲🎲 [4-] 10,
+  Direct Impact 🎲🎲 [4-], every Pierce 🎲 [2-3] 5. *Strength* skills (swings, smashes) need high rolls. *Spells*
+  are powerful but need dice of specific values, sometimes two or three different ones.
 - **1️⃣** once until refreshed; **🔗 breaks**: the card is discarded.
 - **Objective sites**: each Objective marker stands for a site: the type of the building it is in (Buildings
   tool), or one picked in Markers → Objective → Site. A site type always has the same fixtures (the Church: a Votive Candle Stand and a Holy Water

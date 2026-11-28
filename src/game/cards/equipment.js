@@ -9,6 +9,10 @@
 //           crystal ◆, iron ⚔ (the crossed tools), fire 🔥; null = the plain circle (untyped)
 //   dice    how many rolled dice you slot into it (0 = free)
 //   obols   Obols it costs, any colour (printed as 🪙 [n] on the card)
+// Dice archetypes (designer's rule): PRECISION skills (aimed shots, thrown
+// weapons, stabs) need precise LOW rolls and deal fixed damage; STRENGTH skills
+// (swings, smashes) need HIGH rolls; SPELLS are powerful but need dice of
+// specific values, sometimes two or three different ones ('4, 6', '1, 3, 5').
 //   req     the bracket: the slotted dice ADDED TOGETHER must equal it ('12'), reach it
 //           ('4+', '11-'), fall in it ('2-3', '1,2'), or ('2, 5+') one die each; see
 //           cards/requirements.js. '2x Target’s': twice the target's action roll this turn.
@@ -45,7 +49,7 @@ export const EQUIPMENT_CARDS = [
     A('close', 'silver', 'Seal', 2, '2', 'Halve target’s attack damage this turn (round down)', { target: 'monster', halve: true }),
   ] },
   { id: 'cursebreaker-dagger', name: 'Cursebreaker Dagger', abilities: [
-    A('close', 'silver', 'Pierce', 1, '4+', 'Deal 🎲 damage', HIT('die')),
+    A('close', 'silver', 'Pierce', 1, '2-3', 'Deal 5 damage', HIT(5)),
     A('close', 'silver', 'Seal', 2, '2', 'Halve target’s attack damage this turn (round down)', { target: 'monster', halve: true }),
     A('mid', 'crystal', 'Bind', 2, '10', 'Reduce target’s movement by 5 this turn', { target: 'monster', moveDown: 5 }),
   ] },
@@ -55,27 +59,27 @@ export const EQUIPMENT_CARDS = [
     A('close', null, 'Breach', 2, '2+', 'Destroy an adjacent door.', { door: 'breach' }, 'reload'),
   ] },
   { id: 'cut-spike', name: 'Cut Spike', abilities: [
-    A('close', 'iron', 'Pierce', 1, '4+', 'Deal 🎲 damage', HIT('die')),
+    A('close', 'iron', 'Pierce', 1, '2-3', 'Deal 5 damage', HIT(5)),
     A('close', null, 'Nail Shut', 2, '2+', 'Block an adjacent door.', { door: 'block', how: 'nailed shut' }, 'breaks'),
   ] },
   { id: 'compact-revolver', name: 'Compact Revolver', abilities: [
-    A('mid', null, 'Controlled Shots', 3, '12+', 'Deal 🎲 damage (the three dice added)', HIT('sum'), 'reload'),
+    A('mid', null, 'Controlled Shots', 3, '8-', 'Deal 9 damage.', HIT(9), 'reload'),
     A('mid', null, 'Hip Fire', 3, '11-', 'Deal 8 damage.', HIT(8), 'reload'),
   ] },
   { id: 'hunting-rifle', name: 'Hunting Rifle', abilities: [
-    A('long', null, 'Sniper Shots', 3, '18', 'Deal 18 damage, ignore toughness.', HIT(18, { ignoreToughness: true }), 'reload'),
-    A('mid', null, 'Center Shots', 3, '12+', 'Deal 🎲 damage (the three dice added)', HIT('sum'), 'reload'),
+    A('long', null, 'Sniper Shots', 3, '4-', 'Deal 18 damage, ignore toughness.', HIT(18, { ignoreToughness: true }), 'reload'),
+    A('mid', null, 'Center Shots', 3, '8-', 'Deal 10 damage.', HIT(10), 'reload'),
   ] },
   { id: 'eccentric-crossbow', name: 'Eccentric Crossbow', abilities: [
-    A('mid', null, 'Piercing Tip', 2, '10', 'Deal 5 damage, ignore toughness.', HIT(5, { ignoreToughness: true }), 'reload'),
-    A('long', null, 'Flighted Bolt', 1, '3+', 'Deal 🎲 damage', HIT('die'), 'reload'),
+    A('mid', null, 'Piercing Tip', 2, '3-', 'Deal 5 damage, ignore toughness.', HIT(5, { ignoreToughness: true }), 'reload'),
+    A('long', null, 'Flighted Bolt', 2, '4-', 'Deal 6 damage', HIT(6), 'reload'),
   ] },
   { id: 'firemans-axe', name: 'Fireman’s Axe', abilities: [
     A('close', null, 'Chop', 1, '4+', 'Reduce target’s toughness by 1 this turn, then deal 🎲 damage', HIT('die', { toughDown: 1 })),
     A('close', null, 'Breach', 2, '2+', 'Destroy an adjacent door', { door: 'breach' }),
   ] },
   { id: 'flare-gun', name: 'Flare Gun', abilities: [
-    A('mid', 'fire', 'Direct Impact', 2, '7', 'Reduce target’s toughness by 2 this turn, then deal 7 damage.', HIT(7, { toughDown: 2 }), 'reload'),
+    A('mid', 'fire', 'Direct Impact', 2, '4-', 'Reduce target’s toughness by 2 this turn, then deal 7 damage.', HIT(7, { toughDown: 2 }), 'reload'),
     A('self', null, 'Illuminate', 1, 'Any', 'Increase two other 🎲 to 6.', { target: 'dice', raise: 2, to: 6 }, 'reload'),
   ] },
   { id: 'weathered-machete', name: 'Weathered Machete', abilities: [
@@ -86,8 +90,8 @@ export const EQUIPMENT_CARDS = [
     A('self', 'salt', 'Salt Circle', 1, 'Any', 'Prevent Monster from crossing this space for 1 turn.', { salt: true }, 'breaks'),
   ] },
   { id: 'improvised-spear', name: 'Improvised Spear', abilities: [
-    A('close', 'iron', 'Pierce', 1, '4+', 'Deal 🎲 damage', HIT('die')),
-    A('mid', 'iron', 'Javelin', 2, '7', 'Deal 10 damage.', HIT(10), 'breaks'),
+    A('close', 'iron', 'Pierce', 1, '2-3', 'Deal 5 damage', HIT(5)),
+    A('mid', 'iron', 'Javelin', 2, '4-', 'Deal 10 damage.', HIT(10), 'breaks'),
   ] },
   { id: 'molotov-cocktail', name: 'Molotov Cocktail', abilities: [
     A('mid', 'fire', 'Immolate', 2, '6', 'Reduce target’s toughness by 3 this turn, then deal 3 damage.', HIT(3, { toughDown: 3 }), 'breaks'),
@@ -116,7 +120,7 @@ export const EQUIPMENT_CARDS = [
     A('close', null, 'Breach', 2, '2+', 'Destroy an adjacent door', { door: 'breach' }),
   ] },
   { id: 'kitchen-knife', name: 'Kitchen Knife', abilities: [
-    A('close', null, 'Pierce', 1, '4+', 'Deal 🎲 damage', HIT('die')),
+    A('close', null, 'Pierce', 1, '2-3', 'Deal 5 damage', HIT(5)),
   ] },
   { id: 'powerful-flashlight', name: 'Powerful Flashlight', abilities: [
     A('self', null, 'Illuminate', 1, 'Any', 'Change this 🎲 to 6 and refresh it', { target: 'self', refreshAs: 6 }),

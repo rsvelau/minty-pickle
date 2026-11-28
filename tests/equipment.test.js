@@ -32,7 +32,7 @@ function setup(kind, { items = [], pool = [], obols = [] } = {}) {
 }
 
 test('damage goes through toughness into health', () => {
-  const { monster, use, state } = setup('werewolf', { items: ['kitchen-knife'], pool: [6] }); // hp 20, toughness 4
+  const { monster, use, state } = setup('werewolf', { items: ['baseball-bat'], pool: [6] }); // hp 20, toughness 4 (Bludgeon [3+]: 🎲)
   const r = use(0, 0, [0]);
   assert.ok(r.ok, r.error);
   assert.equal(monster.hp, 18);                       // 6 − 4
@@ -40,8 +40,8 @@ test('damage goes through toughness into health', () => {
 });
 
 test('requirements, range and immunity', () => {
-  const s = setup('werewolf', { items: ['kitchen-knife', 'flare-gun'], pool: [3, 6] });
-  assert.match(s.use(0, 0, [0]).error, /\[4\+\]/);    // 3 is not 4+
+  const s = setup('werewolf', { items: ['kitchen-knife', 'flare-gun'], pool: [4, 3] });
+  assert.match(s.use(0, 0, [0]).error, /\[2-3\]/);    // Pierce is precise: 4 is not 2-3
   s.monster.pos = s.g.index(14, 5);                   // 4 away: out of Close range
   assert.match(s.use(0, 0, [1]).error, /no monster in range/);
   const b = setup('barghest', { items: ['makeshift-torch'], pool: [5] }); // immune to fire
@@ -51,7 +51,7 @@ test('requirements, range and immunity', () => {
 });
 
 test('weakness hits count up the track and apply its effects', () => {
-  const { monster, use, state } = setup('werewolf', { items: ['cursebreaker-dagger'], pool: [6, 6, 6, 6, 6, 6] }); // weak to silver
+  const { monster, use, state } = setup('werewolf', { items: ['cursebreaker-dagger'], pool: [3, 3, 3, 3, 3, 3] }); // weak to silver (Pierce [2-3])
   // (Once a turn per card: a new turn between uses.)
   for (let k = 0; k < 2; k++) { assert.ok(use(0, 0, [k]).ok); state.turn++; }
   assert.equal(monster.weakHits, 2);
@@ -63,7 +63,7 @@ test('weakness hits count up the track and apply its effects', () => {
 });
 
 test('Choke needs twice the monster’s action roll; guns go empty after firing', () => {
-  const s = setup('werewolf', { items: ['iron-chain', 'rock-salt-shotgun', 'eccentric-crossbow', 'sacrificial-fetish'], pool: [3, 4, 6, 6, 5, 5, 4], obols: ['attack', 'event'] });
+  const s = setup('werewolf', { items: ['iron-chain', 'rock-salt-shotgun', 'eccentric-crossbow', 'sacrificial-fetish'], pool: [3, 4, 6, 6, 1, 2, 4], obols: ['attack', 'event'] });
   s.monster.intents = [{ roll: 4, ops: [], unknown: [] }];
   assert.match(s.use(0, 0, [0, 1]).error, /twice 4/); // 7 < 8
   assert.ok(s.use(0, 0, [2, 3]).ok);                  // 12 ≥ 8
@@ -73,7 +73,7 @@ test('Choke needs twice the monster’s action roll; guns go empty after firing'
   assert.ok(s.use(1, 0, [7, 8]).ok);
   assert.equal(s.monster.mods.blind, true);
   assert.match(s.use(1, 0, [9, 10]).error, /Reload Salt Shot needs one die/);
-  // Crossbow: Piercing Tip [10], then (empty) its Reload.
+  // Crossbow: Piercing Tip [3-] (1 + 2), then (empty) its Reload.
   assert.ok(s.use(2, 0, [4, 5]).ok);
   assert.deepEqual(s.pl.inventory.equipment[2].empty, [0]);
   // Sacrifice isn't used from the sheet: it comes up when someone would die (tricks.test.js).
@@ -119,7 +119,7 @@ test('attacks wear defense down', async () => {
 });
 
 test('Long only reaches 3+; Medical Kit heals a teammate in your space; Bless doubles before toughness', () => {
-  const s = setup('werewolf', { items: ['hunting-rifle', 'medical-kit', 'witch-hunters-sword', 'kitchen-knife'], pool: [6, 6, 6, 1, 3, 4, 6] });
+  const s = setup('werewolf', { items: ['hunting-rifle', 'medical-kit', 'witch-hunters-sword', 'baseball-bat'], pool: [1, 1, 1, 1, 3, 4, 6] });
   assert.match(s.use(0, 0, [0, 1, 2]).error, /no monster in range/);   // adjacent: too close for Long
   s.state.players[1].pos = s.pl.pos;
   s.state.players[1].injuries = { P: 2, M: 0, S: 0 };
@@ -132,19 +132,19 @@ test('Long only reaches 3+; Medical Kit heals a teammate in your space; Bless do
 
 test('objectives decide the win', () => {
   // Kill: destroying wins.
-  const k = setup('werewolf', { items: ['hunting-rifle'], pool: [6, 6, 6] });
+  const k = setup('werewolf', { items: ['hunting-rifle'], pool: [1, 1, 1] });
   k.monster.pos = k.g.index(14, 5);
   k.monster.hp = 10;
   assert.ok(k.use(0, 0, [0, 1, 2]).ok);                                // 18 damage ignoring toughness
   assert.equal(k.state.won, true);
   // Redcap: a Piercing blow (one that ignores toughness) can't land the killing blow.
-  const r = setup('redcap', { items: ['hunting-rifle'], pool: [6, 6, 6] });   // 9 health
+  const r = setup('redcap', { items: ['hunting-rifle'], pool: [1, 1, 1] });   // 9 health
   r.monster.pos = r.g.index(14, 5);
   assert.ok(r.use(0, 0, [0, 1, 2]).ok);
   assert.equal(r.monster.hp, 1);
   assert.equal(r.state.won, undefined);
   // Disrupt Ritual (Hellhounds): back to the Lair until the objective is done.
-  const h = setup('hellhounds', { items: ['hunting-rifle', 'hunting-rifle'], pool: [6, 6, 6, 6, 6, 6] });
+  const h = setup('hellhounds', { items: ['hunting-rifle', 'hunting-rifle'], pool: [1, 1, 1, 1, 1, 1] });
   h.state.mystery = { spawnCell: h.g.index(2, 5) };
   h.monster.pos = h.g.index(14, 5);
   assert.ok(h.use(0, 0, [0, 1, 2]).ok);
@@ -174,7 +174,7 @@ test('discarding an item of the right element for an ∞ weakness effect', () =>
 });
 
 test('each skill once a turn per card; a second copy of the card has its own', () => {
-  const s = setup('werewolf', { items: ['cursebreaker-dagger', 'cursebreaker-dagger'], pool: [6, 6, 6, 6] });
+  const s = setup('werewolf', { items: ['cursebreaker-dagger', 'cursebreaker-dagger'], pool: [2, 2, 2, 2] });
   assert.ok(s.use(0, 0, [0]).ok);
   assert.match(s.use(0, 0, [1]).error, /used this turn/);
   assert.ok(s.use(1, 0, [1]).ok, 'the other copy');
@@ -213,8 +213,8 @@ test('Reload: a fired gun reloads with a 4+ (ready next turn), or a 6 (fire agai
 test('Reload: the skill shows as Reload <skill> in the Skills list; Flighted Bolt is Long range', async () => {
   const { skillStatus } = await import('../src/game/skills.js');
   const { EQUIPMENT_BY_ID } = await import('../src/game/cards/equipment.js');
-  const s = setup('werewolf', { items: ['eccentric-crossbow'], pool: [5, 5, 4] });
-  assert.ok(s.use(0, 0, [0, 1]).ok, 'Piercing Tip [10]');
+  const s = setup('werewolf', { items: ['eccentric-crossbow'], pool: [1, 2, 4] });
+  assert.ok(s.use(0, 0, [0, 1]).ok, 'Piercing Tip [3-]');
   const list = skillStatus(s.state, s.board, s.pl);
   const e = list.find((x) => x.ability === 0);
   assert.equal(e.name, 'Reload Piercing Tip');
